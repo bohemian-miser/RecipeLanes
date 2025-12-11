@@ -1,0 +1,70 @@
+
+> recipe-rpg-simple@0.1.0 dev
+> next dev -p 8001
+
+   ▲ Next.js 16.0.8 (Turbopack)
+   - Local:         http://localhost:8001
+   - Network:       http://192.168.1.90:8001
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 790ms
+ GET / 200 in 3.4s (compile: 3.2s, render: 167ms)
+ GET / 200 in 78ms (compile: 32ms, render: 46ms)
+file:///usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/node_modules/@google-cloud/firestore/build/src/v1/firestore_client.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: TypeError [ERR_INVALID_ARG_TYPE]: The "payload" argument must be of type object. Received null
+file:///usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/node_modules/@google-cloud/firestore/build/src/reference/query-util.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: TypeError [ERR_INVALID_ARG_TYPE]: The "payload" argument must be of type object. Received null
+file:///usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/node_modules/@google-cloud/firestore/build/src/reference/query.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: TypeError [ERR_INVALID_ARG_TYPE]: The "payload" argument must be of type object. Received null
+file:///usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/node_modules/@google-cloud/firestore/build/src/telemetry/enabled-trace-util.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: TypeError [ERR_INVALID_ARG_TYPE]: The "payload" argument must be of type object. Received null
+Firestore read failed, using fallback: Error: 2 UNKNOWN: Getting metadata from plugin failed with error: Could not refresh access token: A Not Found error was returned while attempting to retrieve an accesstoken for the Compute Engine built-in service account. This may be because the Compute Engine instance does not have any permission scopes specified: Could not refresh access token: Request failed with status code 404
+    at getOrCreateIconAction (app/actions.ts:123:63)
+  121 |   if (!useFallback) {
+  122 |       try {
+> 123 |           const snapshot = await db.collection('ingredients').get();
+      |                                                               ^
+  124 |           for (const doc of snapshot.docs) {
+  125 |               const data = doc.data();
+  126 |               if (data.embedding) { {
+  code: 2,
+  details: 'Getting metadata from plugin failed with error: Could not refresh access token: A Not Found error was returned while attempting to retrieve an accesstoken for the Compute Engine built-in service account. This may be because the Compute Engine instance does not have any permission scopes specified: Could not refresh access token: Request failed with status code 404',
+  metadata: [Metadata]
+}
+[generateAndStoreIcon] Generating for: egg
+Error [GenkitError]: UNKNOWN: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict: [404 Not Found] models/imagen-3.0-generate-001 is not found for API version v1beta, or is not supported for predict. Call ListModels to see the list of available models and their supported methods.
+    at async generateAndStoreIcon (app/actions.ts:32:21)
+    at async getOrCreateIconAction (app/actions.ts:195:18)
+  30 |   
+  31 |   // 1. Generate Image
+> 32 |   const { media } = await ai.generate({
+     |                     ^
+  33 |     model: imagenModel,
+  34 |     prompt: `Generate a 64x64 pixel art icon for ${ingredient}. The style should be reminiscent of an 8-bit video game. Ensure the background is transparent.`,
+  35 |   }); {
+  source: undefined,
+  status: 'UNKNOWN',
+  detail: undefined,
+  code: 500,
+  originalMessage: 'Error fetching from https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict: [404 Not Found] models/imagen-3.0-generate-001 is not found for API version v1beta, or is not supported for predict. Call ListModels to see the list of available models and their supported methods.'
+}
+ ⨯ Error [GenkitError]: UNKNOWN: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict: [404 Not Found] models/imagen-3.0-generate-001 is not found for API version v1beta, or is not supported for predict. Call ListModels to see the list of available models and their supported methods.
+    at async generateAndStoreIcon (app/actions.ts:32:21)
+    at async getOrCreateIconAction (app/actions.ts:195:18)
+  30 |   
+  31 |   // 1. Generate Image
+> 32 |   const { media } = await ai.generate({
+     |                     ^
+  33 |     model: imagenModel,
+  34 |     prompt: `Generate a 64x64 pixel art icon for ${ingredient}. The style should be reminiscent of an 8-bit video game. Ensure the background is transparent.`,
+  35 |   }); {
+  source: undefined,
+  status: 'UNKNOWN',
+  detail: undefined,
+  code: 500,
+  originalMessage: 'Error fetching from https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict: [404 Not Found] models/imagen-3.0-generate-001 is not found for API version v1beta, or is not supported for predict. Call ListModels to see the list of available models and their supported methods.',
+  traceId: 'd514aa7e15f9509c0a0c5195d47d3797',
+  ignoreFailedSpan: true,
+  digest: '1044620955'
+}
+ POST / 500 in 11.7s (compile: 21ms, render: 11.7s)
+ ✓ Compiled in 35ms
+ GET / 200 in 436ms (compile: 385ms, render: 51ms)
+[?25h

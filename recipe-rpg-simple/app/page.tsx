@@ -1,16 +1,32 @@
 'use client';
 
-import { useState, useId } from 'react';
+import { useState, useId, useEffect } from 'react';
 import { IngredientForm } from '@/components/ingredient-form';
 import { IconDisplay, Icon } from '@/components/icon-display';
-import { getOrCreateIconAction, updatePopularityAction } from './actions';
+import { DebugGallery } from '@/components/debug-gallery';
+import { RerollMonitor } from '@/components/reroll-monitor';
+import { getOrCreateIconAction, recordRejectionAction, getAllIconsAction } from './actions';
 
 export default function Home() {
   const [icons, setIcons] = useState<Icon[]>([]);
-  const [generationCounts, setGenerationCounts] = useState<Record<string, number>>({});
+  
+  // Session State
+  const [sessionRejections, setSessionRejections] = useState<Record<string, number>>({});
+  const [seenIcons, setSeenIcons] = useState<Record<string, Set<string>>>({});
+  const [lastDebugInfo, setLastDebugInfo] = useState<any>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const uniqueId = useId();
+
+  const updateSeen = (ingredient: string, url: string) => {
+      setSeenIcons(prev => {
+          const next = new Set(prev[ingredient] || []);
+          next.add(url);
+          return { ...prev, [ingredient]: next };
+      });
+  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -20,26 +36,32 @@ export default function Home() {
     if (!newIngredient || isLoading) return;
     setIsLoading(true);
     setError(null);
+    setLastDebugInfo(null);
 
-    const count = generationCounts[newIngredient] || 0;
+    const rejections = sessionRejections[newIngredient] || 0;
+    const seen = Array.from(seenIcons[newIngredient] || []);
 
     try {
-      const result = await getOrCreateIconAction(newIngredient, undefined, count);
+      const result = await getOrCreateIconAction(newIngredient, rejections, seen);
       
       if ('error' in result && result.error) {
           throw new Error(result.error);
       }
       
-      const { iconUrl } = result as { iconUrl: string }; // Type assertion helpers if needed
+      const { iconUrl, popularityScore, debugInfo } = result as any; 
       
       const newIcon: Icon = {
         id: `${uniqueId}-${icons.length}`,
         ingredient: newIngredient,
         iconUrl: iconUrl,
+        popularityScore: popularityScore
       };
       
       setIcons(prev => [...prev, newIcon]);
-      setGenerationCounts(prev => ({ ...prev, [newIngredient]: count + 1 }));
+      updateSeen(newIngredient, iconUrl);
+      setLastDebugInfo(debugInfo);
+      setRefreshKey(prev => prev + 1);
+      
     } catch (err) {
       setError('Failed to forge item. Please try again.');
       console.error(err);
@@ -53,20 +75,34 @@ export default function Home() {
     setIsLoading(true);
     
     try {
-        await updatePopularityAction(iconToReroll.iconUrl, -1);
+        // 1. Record Rejection
+        await recordRejectionAction(iconToReroll.iconUrl, iconToReroll.ingredient);
         
-        const count = generationCounts[iconToReroll.ingredient] || 0;
-        const result = await getOrCreateIconAction(iconToReroll.ingredient, iconToReroll.iconUrl, count);
+        // 2. Update Session Stats
+        const ingredient = iconToReroll.ingredient;
+        const newRejections = (sessionRejections[ingredient] || 0) + 1;
+        setSessionRejections(prev => ({ ...prev, [ingredient]: newRejections }));
+        
+        const seen = Array.from(seenIcons[ingredient] || []);
+        // Add the rejected one to seen if not already (it should be)
+        if (!seen.includes(iconToReroll.iconUrl)) seen.push(iconToReroll.iconUrl);
+
+        // 3. Get Next Icon
+        const result = await getOrCreateIconAction(ingredient, newRejections, seen);
 
         if ('error' in result && result.error) throw new Error(result.error);
-        const { iconUrl } = result as { iconUrl: string };
+        const { iconUrl, popularityScore, debugInfo } = result as any;
 
+        // 4. Update UI
         setIcons(prev => prev.map(icon => 
             icon.id === iconToReroll.id 
-                ? { ...icon, iconUrl: iconUrl }
+                ? { ...icon, iconUrl: iconUrl, popularityScore: popularityScore }
                 : icon
         ));
-        setGenerationCounts(prev => ({ ...prev, [iconToReroll.ingredient]: count + 1 }));
+        updateSeen(ingredient, iconUrl);
+        setLastDebugInfo(debugInfo);
+        setRefreshKey(prev => prev + 1);
+
     } catch (err) {
         setError('Failed to reroll item.');
         console.error(err);
@@ -93,6 +129,8 @@ export default function Home() {
             isLoading={isLoading}
           />
           
+          <RerollMonitor debugInfo={lastDebugInfo} />
+
           <IconDisplay
             icons={icons}
             onReroll={handleReroll}
@@ -100,6 +138,8 @@ export default function Home() {
             error={error}
             highlightedIconId={null}
           />
+
+          <DebugGallery refreshKey={refreshKey} />
         </div>
       </main>
     </div>

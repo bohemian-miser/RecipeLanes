@@ -398,3 +398,77 @@ export async function recordRejectionAction(rawIconUrl: string, rawIngredient: s
     }
     return { success: true };
 }
+
+export async function deleteIconByUrlAction(iconUrl: string) {
+    let useFallback = false;
+    try {
+        // 1. Delete from Firestore
+        const query = db.collectionGroup('icons').where('url', '==', iconUrl);
+        const snapshot = await query.get();
+        
+        const batch = db.batch();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+
+        // 2. Delete from Storage
+        if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
+            const matches = iconUrl.match(/\/o\/([^?]+)/);
+            if (matches && matches[1]) {
+                const filePath = decodeURIComponent(matches[1]);
+                const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app');
+                await bucket.file(filePath).delete();
+            }
+        }
+    } catch (e) {
+        console.error('deleteIconByUrlAction failed:', e);
+        return { success: false, error: String(e) };
+    }
+    return { success: true };
+}
+
+export async function deleteIngredientCategoryAction(rawIngredient: string) {
+    try {
+        const ingredient = rawIngredient.trim().toLowerCase();
+        
+        // 1. Find Ingredient Doc
+        const ingSnapshot = await db.collection('ingredients').get();
+        const ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === ingredient);
+        
+        if (!ingDoc) return { success: false, error: 'Ingredient not found' };
+
+        // 2. List all icons
+        const iconsSnapshot = await ingDoc.ref.collection('icons').get();
+        const batch = db.batch();
+        const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ? storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app') : null;
+
+        const deletePromises: Promise<any>[] = [];
+
+        // 3. Queue deletions
+        for (const iconDoc of iconsSnapshot.docs) {
+            const data = iconDoc.data();
+            // Delete Doc
+            batch.delete(iconDoc.ref);
+            
+            // Delete File
+            if (bucket && data.url) {
+                const matches = data.url.match(/\/o\/([^?]+)/);
+                if (matches && matches[1]) {
+                    const filePath = decodeURIComponent(matches[1]);
+                    deletePromises.push(bucket.file(filePath).delete().catch(e => console.warn(`Failed to delete file ${filePath}:`, e)));
+                }
+            }
+        }
+
+        // 4. Delete Parent Doc
+        batch.delete(ingDoc.ref);
+
+        // Execute
+        await Promise.all(deletePromises);
+        await batch.commit();
+
+    } catch (e) {
+        console.error('deleteIngredientCategoryAction failed:', e);
+        return { success: false, error: String(e) };
+    }
+    return { success: true };
+}

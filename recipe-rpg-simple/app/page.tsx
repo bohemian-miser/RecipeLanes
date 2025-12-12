@@ -111,6 +111,10 @@ export default function Home() {
     }
   };
 
+  const handleInventoryDelete = (iconId: string) => {
+      setIcons(prev => prev.filter(i => i.id !== iconId));
+  };
+
   return (
     <div className="flex min-h-screen w-full bg-zinc-900 text-zinc-100 font-mono">
       <main className="container mx-auto flex flex-col items-center p-4 sm:p-8">
@@ -134,6 +138,7 @@ export default function Home() {
           <IconDisplay
             icons={icons}
             onReroll={handleReroll}
+            onDelete={handleInventoryDelete}
             isLoading={isLoading}
             error={error}
             highlightedIconId={null}

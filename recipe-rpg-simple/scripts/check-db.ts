@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { db } from './lib/firebase-admin';
+import { db } from '../lib/firebase-admin';
 
 async function checkIngredients() {
   console.log('Listing all ingredients...');

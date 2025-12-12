@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { getOrCreateIconAction, recordRejectionAction, getAllStorageFilesAction } from './app/actions';
-import { db, storage } from './lib/firebase-admin';
+import { getOrCreateIconAction, recordRejectionAction, getAllStorageFilesAction } from '../app/actions';
+import { db, storage } from '../lib/firebase-admin';
 
 async function testComprehensiveLifecycle() {
   const ingredient = "Integration-Test-Burger-" + Date.now();

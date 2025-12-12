@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { db, storage } from './lib/firebase-admin';
+import { db, storage } from '../lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 // Wilson Score Interval (Lower Confidence Bound) - Copy of logic

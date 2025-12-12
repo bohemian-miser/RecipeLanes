@@ -36,6 +36,29 @@ function calculateWilsonLCB(n: number, r: number): number {
   return Math.max(0, lcb); // Clamp to 0
 }
 
+// Helper to update Storage Metadata safely
+async function updateStorageMetadata(iconUrl: string, updates: { impressions?: number, rejections?: number, lcb?: number }) {
+    if (!process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) return;
+    try {
+        const matches = iconUrl.match(/\/o\/([^?]+)/);
+        if (matches && matches[1]) {
+            const filePath = decodeURIComponent(matches[1]);
+            const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app');
+            const file = bucket.file(filePath);
+            
+            // Construct string-based metadata object
+            const metadata: Record<string, string> = {};
+            if (updates.impressions !== undefined) metadata.impressions = String(updates.impressions);
+            if (updates.rejections !== undefined) metadata.rejections = String(updates.rejections);
+            if (updates.lcb !== undefined) metadata.lcb = String(updates.lcb);
+
+            await file.setMetadata({ metadata });
+        }
+    } catch (err) {
+        console.warn('Storage metadata update failed:', err);
+    }
+}
+
 async function generateAndStoreIcon(ingredient: string, ingredientDocId: string, useFallback = false): Promise<{ url: string, lcb: number }> {
   console.log('[generateAndStoreIcon] Generating for:', ingredient);
   
@@ -277,18 +300,26 @@ export async function getOrCreateIconAction(
       if (!shouldGenerate) {
           // Selection Strategy: Highest LCB
           const selected = sortedCandidates[0];
+          const newImpressions = selected.n + 1;
+          const newLCB = calculateWilsonLCB(newImpressions, selected.r);
           
           if (!useFallback) {
               await db.collection('ingredients').doc(bestMatch.id).collection('icons').doc(selected.id).update({
                   impressions: FieldValue.increment(1),
-                  popularity_score: calculateWilsonLCB(selected.n + 1, selected.r)
+                  popularity_score: newLCB
+              });
+              
+              // Update Storage Metadata
+              await updateStorageMetadata(selected.url, { 
+                  impressions: newImpressions, 
+                  lcb: newLCB 
               });
           }
           
           return { 
               iconUrl: selected.url, 
               isNew: false, 
-              popularityScore: calculateWilsonLCB(selected.n + 1, selected.r),
+              popularityScore: newLCB,
               debugInfo // RETURN DEBUG INFO
           };
       }
@@ -357,22 +388,8 @@ export async function recordRejectionAction(rawIconUrl: string, rawIngredient: s
                 popularity_score: newLcb
             });
             
-            if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
-                try {
-                    const matches = iconUrl.match(/\/o\/([^?]+)/);
-                    if (matches && matches[1]) {
-                        const filePath = decodeURIComponent(matches[1]);
-                        const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app');
-                        const file = bucket.file(filePath);
-                        await file.setMetadata({
-                            metadata: {
-                                rejections: String(r),
-                                lcb: String(newLcb)
-                            }
-                        });
-                    }
-                } catch (err) { console.warn('Storage metadata update failed', err); }
-            }
+            // Update Storage Metadata using helper
+            await updateStorageMetadata(iconUrl, { rejections: r, lcb: newLcb });
         }
         await batch.commit();
     } catch (e) {

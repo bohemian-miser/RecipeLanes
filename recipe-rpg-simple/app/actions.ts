@@ -1,6 +1,6 @@
 'use server';
 
-import { ai, embeddingModel, imagenModel } from '@/lib/genkit';
+import { ai, embeddingModel, imageModelName } from '@/lib/genkit';
 import { db, storage } from '@/lib/firebase-admin';
 import { memoryStore } from '@/lib/store';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -31,7 +31,7 @@ async function generateAndStoreIcon(ingredient: string, generationCount: number,
   
   // 1. Generate Image
   const { media } = await ai.generate({
-    model: imagenModel,
+    model: imageModelName,
     prompt: `Generate a 64x64 pixel art icon for ${ingredient}. The style should be reminiscent of an 8-bit video game. Ensure the background is transparent.`,
   });
 
@@ -110,7 +110,12 @@ export async function getOrCreateIconAction(rawIngredient: string, rawExistingIc
   let embedding: number[] = [];
   try {
       const response = await ai.embed({ embedder: embeddingModel, content: ingredient });
-      if (response && response.embedding) {
+      
+      // Handle various response shapes from Genkit embed
+      if (Array.isArray(response) && response.length > 0 && response[0].embedding) {
+          embedding = response[0].embedding;
+      } else if (response && 'embedding' in response) {
+          // @ts-ignore - Dynamic check
           embedding = response.embedding;
       } else {
           console.error('Embedding response missing data:', response);

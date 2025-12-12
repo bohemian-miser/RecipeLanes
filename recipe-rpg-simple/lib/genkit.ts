@@ -10,5 +10,5 @@ export const ai = genkit({
 });
 
 // Models defined as strings to avoid import issues
-export const imagenModel = 'googleai/imagen-4.0-fast-generate-001'; 
+export const imageModelName = 'googleai/imagen-4.0-fast-generate-001'; 
 export const embeddingModel = 'googleai/text-embedding-004';

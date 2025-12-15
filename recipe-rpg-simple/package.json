@@ -6,7 +6,8 @@
     "dev": "next dev -p 8001",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npx tsx scripts/test-lifecycle.ts"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.25.0",
@@ -29,6 +30,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.0.8",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

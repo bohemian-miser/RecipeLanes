@@ -36,6 +36,14 @@ function calculateWilsonLCB(n: number, r: number): number {
   return Math.max(0, lcb); // Clamp to 0
 }
 
+// Helper for Title Case
+function toTitleCase(str: string) {
+  return str
+    .split(' ')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
 // Helper to update Storage Metadata safely
 async function updateStorageMetadata(iconUrl: string, updates: { impressions?: number, rejections?: number, lcb?: number }) {
     if (!process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) return;
@@ -65,7 +73,7 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string,
   // 1. Generate Image
   const { media } = await ai.generate({
     model: imageModelName,
-    prompt: `Generate a 64x64 pixel art icon for ${ingredient}. The style should be reminiscent of an 8-bit video game. Ensure the background is transparent.`,
+    prompt: `Generate a 64x64 pixel art icon for ${ingredient}. The style should be reminiscent of an 8-bit video game. The style should reflect a simple, modern home cooking environment.Ensure the background is transparent.`,
   });
 
   if (!media || !media.url) throw new Error('Image generation failed');
@@ -100,8 +108,13 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string,
           });
           
           downloadURL = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
-      } catch (e) {
-          console.warn('Storage upload failed, using ephemeral URL:', e);
+      } catch (e: any) {
+          const errString = String(e);
+          if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
+              console.warn('Storage upload failed due to missing/invalid credentials. Using ephemeral URL.');
+          } else {
+              console.warn('Storage upload failed, using ephemeral URL:', e);
+          }
       }
   }
 
@@ -112,6 +125,8 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string,
           ingredient,
           ingredientId: ingredientDocId,
           popularity_score: lcb, // Mapping LCB to score field for compat
+          impressions: initialImpressions,
+          rejections: initialRejections,
           created_at: Date.now(),
           marked_for_deletion: false
       });
@@ -127,8 +142,13 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string,
               marked_for_deletion: false
           });
           console.log(`[generateAndStoreIcon] Successfully wrote metadata for ${ingredient}`);
-      } catch (e) {
-          console.error('Firestore add failed:', e);
+      } catch (e: any) {
+          const errString = String(e);
+          if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
+              console.warn('Firestore add failed due to missing/invalid credentials. Metadata not saved to cloud.');
+          } else {
+              console.error('Firestore add failed:', e);
+          }
       }
   }
 
@@ -150,18 +170,24 @@ export async function getAllIconsAction() {
         // Sort in memory by LCB (popularity_score) descending
         // @ts-ignore
         return items.sort((a, b) => (b.popularity_score || 0) - (a.popularity_score || 0));
-    } catch (e) {
-        console.error('Failed to fetch all icons:', e);
+    } catch (e: any) {
+        const errString = String(e);
+        if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
+             console.warn('Firestore fetch failed (getAllIconsAction) due to missing/invalid credentials. Returning empty list.');
+        } else {
+             console.error('Failed to fetch all icons:', e);
+        }
         return [];
     }
 }
 
 export async function getAllStorageFilesAction() {
+    const files = [];
     try {
         const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app';
         const bucket = storage.bucket(bucketName);
-        const [files] = await bucket.getFiles({ prefix: 'icons/', maxResults: 50 });
-        return files.map(file => ({
+        const [storageFiles] = await bucket.getFiles({ prefix: 'icons/', maxResults: 1000 });
+        files.push(...storageFiles.map(file => ({
             name: file.name,
             updated: file.metadata.updated,
             contentType: file.metadata.contentType,
@@ -175,11 +201,31 @@ export async function getAllStorageFilesAction() {
             rejections: file.metadata.metadata?.rejections || '0',
             mediaLink: file.metadata.mediaLink,
             publicUrl: `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(file.name)}?alt=media`
-        }));
-    } catch (e) {
-        console.error('Failed to fetch storage files:', e);
-        return [];
+        })));
+    } catch (e: any) {
+        const errString = String(e);
+        if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
+             console.warn('Cloud storage credentials invalid or missing. Using local memory store only.');
+        } else {
+             console.error('Failed to fetch storage files:', e);
+        }
     }
+
+    // Merge memory store items
+    const memoryIcons = memoryStore.getAllIcons();
+    files.push(...memoryIcons.map(icon => ({
+        name: `icons/${icon.ingredient.replace(/\s+/g, '-')}-${icon.id}.png`,
+        updated: new Date(icon.created_at).toISOString(),
+        contentType: 'image/png',
+        size: 0,
+        popularityScore: String(icon.popularity_score),
+        impressions: String(icon.impressions || 0),
+        rejections: String(icon.rejections || 0),
+        mediaLink: icon.url,
+        publicUrl: icon.url
+    })));
+
+    return files;
 }
 
 export async function getOrCreateIconAction(
@@ -190,10 +236,11 @@ export async function getOrCreateIconAction(
   // Validate Input
   const ingredientParse = IngredientSchema.safeParse(rawIngredient);
   if (!ingredientParse.success) return { error: 'Invalid ingredient' };
-  let ingredient = ingredientParse.data;
+  let ingredient = toTitleCase(ingredientParse.data); // Normalize to Title Case
 
   const countParse = CountSchema.safeParse(rawSessionRejections);
   const sessionRejections = countParse.success ? countParse.data : 0;
+
 
   const seenParse = SeenUrlsSchema.safeParse(rawSeenUrls);
   const seenUrls = new Set(seenParse.success ? seenParse.data : []);
@@ -217,8 +264,13 @@ export async function getOrCreateIconAction(
               bestMatch = { id: matchDoc.id, data: matchDoc.data() };
               ingredient = matchDoc.data().name; // Use canonical name
           }
-      } catch (e) {
-          console.warn('Firestore read failed, using fallback:', e);
+      } catch (e: any) {
+          const errString = String(e);
+          if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
+              console.warn('Firestore read failed (getOrCreateIconAction), using fallback.');
+          } else {
+              console.warn('Firestore read failed, using fallback:', e);
+          }
           useFallback = true;
       }
   }
@@ -314,6 +366,11 @@ export async function getOrCreateIconAction(
                   impressions: newImpressions, 
                   lcb: newLCB 
               });
+          } else {
+              memoryStore.updateIcon(selected.id, {
+                  impressions: newImpressions,
+                  popularity_score: newLCB
+              });
           }
           
           return { 
@@ -392,25 +449,76 @@ export async function recordRejectionAction(rawIconUrl: string, rawIngredient: s
             await updateStorageMetadata(iconUrl, { rejections: r, lcb: newLcb });
         }
         await batch.commit();
-    } catch (e) {
+    } catch (e: any) {
         useFallback = true;
-        console.error('recordRejectionAction failed:', e);
+        const errString = String(e);
+        if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
+             console.warn('recordRejectionAction failed due to missing/invalid credentials. Ignored in fallback mode.');
+             
+             // Try to update memory store if we are in fallback mode
+             const icons = memoryStore.getAllIcons().filter(i => i.url === iconUrl);
+             for (const icon of icons) {
+                 const n = (icon.impressions || 0);
+                 const r = (icon.rejections || 0) + 1;
+                 const newLcb = calculateWilsonLCB(n, r);
+                 memoryStore.updateIcon(icon.id, {
+                     rejections: r,
+                     popularity_score: newLcb
+                 });
+             }
+        } else {
+             console.error('recordRejectionAction failed:', e);
+        }
     }
     return { success: true };
 }
 
-export async function deleteIconByUrlAction(iconUrl: string) {
-    let useFallback = false;
+export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: string) {
+    // 1. Firestore
+    let firestoreDeleted = false;
     try {
-        // 1. Delete from Firestore
-        const query = db.collectionGroup('icons').where('url', '==', iconUrl);
-        const snapshot = await query.get();
-        
-        const batch = db.batch();
-        snapshot.docs.forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
+        if (ingredientName) {
+            // OPTION A: Targeted Delete (No Index Required)
+            const ingSnapshot = await db.collection('ingredients').get();
+            const ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === ingredientName.toLowerCase());
+            
+            if (ingDoc) {
+                const iconQuery = ingDoc.ref.collection('icons').where('url', '==', iconUrl);
+                const snapshot = await iconQuery.get();
+                if (!snapshot.empty) {
+                    const batch = db.batch();
+                    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+                    await batch.commit();
+                    firestoreDeleted = true;
+                }
+            }
+        }
 
-        // 2. Delete from Storage
+        if (!firestoreDeleted) {
+            // OPTION B: Global Search (Requires Index)
+            const query = db.collectionGroup('icons').where('url', '==', iconUrl);
+            const snapshot = await query.get();
+            
+            if (!snapshot.empty) {
+                const batch = db.batch();
+                snapshot.docs.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+            }
+        }
+    } catch (e: any) {
+        const errString = String(e);
+        // Code 9 is FAILED_PRECONDITION (Missing Index)
+        if (errString.includes('invalid_grant') || errString.includes('invalid_rapt') || e.code === 9 || errString.includes('FAILED_PRECONDITION')) {
+             // If we tried specific delete and failed, or fallback failed, just log warning.
+             // It's acceptable to skip metadata delete if we lack permissions/indexes.
+             console.warn(`Firestore delete skipped (Auth/Index): ${e.message}`);
+        } else {
+             console.error('Firestore delete failed:', e);
+        }
+    }
+
+    // 2. Storage
+    try {
         if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
             const matches = iconUrl.match(/\/o\/([^?]+)/);
             if (matches && matches[1]) {
@@ -419,56 +527,83 @@ export async function deleteIconByUrlAction(iconUrl: string) {
                 await bucket.file(filePath).delete();
             }
         }
-    } catch (e) {
-        console.error('deleteIconByUrlAction failed:', e);
-        return { success: false, error: String(e) };
+    } catch (e: any) {
+        const errString = String(e);
+        if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
+            console.warn('Storage delete skipped (Auth).');
+        } else if (e.code !== 404) {
+             console.error('Storage delete failed:', e);
+        }
     }
+
+    // 3. Memory Store
+    memoryStore.deleteIcon(iconUrl);
+
     return { success: true };
 }
 
 export async function deleteIngredientCategoryAction(rawIngredient: string) {
+    // 1. Firestore & Storage (Coupled for category delete mostly)
     try {
-        const ingredient = rawIngredient.trim().toLowerCase();
+        let ingredient = toTitleCase(rawIngredient.trim()); // Normalize
         
-        // 1. Find Ingredient Doc
+        // Find Ingredient Doc
         const ingSnapshot = await db.collection('ingredients').get();
-        const ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === ingredient);
+        // Try exact match first (normalized)
+        let ingDoc = ingSnapshot.docs.find(d => d.data().name === ingredient);
         
-        if (!ingDoc) return { success: false, error: 'Ingredient not found' };
+        // Fallback: Case-insensitive match if exact fails (e.g. legacy data)
+        if (!ingDoc) {
+             ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === rawIngredient.trim().toLowerCase());
+        }
+        
+        if (ingDoc) {
+            // List all icons
+            const iconsSnapshot = await ingDoc.ref.collection('icons').get();
+            const batch = db.batch();
+            const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ? storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app') : null;
 
-        // 2. List all icons
-        const iconsSnapshot = await ingDoc.ref.collection('icons').get();
-        const batch = db.batch();
-        const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ? storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app') : null;
+            const deletePromises: Promise<any>[] = [];
 
-        const deletePromises: Promise<any>[] = [];
-
-        // 3. Queue deletions
-        for (const iconDoc of iconsSnapshot.docs) {
-            const data = iconDoc.data();
-            // Delete Doc
-            batch.delete(iconDoc.ref);
-            
-            // Delete File
-            if (bucket && data.url) {
-                const matches = data.url.match(/\/o\/([^?]+)/);
-                if (matches && matches[1]) {
-                    const filePath = decodeURIComponent(matches[1]);
-                    deletePromises.push(bucket.file(filePath).delete().catch(e => console.warn(`Failed to delete file ${filePath}:`, e)));
+            // Queue deletions
+            for (const iconDoc of iconsSnapshot.docs) {
+                const data = iconDoc.data();
+                // Delete Doc
+                batch.delete(iconDoc.ref);
+                
+                // Delete File
+                if (bucket && data.url) {
+                    const matches = data.url.match(/\/o\/([^?]+)/);
+                    if (matches && matches[1]) {
+                        const filePath = decodeURIComponent(matches[1]);
+                        deletePromises.push(bucket.file(filePath).delete().catch(e => {
+                             if (e.code !== 404) console.warn(`Failed to delete file ${filePath}:`, e);
+                        }));
+                    }
                 }
             }
+
+            // Delete Parent Doc
+            batch.delete(ingDoc.ref);
+
+            // Execute
+            await Promise.all(deletePromises);
+            await batch.commit();
+        } else {
+             // Not found in Firestore, possibly only in memory?
         }
 
-        // 4. Delete Parent Doc
-        batch.delete(ingDoc.ref);
-
-        // Execute
-        await Promise.all(deletePromises);
-        await batch.commit();
-
-    } catch (e) {
-        console.error('deleteIngredientCategoryAction failed:', e);
-        return { success: false, error: String(e) };
+    } catch (e: any) {
+        const errString = String(e);
+        if (errString.includes('invalid_grant') || errString.includes('invalid_rapt') || e.code === 9 || errString.includes('FAILED_PRECONDITION')) {
+             console.warn(`Category delete skipped (Auth/Index): ${e.message}`);
+        } else {
+             console.error('deleteIngredientCategoryAction failed:', e);
+        }
     }
+    
+    // 2. Memory Store
+    memoryStore.deleteIngredient(rawIngredient); // Store handles case-insensitive
+
     return { success: true };
 }

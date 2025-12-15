@@ -2,13 +2,14 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { getAllStorageFilesAction } from '@/app/actions';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { getAllStorageFilesAction, deleteIconByUrlAction, deleteIngredientCategoryAction } from '@/app/actions';
+import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 
 export function DebugGallery({ refreshKey }: { refreshKey?: number }) {
   const [storageFiles, setStorageFiles] = useState<any[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -27,6 +28,42 @@ export function DebugGallery({ refreshKey }: { refreshKey?: number }) {
         setLoading(false);
       });
   }, [refreshKey]);
+
+  const handleDeleteIcon = async (url: string, name: string, ingredientName: string) => {
+      if (!confirm(`Delete icon ${name}?`)) return;
+      setDeleting(url);
+      try {
+          const result = await deleteIconByUrlAction(url, ingredientName);
+          if (result && !result.success) throw new Error(result.error);
+          setStorageFiles(prev => prev.filter(f => f.publicUrl !== url));
+      } catch (err: any) {
+          setErrors(prev => [...prev, `Delete Error: ${err.message}`]);
+      } finally {
+          setDeleting(null);
+      }
+  };
+
+  const handleDeleteCategory = async (category: string) => {
+      if (!confirm(`Delete ENTIRE category "${category}" and ALL its icons? This cannot be undone.`)) return;
+      setDeleting(`cat:${category}`);
+      try {
+          const result = await deleteIngredientCategoryAction(category);
+          if (result && !result.success) throw new Error(result.error);
+          // Filter out all files that match this category logic
+          setStorageFiles(prev => prev.filter(f => {
+              const basename = f.name.split('/').pop() || '';
+              const nameWithoutExt = basename.replace('.png', '');
+              const parts = nameWithoutExt.split('-');
+              if (parts.length > 1 && !isNaN(Number(parts[parts.length - 1]))) parts.pop();
+              const fileCategory = parts.join(' ') || 'Uncategorized';
+              return fileCategory !== category;
+          }));
+      } catch (err: any) {
+          setErrors(prev => [...prev, `Delete Category Error: ${err.message}`]);
+      } finally {
+          setDeleting(null);
+      }
+  };
 
   const groupedStorageFiles = useMemo(() => {
     const groups: Record<string, any[]> = {};
@@ -85,22 +122,30 @@ export function DebugGallery({ refreshKey }: { refreshKey?: number }) {
              
              return (
                <div key={key} className="border-2 border-zinc-800 bg-zinc-900/30">
-                 <button 
-                   onClick={() => toggleStorageCategory(category)}
-                   className="w-full flex items-center justify-between p-3 bg-zinc-800/50 hover:bg-zinc-800 transition-colors text-left"
-                 >
-                   <div className="flex items-center gap-2">
-                     {isCollapsed ? <ChevronRight className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />}
-                     <span className="text-sm font-bold text-zinc-300 uppercase tracking-wider">{category}</span>
-                     <span className="text-xs text-zinc-500 bg-zinc-900 px-1.5 py-0.5 rounded-full">{categoryFiles.length}</span>
-                   </div>
-                 </button>
+                 <div className="flex items-center justify-between p-3 bg-zinc-800/50">
+                     <button 
+                       onClick={() => toggleStorageCategory(category)}
+                       className="flex-1 flex items-center gap-2 hover:text-zinc-300 transition-colors text-left"
+                     >
+                       {isCollapsed ? <ChevronRight className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />}
+                       <span className="text-sm font-bold text-zinc-300 uppercase tracking-wider">{category}</span>
+                       <span className="text-xs text-zinc-500 bg-zinc-900 px-1.5 py-0.5 rounded-full">{categoryFiles.length}</span>
+                     </button>
+                     <button
+                        onClick={() => handleDeleteCategory(category)}
+                        disabled={deleting === `cat:${category}`}
+                        className="p-1 hover:bg-red-900/50 rounded text-zinc-500 hover:text-red-400 transition-colors"
+                        title="Delete Category"
+                     >
+                        <Trash2 className="h-4 w-4" />
+                     </button>
+                 </div>
 
                  {!isCollapsed && (
                    <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
                       {categoryFiles.map((file) => (
-                        <div key={file.name} className="flex flex-col gap-2 p-2 bg-zinc-900/50 border border-zinc-800 overflow-hidden text-xs">
-                          <div className="relative aspect-square w-full bg-zinc-950 border border-zinc-700 flex items-center justify-center relative group">
+                        <div key={file.name} className="flex flex-col gap-2 p-2 bg-zinc-900/50 border border-zinc-800 overflow-hidden text-xs relative group">
+                          <div className="relative aspect-square w-full bg-zinc-950 border border-zinc-700 flex items-center justify-center">
                              <img 
                                src={file.publicUrl} 
                                alt="debug-file" 
@@ -111,6 +156,15 @@ export function DebugGallery({ refreshKey }: { refreshKey?: number }) {
                                }}
                              />
                              <div className="absolute inset-0 flex items-center justify-center text-[8px] text-zinc-600 z-0">IMG FAIL</div>
+                             
+                             <button
+                                onClick={() => handleDeleteIcon(file.publicUrl, file.name, category)}
+                                disabled={deleting === file.publicUrl}
+                                className="absolute top-1 right-1 p-1.5 bg-zinc-900/80 hover:bg-red-900 border border-zinc-700 hover:border-red-500 text-zinc-400 hover:text-red-200 z-20 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Delete Icon"
+                             >
+                                <Trash2 className="h-3 w-3" />
+                             </button>
                           </div>
                           <div className="flex-1 min-w-0 space-y-1">
                             <div className="text-blue-400 font-bold truncate">{file.name.split('/').pop()}</div>

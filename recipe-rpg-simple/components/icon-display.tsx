@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import React, { useState, useMemo } from 'react';
-import { RefreshCw, ChevronDown, ChevronRight } from "lucide-react";
+import { RefreshCw, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 
 export interface Icon {
   id: string;
@@ -12,12 +12,13 @@ export interface Icon {
 interface IconDisplayProps {
   icons: Icon[];
   onReroll: (icon: Icon) => void;
+  onDelete: (iconId: string, ingredientName: string) => void;
   isLoading: boolean;
   error: string | null;
   highlightedIconId: string | null;
 }
 
-export function IconDisplay({ icons, onReroll, isLoading, error, highlightedIconId }: IconDisplayProps) {
+export function IconDisplay({ icons, onReroll, onDelete, isLoading, error, highlightedIconId }: IconDisplayProps) {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
 
   // Group icons by ingredient
@@ -105,14 +106,24 @@ export function IconDisplay({ icons, onReroll, isLoading, error, highlightedIcon
                             <span className="text-[10px] text-yellow-500 font-bold truncate uppercase flex-1 tracking-tighter" title={icon.ingredient}>
                               {icon.ingredient}
                             </span>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onReroll(icon); }}
-                              disabled={isLoading}
-                              className="p-1 hover:text-white text-zinc-500 transition-colors"
-                              title="Reroll"
-                            >
-                              <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onReroll(icon); }}
+                                  disabled={isLoading}
+                                  className="p-1 hover:text-white text-zinc-500 transition-colors"
+                                  title="Reroll"
+                                >
+                                  <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onDelete(icon.id, icon.ingredient); }}
+                                  disabled={isLoading}
+                                  className="p-1 hover:text-red-400 text-zinc-500 transition-colors"
+                                  title="Remove from Inventory"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                            </div>
                           </div>
                         </div>
                       </div>

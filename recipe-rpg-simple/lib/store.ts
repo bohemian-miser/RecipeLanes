@@ -4,6 +4,8 @@ export interface IconData {
   url: string;
   ingredient: string;
   popularity_score: number;
+  impressions?: number;
+  rejections?: number;
   created_at: number;
   marked_for_deletion: boolean;
   embedding?: number[];
@@ -37,12 +39,23 @@ class MemoryStore {
     return id;
   }
 
+  updateIcon(id: string, updates: Partial<IconData>) {
+      const index = this.icons.findIndex(i => i.id === id);
+      if (index !== -1) {
+          this.icons[index] = { ...this.icons[index], ...updates };
+      }
+  }
+
   getIconsForIngredient(ingredientId: string): IconData[] {
     return this.icons.filter(i => i.ingredientId === ingredientId);
   }
   
   getIconsByName(name: string): IconData[] {
       return this.icons.filter(i => i.ingredient === name);
+  }
+
+  getAllIcons(): IconData[] {
+    return this.icons;
   }
 
   updateIconPopularity(iconUrl: string, adjustment: number) {
@@ -55,6 +68,18 @@ class MemoryStore {
         icon.marked_for_deletion = true;
       }
     }
+  }
+
+  deleteIcon(url: string) {
+      this.icons = this.icons.filter(i => i.url !== url);
+  }
+
+  deleteIngredient(name: string) {
+      const ingredient = this.ingredients.find(i => i.name.toLowerCase() === name.toLowerCase());
+      if (ingredient) {
+          this.ingredients = this.ingredients.filter(i => i.id !== ingredient.id);
+          this.icons = this.icons.filter(i => i.ingredientId !== ingredient.id);
+      }
   }
 }
 

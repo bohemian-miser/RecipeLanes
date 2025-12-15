@@ -91,15 +91,24 @@ async function testComprehensiveLifecycle() {
       console.log('\n[Cleanup] Deleting test data...');
       
       // 1. Delete Firestore Data
-      const ingSnapshot = await db.collection('ingredients').where('name', '==', ingredient).get();
-      for (const doc of ingSnapshot.docs) {
-          const icons = await doc.ref.collection('icons').get();
-          const batch = db.batch();
-          icons.docs.forEach(i => batch.delete(i.ref));
-          batch.delete(doc.ref);
-          await batch.commit();
+      try {
+          const ingSnapshot = await db.collection('ingredients').where('name', '==', ingredient).get();
+          for (const doc of ingSnapshot.docs) {
+              const icons = await doc.ref.collection('icons').get();
+              const batch = db.batch();
+              icons.docs.forEach(i => batch.delete(i.ref));
+              batch.delete(doc.ref);
+              await batch.commit();
+          }
+          console.log(' -> Deleted Firestore records.');
+      } catch (e: any) {
+          const errString = String(e);
+          if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
+              console.warn(' -> Skipping Firestore cleanup (invalid credentials).');
+          } else {
+              console.error(' -> Failed to cleanup Firestore:', e);
+          }
       }
-      console.log(' -> Deleted Firestore records.');
 
       // 2. Delete Storage Files
       if (generatedUrls.length > 0 && process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
@@ -113,8 +122,11 @@ async function testComprehensiveLifecycle() {
                       await bucket.file(name).delete();
                       console.log(` -> Deleted file: ${name}`);
                   }
-              } catch (e) {
-                  console.warn(` -> Failed to delete file ${url}:`, e);
+              } catch (e: any) {
+                  const errString = String(e);
+                  if (!errString.includes('invalid_grant') && !errString.includes('invalid_rapt')) {
+                      console.warn(` -> Failed to delete file ${url}:`, e);
+                  }
               }
           }
       }

@@ -102,7 +102,7 @@ export async function getAllIconsAction() {
 
 export async function getAllStorageFilesAction() {
     const session = await getAuthService().verifyAuth();
-    if (!session?.isAdmin) return [];
+    if (!session?.isAdmin) return null;
     return getDataService().listDebugFiles();
 }
 

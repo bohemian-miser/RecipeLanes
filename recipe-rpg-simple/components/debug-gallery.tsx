@@ -6,19 +6,18 @@ import { getAllStorageFilesAction, deleteIconByUrlAction, deleteIngredientCatego
 import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 
 export function DebugGallery({ refreshKey }: { refreshKey?: number }) {
-  const [storageFiles, setStorageFiles] = useState<any[]>([]);
+  const [storageFiles, setStorageFiles] = useState<any[] | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    console.log(`[DebugGallery] Mounting/Refreshing (Key: ${refreshKey})...`);
+    // console.log(`[DebugGallery] Mounting/Refreshing (Key: ${refreshKey})...`);
     setLoading(true);
     
     getAllStorageFilesAction()
       .then((files) => {
-        console.log('[DebugGallery] Storage data:', files);
         setStorageFiles(files);
         setLoading(false);
       })
@@ -29,13 +28,20 @@ export function DebugGallery({ refreshKey }: { refreshKey?: number }) {
       });
   }, [refreshKey]);
 
+  // Hide if unauthorized (null) or loading
+  if (loading) return null; // Don't show loading pulse for unauthorized users? Or show pulse then hide?
+  // User said "don't show". If we show pulse then disappear, it's ok.
+  // But if we want to be clean, maybe keep loading?
+  // Let's hide completely if null.
+  if (storageFiles === null) return null;
+
   const handleDeleteIcon = async (url: string, name: string, ingredientName: string) => {
       if (!confirm(`Delete icon ${name}?`)) return;
       setDeleting(url);
       try {
           const result = await deleteIconByUrlAction(url, ingredientName);
           if (result && !result.success) throw new Error(result.error);
-          setStorageFiles(prev => prev.filter(f => f.publicUrl !== url));
+          setStorageFiles(prev => prev ? prev.filter(f => f.publicUrl !== url) : null);
       } catch (err: any) {
           setErrors(prev => [...prev, `Delete Error: ${err.message}`]);
       } finally {
@@ -50,56 +56,20 @@ export function DebugGallery({ refreshKey }: { refreshKey?: number }) {
           const result = await deleteIngredientCategoryAction(category);
           if (result && !result.success) throw new Error(result.error);
           // Filter out all files that match this category logic
-          setStorageFiles(prev => prev.filter(f => {
+          setStorageFiles(prev => prev ? prev.filter(f => {
               const basename = f.name.split('/').pop() || '';
               const nameWithoutExt = basename.replace('.png', '');
               const parts = nameWithoutExt.split('-');
               if (parts.length > 1 && !isNaN(Number(parts[parts.length - 1]))) parts.pop();
               const fileCategory = parts.join(' ') || 'Uncategorized';
               return fileCategory !== category;
-          }));
+          }) : null);
       } catch (err: any) {
           setErrors(prev => [...prev, `Delete Category Error: ${err.message}`]);
       } finally {
           setDeleting(null);
       }
   };
-
-  const groupedStorageFiles = useMemo(() => {
-    const groups: Record<string, any[]> = {};
-    storageFiles.forEach(file => {
-      // Parse filename: icons/Ingredient-Name-12345.png
-      const basename = file.name.split('/').pop() || '';
-      const nameWithoutExt = basename.replace('.png', '');
-      const parts = nameWithoutExt.split('-');
-      // Remove timestamp (last part)
-      if (parts.length > 1 && !isNaN(Number(parts[parts.length - 1]))) {
-          parts.pop();
-      }
-      // Reassemble ingredient name (approximate)
-      const category = parts.join(' ') || 'Uncategorized';
-      
-      if (!groups[category]) {
-        groups[category] = [];
-      }
-      groups[category].push(file);
-    });
-    return groups;
-  }, [storageFiles]);
-
-  const storageCategories = useMemo(() => Object.keys(groupedStorageFiles).sort(), [groupedStorageFiles]);
-
-  const toggleStorageCategory = (category: string) => {
-    const key = `storage:${category}`;
-    setCollapsedCategories(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  if (loading) return <div className="p-4 text-zinc-500 font-mono text-xs animate-pulse">Loading Debug Gallery...</div>;
 
   return (
     <div className="w-full mt-12 border-t-2 border-zinc-800 pt-8 space-y-8">

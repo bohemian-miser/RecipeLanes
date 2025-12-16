@@ -19,18 +19,26 @@ export const ai = genkit({
 
 // Register mocks if no API key
 if (!process.env.GEMINI_API_KEY) {
-  ai.defineModel({ name: textModel }, async (req) => {
+  ai.defineModel({ name: textModel } as any, async (req) => {
     return { 
-      content: [{ text: "Mock visual description for test" }]
-    };
+      candidates: [{
+        index: 0,
+        message: { role: 'model', content: [{ text: "Mock visual description for test" }] },
+        finishReason: 'stop'
+      }]
+    } as any;
   });
 
-  ai.defineModel({ name: imageModelName }, async (req) => {
+  ai.defineModel({ name: imageModelName } as any, async (req) => {
     return {
-      content: [],
-      media: {
-        url: `https://placehold.co/64x64/png?text=Mock`
-      }
-    };
+      candidates: [{
+        index: 0,
+        message: { 
+          role: 'model', 
+          content: [{ media: { url: `https://placehold.co/64x64/png?text=Mock` } }] 
+        },
+        finishReason: 'stop'
+      }]
+    } as any;
   });
 }

@@ -10,14 +10,7 @@ setDataService(new MemoryDataService());
 setAuthService(new MockAuthService());
 
 function urlsMatch(url1: string, url2: string) {
-    if (!url1 || !url2) return false;
-    try {
-        const u1 = decodeURIComponent(url1.split('?')[0]);
-        const u2 = decodeURIComponent(url2.split('?')[0]);
-        return u1 === u2;
-    } catch (e) {
-        return url1.split('?')[0] === url2.split('?')[0];
-    }
+    return url1 === url2;
 }
 
 async function testComprehensiveLifecycle() {

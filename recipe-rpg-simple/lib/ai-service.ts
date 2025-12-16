@@ -28,11 +28,11 @@ export class RealAIService implements AIService {
 
 export class MockAIService implements AIService {
   async generateText(prompt: string): Promise<string> {
-    return `Mock visual description for: ${prompt.slice(0, 20)}...`;
+    return `Mock visual description for: ${prompt}...`;
   }
 
   async generateImage(prompt: string): Promise<string> {
-    return `https://placehold.co/64x64/png?text=Mock+${encodeURIComponent(prompt.slice(0, 10))}`;
+    return `https://placehold.co/64x64/png?text=Mock+${encodeURIComponent(prompt)}`;
   }
 }
 

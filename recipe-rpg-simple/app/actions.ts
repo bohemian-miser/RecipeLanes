@@ -119,11 +119,11 @@ export async function getSharedGalleryAction() {
         grouped[icon.ingredient_name].push(icon);
     });
 
-    // Take top 5
+    // Take top 4
     const result = [];
     for (const ing in grouped) {
         const sorted = grouped[ing].sort((a, b) => (b.popularity_score || 0) - (a.popularity_score || 0));
-        result.push(...sorted.slice(0, 5));
+        result.push(...sorted.slice(0, 4));
     }
     return result;
 }
@@ -134,8 +134,7 @@ export async function getOrCreateIconAction(
     rawSeenUrls: string[] = []
 ) {
   const session = await getAuthService().verifyAuth();
-  if (!session) return { error: 'Authentication required' };
-
+  
   // Validate Input
   const ingredientParse = IngredientSchema.safeParse(rawIngredient);
   if (!ingredientParse.success) return { error: 'Invalid ingredient' };
@@ -207,6 +206,19 @@ export async function getOrCreateIconAction(
           debugInfo.decision = 'NORMAL_SELECTION';
       }
 
+      if (shouldGenerate) {
+          // If user is NOT authenticated, force them to use cache (if available) or fail
+          if (!session) {
+              if (sortedCandidates.length > 0) {
+                  // Fallback to best available candidate regardless of quality check
+                  shouldGenerate = false; 
+                  // Proceed to selection logic below
+              } else {
+                  return { error: 'Item not found. Login to forge new items.' };
+              }
+          }
+      }
+
       if (!shouldGenerate) {
           const selected = sortedCandidates[0];
           const newImpressions = (selected.n || 0) + 1;
@@ -241,7 +253,9 @@ export async function getOrCreateIconAction(
       };
   } 
   
-  // 3. Create New Ingredient Group
+  // 3. Create New Ingredient Group (Requires Auth)
+  if (!session) return { error: 'Item not found. Login to forge new items.' };
+
   const newDocId = await getDataService().createIngredient(ingredient);
   const { url: newUrl, lcb } = await generateAndStoreIcon(ingredient, newDocId);
   return { 

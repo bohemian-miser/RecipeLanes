@@ -211,10 +211,25 @@ export async function getOrCreateIconAction(
 
       if (!shouldGenerate) {
           const selected = sortedCandidates[0];
+          const newImpressions = (selected.n || 0) + 1;
+          const newLCB = calculateWilsonLCB(newImpressions, selected.r || 0);
+
+          try {
+              await getDataService().incrementImpressions(
+                  bestMatch.id,
+                  selected.id,
+                  selected.url,
+                  newLCB,
+                  newImpressions
+              );
+          } catch (e) {
+              console.error('Failed to increment impressions:', e);
+          }
+
           return { 
               iconUrl: selected.url, 
               isNew: false, 
-              popularityScore: selected.lcb,
+              popularityScore: newLCB,
               debugInfo 
           };
       }

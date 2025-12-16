@@ -24,6 +24,8 @@ export interface DataService {
   deleteIcon(iconUrl: string, ingredientName?: string): Promise<void>;
   deleteIngredientCategory(ingredientName: string): Promise<void>;
   
+  incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number): Promise<void>;
+
   listDebugFiles(): Promise<any[]>;
 }
 
@@ -43,6 +45,14 @@ export class FirebaseDataService implements DataService {
       created_at: FieldValue.serverTimestamp()
     });
     return doc.id;
+  }
+
+  async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number) {
+      await db.collection('ingredients').doc(ingredientId).collection('icons').doc(iconId).update({
+          impressions: FieldValue.increment(1),
+          popularity_score: newScore
+      });
+      await this.updateStorageMetadata(iconUrl, { impressions: newImpressions, lcb: newScore });
   }
 
   async getIconsForIngredient(ingredientId: string) {
@@ -301,6 +311,10 @@ export class MemoryDataService implements DataService {
 
           memoryStore.updateIcon(icon.id, { rejections: r, popularity_score: newLcb });
       }
+  }
+
+  async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number) {
+      memoryStore.updateIcon(iconId, { impressions: newImpressions, popularity_score: newScore });
   }
 
   async deleteIcon(iconUrl: string) {

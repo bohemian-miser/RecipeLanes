@@ -3,6 +3,7 @@
 import { embeddingModel, imageModelName, textModel } from '@/lib/genkit';
 import { getAIService } from '@/lib/ai-service';
 import { getDataService } from '@/lib/data-service';
+import { verifyAuth } from '@/lib/auth';
 import { z } from 'zod';
 
 // Constants for Generation Gating
@@ -62,7 +63,6 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
       imageBuffer = await response.arrayBuffer();
   } catch (e) {
       console.error('Failed to download generated image for storage:', e);
-      // Fallback: Store the ephemeral URL if we can't download (unlikely but safe)
       throw new Error('Failed to download generated image');
   }
 
@@ -89,18 +89,45 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
       downloadURL = savedUrl;
   } catch (e) {
       console.error('DataService save failed:', e);
-      // Continue with ephemeral URL if save fails
   }
 
   return { url: downloadURL, lcb };
 }
 
 export async function getAllIconsAction() {
+    const session = await verifyAuth();
+    if (!session?.isAdmin) return [];
     return getDataService().getAllIcons();
 }
 
 export async function getAllStorageFilesAction() {
+    const session = await verifyAuth();
+    if (!session?.isAdmin) return [];
     return getDataService().listDebugFiles();
+}
+
+export async function getSharedGalleryAction() {
+    const session = await verifyAuth();
+    if (!session) return [];
+    
+    // Simplistic implementation: Get all (limit 100 from service) and group
+    // In a real app, you'd want a dedicated query for "top icons per category"
+    const allIcons = await getDataService().getAllIcons();
+    
+    // Group by Ingredient
+    const grouped: Record<string, any[]> = {};
+    allIcons.forEach((icon: any) => {
+        if (!grouped[icon.ingredient_name]) grouped[icon.ingredient_name] = [];
+        grouped[icon.ingredient_name].push(icon);
+    });
+
+    // Take top 5
+    const result = [];
+    for (const ing in grouped) {
+        const sorted = grouped[ing].sort((a, b) => (b.popularity_score || 0) - (a.popularity_score || 0));
+        result.push(...sorted.slice(0, 5));
+    }
+    return result;
 }
 
 export async function getOrCreateIconAction(
@@ -108,6 +135,9 @@ export async function getOrCreateIconAction(
     rawSessionRejections = 0,
     rawSeenUrls: string[] = []
 ) {
+  const session = await verifyAuth();
+  if (!session) return { error: 'Authentication required' };
+
   // Validate Input
   const ingredientParse = IngredientSchema.safeParse(rawIngredient);
   if (!ingredientParse.success) return { error: 'Invalid ingredient' };
@@ -210,6 +240,9 @@ export async function getOrCreateIconAction(
 }
 
 export async function recordRejectionAction(rawIconUrl: string, rawIngredient: string) {
+    const session = await verifyAuth();
+    if (!session) return { error: 'Authentication required' };
+
     const urlParse = z.string().url().safeParse(rawIconUrl);
     if (!urlParse.success) return { error: 'Invalid URL' };
     const iconUrl = urlParse.data;
@@ -230,6 +263,9 @@ export async function recordRejectionAction(rawIconUrl: string, rawIngredient: s
 }
 
 export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: string): Promise<{ success: boolean; error?: string }> {
+    const session = await verifyAuth();
+    if (!session?.isAdmin) return { success: false, error: 'Admin required' };
+
     try {
         await getDataService().deleteIcon(iconUrl, ingredientName);
         return { success: true };
@@ -240,6 +276,9 @@ export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: st
 }
 
 export async function deleteIngredientCategoryAction(rawIngredient: string): Promise<{ success: boolean; error?: string }> {
+    const session = await verifyAuth();
+    if (!session?.isAdmin) return { success: false, error: 'Admin required' };
+
     try {
         const ingredient = toTitleCase(rawIngredient.trim());
         await getDataService().deleteIngredientCategory(ingredient);

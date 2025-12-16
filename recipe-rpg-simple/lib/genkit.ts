@@ -1,12 +1,15 @@
 import { genkit, z } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
 
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error('GEMINI_API_KEY is not set in environment variables');
+const plugins = [];
+if (process.env.GEMINI_API_KEY) {
+  plugins.push(googleAI());
+} else {
+  console.warn('GEMINI_API_KEY is not set. AI features will fail.');
 }
 
 export const ai = genkit({
-  plugins: [googleAI()],
+  plugins,
 });
 
 // Models defined as strings to avoid import issues

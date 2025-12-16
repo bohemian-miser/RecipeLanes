@@ -2,6 +2,17 @@ import 'dotenv/config';
 import { getOrCreateIconAction, recordRejectionAction, getAllStorageFilesAction } from '../app/actions';
 import { db, storage } from '../lib/firebase-admin';
 
+function urlsMatch(url1: string, url2: string) {
+    if (!url1 || !url2) return false;
+    try {
+        const u1 = decodeURIComponent(url1.split('?')[0]);
+        const u2 = decodeURIComponent(url2.split('?')[0]);
+        return u1 === u2;
+    } catch (e) {
+        return url1.split('?')[0] === url2.split('?')[0];
+    }
+}
+
 async function testComprehensiveLifecycle() {
   const ingredient = "Integration-Test-Burger-" + Date.now();
   console.log(`\n=== Starting Comprehensive Test for: ${ingredient} ===`);
@@ -68,7 +79,7 @@ async function testComprehensiveLifecycle() {
     // Our actions await them, so should be fine.
     
     const storageFiles = await getAllStorageFilesAction();
-    const fileC = storageFiles.find((f: any) => f.publicUrl === urlC);
+    const fileC = storageFiles.find((f: any) => urlsMatch(f.publicUrl, urlC));
     
     if (fileC) {
         console.log(' -> Found Icon C in storage listing.');

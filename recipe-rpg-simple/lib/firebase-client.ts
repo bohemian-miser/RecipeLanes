@@ -1,5 +1,5 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, Auth, User } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,9 +10,28 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase (Client)
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const googleProvider = new GoogleAuthProvider();
+let app: FirebaseApp | undefined;
+let auth: Auth;
+let googleProvider: GoogleAuthProvider;
+
+if (firebaseConfig.apiKey) {
+  // Initialize Firebase (Client)
+  app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  googleProvider = new GoogleAuthProvider();
+} else {
+  console.warn('Firebase Client SDK missing API Key (likely during build). Using mock auth.');
+  // Mock Auth for Build Time
+  auth = {
+    onAuthStateChanged: (cb: (user: User | null) => void) => {
+        // Immediately resolve to null user during build/mock
+        cb(null);
+        return () => {};
+    },
+    currentUser: null,
+  } as unknown as Auth;
+  
+  googleProvider = {} as GoogleAuthProvider;
+}
 
 export { auth, googleProvider };

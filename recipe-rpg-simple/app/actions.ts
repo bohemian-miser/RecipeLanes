@@ -271,10 +271,14 @@ export async function getOrCreateIconAction(
   } catch (e: any) {
       console.error('[getOrCreateIconAction] Error:', e);
       // Nice error message for common issues
-      if (e.message?.includes('invalid_grant')) {
+      const msg = e.message || '';
+      if (msg.includes('invalid_grant')) {
           return { error: 'Server authentication failed. Please check backend credentials.' };
       }
-      return { error: `Failed to forge item: ${e.message}` };
+      if (msg.includes('API key expired') || msg.includes('API key not valid')) {
+          return { error: 'AI Service Error: The API Key is invalid or expired. Please contact the administrator.' };
+      }
+      return { error: `Failed to forge item: ${msg}` };
   }
 }
 

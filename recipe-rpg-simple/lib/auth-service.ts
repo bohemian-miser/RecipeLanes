@@ -1,5 +1,5 @@
 import { cookies, headers } from 'next/headers';
-import { auth, isFirebaseEnabled } from '@/lib/firebase-admin';
+import { auth, db, isFirebaseEnabled } from '@/lib/firebase-admin';
 
 export interface AuthSession {
   uid: string;
@@ -61,7 +61,16 @@ export class RealAuthService implements AuthService {
 
         if (!decoded) return null;
         
-        return this.mapUser(decoded);
+        // Check Firestore for Admin flag
+        let isDbAdmin = false;
+        try {
+            const userDoc = await db.collection('users').doc(decoded.uid).get();
+            isDbAdmin = userDoc.data()?.isAdmin === true;
+        } catch (e) {
+            console.warn('Failed to fetch user permissions from Firestore:', e);
+        }
+        
+        return this.mapUser(decoded, isDbAdmin);
 
     } catch (e) {
         console.error('Auth verification failed', e);
@@ -69,13 +78,15 @@ export class RealAuthService implements AuthService {
     }
   }
 
-  private mapUser(decoded: any): AuthSession {
+  private mapUser(decoded: any, isDbAdmin: boolean): AuthSession {
     const admins = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
     const email = decoded.email || '';
+    const isEnvAdmin = admins.includes(email.toLowerCase());
+    
     return {
         uid: decoded.uid,
         email,
-        isAdmin: admins.includes(email.toLowerCase())
+        isAdmin: isDbAdmin || isEnvAdmin
     };
   }
 }

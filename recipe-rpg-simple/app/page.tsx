@@ -8,9 +8,10 @@ import { RerollMonitor } from '@/components/reroll-monitor';
 import { Login } from '@/components/login';
 import { useAuth } from '@/components/auth-provider';
 import { getOrCreateIconAction, recordRejectionAction, getAllIconsAction } from './actions';
+import { LogOut } from 'lucide-react';
 
 export default function Home() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, logout } = useAuth();
   const [icons, setIcons] = useState<Icon[]>([]);
   
   // Session State
@@ -160,13 +161,25 @@ export default function Home() {
     <div className="flex min-h-screen w-full bg-zinc-900 text-zinc-100 font-mono">
       <main className="container mx-auto flex flex-col items-center p-4 sm:p-8">
         <div className="w-full max-w-4xl space-y-8">
-          <header className="text-center space-y-4">
+          <header className="text-center space-y-4 relative">
             <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-yellow-500 uppercase drop-shadow-[0_4px_0_rgba(0,0,0,1)]">
               Icon Maker
             </h1>
             <p className="text-lg text-zinc-400">
               Forge pixel art icons from text! Build your collection.
             </p>
+            {user && (
+              <div className="absolute top-0 right-0 flex flex-col items-end gap-2">
+                <span className="text-[10px] text-zinc-600 font-mono hidden sm:block">{user.email}</span>
+                <button 
+                  onClick={() => logout()}
+                  className="p-2 text-zinc-500 hover:text-red-400 transition-colors"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
+            )}
           </header>
 
           {!user ? (

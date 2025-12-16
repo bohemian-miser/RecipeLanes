@@ -4,6 +4,7 @@ import { useState, useId, useEffect } from 'react';
 import { IngredientForm } from '@/components/ingredient-form';
 import { IconDisplay, Icon } from '@/components/icon-display';
 import { DebugGallery } from '@/components/debug-gallery';
+import { SharedGallery } from '@/components/shared-gallery';
 import { RerollMonitor } from '@/components/reroll-monitor';
 import { Login } from '@/components/login';
 import { useAuth } from '@/components/auth-provider';
@@ -201,6 +202,8 @@ export default function Home() {
                 error={error}
                 highlightedIconId={null}
               />
+
+              <SharedGallery />
 
               <DebugGallery refreshKey={refreshKey} />
             </>

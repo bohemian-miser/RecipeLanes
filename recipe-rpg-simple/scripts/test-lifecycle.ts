@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { getOrCreateIconAction, recordRejectionAction, getAllStorageFilesAction } from '../app/actions';
-import { db, storage } from '../lib/firebase-admin';
+import { db, storage, isFirebaseEnabled } from '../lib/firebase-admin';
 
 function urlsMatch(url1: string, url2: string) {
     if (!url1 || !url2) return false;
@@ -102,27 +102,31 @@ async function testComprehensiveLifecycle() {
       console.log('\n[Cleanup] Deleting test data...');
       
       // 1. Delete Firestore Data
-      try {
-          const ingSnapshot = await db.collection('ingredients').where('name', '==', ingredient).get();
-          for (const doc of ingSnapshot.docs) {
-              const icons = await doc.ref.collection('icons').get();
-              const batch = db.batch();
-              icons.docs.forEach(i => batch.delete(i.ref));
-              batch.delete(doc.ref);
-              await batch.commit();
+      if (isFirebaseEnabled) {
+          try {
+              const ingSnapshot = await db.collection('ingredients').where('name', '==', ingredient).get();
+              for (const doc of ingSnapshot.docs) {
+                  const icons = await doc.ref.collection('icons').get();
+                  const batch = db.batch();
+                  icons.docs.forEach(i => batch.delete(i.ref));
+                  batch.delete(doc.ref);
+                  await batch.commit();
+              }
+              console.log(' -> Deleted Firestore records.');
+          } catch (e: any) {
+              const errString = String(e);
+              if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
+                  console.warn(' -> Skipping Firestore cleanup (invalid credentials).');
+              } else {
+                  console.error(' -> Failed to cleanup Firestore:', e);
+              }
           }
-          console.log(' -> Deleted Firestore records.');
-      } catch (e: any) {
-          const errString = String(e);
-          if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
-              console.warn(' -> Skipping Firestore cleanup (invalid credentials).');
-          } else {
-              console.error(' -> Failed to cleanup Firestore:', e);
-          }
+      } else {
+          console.log(' -> Skipping Firestore cleanup (Mock Mode).');
       }
 
       // 2. Delete Storage Files
-      if (generatedUrls.length > 0 && process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
+      if (isFirebaseEnabled && generatedUrls.length > 0 && process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
           const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
           for (const url of generatedUrls) {
               try {

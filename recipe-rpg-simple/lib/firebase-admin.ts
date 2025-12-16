@@ -16,6 +16,8 @@ if (serviceAccountKey) {
   }
 }
 
+export const isFirebaseEnabled = !!(serviceAccountKey || process.env.GOOGLE_APPLICATION_CREDENTIALS);
+
 const app = getApps().length > 0 ? getApp() : initializeApp({
   projectId,
   storageBucket,

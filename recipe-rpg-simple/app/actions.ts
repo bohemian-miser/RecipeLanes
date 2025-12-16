@@ -1,7 +1,7 @@
 'use server';
 
 import { ai, embeddingModel, imageModelName, textModel } from '@/lib/genkit';
-import { db, storage } from '@/lib/firebase-admin';
+import { db, storage, isFirebaseEnabled } from '@/lib/firebase-admin';
 import { memoryStore } from '@/lib/store';
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
@@ -58,7 +58,7 @@ function urlsMatch(url1: string, url2: string) {
 
 // Helper to update Storage Metadata safely
 async function updateStorageMetadata(iconUrl: string, updates: { impressions?: number, rejections?: number, lcb?: number }) {
-    if (!process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) return;
+    if (!process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || !isFirebaseEnabled) return;
     try {
         const matches = iconUrl.match(/\/o\/([^?]+)/);
         if (matches && matches[1]) {
@@ -109,7 +109,7 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string,
   const lcb = calculateWilsonLCB(initialImpressions, initialRejections);
 
   // 3. Upload to Storage
-  if (!useFallback) {
+  if (!useFallback && isFirebaseEnabled) {
       try {
           const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app';
           const bucket = storage.bucket(bucketName);
@@ -147,7 +147,7 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string,
   }
 
   // 4. Store Metadata
-  if (useFallback) {
+  if (useFallback || !isFirebaseEnabled) {
       memoryStore.addIcon({
           url: downloadURL,
           ingredient,
@@ -190,6 +190,9 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string,
 }
 
 export async function getAllIconsAction() {
+    if (!isFirebaseEnabled) {
+        return [];
+    }
     try {
         const snapshot = await db.collectionGroup('icons').limit(100).get();
         const items = snapshot.docs.map(doc => {
@@ -217,31 +220,33 @@ export async function getAllIconsAction() {
 
 export async function getAllStorageFilesAction() {
     const files = [];
-    try {
-        const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app';
-        const bucket = storage.bucket(bucketName);
-        const [storageFiles] = await bucket.getFiles({ prefix: 'icons/', maxResults: 1000 });
-        files.push(...storageFiles.map(file => ({
-            name: file.name,
-            updated: file.metadata.updated || null,
-            contentType: file.metadata.contentType || null,
-            size: file.metadata.size || '0',
-            // Map metadata to simplified props
-            // @ts-ignore
-            popularityScore: file.metadata.metadata?.lcb || '0',
-            // @ts-ignore
-            impressions: file.metadata.metadata?.impressions || '0',
-            // @ts-ignore
-            rejections: file.metadata.metadata?.rejections || '0',
-            mediaLink: file.metadata.mediaLink || null,
-            publicUrl: `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(file.name)}?alt=media`
-        })));
-    } catch (e: any) {
-        const errString = String(e);
-        if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
-             console.warn('Cloud storage credentials invalid or missing. Using local memory store only.');
-        } else {
-             console.error('Failed to fetch storage files:', e);
+    if (isFirebaseEnabled) {
+        try {
+            const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app';
+            const bucket = storage.bucket(bucketName);
+            const [storageFiles] = await bucket.getFiles({ prefix: 'icons/', maxResults: 1000 });
+            files.push(...storageFiles.map(file => ({
+                name: file.name,
+                updated: file.metadata.updated || null,
+                contentType: file.metadata.contentType || null,
+                size: file.metadata.size || '0',
+                // Map metadata to simplified props
+                // @ts-ignore
+                popularityScore: file.metadata.metadata?.lcb || '0',
+                // @ts-ignore
+                impressions: file.metadata.metadata?.impressions || '0',
+                // @ts-ignore
+                rejections: file.metadata.metadata?.rejections || '0',
+                mediaLink: file.metadata.mediaLink || null,
+                publicUrl: `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(file.name)}?alt=media`
+            })));
+        } catch (e: any) {
+            const errString = String(e);
+            if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
+                 console.warn('Cloud storage credentials invalid or missing. Using local memory store only.');
+            } else {
+                 console.error('Failed to fetch storage files:', e);
+            }
         }
     }
 
@@ -279,12 +284,7 @@ export async function getOrCreateIconAction(
   const seenParse = SeenUrlsSchema.safeParse(rawSeenUrls);
   const seenUrls = new Set(seenParse.success ? seenParse.data : []);
 
-  let useFallback = false;
-  try {
-      if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-          // Check for credentials
-      }
-  } catch (e) { useFallback = true; }
+  let useFallback = !isFirebaseEnabled;
 
   // 1. Search for Ingredient Group (Exact Match)
   let bestMatch = null;
@@ -455,40 +455,36 @@ export async function recordRejectionAction(rawIconUrl: string, rawIngredient: s
     if (!ingParse.success) return { error: 'Invalid ingredient' };
     const ingredient = ingParse.data;
 
-    let useFallback = false;
+    let useFallback = !isFirebaseEnabled;
     try {
-        const ingSnapshot = await db.collection('ingredients').get();
-        const ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === ingredient.toLowerCase());
-        
-        if (!ingDoc) throw new Error('Ingredient not found');
-
-        const iconQuery = ingDoc.ref.collection('icons').where('url', '==', iconUrl);
-        const snapshot = await iconQuery.get();
-        
-        if (snapshot.empty) throw new Error('Icon not found in Firestore');
-        
-        const batch = db.batch();
-        for (const doc of snapshot.docs) {
-            const data = doc.data();
-            const n = (data.impressions || 0);
-            const r = (data.rejections || 0) + 1; 
-            const newLcb = calculateWilsonLCB(n, r);
-
-            batch.update(doc.ref, { 
-                rejections: FieldValue.increment(1),
-                popularity_score: newLcb
-            });
+        if (!useFallback) {
+            const ingSnapshot = await db.collection('ingredients').get();
+            const ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === ingredient.toLowerCase());
             
-            // Update Storage Metadata using helper
-            await updateStorageMetadata(iconUrl, { rejections: r, lcb: newLcb });
-        }
-        await batch.commit();
-    } catch (e: any) {
-        useFallback = true;
-        const errString = String(e);
-        if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
-             console.warn('recordRejectionAction failed due to missing/invalid credentials. Ignored in fallback mode.');
-             
+            if (!ingDoc) throw new Error('Ingredient not found');
+
+            const iconQuery = ingDoc.ref.collection('icons').where('url', '==', iconUrl);
+            const snapshot = await iconQuery.get();
+            
+            if (snapshot.empty) throw new Error('Icon not found in Firestore');
+            
+            const batch = db.batch();
+            for (const doc of snapshot.docs) {
+                const data = doc.data();
+                const n = (data.impressions || 0);
+                const r = (data.rejections || 0) + 1; 
+                const newLcb = calculateWilsonLCB(n, r);
+
+                batch.update(doc.ref, { 
+                    rejections: FieldValue.increment(1),
+                    popularity_score: newLcb
+                });
+                
+                // Update Storage Metadata using helper
+                await updateStorageMetadata(iconUrl, { rejections: r, lcb: newLcb });
+            }
+            await batch.commit();
+        } else {
              // Try to update memory store if we are in fallback mode
              const icons = memoryStore.getAllIcons().filter(i => i.url === iconUrl);
              for (const icon of icons) {
@@ -500,9 +496,11 @@ export async function recordRejectionAction(rawIconUrl: string, rawIngredient: s
                      popularity_score: newLcb
                  });
              }
-        } else {
-             console.error('recordRejectionAction failed:', e);
         }
+    } catch (e: any) {
+        // Fallback catch (if something weird happens despite useFallback logic)
+        const errString = String(e);
+        console.error('recordRejectionAction failed:', e);
     }
     return { success: true };
 }
@@ -511,48 +509,46 @@ export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: st
     // 1. Firestore
     let firestoreDeleted = false;
     try {
-        if (ingredientName) {
-            // OPTION A: Targeted Delete (Scan and Destroy)
-            // We fetch all icons for this ingredient and find the matching URL in memory to avoid index issues or query fragility.
-            const ingSnapshot = await db.collection('ingredients').get();
-            const ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === ingredientName.toLowerCase());
-            
-            if (ingDoc) {
-                const iconsSnapshot = await ingDoc.ref.collection('icons').get();
-                const batch = db.batch();
-                let matchFound = false;
+        if (isFirebaseEnabled) {
+            if (ingredientName) {
+                // OPTION A: Targeted Delete (Scan and Destroy)
+                const ingSnapshot = await db.collection('ingredients').get();
+                const ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === ingredientName.toLowerCase());
+                
+                if (ingDoc) {
+                    const iconsSnapshot = await ingDoc.ref.collection('icons').get();
+                    const batch = db.batch();
+                    let matchFound = false;
 
-                iconsSnapshot.docs.forEach(doc => {
-                    if (urlsMatch(doc.data().url, iconUrl)) {
-                        batch.delete(doc.ref);
-                        matchFound = true;
+                    iconsSnapshot.docs.forEach(doc => {
+                        if (urlsMatch(doc.data().url, iconUrl)) {
+                            batch.delete(doc.ref);
+                            matchFound = true;
+                        }
+                    });
+
+                    if (matchFound) {
+                        await batch.commit();
+                        firestoreDeleted = true;
                     }
-                });
-
-                if (matchFound) {
-                    await batch.commit();
-                    firestoreDeleted = true;
                 }
             }
-        }
 
-        if (!firestoreDeleted) {
-            // OPTION B: Global Search (Requires Index)
-            const query = db.collectionGroup('icons').where('url', '==', iconUrl);
-            const snapshot = await query.get();
-            
-            if (!snapshot.empty) {
-                const batch = db.batch();
-                snapshot.docs.forEach(doc => batch.delete(doc.ref));
-                await batch.commit();
+            if (!firestoreDeleted) {
+                // OPTION B: Global Search (Requires Index)
+                const query = db.collectionGroup('icons').where('url', '==', iconUrl);
+                const snapshot = await query.get();
+                
+                if (!snapshot.empty) {
+                    const batch = db.batch();
+                    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+                    await batch.commit();
+                }
             }
         }
     } catch (e: any) {
         const errString = String(e);
-        // Code 9 is FAILED_PRECONDITION (Missing Index)
         if (errString.includes('invalid_grant') || errString.includes('invalid_rapt') || e.code === 9 || errString.includes('FAILED_PRECONDITION')) {
-             // If we tried specific delete and failed, or fallback failed, just log warning.
-             // It's acceptable to skip metadata delete if we lack permissions/indexes.
              console.warn(`Firestore delete skipped (Auth/Index): ${e.message}`);
         } else {
              console.error('Firestore delete failed:', e);
@@ -561,7 +557,7 @@ export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: st
 
     // 2. Storage
     try {
-        if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
+        if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET && isFirebaseEnabled) {
             const matches = iconUrl.match(/\/o\/([^?]+)/);
             if (matches && matches[1]) {
                 const filePath = decodeURIComponent(matches[1]);
@@ -589,50 +585,50 @@ export async function deleteIngredientCategoryAction(rawIngredient: string): Pro
     try {
         let ingredient = toTitleCase(rawIngredient.trim()); // Normalize
         
-        // Find Ingredient Doc
-        const ingSnapshot = await db.collection('ingredients').get();
-        // Try exact match first (normalized)
-        let ingDoc = ingSnapshot.docs.find(d => d.data().name === ingredient);
-        
-        // Fallback: Case-insensitive match if exact fails (e.g. legacy data)
-        if (!ingDoc) {
-             ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === rawIngredient.trim().toLowerCase());
-        }
-        
-        if (ingDoc) {
-            // List all icons
-            const iconsSnapshot = await ingDoc.ref.collection('icons').get();
-            const batch = db.batch();
-            const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ? storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app') : null;
+        if (isFirebaseEnabled) {
+            // Find Ingredient Doc
+            const ingSnapshot = await db.collection('ingredients').get();
+            // Try exact match first (normalized)
+            let ingDoc = ingSnapshot.docs.find(d => d.data().name === ingredient);
+            
+            // Fallback: Case-insensitive match if exact fails (e.g. legacy data)
+            if (!ingDoc) {
+                 ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === rawIngredient.trim().toLowerCase());
+            }
+            
+            if (ingDoc) {
+                // List all icons
+                const iconsSnapshot = await ingDoc.ref.collection('icons').get();
+                const batch = db.batch();
+                const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ? storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app') : null;
 
-            const deletePromises: Promise<any>[] = [];
+                const deletePromises: Promise<any>[] = [];
 
-            // Queue deletions
-            for (const iconDoc of iconsSnapshot.docs) {
-                const data = iconDoc.data();
-                // Delete Doc
-                batch.delete(iconDoc.ref);
-                
-                // Delete File
-                if (bucket && data.url) {
-                    const matches = data.url.match(/\/o\/([^?]+)/);
-                    if (matches && matches[1]) {
-                        const filePath = decodeURIComponent(matches[1]);
-                        deletePromises.push(bucket.file(filePath).delete().catch(e => {
-                             if (e.code !== 404) console.warn(`Failed to delete file ${filePath}:`, e);
-                        }));
+                // Queue deletions
+                for (const iconDoc of iconsSnapshot.docs) {
+                    const data = iconDoc.data();
+                    // Delete Doc
+                    batch.delete(iconDoc.ref);
+                    
+                    // Delete File
+                    if (bucket && data.url) {
+                        const matches = data.url.match(/\/o\/([^?]+)/);
+                        if (matches && matches[1]) {
+                            const filePath = decodeURIComponent(matches[1]);
+                            deletePromises.push(bucket.file(filePath).delete().catch(e => {
+                                 if (e.code !== 404) console.warn(`Failed to delete file ${filePath}:`, e);
+                            }));
+                        }
                     }
                 }
+
+                // Delete Parent Doc
+                batch.delete(ingDoc.ref);
+
+                // Execute
+                await Promise.all(deletePromises);
+                await batch.commit();
             }
-
-            // Delete Parent Doc
-            batch.delete(ingDoc.ref);
-
-            // Execute
-            await Promise.all(deletePromises);
-            await batch.commit();
-        } else {
-             // Not found in Firestore, possibly only in memory?
         }
 
     } catch (e: any) {

@@ -1,6 +1,13 @@
 import 'dotenv/config';
 import { getOrCreateIconAction, recordRejectionAction, getAllStorageFilesAction } from '../app/actions';
-import { db, storage } from '../lib/firebase-admin';
+import { setAIService, MockAIService } from '../lib/ai-service';
+import { setDataService, MemoryDataService } from '../lib/data-service';
+import { setAuthService, MockAuthService } from '../lib/auth-service';
+
+// Explicitly use Mocks for tests
+setAIService(new MockAIService());
+setDataService(new MemoryDataService());
+setAuthService(new MockAuthService());
 
 async function testExtendedScenarios() {
   console.log('=== Starting Extended Scenarios Test ===');
@@ -11,9 +18,8 @@ async function testExtendedScenarios() {
     await testScenarioC();
   } catch (e) {
     console.error('FATAL TEST ERROR:', e);
+    process.exitCode = 1;
   } finally {
-    // Cleanup would go here, but maybe we keep artifacts for inspection? 
-    // I'll add a simple cleanup helper but only run it if needed.
     console.log('\n=== Tests Complete ===');
   }
 }
@@ -42,13 +48,11 @@ async function testScenarioA() {
   
   // Verify Storage
   const files = await getAllStorageFilesAction();
-  // Extract filename from URL (between /o/ and ?)
-  const filenameMatch = url1.match(/\/o\/([^?]+)/);
-  const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : '';
+  if (!files) throw new Error("Storage access denied!");
   
-  const file = files.find((f: any) => f.name === filename);
+  const file = files.find((f: any) => f.publicUrl === url1);
   
-  if (!file) throw new Error(`File not found in storage listing: ${filename}`);
+  if (!file) throw new Error(`File not found in storage listing: ${url1}`);
   
   console.log(`[Storage] Impressions: ${file.impressions}`);
   if (String(file.impressions) !== '3') throw new Error(`Storage impressions mismatch. Expected 3, got ${file.impressions}`);

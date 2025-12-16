@@ -2,10 +2,12 @@ import 'dotenv/config';
 import { getOrCreateIconAction, recordRejectionAction, getAllStorageFilesAction } from '../app/actions';
 import { setAIService, MockAIService } from '../lib/ai-service';
 import { setDataService, MemoryDataService } from '../lib/data-service';
+import { setAuthService, MockAuthService } from '../lib/auth-service';
 
 // Explicitly use Mocks for tests
 setAIService(new MockAIService());
 setDataService(new MemoryDataService());
+setAuthService(new MockAuthService());
 
 function urlsMatch(url1: string, url2: string) {
     if (!url1 || !url2) return false;

@@ -3,7 +3,7 @@
 import { embeddingModel, imageModelName, textModel } from '@/lib/genkit';
 import { getAIService } from '@/lib/ai-service';
 import { getDataService } from '@/lib/data-service';
-import { verifyAuth } from '@/lib/auth';
+import { getAuthService } from '@/lib/auth-service';
 import { z } from 'zod';
 
 // Constants for Generation Gating
@@ -95,23 +95,21 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
 }
 
 export async function getAllIconsAction() {
-    const session = await verifyAuth();
+    const session = await getAuthService().verifyAuth();
     if (!session?.isAdmin) return [];
     return getDataService().getAllIcons();
 }
 
 export async function getAllStorageFilesAction() {
-    const session = await verifyAuth();
+    const session = await getAuthService().verifyAuth();
     if (!session?.isAdmin) return [];
     return getDataService().listDebugFiles();
 }
 
 export async function getSharedGalleryAction() {
-    const session = await verifyAuth();
+    const session = await getAuthService().verifyAuth();
     if (!session) return [];
     
-    // Simplistic implementation: Get all (limit 100 from service) and group
-    // In a real app, you'd want a dedicated query for "top icons per category"
     const allIcons = await getDataService().getAllIcons();
     
     // Group by Ingredient
@@ -135,7 +133,7 @@ export async function getOrCreateIconAction(
     rawSessionRejections = 0,
     rawSeenUrls: string[] = []
 ) {
-  const session = await verifyAuth();
+  const session = await getAuthService().verifyAuth();
   if (!session) return { error: 'Authentication required' };
 
   // Validate Input
@@ -255,7 +253,7 @@ export async function getOrCreateIconAction(
 }
 
 export async function recordRejectionAction(rawIconUrl: string, rawIngredient: string) {
-    const session = await verifyAuth();
+    const session = await getAuthService().verifyAuth();
     if (!session) return { error: 'Authentication required' };
 
     const urlParse = z.string().url().safeParse(rawIconUrl);
@@ -278,7 +276,7 @@ export async function recordRejectionAction(rawIconUrl: string, rawIngredient: s
 }
 
 export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: string): Promise<{ success: boolean; error?: string }> {
-    const session = await verifyAuth();
+    const session = await getAuthService().verifyAuth();
     if (!session?.isAdmin) return { success: false, error: 'Admin required' };
 
     try {
@@ -291,7 +289,7 @@ export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: st
 }
 
 export async function deleteIngredientCategoryAction(rawIngredient: string): Promise<{ success: boolean; error?: string }> {
-    const session = await verifyAuth();
+    const session = await getAuthService().verifyAuth();
     if (!session?.isAdmin) return { success: false, error: 'Admin required' };
 
     try {

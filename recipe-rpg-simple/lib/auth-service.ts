@@ -51,6 +51,10 @@ export class RealAuthService implements AuthService {
         let decoded = null;
         if (isSessionCookie) {
             decoded = await auth.verifySessionCookie(token, true).catch(() => null);
+            if (!decoded) {
+                // Fallback: Check if the cookie holds a raw ID token
+                decoded = await auth.verifyIdToken(token).catch(() => null);
+            }
         } else {
             decoded = await auth.verifyIdToken(token).catch(() => null);
         }

@@ -9,10 +9,17 @@ export async function POST(request: NextRequest) {
 
     // 5 days
     const expiresIn = 60 * 60 * 24 * 5 * 1000;
-    let sessionCookie = 'mock-session-token';
+    let sessionCookie;
 
-    if (isFirebaseEnabled) {
-        sessionCookie = await auth.createSessionCookie(idToken, { expiresIn });
+    try {
+        if (isFirebaseEnabled) {
+            sessionCookie = await auth.createSessionCookie(idToken, { expiresIn });
+        } else {
+            sessionCookie = 'mock-session-token';
+        }
+    } catch (e) {
+        console.warn('Failed to create session cookie (likely ADC permissions), falling back to ID token.', e);
+        sessionCookie = idToken;
     }
 
     cookies().set('session', sessionCookie, {

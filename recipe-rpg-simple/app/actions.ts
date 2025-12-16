@@ -223,9 +223,9 @@ export async function getAllStorageFilesAction() {
         const [storageFiles] = await bucket.getFiles({ prefix: 'icons/', maxResults: 1000 });
         files.push(...storageFiles.map(file => ({
             name: file.name,
-            updated: file.metadata.updated,
-            contentType: file.metadata.contentType,
-            size: file.metadata.size,
+            updated: file.metadata.updated || null,
+            contentType: file.metadata.contentType || null,
+            size: file.metadata.size || '0',
             // Map metadata to simplified props
             // @ts-ignore
             popularityScore: file.metadata.metadata?.lcb || '0',
@@ -233,7 +233,7 @@ export async function getAllStorageFilesAction() {
             impressions: file.metadata.metadata?.impressions || '0',
             // @ts-ignore
             rejections: file.metadata.metadata?.rejections || '0',
-            mediaLink: file.metadata.mediaLink,
+            mediaLink: file.metadata.mediaLink || null,
             publicUrl: `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(file.name)}?alt=media`
         })));
     } catch (e: any) {

@@ -1,6 +1,10 @@
 import 'dotenv/config';
 import { getOrCreateIconAction, recordRejectionAction, getAllStorageFilesAction } from '../app/actions';
 import { db, storage, isFirebaseEnabled } from '../lib/firebase-admin';
+import { setAIService, MockAIService } from '../lib/ai-service';
+
+// Explicitly use Mock AI Service for tests
+setAIService(new MockAIService());
 
 function urlsMatch(url1: string, url2: string) {
     if (!url1 || !url2) return false;

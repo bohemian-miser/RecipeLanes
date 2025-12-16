@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User, signInWithPopup, signOut } from 'firebase/auth';
-import { auth, googleProvider } from '@/lib/firebase-client';
+import { auth, googleProvider, isInitialized } from '@/lib/firebase-client';
 
 interface AuthContextType {
   user: User | null;
@@ -26,6 +26,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isInitialized) {
+        setLoading(false);
+        return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -47,6 +52,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async () => {
     setError(null);
+    if (!isInitialized) {
+        setError('Firebase not configured (missing API Key).');
+        return;
+    }
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
@@ -60,6 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     setError(null);
+    if (!isInitialized) return;
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
       await signOut(auth);

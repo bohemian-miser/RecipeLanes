@@ -13,16 +13,20 @@ const firebaseConfig = {
 let app: FirebaseApp | undefined;
 let auth: Auth;
 let googleProvider: GoogleAuthProvider;
+let isInitialized = false;
 
 if (firebaseConfig.apiKey) {
   // Initialize Firebase (Client)
   app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
   auth = getAuth(app);
   googleProvider = new GoogleAuthProvider();
+  isInitialized = true;
 } else {
   console.warn('Firebase Client SDK missing API Key (likely during build). Using mock auth.');
   // Mock Auth for Build Time
   auth = {
+    app: { name: 'mock', options: {} } as FirebaseApp,
+    config: {},
     onAuthStateChanged: (cb: (user: User | null) => void) => {
         // Immediately resolve to null user during build/mock
         cb(null);
@@ -34,4 +38,4 @@ if (firebaseConfig.apiKey) {
   googleProvider = {} as GoogleAuthProvider;
 }
 
-export { auth, googleProvider };
+export { auth, googleProvider, isInitialized };

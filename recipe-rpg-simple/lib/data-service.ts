@@ -61,7 +61,12 @@ export class FirebaseDataService implements DataService {
   }
 
   async getAllIcons() {
-     const snapshot = await db.collectionGroup('icons').limit(100).get();
+     // Fetch active icons (up to 1000) for the shared gallery
+     const snapshot = await db.collectionGroup('icons')
+        .where('marked_for_deletion', '==', false)
+        .limit(1000)
+        .get();
+
      const items = snapshot.docs.map(doc => {
          const data = doc.data();
          return {

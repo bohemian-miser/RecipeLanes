@@ -10,6 +10,9 @@ export interface IconData {
   marked_for_deletion: boolean;
   embedding?: number[];
   ingredientId?: string;
+  prompt?: string;
+  textModel?: string;
+  imageModel?: string;
 }
 
 export interface IngredientData {

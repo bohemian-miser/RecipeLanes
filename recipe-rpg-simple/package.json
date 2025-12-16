@@ -9,6 +9,9 @@
     "lint": "eslint",
     "test": "npx tsx scripts/test-lifecycle.ts"
   },
+  "engines": {
+    "node": "20"
+  },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.25.0",
     "clsx": "^2.1.1",

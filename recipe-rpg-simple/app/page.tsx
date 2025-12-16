@@ -16,9 +16,14 @@ export default function Home() {
   const [lastDebugInfo, setLastDebugInfo] = useState<any>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const [isLoading, setIsLoading] = useState(false);
+  // Parallel Request Management
+  const [rerollingIds, setRerollingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const uniqueId = useId();
+
+  const toTitleCase = (str: string) => {
+    return str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  };
 
   const updateSeen = (ingredient: string, url: string) => {
       setSeenIcons(prev => {
@@ -31,10 +36,25 @@ export default function Home() {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const newIngredient = formData.get('ingredient') as string;
+    const rawIngredient = formData.get('ingredient') as string;
     
-    if (!newIngredient || isLoading) return;
-    setIsLoading(true);
+    // Allow parallel submissions, only check if input is empty
+    if (!rawIngredient) return;
+
+    // Reset form immediately to allow next input
+    event.currentTarget.reset();
+    
+    // Optimistic UI: Add pending card
+    const newIngredient = toTitleCase(rawIngredient);
+    const tempId = `temp-${uniqueId}-${Date.now()}-${Math.random()}`;
+    const pendingIcon: Icon = {
+        id: tempId,
+        ingredient: newIngredient,
+        iconUrl: '',
+        isPending: true
+    };
+    setIcons(prev => [...prev, pendingIcon]);
+    
     setError(null);
     setLastDebugInfo(null);
 
@@ -42,7 +62,7 @@ export default function Home() {
     const seen = Array.from(seenIcons[newIngredient] || []);
 
     try {
-      const result = await getOrCreateIconAction(newIngredient, rejections, seen);
+      const result = await getOrCreateIconAction(rawIngredient, rejections, seen);
       
       if ('error' in result && result.error) {
           throw new Error(result.error);
@@ -51,13 +71,14 @@ export default function Home() {
       const { iconUrl, popularityScore, debugInfo } = result as any; 
       
       const newIcon: Icon = {
-        id: `${uniqueId}-${icons.length}`,
+        id: `${uniqueId}-${Date.now()}-${Math.random()}`, 
         ingredient: newIngredient,
         iconUrl: iconUrl,
         popularityScore: popularityScore
       };
       
-      setIcons(prev => [...prev, newIcon]);
+      // Replace pending icon with real one
+      setIcons(prev => prev.map(i => i.id === tempId ? newIcon : i));
       updateSeen(newIngredient, iconUrl);
       setLastDebugInfo(debugInfo);
       setRefreshKey(prev => prev + 1);
@@ -65,14 +86,20 @@ export default function Home() {
     } catch (err) {
       setError('Failed to forge item. Please try again.');
       console.error(err);
-    } finally {
-      setIsLoading(false);
+      // Remove pending icon on error
+      setIcons(prev => prev.filter(i => i.id !== tempId));
     }
   };
 
   const handleReroll = async (iconToReroll: Icon) => {
-    if (isLoading) return;
-    setIsLoading(true);
+    // Prevent double reroll of same item
+    if (rerollingIds.has(iconToReroll.id)) return;
+    
+    setRerollingIds(prev => {
+        const next = new Set(prev);
+        next.add(iconToReroll.id);
+        return next;
+    });
     
     try {
         // 1. Record Rejection
@@ -84,7 +111,6 @@ export default function Home() {
         setSessionRejections(prev => ({ ...prev, [ingredient]: newRejections }));
         
         const seen = Array.from(seenIcons[ingredient] || []);
-        // Add the rejected one to seen if not already (it should be)
         if (!seen.includes(iconToReroll.iconUrl)) seen.push(iconToReroll.iconUrl);
 
         // 3. Get Next Icon
@@ -107,7 +133,11 @@ export default function Home() {
         setError('Failed to reroll item.');
         console.error(err);
     } finally {
-        setIsLoading(false);
+        setRerollingIds(prev => {
+            const next = new Set(prev);
+            next.delete(iconToReroll.id);
+            return next;
+        });
     }
   };
 
@@ -121,16 +151,16 @@ export default function Home() {
         <div className="w-full max-w-4xl space-y-8">
           <header className="text-center space-y-4">
             <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-yellow-500 uppercase drop-shadow-[0_4px_0_rgba(0,0,0,1)]">
-              Recipe RPG
+              Icon Maker
             </h1>
             <p className="text-lg text-zinc-400">
-              Forge culinary items from text! Build your collection.
+              Forge pixel art icons from text! Build your collection.
             </p>
           </header>
 
           <IngredientForm
             onSubmit={handleSubmit}
-            isLoading={isLoading}
+            isLoading={false} // Always allow new submissions
           />
           
           <RerollMonitor debugInfo={lastDebugInfo} />
@@ -139,7 +169,7 @@ export default function Home() {
             icons={icons}
             onReroll={handleReroll}
             onDelete={handleInventoryDelete}
-            isLoading={isLoading}
+            rerollingIds={rerollingIds}
             error={error}
             highlightedIconId={null}
           />

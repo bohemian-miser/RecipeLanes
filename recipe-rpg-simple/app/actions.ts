@@ -1,6 +1,6 @@
 'use server';
 
-import { ai, embeddingModel, imageModelName } from '@/lib/genkit';
+import { ai, embeddingModel, imageModelName, textModel } from '@/lib/genkit';
 import { db, storage } from '@/lib/firebase-admin';
 import { memoryStore } from '@/lib/store';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -44,6 +44,18 @@ function toTitleCase(str: string) {
     .join(' ');
 }
 
+// Helper for URL matching (ignoring tokens and encoding differences)
+function urlsMatch(url1: string, url2: string) {
+    if (!url1 || !url2) return false;
+    try {
+        const u1 = decodeURIComponent(url1.split('?')[0]);
+        const u2 = decodeURIComponent(url2.split('?')[0]);
+        return u1 === u2;
+    } catch (e) {
+        return url1.split('?')[0] === url2.split('?')[0];
+    }
+}
+
 // Helper to update Storage Metadata safely
 async function updateStorageMetadata(iconUrl: string, updates: { impressions?: number, rejections?: number, lcb?: number }) {
     if (!process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) return;
@@ -54,8 +66,12 @@ async function updateStorageMetadata(iconUrl: string, updates: { impressions?: n
             const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app');
             const file = bucket.file(filePath);
             
+            // Fetch existing metadata to preserve other fields (like prompt)
+            const [existing] = await file.getMetadata();
+            const existingCustom = existing.metadata || {};
+
             // Construct string-based metadata object
-            const metadata: Record<string, string> = {};
+            const metadata: Record<string, string> = { ...(existingCustom as Record<string, string>) };
             if (updates.impressions !== undefined) metadata.impressions = String(updates.impressions);
             if (updates.rejections !== undefined) metadata.rejections = String(updates.rejections);
             if (updates.lcb !== undefined) metadata.lcb = String(updates.lcb);
@@ -70,10 +86,19 @@ async function updateStorageMetadata(iconUrl: string, updates: { impressions?: n
 async function generateAndStoreIcon(ingredient: string, ingredientDocId: string, useFallback = false): Promise<{ url: string, lcb: number }> {
   console.log('[generateAndStoreIcon] Generating for:', ingredient);
   
-  // 1. Generate Image
+  // 1. Enrich Prompt (LLM Step)
+  // We use a text model to convert potential actions (e.g. "Pat steak dry") into visual descriptions.
+  const enrichment = await ai.generate({
+      model: textModel,
+      prompt: `Describe a distinct and recognizable visual representation of '${ingredient}' for a 64x64 pixel art icon. If it is an action (e.g. 'chop onion'), describe the tools and objects interacting (e.g. 'A knife slicing a red onion'). Do not describe hands. If it is an object (e.g. 'bag of sugar'), describe it with defining features or labels to ensure it is identifiable (e.g. 'A paper sack labeled "SUGAR" with a few cubes spilling out'). Keep it concise (under 30 words). Focus on visual subject matter only.`,
+  });
+  const visualDescription = enrichment.text || ingredient;
+  console.log(`[generateAndStoreIcon] Enriched prompt: "${visualDescription}"`);
+
+  // 2. Generate Image
   const { media } = await ai.generate({
     model: imageModelName,
-    prompt: `Generate a 64x64 pixel art icon for ${ingredient}. The style should be reminiscent of an 8-bit video game. The style should reflect a simple, modern home cooking environment.Ensure the background is transparent.`,
+    prompt: `Generate a high-quality 64x64 pixel art icon of ${visualDescription}. The style should be distinct, colorful, and clearly recognizable, suitable for a game inventory or flowchart. Use clean outlines and bright colors. Ensure the background is transparent.`,
   });
 
   if (!media || !media.url) throw new Error('Image generation failed');
@@ -83,7 +108,7 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string,
   const initialRejections = 0;
   const lcb = calculateWilsonLCB(initialImpressions, initialRejections);
 
-  // 2. Upload to Storage
+  // 3. Upload to Storage
   if (!useFallback) {
       try {
           const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app';
@@ -102,7 +127,10 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string,
                       firebaseStorageDownloadTokens: token,
                       impressions: String(initialImpressions),
                       rejections: String(initialRejections),
-                      lcb: String(lcb)
+                      lcb: String(lcb),
+                      prompt: visualDescription,
+                      textModel: textModel,
+                      imageModel: imageModelName
                   }
               }
           });
@@ -118,7 +146,7 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string,
       }
   }
 
-  // 3. Store Metadata
+  // 4. Store Metadata
   if (useFallback) {
       memoryStore.addIcon({
           url: downloadURL,
@@ -128,7 +156,10 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string,
           impressions: initialImpressions,
           rejections: initialRejections,
           created_at: Date.now(),
-          marked_for_deletion: false
+          marked_for_deletion: false,
+          prompt: visualDescription,
+          textModel: textModel,
+          imageModel: imageModelName
       });
   } else {
       try {
@@ -139,7 +170,10 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string,
               popularity_score: lcb, // Keep popularity_score field for UI compat
               ingredient_name: ingredient,
               created_at: FieldValue.serverTimestamp(),
-              marked_for_deletion: false
+              marked_for_deletion: false,
+              prompt: visualDescription,
+              textModel: textModel,
+              imageModel: imageModelName
           });
           console.log(`[generateAndStoreIcon] Successfully wrote metadata for ${ingredient}`);
       } catch (e: any) {
@@ -473,21 +507,29 @@ export async function recordRejectionAction(rawIconUrl: string, rawIngredient: s
     return { success: true };
 }
 
-export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: string) {
+export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: string): Promise<{ success: boolean; error?: string }> {
     // 1. Firestore
     let firestoreDeleted = false;
     try {
         if (ingredientName) {
-            // OPTION A: Targeted Delete (No Index Required)
+            // OPTION A: Targeted Delete (Scan and Destroy)
+            // We fetch all icons for this ingredient and find the matching URL in memory to avoid index issues or query fragility.
             const ingSnapshot = await db.collection('ingredients').get();
             const ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === ingredientName.toLowerCase());
             
             if (ingDoc) {
-                const iconQuery = ingDoc.ref.collection('icons').where('url', '==', iconUrl);
-                const snapshot = await iconQuery.get();
-                if (!snapshot.empty) {
-                    const batch = db.batch();
-                    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+                const iconsSnapshot = await ingDoc.ref.collection('icons').get();
+                const batch = db.batch();
+                let matchFound = false;
+
+                iconsSnapshot.docs.forEach(doc => {
+                    if (urlsMatch(doc.data().url, iconUrl)) {
+                        batch.delete(doc.ref);
+                        matchFound = true;
+                    }
+                });
+
+                if (matchFound) {
                     await batch.commit();
                     firestoreDeleted = true;
                 }
@@ -542,7 +584,7 @@ export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: st
     return { success: true };
 }
 
-export async function deleteIngredientCategoryAction(rawIngredient: string) {
+export async function deleteIngredientCategoryAction(rawIngredient: string): Promise<{ success: boolean; error?: string }> {
     // 1. Firestore & Storage (Coupled for category delete mostly)
     try {
         let ingredient = toTitleCase(rawIngredient.trim()); // Normalize

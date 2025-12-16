@@ -1,0 +1,64 @@
+import 'dotenv/config';
+import { getOrCreateIconAction, deleteIconByUrlAction, deleteIngredientCategoryAction, getAllStorageFilesAction } from '../app/actions';
+
+function urlsMatch(url1: string, url2: string) {
+    if (!url1 || !url2) return false;
+    return url1.split('?')[0] === url2.split('?')[0];
+}
+
+async function testDeletionSync() {
+  const ingredient = "Sync-Test-Item-" + Date.now();
+  console.log(`\n=== Starting Deletion Sync Test ===`);
+
+  try {
+    // 1. Create Icon
+    const resA = await getOrCreateIconAction(ingredient, 0, []) as any;
+    if (resA.error) throw new Error(resA.error);
+    const urlA = resA.iconUrl;
+    console.log(` -> Created Icon: ${urlA}`);
+
+    // Wait for consistency
+    await new Promise(r => setTimeout(r, 2000));
+
+    // 2. Delete Icon
+    console.log(" -> Deleting icon...");
+    // Pass ingredient name to trigger targeted delete
+    const delResA = await deleteIconByUrlAction(urlA, ingredient);
+    if (!delResA.success) throw new Error(delResA.error);
+    
+    console.log(" -> Deletion command sent.");
+    await new Promise(r => setTimeout(r, 2000)); // Wait for propagation
+
+    // 3. Verify it is GONE from Storage List (Debug Gallery view)
+    let storageFiles = await getAllStorageFilesAction();
+    let existsInStorage = storageFiles.some((f: any) => urlsMatch(f.publicUrl, urlA));
+    if (existsInStorage) {
+        console.error("FAILURE: Icon still exists in storage list!");
+    } else {
+        console.log("SUCCESS: Icon removed from storage list.");
+    }
+
+    // 4. Verify it is NOT picked again by Forge (Firestore check)
+    console.log(" -> Attempting to forge again (should generate NEW, not pick old)...");
+    const resB = await getOrCreateIconAction(ingredient, 0, []) as any;
+    if (resB.error) throw new Error(resB.error);
+    const urlB = resB.iconUrl;
+    
+    console.log(` -> New Icon URL: ${urlB}`);
+
+    if (urlsMatch(urlA, urlB)) {
+        throw new Error("FAILURE: The system picked the DELETED icon! Synchronization is broken.");
+    } else {
+        console.log("SUCCESS: The system generated a NEW icon. Old one was correctly purged.");
+    }
+    
+    // Cleanup
+    await deleteIngredientCategoryAction(ingredient);
+
+  } catch (e) {
+      console.error("TEST FAILED:", e);
+      process.exit(1);
+  }
+}
+
+testDeletionSync();

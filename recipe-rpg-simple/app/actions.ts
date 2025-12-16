@@ -1,20 +1,15 @@
 'use server';
 
 import { embeddingModel, imageModelName, textModel } from '@/lib/genkit';
-import { db, storage, isFirebaseEnabled } from '@/lib/firebase-admin';
-import { memoryStore } from '@/lib/store';
 import { getAIService } from '@/lib/ai-service';
-import { FieldValue } from 'firebase-admin/firestore';
+import { getDataService } from '@/lib/data-service';
 import { z } from 'zod';
-import { randomUUID } from 'crypto';
 
 // Constants for Generation Gating
 const SESSION_REJECT_LIMIT = 4;
 const PROVEN_SAMPLE_SIZE = 20;
 const QUALITY_FLOOR_LCB = 0.40;
 const MIN_CACHE_SIZE = 3;
-const NEW_ICON_WEIGHT = 10;
-const REJECT_PENALTY = 10; // Keep for now if needed, though recordRejectionAction handles it logic internally with LCB
 
 // Input Validation Schemas
 const IngredientSchema = z.string().min(1).max(100);
@@ -45,223 +40,67 @@ function toTitleCase(str: string) {
     .join(' ');
 }
 
-// Helper for URL matching (ignoring tokens and encoding differences)
-function urlsMatch(url1: string, url2: string) {
-    if (!url1 || !url2) return false;
-    try {
-        const u1 = decodeURIComponent(url1.split('?')[0]);
-        const u2 = decodeURIComponent(url2.split('?')[0]);
-        return u1 === u2;
-    } catch (e) {
-        return url1.split('?')[0] === url2.split('?')[0];
-    }
-}
-
-// Helper to update Storage Metadata safely
-async function updateStorageMetadata(iconUrl: string, updates: { impressions?: number, rejections?: number, lcb?: number }) {
-    if (!process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || !isFirebaseEnabled) return;
-    try {
-        const matches = iconUrl.match(/\/o\/([^?]+)/);
-        if (matches && matches[1]) {
-            const filePath = decodeURIComponent(matches[1]);
-            const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app');
-            const file = bucket.file(filePath);
-            
-            // Fetch existing metadata to preserve other fields (like prompt)
-            const [existing] = await file.getMetadata();
-            const existingCustom = existing.metadata || {};
-
-            // Construct string-based metadata object
-            const metadata: Record<string, string> = { ...(existingCustom as Record<string, string>) };
-            if (updates.impressions !== undefined) metadata.impressions = String(updates.impressions);
-            if (updates.rejections !== undefined) metadata.rejections = String(updates.rejections);
-            if (updates.lcb !== undefined) metadata.lcb = String(updates.lcb);
-
-            await file.setMetadata({ metadata });
-        }
-    } catch (err) {
-        console.warn('Storage metadata update failed:', err);
-    }
-}
-
-async function generateAndStoreIcon(ingredient: string, ingredientDocId: string, useFallback = false): Promise<{ url: string, lcb: number }> {
+async function generateAndStoreIcon(ingredient: string, ingredientDocId: string): Promise<{ url: string, lcb: number }> {
   console.log('[generateAndStoreIcon] Generating for:', ingredient);
   
-  // 1. Enrich Prompt (LLM Step)
-  // We use a text model to convert potential actions (e.g. "Pat steak dry") into visual descriptions.
+  // 1. Enrich Prompt (AI)
   const visualDescriptionRaw = await getAIService().generateText(
       `Describe a distinct and recognizable visual representation of '${ingredient}' for a 64x64 pixel art icon. If it is an action (e.g. 'chop onion'), describe the tools and objects interacting (e.g. 'A knife slicing a red onion'). Do not describe hands. If it is an object (e.g. 'bag of sugar'), describe it with defining features or labels to ensure it is identifiable (e.g. 'A paper sack labeled "SUGAR" with a few cubes spilling out'). Keep it concise (under 30 words). Focus on visual subject matter only.`
   );
-  
   const visualDescription = visualDescriptionRaw || ingredient;
   console.log(`[generateAndStoreIcon] Enriched prompt: "${visualDescription}"`);
 
-  // 2. Generate Image
+  // 2. Generate Image (AI)
   let downloadURL = await getAIService().generateImage(
     `Generate a high-quality 64x64 pixel art icon of ${visualDescription}. The style should be distinct, colorful, and clearly recognizable, suitable for a game inventory or flowchart. Use clean outlines and bright colors. Ensure the background is transparent.`
   );
+
+  // 3. Download Buffer for Storage
+  let imageBuffer: ArrayBuffer;
+  try {
+      const response = await fetch(downloadURL);
+      imageBuffer = await response.arrayBuffer();
+  } catch (e) {
+      console.error('Failed to download generated image for storage:', e);
+      // Fallback: Store the ephemeral URL if we can't download (unlikely but safe)
+      throw new Error('Failed to download generated image');
+  }
 
   const initialImpressions = 1;
   const initialRejections = 0;
   const lcb = calculateWilsonLCB(initialImpressions, initialRejections);
 
-  // 3. Upload to Storage
-  if (!useFallback && isFirebaseEnabled) {
-      try {
-          const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app';
-          const bucket = storage.bucket(bucketName);
-          const fileName = `icons/${ingredient.replace(/\s+/g, '-')}-${Date.now()}.png`;
-          const file = bucket.file(fileName);
-          const token = randomUUID();
-          
-          const response = await fetch(downloadURL);
-          const buffer = await response.arrayBuffer();
-          
-          await file.save(Buffer.from(buffer), {
-              metadata: { 
-                  contentType: 'image/png',
-                  metadata: {
-                      firebaseStorageDownloadTokens: token,
-                      impressions: String(initialImpressions),
-                      rejections: String(initialRejections),
-                      lcb: String(lcb),
-                      prompt: visualDescription,
-                      textModel: textModel,
-                      imageModel: imageModelName
-                  }
-              }
-          });
-          
-          downloadURL = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
-      } catch (e: any) {
-          const errString = String(e);
-          if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
-              console.warn('Storage upload failed due to missing/invalid credentials. Using ephemeral URL.');
-          } else {
-              console.warn('Storage upload failed, using ephemeral URL:', e);
-          }
-      }
-  }
-
-  // 4. Store Metadata
-  if (useFallback || !isFirebaseEnabled) {
-      memoryStore.addIcon({
-          url: downloadURL,
+  // 4. Save via Service
+  try {
+      const savedUrl = await getDataService().saveIcon(
+          ingredientDocId,
           ingredient,
-          ingredientId: ingredientDocId,
-          popularity_score: lcb, // Mapping LCB to score field for compat
-          impressions: initialImpressions,
-          rejections: initialRejections,
-          created_at: Date.now(),
-          marked_for_deletion: false,
-          prompt: visualDescription,
-          textModel: textModel,
-          imageModel: imageModelName
-      });
-  } else {
-      try {
-          await db.collection('ingredients').doc(ingredientDocId).collection('icons').add({
-              url: downloadURL,
+          visualDescription,
+          downloadURL,
+          imageBuffer,
+          {
+              lcb,
               impressions: initialImpressions,
               rejections: initialRejections,
-              popularity_score: lcb, // Keep popularity_score field for UI compat
-              ingredient_name: ingredient,
-              created_at: FieldValue.serverTimestamp(),
-              marked_for_deletion: false,
-              prompt: visualDescription,
-              textModel: textModel,
+              textModel,
               imageModel: imageModelName
-          });
-          console.log(`[generateAndStoreIcon] Successfully wrote metadata for ${ingredient}`);
-      } catch (e: any) {
-          const errString = String(e);
-          if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
-              console.warn('Firestore add failed due to missing/invalid credentials. Metadata not saved to cloud.');
-          } else {
-              console.error('Firestore add failed:', e);
           }
-      }
+      );
+      downloadURL = savedUrl;
+  } catch (e) {
+      console.error('DataService save failed:', e);
+      // Continue with ephemeral URL if save fails
   }
 
   return { url: downloadURL, lcb };
 }
 
 export async function getAllIconsAction() {
-    if (!isFirebaseEnabled) {
-        return [];
-    }
-    try {
-        const snapshot = await db.collectionGroup('icons').limit(100).get();
-        const items = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                path: doc.ref.path,
-                ...data,
-                created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at
-            };
-        });
-        // Sort in memory by LCB (popularity_score) descending
-        // @ts-ignore
-        return items.sort((a, b) => (b.popularity_score || 0) - (a.popularity_score || 0));
-    } catch (e: any) {
-        const errString = String(e);
-        if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
-             console.warn('Firestore fetch failed (getAllIconsAction) due to missing/invalid credentials. Returning empty list.');
-        } else {
-             console.error('Failed to fetch all icons:', e);
-        }
-        return [];
-    }
+    return getDataService().getAllIcons();
 }
 
 export async function getAllStorageFilesAction() {
-    const files = [];
-    if (isFirebaseEnabled) {
-        try {
-            const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app';
-            const bucket = storage.bucket(bucketName);
-            const [storageFiles] = await bucket.getFiles({ prefix: 'icons/', maxResults: 1000 });
-            files.push(...storageFiles.map(file => ({
-                name: file.name,
-                updated: file.metadata.updated || null,
-                contentType: file.metadata.contentType || null,
-                size: file.metadata.size || '0',
-                // Map metadata to simplified props
-                // @ts-ignore
-                popularityScore: file.metadata.metadata?.lcb || '0',
-                // @ts-ignore
-                impressions: file.metadata.metadata?.impressions || '0',
-                // @ts-ignore
-                rejections: file.metadata.metadata?.rejections || '0',
-                mediaLink: file.metadata.mediaLink || null,
-                publicUrl: `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(file.name)}?alt=media`
-            })));
-        } catch (e: any) {
-            const errString = String(e);
-            if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
-                 console.warn('Cloud storage credentials invalid or missing. Using local memory store only.');
-            } else {
-                 console.error('Failed to fetch storage files:', e);
-            }
-        }
-    }
-
-    // Merge memory store items
-    const memoryIcons = memoryStore.getAllIcons();
-    files.push(...memoryIcons.map(icon => ({
-        name: `icons/${icon.ingredient.replace(/\s+/g, '-')}-${icon.id}.png`,
-        updated: new Date(icon.created_at).toISOString(),
-        contentType: 'image/png',
-        size: 0,
-        popularityScore: String(icon.popularity_score),
-        impressions: String(icon.impressions || 0),
-        rejections: String(icon.rejections || 0),
-        mediaLink: icon.url,
-        publicUrl: icon.url
-    })));
-
-    return files;
+    return getDataService().listDebugFiles();
 }
 
 export async function getOrCreateIconAction(
@@ -272,64 +111,28 @@ export async function getOrCreateIconAction(
   // Validate Input
   const ingredientParse = IngredientSchema.safeParse(rawIngredient);
   if (!ingredientParse.success) return { error: 'Invalid ingredient' };
-  let ingredient = toTitleCase(ingredientParse.data); // Normalize to Title Case
+  let ingredient = toTitleCase(ingredientParse.data);
 
   const countParse = CountSchema.safeParse(rawSessionRejections);
   const sessionRejections = countParse.success ? countParse.data : 0;
 
-
   const seenParse = SeenUrlsSchema.safeParse(rawSeenUrls);
   const seenUrls = new Set(seenParse.success ? seenParse.data : []);
 
-  let useFallback = !isFirebaseEnabled;
-
-  // 1. Search for Ingredient Group (Exact Match)
-  let bestMatch = null;
-  if (!useFallback) {
-      try {
-          const snapshot = await db.collection('ingredients').get();
-          const matchDoc = snapshot.docs.find(doc => 
-              doc.data().name.toLowerCase() === ingredient.toLowerCase()
-          );
-          if (matchDoc) {
-              bestMatch = { id: matchDoc.id, data: matchDoc.data() };
-              ingredient = matchDoc.data().name; // Use canonical name
-          }
-      } catch (e: any) {
-          const errString = String(e);
-          if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
-              console.warn('Firestore read failed (getOrCreateIconAction), using fallback.');
-          } else {
-              console.warn('Firestore read failed, using fallback:', e);
-          }
-          useFallback = true;
-      }
-  }
-
-  if (useFallback) {
-      const ingredients = memoryStore.getIngredients();
-      const match = ingredients.find(i => i.name.toLowerCase() === ingredient.toLowerCase());
-      if (match) {
-          bestMatch = { id: match.id, data: match };
-          ingredient = match.name;
-      }
+  // 1. Search for Ingredient Group
+  let bestMatch = await getDataService().getIngredientByName(ingredient);
+  if (bestMatch) {
+      ingredient = bestMatch.data.name; // Canonical name
   }
 
   // 2. Decide: Pick Existing or Generate New
   if (bestMatch) {
-      console.log(`[getOrCreateIconAction] Found group: ${bestMatch.data.name}`);
-      let icons: any[] = [];
-      
-      if (!useFallback) {
-          const iconSnap = await db.collection('ingredients').doc(bestMatch.id).collection('icons').get();
-          icons = iconSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      } else {
-          icons = memoryStore.getIconsForIngredient(bestMatch.id);
-      }
+      console.log(`[getOrCreateIconAction] Found group: ${ingredient}`);
+      const icons = await getDataService().getIconsForIngredient(bestMatch.id);
 
-      // Calculate LCB for all icons and filter
+      // Calculate LCB for decision making
       const evaluated = icons
-          .map(icon => {
+          .map((icon: any) => {
               const n = icon.impressions || 0;
               const r = icon.rejections || 0;
               return { 
@@ -338,16 +141,12 @@ export async function getOrCreateIconAction(
                   n, r 
               };
           })
-          .filter(i => !i.marked_for_deletion && !seenUrls.has(i.url));
+          .filter((i: any) => !i.marked_for_deletion && !seenUrls.has(i.url));
 
-      // DEBUG INFO PREPARATION
-      // Create a snapshot of ALL candidates (even filtered ones, maybe? No, just evaluated ones)
-      // Actually user wants to see "5 options".
-      // Let's take top 5 sorted by LCB for debug info
-      const sortedCandidates = [...evaluated].sort((a, b) => b.lcb - a.lcb);
-      
+      // Debug Info
+      const sortedCandidates = [...evaluated].sort((a: any, b: any) => b.lcb - a.lcb);
       const debugInfo = {
-          candidates: sortedCandidates.slice(0, 5).map(c => ({
+          candidates: sortedCandidates.slice(0, 5).map((c: any) => ({
               url: c.url,
               score: c.lcb,
               impressions: c.n,
@@ -358,10 +157,10 @@ export async function getOrCreateIconAction(
           decision: 'UNKNOWN'
       };
 
-      // GENERATION GATE LOGIC
+      // Generation Logic
       let shouldGenerate = false;
-      const provenIcons = evaluated.filter(i => i.n >= PROVEN_SAMPLE_SIZE);
-      const bestProvenLCB = provenIcons.length > 0 ? Math.max(...provenIcons.map(i => i.lcb)) : 0;
+      const provenIcons = evaluated.filter((i: any) => i.n >= PROVEN_SAMPLE_SIZE);
+      const bestProvenLCB = provenIcons.length > 0 ? Math.max(...provenIcons.map((i: any) => i.lcb)) : 0;
       
       if (evaluated.length === 0) {
           debugInfo.decision = 'CACHE_EXHAUSTED';
@@ -381,38 +180,16 @@ export async function getOrCreateIconAction(
       }
 
       if (!shouldGenerate) {
-          // Selection Strategy: Highest LCB
           const selected = sortedCandidates[0];
-          const newImpressions = selected.n + 1;
-          const newLCB = calculateWilsonLCB(newImpressions, selected.r);
-          
-          if (!useFallback) {
-              await db.collection('ingredients').doc(bestMatch.id).collection('icons').doc(selected.id).update({
-                  impressions: FieldValue.increment(1),
-                  popularity_score: newLCB
-              });
-              
-              // Update Storage Metadata
-              await updateStorageMetadata(selected.url, { 
-                  impressions: newImpressions, 
-                  lcb: newLCB 
-              });
-          } else {
-              memoryStore.updateIcon(selected.id, {
-                  impressions: newImpressions,
-                  popularity_score: newLCB
-              });
-          }
-          
           return { 
               iconUrl: selected.url, 
               isNew: false, 
-              popularityScore: newLCB,
-              debugInfo // RETURN DEBUG INFO
+              popularityScore: selected.lcb,
+              debugInfo 
           };
       }
       
-      const { url: newUrl, lcb } = await generateAndStoreIcon(ingredient, bestMatch.id, useFallback);
+      const { url: newUrl, lcb } = await generateAndStoreIcon(ingredient, bestMatch.id);
       return { 
           iconUrl: newUrl, 
           isNew: true, 
@@ -422,19 +199,8 @@ export async function getOrCreateIconAction(
   } 
   
   // 3. Create New Ingredient Group
-  let newDocId = '';
-  if (useFallback) {
-      newDocId = memoryStore.addIngredient({ name: ingredient, embedding: [], created_at: Date.now() });
-  } else {
-      const docRef = await db.collection('ingredients').add({
-          name: ingredient,
-          embedding: [],
-          created_at: FieldValue.serverTimestamp()
-      });
-      newDocId = docRef.id;
-  }
-
-  const { url: newUrl, lcb } = await generateAndStoreIcon(ingredient, newDocId, useFallback);
+  const newDocId = await getDataService().createIngredient(ingredient);
+  const { url: newUrl, lcb } = await generateAndStoreIcon(ingredient, newDocId);
   return { 
       iconUrl: newUrl, 
       isNew: true, 
@@ -452,193 +218,34 @@ export async function recordRejectionAction(rawIconUrl: string, rawIngredient: s
     if (!ingParse.success) return { error: 'Invalid ingredient' };
     const ingredient = ingParse.data;
 
-    let useFallback = !isFirebaseEnabled;
     try {
-        if (!useFallback) {
-            const ingSnapshot = await db.collection('ingredients').get();
-            const ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === ingredient.toLowerCase());
-            
-            if (!ingDoc) throw new Error('Ingredient not found');
-
-            const iconQuery = ingDoc.ref.collection('icons').where('url', '==', iconUrl);
-            const snapshot = await iconQuery.get();
-            
-            if (snapshot.empty) throw new Error('Icon not found in Firestore');
-            
-            const batch = db.batch();
-            for (const doc of snapshot.docs) {
-                const data = doc.data();
-                const n = (data.impressions || 0);
-                const r = (data.rejections || 0) + 1; 
-                const newLcb = calculateWilsonLCB(n, r);
-
-                batch.update(doc.ref, { 
-                    rejections: FieldValue.increment(1),
-                    popularity_score: newLcb
-                });
-                
-                // Update Storage Metadata using helper
-                await updateStorageMetadata(iconUrl, { rejections: r, lcb: newLcb });
-            }
-            await batch.commit();
-        } else {
-             // Try to update memory store if we are in fallback mode
-             const icons = memoryStore.getAllIcons().filter(i => i.url === iconUrl);
-             for (const icon of icons) {
-                 const n = (icon.impressions || 0);
-                 const r = (icon.rejections || 0) + 1;
-                 const newLcb = calculateWilsonLCB(n, r);
-                 memoryStore.updateIcon(icon.id, {
-                     rejections: r,
-                     popularity_score: newLcb
-                 });
-             }
-        }
+        const match = await getDataService().getIngredientByName(ingredient);
+        if (!match) throw new Error('Ingredient not found');
+        
+        await getDataService().recordRejection(iconUrl, ingredient, match.id);
     } catch (e: any) {
-        // Fallback catch (if something weird happens despite useFallback logic)
-        const errString = String(e);
         console.error('recordRejectionAction failed:', e);
     }
     return { success: true };
 }
 
 export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: string): Promise<{ success: boolean; error?: string }> {
-    // 1. Firestore
-    let firestoreDeleted = false;
     try {
-        if (isFirebaseEnabled) {
-            if (ingredientName) {
-                // OPTION A: Targeted Delete (Scan and Destroy)
-                const ingSnapshot = await db.collection('ingredients').get();
-                const ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === ingredientName.toLowerCase());
-                
-                if (ingDoc) {
-                    const iconsSnapshot = await ingDoc.ref.collection('icons').get();
-                    const batch = db.batch();
-                    let matchFound = false;
-
-                    iconsSnapshot.docs.forEach(doc => {
-                        if (urlsMatch(doc.data().url, iconUrl)) {
-                            batch.delete(doc.ref);
-                            matchFound = true;
-                        }
-                    });
-
-                    if (matchFound) {
-                        await batch.commit();
-                        firestoreDeleted = true;
-                    }
-                }
-            }
-
-            if (!firestoreDeleted) {
-                // OPTION B: Global Search (Requires Index)
-                const query = db.collectionGroup('icons').where('url', '==', iconUrl);
-                const snapshot = await query.get();
-                
-                if (!snapshot.empty) {
-                    const batch = db.batch();
-                    snapshot.docs.forEach(doc => batch.delete(doc.ref));
-                    await batch.commit();
-                }
-            }
-        }
+        await getDataService().deleteIcon(iconUrl, ingredientName);
+        return { success: true };
     } catch (e: any) {
-        const errString = String(e);
-        if (errString.includes('invalid_grant') || errString.includes('invalid_rapt') || e.code === 9 || errString.includes('FAILED_PRECONDITION')) {
-             console.warn(`Firestore delete skipped (Auth/Index): ${e.message}`);
-        } else {
-             console.error('Firestore delete failed:', e);
-        }
+        console.error('deleteIconByUrlAction failed:', e);
+        return { success: false, error: e.message };
     }
-
-    // 2. Storage
-    try {
-        if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET && isFirebaseEnabled) {
-            const matches = iconUrl.match(/\/o\/([^?]+)/);
-            if (matches && matches[1]) {
-                const filePath = decodeURIComponent(matches[1]);
-                const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app');
-                await bucket.file(filePath).delete();
-            }
-        }
-    } catch (e: any) {
-        const errString = String(e);
-        if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
-            console.warn('Storage delete skipped (Auth).');
-        } else if (e.code !== 404) {
-             console.error('Storage delete failed:', e);
-        }
-    }
-
-    // 3. Memory Store
-    memoryStore.deleteIcon(iconUrl);
-
-    return { success: true };
 }
 
 export async function deleteIngredientCategoryAction(rawIngredient: string): Promise<{ success: boolean; error?: string }> {
-    // 1. Firestore & Storage (Coupled for category delete mostly)
     try {
-        let ingredient = toTitleCase(rawIngredient.trim()); // Normalize
-        
-        if (isFirebaseEnabled) {
-            // Find Ingredient Doc
-            const ingSnapshot = await db.collection('ingredients').get();
-            // Try exact match first (normalized)
-            let ingDoc = ingSnapshot.docs.find(d => d.data().name === ingredient);
-            
-            // Fallback: Case-insensitive match if exact fails (e.g. legacy data)
-            if (!ingDoc) {
-                 ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === rawIngredient.trim().toLowerCase());
-            }
-            
-            if (ingDoc) {
-                // List all icons
-                const iconsSnapshot = await ingDoc.ref.collection('icons').get();
-                const batch = db.batch();
-                const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ? storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app') : null;
-
-                const deletePromises: Promise<any>[] = [];
-
-                // Queue deletions
-                for (const iconDoc of iconsSnapshot.docs) {
-                    const data = iconDoc.data();
-                    // Delete Doc
-                    batch.delete(iconDoc.ref);
-                    
-                    // Delete File
-                    if (bucket && data.url) {
-                        const matches = data.url.match(/\/o\/([^?]+)/);
-                        if (matches && matches[1]) {
-                            const filePath = decodeURIComponent(matches[1]);
-                            deletePromises.push(bucket.file(filePath).delete().catch(e => {
-                                 if (e.code !== 404) console.warn(`Failed to delete file ${filePath}:`, e);
-                            }));
-                        }
-                    }
-                }
-
-                // Delete Parent Doc
-                batch.delete(ingDoc.ref);
-
-                // Execute
-                await Promise.all(deletePromises);
-                await batch.commit();
-            }
-        }
-
+        const ingredient = toTitleCase(rawIngredient.trim());
+        await getDataService().deleteIngredientCategory(ingredient);
+        return { success: true };
     } catch (e: any) {
-        const errString = String(e);
-        if (errString.includes('invalid_grant') || errString.includes('invalid_rapt') || e.code === 9 || errString.includes('FAILED_PRECONDITION')) {
-             console.warn(`Category delete skipped (Auth/Index): ${e.message}`);
-        } else {
-             console.error('deleteIngredientCategoryAction failed:', e);
-        }
+        console.error('deleteIngredientCategoryAction failed:', e);
+        return { success: false, error: e.message };
     }
-    
-    // 2. Memory Store
-    memoryStore.deleteIngredient(rawIngredient); // Store handles case-insensitive
-
-    return { success: true };
 }

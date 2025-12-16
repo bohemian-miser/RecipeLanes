@@ -1,10 +1,11 @@
 import 'dotenv/config';
 import { getOrCreateIconAction, recordRejectionAction, getAllStorageFilesAction } from '../app/actions';
-import { db, storage, isFirebaseEnabled } from '../lib/firebase-admin';
 import { setAIService, MockAIService } from '../lib/ai-service';
+import { setDataService, MemoryDataService } from '../lib/data-service';
 
-// Explicitly use Mock AI Service for tests
+// Explicitly use Mocks for tests
 setAIService(new MockAIService());
+setDataService(new MemoryDataService());
 
 function urlsMatch(url1: string, url2: string) {
     if (!url1 || !url2) return false;
@@ -102,53 +103,6 @@ async function testComprehensiveLifecycle() {
   } catch (e) {
       console.error('TEST FAILED:', e);
   } finally {
-      // --- CLEANUP ---
-      console.log('\n[Cleanup] Deleting test data...');
-      
-      // 1. Delete Firestore Data
-      if (isFirebaseEnabled) {
-          try {
-              const ingSnapshot = await db.collection('ingredients').where('name', '==', ingredient).get();
-              for (const doc of ingSnapshot.docs) {
-                  const icons = await doc.ref.collection('icons').get();
-                  const batch = db.batch();
-                  icons.docs.forEach(i => batch.delete(i.ref));
-                  batch.delete(doc.ref);
-                  await batch.commit();
-              }
-              console.log(' -> Deleted Firestore records.');
-          } catch (e: any) {
-              const errString = String(e);
-              if (errString.includes('invalid_grant') || errString.includes('invalid_rapt')) {
-                  console.warn(' -> Skipping Firestore cleanup (invalid credentials).');
-              } else {
-                  console.error(' -> Failed to cleanup Firestore:', e);
-              }
-          }
-      } else {
-          console.log(' -> Skipping Firestore cleanup (Mock Mode).');
-      }
-
-      // 2. Delete Storage Files
-      if (isFirebaseEnabled && generatedUrls.length > 0 && process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
-          const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
-          for (const url of generatedUrls) {
-              try {
-                  // Extract filename from URL
-                  const matches = url.match(/\/o\/([^?]+)/);
-                  if (matches && matches[1]) {
-                      const name = decodeURIComponent(matches[1]);
-                      await bucket.file(name).delete();
-                      console.log(` -> Deleted file: ${name}`);
-                  }
-              } catch (e: any) {
-                  const errString = String(e);
-                  if (!errString.includes('invalid_grant') && !errString.includes('invalid_rapt')) {
-                      console.warn(` -> Failed to delete file ${url}:`, e);
-                  }
-              }
-          }
-      }
       console.log('Test Complete.');
   }
 }

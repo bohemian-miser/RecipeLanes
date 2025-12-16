@@ -110,7 +110,8 @@ export async function getSharedGalleryAction() {
     const session = await getAuthService().verifyAuth();
     if (!session) return [];
     
-    const allIcons = await getDataService().getAllIcons();
+    // Filter out soft-deleted items
+    const allIcons = (await getDataService().getAllIcons()).filter((i: any) => !i.marked_for_deletion);
     
     // Group by Ingredient
     const grouped: Record<string, any[]> = {};

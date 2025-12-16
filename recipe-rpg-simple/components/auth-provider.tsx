@@ -7,6 +7,7 @@ import { auth, googleProvider } from '@/lib/firebase-client';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  error: string | null;
   signIn: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -14,6 +15,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  error: null,
   signIn: async () => {},
   logout: async () => {},
 });
@@ -21,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -34,6 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               });
           } catch (e) {
               console.error('Failed to sync session:', e);
+              // Don't block UI on session sync fail, but maybe log it?
           }
       }
       setLoading(false);
@@ -42,25 +46,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async () => {
+    setError(null);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      // The useEffect will handle the cookie sync
-    } catch (error) {
-      console.error('Login failed:', error);
+      await signInWithPopup(auth, googleProvider);
+    } catch (err: any) {
+      console.error('Login failed:', err);
+      let msg = 'Failed to sign in.';
+      if (err.code === 'auth/popup-closed-by-user') msg = 'Sign-in cancelled.';
+      if (err.message) msg = err.message;
+      setError(msg);
     }
   };
 
   const logout = async () => {
+    setError(null);
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
       await signOut(auth);
-    } catch (error) {
-      console.error('Logout failed:', error);
+    } catch (err: any) {
+      console.error('Logout failed:', err);
+      setError(err.message || 'Logout failed');
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, logout }}>
+    <AuthContext.Provider value={{ user, loading, error, signIn, logout }}>
       {children}
     </AuthContext.Provider>
   );

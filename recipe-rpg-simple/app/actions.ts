@@ -133,137 +133,148 @@ export async function getOrCreateIconAction(
     rawSessionRejections = 0,
     rawSeenUrls: string[] = []
 ) {
-  const session = await getAuthService().verifyAuth();
-  
-  // Validate Input
-  const ingredientParse = IngredientSchema.safeParse(rawIngredient);
-  if (!ingredientParse.success) return { error: 'Invalid ingredient' };
-  let ingredient = toTitleCase(ingredientParse.data);
+  try {
+      const session = await getAuthService().verifyAuth();
+      if (!session) return { error: 'Authentication required' };
 
-  const countParse = CountSchema.safeParse(rawSessionRejections);
-  const sessionRejections = countParse.success ? countParse.data : 0;
+      // Validate Input
+      const ingredientParse = IngredientSchema.safeParse(rawIngredient);
+      if (!ingredientParse.success) return { error: 'Invalid ingredient' };
+      let ingredient = toTitleCase(ingredientParse.data);
 
-  const seenParse = SeenUrlsSchema.safeParse(rawSeenUrls);
-  const seenUrls = new Set(seenParse.success ? seenParse.data : []);
+      const countParse = CountSchema.safeParse(rawSessionRejections);
+      const sessionRejections = countParse.success ? countParse.data : 0;
 
-  // 1. Search for Ingredient Group
-  let bestMatch = await getDataService().getIngredientByName(ingredient);
-  if (bestMatch) {
-      ingredient = bestMatch.data.name; // Canonical name
-  }
+      const seenParse = SeenUrlsSchema.safeParse(rawSeenUrls);
+      const seenUrls = new Set(seenParse.success ? seenParse.data : []);
 
-  // 2. Decide: Pick Existing or Generate New
-  if (bestMatch) {
-      console.log(`[getOrCreateIconAction] Found group: ${ingredient}`);
-      const icons = await getDataService().getIconsForIngredient(bestMatch.id);
-
-      // Calculate LCB for decision making
-      const evaluated = icons
-          .map((icon: any) => {
-              const n = icon.impressions || 0;
-              const r = icon.rejections || 0;
-              return { 
-                  ...icon, 
-                  lcb: calculateWilsonLCB(n, r), 
-                  n, r 
-              };
-          })
-          .filter((i: any) => !i.marked_for_deletion && !seenUrls.has(i.url));
-
-      // Debug Info
-      const sortedCandidates = [...evaluated].sort((a: any, b: any) => b.lcb - a.lcb);
-      const debugInfo = {
-          candidates: sortedCandidates.slice(0, 5).map((c: any) => ({
-              url: c.url,
-              score: c.lcb,
-              impressions: c.n,
-              rejections: c.r
-          })),
-          sessionRejections,
-          totalAvailable: evaluated.length,
-          decision: 'UNKNOWN'
-      };
-
-      // Generation Logic
-      let shouldGenerate = false;
-      const provenIcons = evaluated.filter((i: any) => i.n >= PROVEN_SAMPLE_SIZE);
-      const bestProvenLCB = provenIcons.length > 0 ? Math.max(...provenIcons.map((i: any) => i.lcb)) : 0;
-      
-      if (evaluated.length === 0) {
-          debugInfo.decision = 'CACHE_EXHAUSTED';
-          shouldGenerate = true;
-      } else if (sessionRejections >= SESSION_REJECT_LIMIT) {
-          if (provenIcons.length > 0 && bestProvenLCB < QUALITY_FLOOR_LCB) {
-              debugInfo.decision = 'QUALITY_FLOOR_BREACH';
-              shouldGenerate = true;
-          } else if (icons.length < MIN_CACHE_SIZE) {
-              debugInfo.decision = 'CACHE_TOO_SMALL_REJECT_STREAK';
-              shouldGenerate = true;
-          } else {
-              debugInfo.decision = 'CACHE_SUFFICIENT';
-          }
-      } else {
-          debugInfo.decision = 'NORMAL_SELECTION';
+      // 1. Search for Ingredient Group
+      let bestMatch = await getDataService().getIngredientByName(ingredient);
+      if (bestMatch) {
+          ingredient = bestMatch.data.name; // Canonical name
       }
 
-      if (shouldGenerate) {
-          // If user is NOT authenticated, force them to use cache (if available) or fail
-          if (!session) {
-              if (sortedCandidates.length > 0) {
-                  // Fallback to best available candidate regardless of quality check
-                  shouldGenerate = false; 
-                  // Proceed to selection logic below
+      // 2. Decide: Pick Existing or Generate New
+      if (bestMatch) {
+          console.log(`[getOrCreateIconAction] Found group: ${ingredient}`);
+          const icons = await getDataService().getIconsForIngredient(bestMatch.id);
+
+          // Calculate LCB for decision making
+          const evaluated = icons
+              .map((icon: any) => {
+                  const n = icon.impressions || 0;
+                  const r = icon.rejections || 0;
+                  return { 
+                      ...icon, 
+                      lcb: calculateWilsonLCB(n, r), 
+                      n, r 
+                  };
+              })
+              .filter((i: any) => !i.marked_for_deletion && !seenUrls.has(i.url));
+
+          // Debug Info
+          const sortedCandidates = [...evaluated].sort((a: any, b: any) => b.lcb - a.lcb);
+          const debugInfo = {
+              candidates: sortedCandidates.slice(0, 5).map((c: any) => ({
+                  url: c.url,
+                  score: c.lcb,
+                  impressions: c.n,
+                  rejections: c.r
+              })),
+              sessionRejections,
+              totalAvailable: evaluated.length,
+              decision: 'UNKNOWN'
+          };
+
+          // Generation Logic
+          let shouldGenerate = false;
+          const provenIcons = evaluated.filter((i: any) => i.n >= PROVEN_SAMPLE_SIZE);
+          const bestProvenLCB = provenIcons.length > 0 ? Math.max(...provenIcons.map((i: any) => i.lcb)) : 0;
+          
+          if (evaluated.length === 0) {
+              debugInfo.decision = 'CACHE_EXHAUSTED';
+              shouldGenerate = true;
+          } else if (sessionRejections >= SESSION_REJECT_LIMIT) {
+              if (provenIcons.length > 0 && bestProvenLCB < QUALITY_FLOOR_LCB) {
+                  debugInfo.decision = 'QUALITY_FLOOR_BREACH';
+                  shouldGenerate = true;
+              } else if (icons.length < MIN_CACHE_SIZE) {
+                  debugInfo.decision = 'CACHE_TOO_SMALL_REJECT_STREAK';
+                  shouldGenerate = true;
               } else {
-                  return { error: 'Item not found. Login to forge new items.' };
+                  debugInfo.decision = 'CACHE_SUFFICIENT';
+              }
+          } else {
+              debugInfo.decision = 'NORMAL_SELECTION';
+          }
+
+          if (shouldGenerate) {
+              // If user is NOT authenticated, force them to use cache (if available) or fail
+              if (!session) {
+                  if (sortedCandidates.length > 0) {
+                      // Fallback to best available candidate regardless of quality check
+                      shouldGenerate = false; 
+                      // Proceed to selection logic below
+                  } else {
+                      return { error: 'Item not found. Login to forge new items.' };
+                  }
               }
           }
-      }
 
-      if (!shouldGenerate) {
-          const selected = sortedCandidates[0];
-          const newImpressions = (selected.n || 0) + 1;
-          const newLCB = calculateWilsonLCB(newImpressions, selected.r || 0);
+          if (!shouldGenerate) {
+              const selected = sortedCandidates[0];
+              const newImpressions = (selected.n || 0) + 1;
+              const newLCB = calculateWilsonLCB(newImpressions, selected.r || 0);
 
-          try {
-              await getDataService().incrementImpressions(
-                  bestMatch.id,
-                  selected.id,
-                  selected.url,
-                  newLCB,
-                  newImpressions
-              );
-          } catch (e) {
-              console.error('Failed to increment impressions:', e);
+              try {
+                  await getDataService().incrementImpressions(
+                      bestMatch.id,
+                      selected.id,
+                      selected.url,
+                      newLCB,
+                      newImpressions
+                  );
+              } catch (e) {
+                  console.error('Failed to increment impressions:', e);
+              }
+
+              return { 
+                  iconUrl: selected.url, 
+                  isNew: false, 
+                  popularityScore: newLCB,
+                  debugInfo 
+              };
           }
-
+          
+          const { url: newUrl, lcb } = await generateAndStoreIcon(ingredient, bestMatch.id);
           return { 
-              iconUrl: selected.url, 
-              isNew: false, 
-              popularityScore: newLCB,
-              debugInfo 
+              iconUrl: newUrl, 
+              isNew: true, 
+              popularityScore: lcb, 
+              debugInfo: { ...debugInfo, decision: 'GENERATED_NEW' } 
           };
-      }
+      } 
       
-      const { url: newUrl, lcb } = await generateAndStoreIcon(ingredient, bestMatch.id);
+      // 3. Create New Ingredient Group (Requires Auth)
+      if (!session) return { error: 'Item not found. Login to forge new items.' };
+
+      const newDocId = await getDataService().createIngredient(ingredient);
+      const { url: newUrl, lcb } = await generateAndStoreIcon(ingredient, newDocId);
       return { 
           iconUrl: newUrl, 
           isNew: true, 
-          popularityScore: lcb, 
-          debugInfo: { ...debugInfo, decision: 'GENERATED_NEW' } 
+          popularityScore: lcb,
+          debugInfo: { decision: 'NEW_INGREDIENT_GROUP' } 
       };
-  } 
-  
-  // 3. Create New Ingredient Group (Requires Auth)
-  if (!session) return { error: 'Item not found. Login to forge new items.' };
 
-  const newDocId = await getDataService().createIngredient(ingredient);
-  const { url: newUrl, lcb } = await generateAndStoreIcon(ingredient, newDocId);
-  return { 
-      iconUrl: newUrl, 
-      isNew: true, 
-      popularityScore: lcb,
-      debugInfo: { decision: 'NEW_INGREDIENT_GROUP' } 
-  };
+  } catch (e: any) {
+      console.error('[getOrCreateIconAction] Error:', e);
+      // Nice error message for common issues
+      if (e.message?.includes('invalid_grant')) {
+          return { error: 'Server authentication failed. Please check backend credentials.' };
+      }
+      return { error: `Failed to forge item: ${e.message}` };
+  }
 }
 
 export async function recordRejectionAction(rawIconUrl: string, rawIngredient: string) {

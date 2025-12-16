@@ -1,0 +1,17 @@
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyAvj2Gdtkpn5FJFu3SVDSu-T5FcvOliU14
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: ropgcp.firebaseapp.com
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: ropgcp
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: ropgcp.firebasestorage.app
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "805380848748"
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:805380848748:web:9ab7563a0500efd07aec49"
+  - variable: FIREBASE_SERVICE_ACCOUNT_KEY
+    secret: FIREBASE_SERVICE_ACCOUNT_KEY
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY

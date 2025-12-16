@@ -1,4 +1,4 @@
-import { db, storage, isFirebaseEnabled } from './firebase-admin';
+import { db, storage } from './firebase-admin';
 import { memoryStore, IconData, IngredientData } from './store';
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
@@ -333,13 +333,7 @@ let currentDataService: DataService | null = null;
 
 export function getDataService(): DataService {
   if (currentDataService) return currentDataService;
-  
-  if (isFirebaseEnabled) {
-      currentDataService = new FirebaseDataService();
-  } else {
-      console.warn('Firebase disabled. Using In-Memory Data Service.');
-      currentDataService = new MemoryDataService();
-  }
+  currentDataService = new FirebaseDataService();
   return currentDataService;
 }
 

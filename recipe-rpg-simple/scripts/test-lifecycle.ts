@@ -79,6 +79,8 @@ async function testComprehensiveLifecycle() {
     // Our actions await them, so should be fine.
     
     const storageFiles = await getAllStorageFilesAction();
+    if (!storageFiles) throw new Error("Storage access denied!");
+    
     const fileC = storageFiles.find((f: any) => urlsMatch(f.publicUrl, urlC));
     
     if (fileC) {

@@ -1,9 +1,16 @@
 import 'dotenv/config';
 import { getOrCreateIconAction, deleteIconByUrlAction, deleteIngredientCategoryAction, getAllStorageFilesAction } from '../app/actions';
+import { setAIService, MockAIService } from '../lib/ai-service';
+import { setDataService, MemoryDataService } from '../lib/data-service';
+import { setAuthService, MockAuthService } from '../lib/auth-service';
+
+// Explicitly use Mocks for tests
+setAIService(new MockAIService());
+setDataService(new MemoryDataService());
+setAuthService(new MockAuthService());
 
 function urlsMatch(url1: string, url2: string) {
-    if (!url1 || !url2) return false;
-    return url1.split('?')[0] === url2.split('?')[0];
+    return url1 === url2;
 }
 
 async function testDeletionSync() {
@@ -31,9 +38,11 @@ async function testDeletionSync() {
 
     // 3. Verify it is GONE from Storage List (Debug Gallery view)
     let storageFiles = await getAllStorageFilesAction();
+    if (!storageFiles) throw new Error("Storage access denied!");
     let existsInStorage = storageFiles.some((f: any) => urlsMatch(f.publicUrl, urlA));
     if (existsInStorage) {
         console.error("FAILURE: Icon still exists in storage list!");
+        throw new Error("Deletion failed verification");
     } else {
         console.log("SUCCESS: Icon removed from storage list.");
     }
@@ -57,7 +66,7 @@ async function testDeletionSync() {
 
   } catch (e) {
       console.error("TEST FAILED:", e);
-      process.exit(1);
+      process.exitCode = 1;
   }
 }
 

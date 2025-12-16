@@ -16,7 +16,8 @@ if (serviceAccountKey) {
   }
 }
 
-export const isFirebaseEnabled = !!(serviceAccountKey || process.env.GOOGLE_APPLICATION_CREDENTIALS);
+// Enable Firebase if explicit keys exist OR if running in production (assuming ADC)
+export const isFirebaseEnabled = !!(serviceAccountKey || process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.NODE_ENV === 'production');
 
 const app = getApps().length > 0 ? getApp() : initializeApp({
   projectId,

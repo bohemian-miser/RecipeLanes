@@ -28,11 +28,43 @@ export function DebugGallery({ refreshKey }: { refreshKey?: number }) {
       });
   }, [refreshKey]);
 
+  const groupedStorageFiles = useMemo(() => {
+    if (!storageFiles) return {};
+    const groups: Record<string, any[]> = {};
+    storageFiles.forEach(file => {
+      // Parse filename: icons/Ingredient-Name-12345.png
+      const basename = file.name.split('/').pop() || '';
+      const nameWithoutExt = basename.replace('.png', '');
+      const parts = nameWithoutExt.split('-');
+      // Remove timestamp (last part)
+      if (parts.length > 1 && !isNaN(Number(parts[parts.length - 1]))) {
+          parts.pop();
+      }
+      // Reassemble ingredient name (approximate)
+      const category = parts.join(' ') || 'Uncategorized';
+      
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category].push(file);
+    });
+    return groups;
+  }, [storageFiles]);
+
+  const storageCategories = useMemo(() => Object.keys(groupedStorageFiles).sort(), [groupedStorageFiles]);
+
+  const toggleStorageCategory = (category: string) => {
+    const key = `storage:${category}`;
+    setCollapsedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   // Hide if unauthorized (null) or loading
-  if (loading) return null; // Don't show loading pulse for unauthorized users? Or show pulse then hide?
-  // User said "don't show". If we show pulse then disappear, it's ok.
-  // But if we want to be clean, maybe keep loading?
-  // Let's hide completely if null.
+  if (loading) return null; 
   if (storageFiles === null) return null;
 
   const handleDeleteIcon = async (url: string, name: string, ingredientName: string) => {

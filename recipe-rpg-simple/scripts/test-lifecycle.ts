@@ -102,6 +102,7 @@ async function testComprehensiveLifecycle() {
 
   } catch (e) {
       console.error('TEST FAILED:', e);
+      process.exitCode = 1;
   } finally {
       console.log('Test Complete.');
   }

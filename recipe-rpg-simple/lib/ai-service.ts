@@ -32,7 +32,7 @@ export class MockAIService implements AIService {
   }
 
   async generateImage(prompt: string): Promise<string> {
-    return `https://placehold.co/64x64/png?text=Mock+${encodeURIComponent(prompt)}`;
+    return `https://placehold.co/64x64/png?text=Mock+${encodeURIComponent(prompt.slice(0, 10))}&uuid=${Math.random().toString(36).substring(7)}`;
   }
 }
 

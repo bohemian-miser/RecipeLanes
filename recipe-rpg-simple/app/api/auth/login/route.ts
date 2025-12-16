@@ -1,4 +1,4 @@
-import { auth } from '@/lib/firebase-admin';
+import { auth, isFirebaseEnabled } from '@/lib/firebase-admin';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -9,7 +9,11 @@ export async function POST(request: NextRequest) {
 
     // 5 days
     const expiresIn = 60 * 60 * 24 * 5 * 1000;
-    const sessionCookie = await auth.createSessionCookie(idToken, { expiresIn });
+    let sessionCookie = 'mock-session-token';
+
+    if (isFirebaseEnabled) {
+        sessionCookie = await auth.createSessionCookie(idToken, { expiresIn });
+    }
 
     cookies().set('session', sessionCookie, {
       maxAge: expiresIn,

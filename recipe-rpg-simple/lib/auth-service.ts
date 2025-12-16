@@ -13,9 +13,22 @@ export interface AuthService {
 
 export class RealAuthService implements AuthService {
   async verifyAuth(): Promise<AuthSession | null> {
-    // In production/real mode, strictly check headers/cookies.
-    // We do NOT check isFirebaseEnabled here because the Factory decides usage.
     
+    // 1. Mock/Local Bypass (if Firebase Admin is not configured)
+    if (!isFirebaseEnabled) {
+        // Check if ANY auth token/cookie is present to simulate "logged in" state
+        // If the client sends a token/cookie, we treat them as a logged-in admin.
+        const authHeader = (await headers()).get('Authorization');
+        const cookieStore = await cookies();
+        const sessionCookie = cookieStore.get('session')?.value;
+
+        if (authHeader || sessionCookie) {
+            return { uid: 'mock-local-user', email: 'admin@localhost', isAdmin: true };
+        }
+        return null;
+    }
+
+    // In production/real mode, strictly check headers/cookies.
     try {
         let token = '';
         let isSessionCookie = false;

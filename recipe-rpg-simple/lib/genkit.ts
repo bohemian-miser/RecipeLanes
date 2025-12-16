@@ -6,19 +6,23 @@ export const imageModelName = 'googleai/imagen-4.0-generate-001';
 export const embeddingModel = 'googleai/text-embedding-004';
 export const textModel = 'googleai/gemini-2.5-flash';
 
-const plugins = [];
-if (process.env.GEMINI_API_KEY) {
-  plugins.push(googleAI());
-} else {
-  console.warn('GEMINI_API_KEY is not set. Using MOCK models for AI generation.');
+const plugins = [googleAI()];
+
+// Mocking Logic:
+// Only mock if API Key is missing AND we are NOT in production.
+// This allows Production to attempt using Application Default Credentials (ADC) if Key is missing.
+const shouldMock = !process.env.GEMINI_API_KEY && (!!process.env.CI || process.env.NODE_ENV !== 'production');
+
+if (shouldMock) {
+  console.warn('GEMINI_API_KEY is not set. Using MOCK models (CI/Dev mode).');
 }
 
 export const ai = genkit({
   plugins,
 });
 
-// Register mocks if no API key
-if (!process.env.GEMINI_API_KEY) {
+// Register mocks if needed
+if (shouldMock) {
   ai.defineModel({ name: textModel } as any, async (req) => {
     return { 
       candidates: [{

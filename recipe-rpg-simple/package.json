@@ -15,12 +15,11 @@
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.25.0",
-    "@genkit-ai/vertexai": "^1.26.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
     "firebase": "^12.6.0",
     "firebase-admin": "^13.6.0",
-    "genkit": "^1.25.0",
+    "genkit": "^1.26.0",
     "lucide-react": "^0.559.0",
     "next": "16.0.8",
     "react": "19.2.1",

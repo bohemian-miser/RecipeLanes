@@ -1,5 +1,5 @@
 import { genkit } from 'genkit';
-import { vertexAI } from '@genkit-ai/vertexai';
+import { vertexAI } from '@genkit-ai/google-genai';
 
 // Models defined as strings to avoid import issues
 // Using Vertex AI models which use ADC (no API Key required in Prod)

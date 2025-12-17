@@ -1,5 +1,8 @@
 import { genkit } from 'genkit';
 import { vertexAI } from '@genkit-ai/google-genai';
+import { enableFirebaseTelemetry } from '@genkit-ai/firebase';
+
+enableFirebaseTelemetry();
 
 // Models defined as strings to avoid import issues
 // Using Vertex AI models which use ADC (no API Key required in Prod)

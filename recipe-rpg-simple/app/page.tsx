@@ -73,13 +73,14 @@ export default function Home() {
           throw new Error(result.error);
       }
       
-      const { iconUrl, popularityScore, debugInfo } = result as any; 
+      const { iconUrl, popularityScore, debugInfo, imagePrompt } = result as any; 
       
       const newIcon: Icon = {
         id: `${uniqueId}-${Date.now()}-${Math.random()}`, 
         ingredient: newIngredient,
         iconUrl: iconUrl,
-        popularityScore: popularityScore
+        popularityScore: popularityScore,
+        imagePrompt: imagePrompt
       };
       
       // Replace pending icon with real one
@@ -122,12 +123,12 @@ export default function Home() {
         const result = await getOrCreateIconAction(ingredient, newRejections, seen);
 
         if ('error' in result && result.error) throw new Error(result.error);
-        const { iconUrl, popularityScore, debugInfo } = result as any;
+        const { iconUrl, popularityScore, debugInfo, imagePrompt } = result as any;
 
         // 4. Update UI
         setIcons(prev => prev.map(icon => 
             icon.id === iconToReroll.id 
-                ? { ...icon, iconUrl: iconUrl, popularityScore: popularityScore }
+                ? { ...icon, iconUrl: iconUrl, popularityScore: popularityScore, imagePrompt: imagePrompt }
                 : icon
         ));
         updateSeen(ingredient, iconUrl);

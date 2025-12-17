@@ -8,6 +8,7 @@ export interface Icon {
   iconUrl: string;
   popularityScore?: number;
   isPending?: boolean;
+  imagePrompt?: string;
 }
 
 interface IconDisplayProps {
@@ -110,6 +111,7 @@ export function IconDisplay({ icons, onReroll, onDelete, rerollingIds, error, hi
                                <img 
                                  src={icon.iconUrl} 
                                  alt={icon.ingredient}
+                                 title={icon.imagePrompt || icon.ingredient}
                                  className={`w-full h-full object-contain rendering-pixelated ${isRerolling ? 'opacity-50 grayscale' : ''}`}
                                  style={{ imageRendering: 'pixelated' }}
                                />

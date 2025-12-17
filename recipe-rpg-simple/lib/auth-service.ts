@@ -49,14 +49,24 @@ export class RealAuthService implements AuthService {
         if (!token) return null;
 
         let decoded = null;
-        if (isSessionCookie) {
-            decoded = await auth.verifySessionCookie(token, true).catch(() => null);
-            if (!decoded) {
-                // Fallback: Check if the cookie holds a raw ID token
+        // Basic format check to prevent "argument must be object" errors if token is weird
+        if (token && typeof token === 'string' && token.length > 10) {
+            if (isSessionCookie) {
+                decoded = await auth.verifySessionCookie(token, true).catch((e) => {
+                    // Ignore common errors, log weird ones
+                    if (e.code !== 'auth/session-cookie-expired' && e.code !== 'auth/argument-error') {
+                        console.warn('verifySessionCookie failed:', e.message);
+                    }
+                    return null;
+                });
+                
+                if (!decoded) {
+                    // Fallback: Check if the cookie holds a raw ID token
+                    decoded = await auth.verifyIdToken(token).catch(() => null);
+                }
+            } else {
                 decoded = await auth.verifyIdToken(token).catch(() => null);
             }
-        } else {
-            decoded = await auth.verifyIdToken(token).catch(() => null);
         }
 
         if (!decoded) return null;

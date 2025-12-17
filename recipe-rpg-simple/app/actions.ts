@@ -45,12 +45,12 @@ import { generateIconFlow } from '@/lib/flows';
 
 // ... (existing imports)
 
-async function generateAndStoreIcon(ingredient: string, ingredientDocId: string): Promise<{ url: string, lcb: number }> {
+async function generateAndStoreIcon(ingredient: string, ingredientDocId: string): Promise<{ url: string, lcb: number, imagePrompt: string }> {
   console.log('[generateAndStoreIcon] Generating for:', ingredient);
   
   // 1. Run Genkit Flow (Text + Image)
   // This encapsulates the prompt enrichment and image generation logic
-  const { url: downloadURL, visualDescription } = await generateIconFlow({ ingredient });
+  const { url: downloadURL, visualDescription, imagePrompt } = await generateIconFlow({ ingredient });
   
 //   console.log(`[generateAndStoreIcon] Generated: ${downloadURL}`);
 
@@ -75,6 +75,7 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
           ingredientDocId,
           ingredient,
           visualDescription,
+          imagePrompt,
           downloadURL,
           imageBuffer,
           {
@@ -90,7 +91,7 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
       console.error('DataService save failed:', e);
   }
 
-  return { url: finalUrl, lcb };
+  return { url: finalUrl, lcb, imagePrompt };
 }
 
 export async function getAllIconsAction() {
@@ -248,15 +249,17 @@ export async function getOrCreateIconAction(
                   iconUrl: selected.url, 
                   isNew: false, 
                   popularityScore: newLCB,
+                  imagePrompt: selected.imagePrompt,
                   debugInfo 
               };
           }
           
-          const { url: newUrl, lcb } = await generateAndStoreIcon(ingredient, bestMatch.id);
+          const { url: newUrl, lcb, imagePrompt } = await generateAndStoreIcon(ingredient, bestMatch.id);
           return { 
               iconUrl: newUrl, 
               isNew: true, 
               popularityScore: lcb, 
+              imagePrompt,
               debugInfo: { ...debugInfo, decision: 'GENERATED_NEW' } 
           };
       } 
@@ -265,11 +268,12 @@ export async function getOrCreateIconAction(
       if (!session) return { error: 'Item not found. Login to forge new items.' };
 
       const newDocId = await getDataService().createIngredient(ingredient);
-      const { url: newUrl, lcb } = await generateAndStoreIcon(ingredient, newDocId);
+      const { url: newUrl, lcb, imagePrompt } = await generateAndStoreIcon(ingredient, newDocId);
       return { 
           iconUrl: newUrl, 
           isNew: true, 
           popularityScore: lcb,
+          imagePrompt,
           debugInfo: { decision: 'NEW_INGREDIENT_GROUP' } 
       };
 

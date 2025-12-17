@@ -11,6 +11,7 @@ export interface IconData {
   embedding?: number[];
   ingredientId?: string;
   prompt?: string;
+  imagePrompt?: string;
   textModel?: string;
   imageModel?: string;
 }

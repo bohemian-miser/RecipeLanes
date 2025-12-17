@@ -9,6 +9,7 @@ const IconInput = z.object({
 const IconOutput = z.object({
   url: z.string(),
   visualDescription: z.string(),
+  imagePrompt: z.string(),
 });
 
 export const generateIconFlow = ai.defineFlow(
@@ -22,11 +23,14 @@ export const generateIconFlow = ai.defineFlow(
     console.log(`[Flow] Starting generation for: ${ingredient}`);
 
     // Step 1: Generate Visual Description (Gemini)
-    const textPrompt = `Describe a distinct and recognizable visual representation of '${ingredient}' for a 64x64 pixel art icon. 
-    If it is an action, describe the tools/objects. 
-    If it is an object, describe defining features/labels.
-    Keep it concise (under 30 words). Focus on visual subject matter only.
-    Return ONLY the description. Do not include "Here is a description" or similar text.`;
+    // Structured prompt to preserve object identity while enabling better descriptions for abstract concepts
+    const textPrompt = `You are an expert pixel art prompt optimizer.
+    The user's input is: '${ingredient}'.
+    
+    Rules:
+    1. If the input is a concrete physical object (e.g., 'golf ball', 'apple', 'sword'), return it EXACTLY as is, optionally adding 1 simple adjective if needed for clarity (e.g., 'white golf ball'). DO NOT describe it as "a spherical object".
+    2. If the input is an action, abstract concept, or complex scene (e.g., 'running', 'victory', 'cooking'), describe a distinct visual representation of it in under 15 words.
+    3. Return ONLY the final prompt string. Do not include quotes or explanations.`;
     
     const textResponse = await ai.generate({
       model: textModel,
@@ -63,6 +67,7 @@ export const generateIconFlow = ai.defineFlow(
     return {
       url: media.url,
       visualDescription,
+      imagePrompt,
     };
   }
 );

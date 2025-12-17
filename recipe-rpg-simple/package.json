@@ -14,6 +14,7 @@
     "node": "20"
   },
   "dependencies": {
+    "@genkit-ai/firebase": "^1.26.0",
     "@genkit-ai/google-genai": "^1.25.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",

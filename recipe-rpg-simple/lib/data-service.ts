@@ -14,6 +14,7 @@ export interface DataService {
       ingredientId: string, 
       ingredientName: string, 
       visualDescription: string, 
+      imagePrompt: string,
       publicUrl: string, 
       imageBuffer: ArrayBuffer, 
       meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string }
@@ -62,28 +63,39 @@ export class FirebaseDataService implements DataService {
 
   async getAllIcons() {
      // Fetch active icons (up to 1000) for the shared gallery
-     const snapshot = await db.collectionGroup('icons')
-        .where('marked_for_deletion', '==', false)
-        .limit(1000)
-        .get();
+     try {
+         const snapshot = await db.collectionGroup('icons')
+            .where('marked_for_deletion', '==', false)
+            .limit(1000)
+            .get();
 
-     const items = snapshot.docs.map(doc => {
-         const data = doc.data();
-         return {
-             id: doc.id,
-             path: doc.ref.path,
-             ...data,
-             created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at
-         };
-     });
-     // @ts-ignore
-     return items.sort((a, b) => (b.popularity_score || 0) - (a.popularity_score || 0));
+         const items = snapshot.docs.map(doc => {
+             const data = doc.data();
+             return {
+                 id: doc.id,
+                 path: doc.ref.path,
+                 ...data,
+                 created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at
+             };
+         });
+         // @ts-ignore
+         return items.sort((a, b) => (b.popularity_score || 0) - (a.popularity_score || 0));
+     } catch (e: any) {
+         if (e.code === 9) { // FAILED_PRECONDITION (Missing Index)
+             console.warn('[getAllIcons] Missing Firestore Composite Index for collectionGroup:icons. Returning empty list.');
+             console.warn('Please create an index on `icons` collection group: marked_for_deletion ASC');
+             return [];
+         }
+         console.error('[getAllIcons] Failed:', e);
+         throw e;
+     }
   }
 
   async saveIcon(
     ingredientId: string, 
     ingredientName: string, 
     visualDescription: string, 
+    imagePrompt: string,
     publicUrl: string, 
     imageBuffer: ArrayBuffer, 
     meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string }
@@ -104,6 +116,7 @@ export class FirebaseDataService implements DataService {
                   rejections: String(meta.rejections),
                   lcb: String(meta.lcb),
                   prompt: visualDescription,
+                  imagePrompt: imagePrompt,
                   textModel: meta.textModel,
                   imageModel: meta.imageModel
               }
@@ -122,6 +135,7 @@ export class FirebaseDataService implements DataService {
           created_at: FieldValue.serverTimestamp(),
           marked_for_deletion: false,
           prompt: visualDescription,
+          imagePrompt: imagePrompt,
           textModel: meta.textModel,
           imageModel: meta.imageModel
       });
@@ -284,7 +298,7 @@ export class MemoryDataService implements DataService {
     return memoryStore.getAllIcons().sort((a, b) => b.popularity_score - a.popularity_score);
   }
 
-  async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, publicUrl: string, buffer: ArrayBuffer, meta: any) {
+  async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, imagePrompt: string, publicUrl: string, buffer: ArrayBuffer, meta: any) {
     memoryStore.addIcon({
         url: publicUrl,
         ingredient: ingredientName,
@@ -295,6 +309,7 @@ export class MemoryDataService implements DataService {
         created_at: Date.now(),
         marked_for_deletion: false,
         prompt: visualDescription,
+        imagePrompt: imagePrompt,
         textModel: meta.textModel,
         imageModel: meta.imageModel
     });

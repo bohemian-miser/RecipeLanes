@@ -49,6 +49,7 @@ export function SharedGallery() {
                    <img 
                      src={icon.url} 
                      alt={ingredient}
+                     title={icon.imagePrompt || icon.ingredient_name}
                      className="w-full h-full object-contain rendering-pixelated transition-transform group-hover:scale-110"
                      style={{ imageRendering: 'pixelated' }}
                    />

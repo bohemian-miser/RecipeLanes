@@ -5,7 +5,7 @@ import { vertexAI } from '@genkit-ai/vertexai';
 // Using Vertex AI models which use ADC (no API Key required in Prod)
 export const imageModelName = 'vertexai/imagen-3.0-generate-001'; 
 export const embeddingModel = 'vertexai/text-embedding-004';
-export const textModel = 'vertexai/gemini-1.5-flash';
+export const textModel = 'vertexai/gemini-2.5-flash';
 
 const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'ropgcp';
 

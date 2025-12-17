@@ -15,6 +15,7 @@ export interface DataService {
       ingredientName: string, 
       visualDescription: string, 
       imagePrompt: string,
+      fullImagePrompt: string,
       publicUrl: string, 
       imageBuffer: ArrayBuffer, 
       meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string }
@@ -96,6 +97,7 @@ export class FirebaseDataService implements DataService {
     ingredientName: string, 
     visualDescription: string, 
     imagePrompt: string,
+    fullImagePrompt: string,
     publicUrl: string, 
     imageBuffer: ArrayBuffer, 
     meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string }
@@ -117,6 +119,7 @@ export class FirebaseDataService implements DataService {
                   lcb: String(meta.lcb),
                   prompt: visualDescription,
                   imagePrompt: imagePrompt,
+                  fullImagePrompt: fullImagePrompt,
                   textModel: meta.textModel,
                   imageModel: meta.imageModel
               }
@@ -136,6 +139,7 @@ export class FirebaseDataService implements DataService {
           marked_for_deletion: false,
           prompt: visualDescription,
           imagePrompt: imagePrompt,
+          fullImagePrompt: fullImagePrompt,
           textModel: meta.textModel,
           imageModel: meta.imageModel
       });
@@ -298,7 +302,7 @@ export class MemoryDataService implements DataService {
     return memoryStore.getAllIcons().sort((a, b) => b.popularity_score - a.popularity_score);
   }
 
-  async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, imagePrompt: string, publicUrl: string, buffer: ArrayBuffer, meta: any) {
+  async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, imagePrompt: string, fullImagePrompt: string, publicUrl: string, buffer: ArrayBuffer, meta: any) {
     memoryStore.addIcon({
         url: publicUrl,
         ingredient: ingredientName,
@@ -310,6 +314,7 @@ export class MemoryDataService implements DataService {
         marked_for_deletion: false,
         prompt: visualDescription,
         imagePrompt: imagePrompt,
+        fullImagePrompt: fullImagePrompt,
         textModel: meta.textModel,
         imageModel: meta.imageModel
     });

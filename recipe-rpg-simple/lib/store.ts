@@ -12,6 +12,7 @@ export interface IconData {
   ingredientId?: string;
   prompt?: string;
   imagePrompt?: string;
+  fullImagePrompt?: string;
   textModel?: string;
   imageModel?: string;
 }

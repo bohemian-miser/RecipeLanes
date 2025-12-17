@@ -10,6 +10,7 @@ const IconOutput = z.object({
   url: z.string(),
   visualDescription: z.string(),
   imagePrompt: z.string(),
+  fullImagePrompt: z.string(),
 });
 
 export const generateIconFlow = ai.defineFlow(
@@ -47,6 +48,7 @@ export const generateIconFlow = ai.defineFlow(
       url: media.url,
       visualDescription,
       imagePrompt: visualDescription,
+      fullImagePrompt,
     };
   }
 );

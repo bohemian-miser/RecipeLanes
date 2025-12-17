@@ -50,7 +50,7 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
   
   // 1. Run Genkit Flow (Text + Image)
   // This encapsulates the prompt enrichment and image generation logic
-  const { url: downloadURL, visualDescription, imagePrompt } = await generateIconFlow({ ingredient });
+  const { url: downloadURL, visualDescription, imagePrompt, fullImagePrompt } = await generateIconFlow({ ingredient });
   
 //   console.log(`[generateAndStoreIcon] Generated: ${downloadURL}`);
 
@@ -76,6 +76,7 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
           ingredient,
           visualDescription,
           imagePrompt,
+          fullImagePrompt,
           downloadURL,
           imageBuffer,
           {

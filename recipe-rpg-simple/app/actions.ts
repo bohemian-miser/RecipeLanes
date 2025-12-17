@@ -107,26 +107,32 @@ export async function getAllStorageFilesAction() {
 }
 
 export async function getSharedGalleryAction() {
-    const session = await getAuthService().verifyAuth();
-    if (!session) return [];
-    
-    // Filter out soft-deleted items
-    const allIcons = (await getDataService().getAllIcons()).filter((i: any) => !i.marked_for_deletion);
-    
-    // Group by Ingredient
-    const grouped: Record<string, any[]> = {};
-    allIcons.forEach((icon: any) => {
-        if (!grouped[icon.ingredient_name]) grouped[icon.ingredient_name] = [];
-        grouped[icon.ingredient_name].push(icon);
-    });
+    try {
+        const session = await getAuthService().verifyAuth();
+        if (!session) return [];
+        
+        // Filter out soft-deleted items
+        // Note: The service might fail if indexes are missing for collectionGroup queries
+        const allIcons = (await getDataService().getAllIcons()).filter((i: any) => !i.marked_for_deletion);
+        
+        // Group by Ingredient
+        const grouped: Record<string, any[]> = {};
+        allIcons.forEach((icon: any) => {
+            if (!grouped[icon.ingredient_name]) grouped[icon.ingredient_name] = [];
+            grouped[icon.ingredient_name].push(icon);
+        });
 
-    // Take top 4
-    const result = [];
-    for (const ing in grouped) {
-        const sorted = grouped[ing].sort((a, b) => (b.popularity_score || 0) - (a.popularity_score || 0));
-        result.push(...sorted.slice(0, 4));
+        // Take top 4
+        const result = [];
+        for (const ing in grouped) {
+            const sorted = grouped[ing].sort((a, b) => (b.popularity_score || 0) - (a.popularity_score || 0));
+            result.push(...sorted.slice(0, 4));
+        }
+        return result;
+    } catch (e) {
+        console.error('getSharedGalleryAction failed:', e);
+        return [];
     }
-    return result;
 }
 
 export async function getOrCreateIconAction(

@@ -15,7 +15,7 @@ export function SharedGallery() {
         setLoading(false);
       })
       .catch((err) => {
-        console.error('Failed to fetch shared gallery:', err);
+        console.error('Failed to fetch shared gallery:', err, (err as any).digest);
         setLoading(false);
       });
   }, []);

@@ -3,7 +3,7 @@ import { vertexAI } from '@genkit-ai/google-genai';
 
 // Models defined as strings to avoid import issues
 // Using Vertex AI models which use ADC (no API Key required in Prod)
-export const imageModelName = 'vertexai/imagen-3.0-generate-001'; 
+export const imageModelName = 'vertexai/imagen-4.0-fast-generate-001'; 
 export const embeddingModel = 'vertexai/text-embedding-004';
 export const textModel = 'vertexai/gemini-2.5-flash';
 

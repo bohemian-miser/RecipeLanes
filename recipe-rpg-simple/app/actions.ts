@@ -52,7 +52,7 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
   // This encapsulates the prompt enrichment and image generation logic
   const { url: downloadURL, visualDescription } = await generateIconFlow({ ingredient });
   
-  console.log(`[generateAndStoreIcon] Generated: ${downloadURL}`);
+//   console.log(`[generateAndStoreIcon] Generated: ${downloadURL}`);
 
   // 2. Download Buffer for Storage
   let imageBuffer: ArrayBuffer;

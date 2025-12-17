@@ -41,22 +41,20 @@ function toTitleCase(str: string) {
     .join(' ');
 }
 
+import { generateIconFlow } from '@/lib/flows';
+
+// ... (existing imports)
+
 async function generateAndStoreIcon(ingredient: string, ingredientDocId: string): Promise<{ url: string, lcb: number }> {
   console.log('[generateAndStoreIcon] Generating for:', ingredient);
   
-  // 1. Enrich Prompt (AI)
-  const visualDescriptionRaw = await getAIService().generateText(
-      `Describe a distinct and recognizable visual representation of '${ingredient}' for a 64x64 pixel art icon. If it is an action (e.g. 'chop onion'), describe the tools and objects interacting (e.g. 'A knife slicing a red onion'). Do not describe hands. If it is an object (e.g. 'bag of sugar'), describe it with defining features or labels to ensure it is identifiable (e.g. 'A paper sack labeled "SUGAR" with a few cubes spilling out'). Keep it concise (under 30 words). Focus on visual subject matter only.`
-  );
-  const visualDescription = visualDescriptionRaw || ingredient;
-  console.log(`[generateAndStoreIcon] Enriched prompt: "${visualDescription}"`);
+  // 1. Run Genkit Flow (Text + Image)
+  // This encapsulates the prompt enrichment and image generation logic
+  const { url: downloadURL, visualDescription } = await generateIconFlow({ ingredient });
+  
+  console.log(`[generateAndStoreIcon] Generated: ${downloadURL}`);
 
-  // 2. Generate Image (AI)
-  let downloadURL = await getAIService().generateImage(
-    `Generate a high-quality 64x64 pixel art icon of ${visualDescription}. The style should be distinct, colorful, and clearly recognizable, suitable for a game inventory or flowchart. Use clean outlines and bright colors. Ensure the background is transparent.`
-  );
-
-  // 3. Download Buffer for Storage
+  // 2. Download Buffer for Storage
   let imageBuffer: ArrayBuffer;
   try {
       const response = await fetch(downloadURL);
@@ -70,7 +68,8 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
   const initialRejections = 0;
   const lcb = calculateWilsonLCB(initialImpressions, initialRejections);
 
-  // 4. Save via Service
+  // 3. Save via Service
+  let finalUrl = downloadURL;
   try {
       const savedUrl = await getDataService().saveIcon(
           ingredientDocId,
@@ -86,12 +85,12 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
               imageModel: imageModelName
           }
       );
-      downloadURL = savedUrl;
+      finalUrl = savedUrl;
   } catch (e) {
       console.error('DataService save failed:', e);
   }
 
-  return { url: downloadURL, lcb };
+  return { url: finalUrl, lcb };
 }
 
 export async function getAllIconsAction() {

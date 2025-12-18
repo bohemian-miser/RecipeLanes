@@ -110,7 +110,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
       "id": "node-3",
       "laneId": "lane-1",
       "text": "Whisk eggs",
-      "visualDescription": "Wire whisk in a glass bowl",
+      "visualDescription": "Wire whisk beating yellow eggs in a glass bowl",
       "type": "action",
       "inputs": ["node-1", "node-2"]
     },
@@ -157,53 +157,52 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
     {
       "id": "node-1",
       "laneId": "lane-1",
-      "text": "Spaghetti",
-      "visualDescription": "Bundle of dry spaghetti",
-      "type": "ingredient"
+      "text": "Add Spaghetti to boiling water",
+      "visualDescription": "Spaghetti boiling in a pot of water",
+      "type": "action",
+      "duration": "10 min"
     },
     {
       "id": "node-2",
       "laneId": "lane-1",
-      "text": "Boil & Cook",
-      "visualDescription": "Spaghetti boiling in a pot of water",
+      "text": "Drain",
+      "visualDescription": "Pasta in a colander",
       "type": "action",
-      "duration": "10 min",
       "inputs": ["node-1"]
     },
     {
       "id": "node-3",
-      "laneId": "lane-1",
-      "text": "Drain",
-      "visualDescription": "Pasta in a colander",
-      "type": "action",
-      "inputs": ["node-2"]
+      "laneId": "lane-2",
+      "text": "2 Onions",
+      "visualDescription": "Chopped onion",
+      "type": "ingredient"
     },
     {
       "id": "node-4",
       "laneId": "lane-2",
-      "text": "Onion & Garlic",
-      "visualDescription": "Chopped onion and garlic",
+      "text": "3 cloves garlic",
+      "visualDescription": "Chopped garlic",
       "type": "ingredient"
     },
     {
       "id": "node-5",
       "laneId": "lane-2",
-      "text": "Fry",
-      "visualDescription": "Onions frying in a pan",
+      "text": "Fry until soft",
+      "visualDescription": "Onions and garlic frying in a pan",
       "type": "action",
-      "inputs": ["node-4"]
+      "inputs": ["node-3", "node-4"]
     },
     {
       "id": "node-6",
       "laneId": "lane-2",
-      "text": "Minced Beef",
+      "text": "500g Minced Beef",
       "visualDescription": "Raw minced beef",
       "type": "ingredient"
     },
     {
       "id": "node-7",
       "laneId": "lane-2",
-      "text": "Brown Meat",
+      "text": "Add Meat & Brown",
       "visualDescription": "Browned mince meat in a pan",
       "type": "action",
       "inputs": ["node-5", "node-6"]
@@ -211,14 +210,14 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
     {
       "id": "node-8",
       "laneId": "lane-2",
-      "text": "Tomato Sauce",
+      "text": "Can of Tomato Sauce",
       "visualDescription": "Can of tomato sauce",
       "type": "ingredient"
     },
     {
       "id": "node-9",
       "laneId": "lane-2",
-      "text": "Simmer Sauce",
+      "text": "Add Sauce & Simmer",
       "visualDescription": "Red sauce simmering in a pan",
       "type": "action",
       "duration": "15 min",
@@ -230,7 +229,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
       "text": "Combine & Serve",
       "visualDescription": "Spaghetti being tossed in red sauce",
       "type": "action",
-      "inputs": ["node-3", "node-9"]
+      "inputs": ["node-2", "node-9"]
     }
   ]
 }

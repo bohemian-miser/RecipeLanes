@@ -117,6 +117,31 @@ const Node: React.FC<{ node: any }> = ({ node }) => {
   const data = node.data as RecipeNode;
   const isIngredient = data.type === 'ingredient';
   
+  // Icon Size logic
+  const iconSize = isIngredient ? 32 : 48;
+  const iconX = isIngredient ? 25 : node.width - 30;
+  const iconY = isIngredient ? node.height / 2 : 24;
+
+  const IconImage = () => {
+      if (data.iconUrl) {
+          return (
+              <image 
+                href={data.iconUrl} 
+                x={iconX - iconSize / 2} 
+                y={iconY - iconSize / 2} 
+                width={iconSize} 
+                height={iconSize} 
+                style={{ imageRendering: 'pixelated' }}
+              />
+          );
+      }
+      return (
+        <text x={iconX} y={iconY} fontSize={isIngredient ? "16" : "22"} textAnchor="middle" dominantBaseline="middle">
+          {isIngredient ? '🥕' : '🍳'}
+        </text>
+      );
+  };
+  
   if (isIngredient) {
     return (
       <g transform={`translate(${node.x}, ${node.y})`}>
@@ -129,12 +154,9 @@ const Node: React.FC<{ node: any }> = ({ node }) => {
           stroke="#D1D5DB"
           strokeWidth="1"
         />
-        {/* Placeholder Icon (Text for now) */}
-        <text x={25} y={node.height / 2} fontSize="16" textAnchor="middle" dominantBaseline="middle">
-          🥕
-        </text>
+        <IconImage />
         <text
-          x={50}
+          x={55}
           y={node.height / 2}
           dominantBaseline="middle"
           fontSize="13"
@@ -183,6 +205,8 @@ const Node: React.FC<{ node: any }> = ({ node }) => {
         STEP {data.id.split('-').pop()}
       </text>
 
+      <IconImage />
+
       {/* Description */}
       <foreignObject x={10} y={40} width={node.width - 20} height={node.height - 45}>
         <div style={{ fontSize: '13px', color: '#1F2937', lineHeight: '1.4', height: '100%', display: 'flex', alignItems: 'center' }}>
@@ -191,7 +215,7 @@ const Node: React.FC<{ node: any }> = ({ node }) => {
       </foreignObject>
       
       {data.duration && (
-         <text x={node.width - 10} y={21} fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">
+         <text x={node.width - 60} y={21} fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">
            ⏱ {data.duration}
          </text>
       )}

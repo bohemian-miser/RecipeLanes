@@ -11,6 +11,7 @@ export interface RecipeNode {
   laneId: string;
   text: string; // "Grate 2 carrots"
   visualDescription: string; // "A carrot going into a grater"
+  iconUrl?: string; // Generated Icon URL
   type: 'ingredient' | 'action';
   inputs?: string[]; // IDs of nodes that flow into this one
   

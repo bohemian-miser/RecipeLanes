@@ -14,6 +14,7 @@ const BOLOGNESE_EXAMPLE: RecipeGraph = {
       "laneId": "lane-1",
       "text": "Add Spaghetti to boiling water",
       "visualDescription": "Spaghetti boiling in a pot of water",
+      "iconUrl": "https://placehold.co/64x64/png?text=Boil",
       "type": "action",
       "duration": "10 min"
     },
@@ -22,6 +23,7 @@ const BOLOGNESE_EXAMPLE: RecipeGraph = {
       "laneId": "lane-1",
       "text": "Drain",
       "visualDescription": "Pasta in a colander",
+      "iconUrl": "https://placehold.co/64x64/png?text=Drain",
       "type": "action",
       "inputs": ["node-1"]
     },
@@ -30,6 +32,7 @@ const BOLOGNESE_EXAMPLE: RecipeGraph = {
       "laneId": "lane-2",
       "text": "2 Onions",
       "visualDescription": "Chopped onion",
+      "iconUrl": "https://placehold.co/64x64/png?text=Onion",
       "type": "ingredient"
     },
     {
@@ -37,6 +40,7 @@ const BOLOGNESE_EXAMPLE: RecipeGraph = {
       "laneId": "lane-2",
       "text": "3 cloves garlic",
       "visualDescription": "Chopped garlic",
+      "iconUrl": "https://placehold.co/64x64/png?text=Garlic",
       "type": "ingredient"
     },
     {
@@ -44,6 +48,7 @@ const BOLOGNESE_EXAMPLE: RecipeGraph = {
       "laneId": "lane-2",
       "text": "Fry until soft",
       "visualDescription": "Onions and garlic frying in a pan",
+      "iconUrl": "https://placehold.co/64x64/png?text=Fry",
       "type": "action",
       "inputs": ["node-3", "node-4"]
     },
@@ -52,6 +57,7 @@ const BOLOGNESE_EXAMPLE: RecipeGraph = {
       "laneId": "lane-2",
       "text": "500g Minced Beef",
       "visualDescription": "Raw minced beef",
+      "iconUrl": "https://placehold.co/64x64/png?text=Beef",
       "type": "ingredient"
     },
     {
@@ -59,6 +65,7 @@ const BOLOGNESE_EXAMPLE: RecipeGraph = {
       "laneId": "lane-2",
       "text": "Add Meat & Brown",
       "visualDescription": "Browned mince meat in a pan",
+      "iconUrl": "https://placehold.co/64x64/png?text=Brown",
       "type": "action",
       "inputs": ["node-5", "node-6"]
     },
@@ -67,6 +74,7 @@ const BOLOGNESE_EXAMPLE: RecipeGraph = {
       "laneId": "lane-2",
       "text": "Can of Tomato Sauce",
       "visualDescription": "Can of tomato sauce",
+      "iconUrl": "https://placehold.co/64x64/png?text=Sauce",
       "type": "ingredient"
     },
     {
@@ -74,6 +82,7 @@ const BOLOGNESE_EXAMPLE: RecipeGraph = {
       "laneId": "lane-2",
       "text": "Add Sauce & Simmer",
       "visualDescription": "Red sauce simmering in a pan",
+      "iconUrl": "https://placehold.co/64x64/png?text=Simmer",
       "type": "action",
       "duration": "15 min",
       "inputs": ["node-7", "node-8"]
@@ -83,6 +92,7 @@ const BOLOGNESE_EXAMPLE: RecipeGraph = {
       "laneId": "lane-2",
       "text": "Combine & Serve",
       "visualDescription": "Spaghetti being tossed in red sauce",
+      "iconUrl": "https://placehold.co/64x64/png?text=Done",
       "type": "action",
       "inputs": ["node-2", "node-9"]
     }

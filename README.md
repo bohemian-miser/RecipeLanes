@@ -20,11 +20,12 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
 
 2.  **Visual Inventory (Icon Generation):**
     *   Input: A simplified visual description from the graph node.
-    *   **Guideline:** Descriptions should focus on the *object* and the *action* without showing human body parts (hands). They should capture the state transition or the tool interaction clearly.
+    *   **Guideline:** Descriptions should focus on the *object* and the *action* without showing human body parts (hands). They should capture the state transition or the tool interaction clearly. The state of the ingredient (grated, chopped, whisked) must be reflected in the prompt.
     *   **Examples:**
-        *   *Result:* "Grated Carrot" -> *Prompt:* "A carrot going into a box grater."
-        *   *Result:* "Whisked Eggs" -> *Prompt:* "A wire whisk beating eggs in a glass bowl."
-        *   *Result:* "Seared Steak" -> *Prompt:* "A steak sizzling in a hot cast iron skillet."
+        *   "Grated Carrot" -> "A carrot going into a box grater."
+        *   "Adding Grated Carrot" -> "Grated orange carrot shreds falling into a skillet."
+        *   "Whisked Eggs" -> "A wire whisk beating eggs in a glass bowl."
+        *   "Seared Steak" -> "A steak sizzling in a hot cast iron skillet."
     *   Process: An image generation model (Imagen 3 via Vertex AI) creates a consistent pixel-art style icon.
     *   **Smart Caching:** We use a caching strategy (proven in our `recipe-rpg-simple` prototype) to reuse icons for similar ingredients, ensuring visual consistency and speed.
 
@@ -41,31 +42,89 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
     *   Text Model: `gemini-2.5-flash`
     *   Image Model: `imagen-3.0-generate-001`
 
-## Data Structure (Draft)
+## Examples
 
-The AI is prompted to return a JSON structure roughly following this schema:
+### Example 1: Simple Carrot Stir Fry
 
+**Input Text:**
+> "Grate 2 large carrots. Heat a skillet over medium heat. Add the grated carrots to the pan and sauté for 5 minutes."
+
+**Structured Output:**
 ```json
 {
   "lanes": [
     { "id": "lane-1", "label": "Cutting Board", "type": "prep" },
-    { "id": "lane-2", "label": "Large Skillet", "type": "cook" }
+    { "id": "lane-2", "label": "Skillet", "type": "cook" }
   ],
   "nodes": [
     {
       "id": "node-1",
       "laneId": "lane-1",
-      "text": "Grate 2 carrots",
+      "text": "Grate 2 large carrots",
       "visualDescription": "A carrot going into a box grater",
       "type": "ingredient" 
     },
     {
       "id": "node-2",
       "laneId": "lane-2",
-      "text": "Add carrots to pan",
-      "visualDescription": "Carrots falling into a skillet",
+      "text": "Heat skillet",
+      "visualDescription": "Empty cast iron skillet on a gas burner flame",
+      "type": "action"
+    },
+    {
+      "id": "node-3",
+      "laneId": "lane-2",
+      "text": "Add carrots & sauté",
+      "visualDescription": "Grated orange carrot shreds falling into a hot skillet",
+      "type": "action",
+      "inputs": ["node-1", "node-2"] 
+    }
+  ]
+}
+```
+
+### Example 2: Scrambled Eggs
+
+**Input Text:**
+> "Crack 3 eggs into a bowl. Whisk them with a pinch of salt. Melt butter in a non-stick pan. Pour the eggs into the pan and stir gently until set."
+
+**Structured Output:**
+```json
+{
+  "lanes": [
+    { "id": "lane-1", "label": "Bowl", "type": "prep" },
+    { "id": "lane-2", "label": "Non-Stick Pan", "type": "cook" }
+  ],
+  "nodes": [
+    {
+      "id": "node-1",
+      "laneId": "lane-1",
+      "text": "Crack 3 eggs & add salt",
+      "visualDescription": "Three cracked eggs in a glass bowl",
+      "type": "ingredient"
+    },
+    {
+      "id": "node-2",
+      "laneId": "lane-1",
+      "text": "Whisk eggs",
+      "visualDescription": "A wire whisk beating yellow eggs in a glass bowl",
       "type": "action",
       "inputs": ["node-1"]
+    },
+    {
+      "id": "node-3",
+      "laneId": "lane-2",
+      "text": "Melt butter",
+      "visualDescription": "A pat of yellow butter melting in a black pan",
+      "type": "ingredient"
+    },
+    {
+      "id": "node-4",
+      "laneId": "lane-2",
+      "text": "Pour eggs & scramble",
+      "visualDescription": "Yellow liquid eggs pouring into a pan",
+      "type": "action",
+      "inputs": ["node-2", "node-3"]
     }
   ]
 }

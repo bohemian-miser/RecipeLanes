@@ -1,10 +1,13 @@
 'use server';
 
-import { embeddingModel, imageModelName, textModel } from '@/lib/genkit';
+import { embeddingModel, imageModelName, textModel, ai } from '@/lib/genkit';
 import { getAIService } from '@/lib/ai-service';
 import { getDataService } from '@/lib/data-service';
 import { getAuthService } from '@/lib/auth-service';
 import { z } from 'zod';
+import { generateRecipePrompt, parseRecipeGraph } from '@/lib/recipe-lanes/parser';
+import { generateIconFlow } from '@/lib/flows';
+import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 
 // Constants for Generation Gating
 const SESSION_REJECT_LIMIT = 4;
@@ -41,10 +44,6 @@ function toTitleCase(str: string) {
     .join(' ');
 }
 
-import { generateIconFlow } from '@/lib/flows';
-
-// ... (existing imports)
-
 async function generateAndStoreIcon(ingredient: string, ingredientDocId: string): Promise<{ url: string, lcb: number, imagePrompt: string }> {
   console.log('[generateAndStoreIcon] Generating for:', ingredient);
   
@@ -52,8 +51,6 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
   // This encapsulates the prompt enrichment and image generation logic
   const { url: downloadURL, visualDescription, imagePrompt, fullImagePrompt } = await generateIconFlow({ ingredient });
   
-//   console.log(`[generateAndStoreIcon] Generated: ${downloadURL}`);
-
   // 2. Download Buffer for Storage
   let imageBuffer: ArrayBuffer;
   try {
@@ -113,7 +110,6 @@ export async function getSharedGalleryAction() {
         if (!session) return [];
         
         // Filter out soft-deleted items
-        // Note: The service might fail if indexes are missing for collectionGroup queries
         const allIcons = (await getDataService().getAllIcons()).filter((i: any) => !i.marked_for_deletion);
         
         // Group by Ingredient
@@ -220,9 +216,7 @@ export async function getOrCreateIconAction(
               // If user is NOT authenticated, force them to use cache (if available) or fail
               if (!session) {
                   if (sortedCandidates.length > 0) {
-                      // Fallback to best available candidate regardless of quality check
                       shouldGenerate = false; 
-                      // Proceed to selection logic below
                   } else {
                       return { error: 'Item not found. Login to forge new items.' };
                   }
@@ -280,7 +274,6 @@ export async function getOrCreateIconAction(
 
   } catch (e: any) {
       console.error('[getOrCreateIconAction] Error:', e);
-      // Nice error message for common issues
       const msg = e.message || '';
       if (msg.includes('invalid_grant')) {
           return { error: 'Server authentication failed. Please check backend credentials.' };
@@ -339,5 +332,72 @@ export async function deleteIngredientCategoryAction(rawIngredient: string): Pro
     } catch (e: any) {
         console.error('deleteIngredientCategoryAction failed:', e);
         return { success: false, error: e.message };
+    }
+}
+
+// --- Recipe Lanes Actions ---
+
+export async function parseRecipeAction(recipeText: string): Promise<{ graph?: RecipeGraph; error?: string }> {
+    try {
+        const session = await getAuthService().verifyAuth();
+        // Allow unauthenticated usage? Maybe limit rate?
+        // For now, let's require auth to prevent abuse of the complex prompt.
+        if (!session) return { error: 'Authentication required' };
+
+        const prompt = generateRecipePrompt(recipeText);
+        
+        // Use Genkit to generate the JSON
+        const response = await ai.generate({
+            model: textModel,
+            prompt: prompt,
+            config: {
+                temperature: 0.2, // Low temp for structured output
+            }
+        });
+
+        const text = response.text;
+        const graph = parseRecipeGraph(text);
+        return { graph };
+
+    } catch (e: any) {
+        console.error('parseRecipeAction failed:', e);
+        return { error: e.message || 'Failed to parse recipe.' };
+    }
+}
+
+export async function generateGraphIconsAction(graph: RecipeGraph): Promise<{ graph: RecipeGraph; error?: string }> {
+    try {
+        const session = await getAuthService().verifyAuth();
+        if (!session) return { error: 'Authentication required', graph };
+
+        const updatedNodes = [];
+        
+        // Process in parallel? Or sequential to avoid rate limits?
+        // Parallel chunks of 3 is safe.
+        const chunk = 3;
+        for (let i = 0; i < graph.nodes.length; i += chunk) {
+            const batch = graph.nodes.slice(i, i + chunk);
+            await Promise.all(batch.map(async (node) => {
+                if (node.visualDescription) {
+                    // Use visual description as the "Ingredient Name" for caching
+                    // This creates a group like "A carrot going into a grater"
+                    const result = await getOrCreateIconAction(node.visualDescription);
+                    if (result && 'iconUrl' in result) {
+                        node.iconUrl = result.iconUrl;
+                    }
+                }
+            }));
+            updatedNodes.push(...batch);
+        }
+
+        // Reconstruct graph (actually updated in place due to references, but let's be safe)
+        // Since I pushed to updatedNodes, I have the list.
+        // Wait, graph.nodes elements were modified in place.
+        
+        return { graph };
+
+    } catch (e: any) {
+        console.error('generateGraphIconsAction failed:', e);
+        return { graph, error: e.message };
     }
 }

@@ -11,28 +11,20 @@ A visual recipe editor that transforms text into clear, lane-based process graph
 
 This structure allows for a "Swimlane" visualization that clarifies parallel tasks and ingredient flow at a glance.
 
-## Core Features
+## Core Philosophy: The State-Flow Pattern
 
-1.  **AI Parsing (Text-to-Graph):**
-    *   Input: Raw recipe text.
-    *   Process: An AI model (Gemini 2.5 Flash via Vertex AI) analyzes the text to extract a structured JSON representation.
-    *   Output: A graph where instructions are assigned to lanes (containers) and linked by dependencies.
+To make recipes intuitive, we visualize them as a sequence of **States** and **Transitions**:
 
-2.  **Visual Inventory (Icon Generation):**
-    *   Input: A simplified visual description from the graph node.
-    *   **Guideline:** Descriptions should focus on the *object* and the *action* without showing human body parts (hands). They should capture the state transition or the tool interaction clearly. The state of the ingredient (grated, chopped, whisked) must be reflected in the prompt.
-    *   **Examples:**
-        *   "Grated Carrot" -> "A carrot going into a grater."
-        *   "Adding Grated Carrot" -> "Grated orange carrot shreds falling into a skillet."
-        *   "Whisked Eggs" -> "A wire whisk beating eggs in a glass bowl."
-        *   "Seared Steak" -> "A steak sizzling in a hot cast iron skillet."
-    *   Process: An image generation model (Imagen 3 via Vertex AI) creates a consistent pixel-art style icon.
-    *   **Smart Caching:** We use a caching strategy (proven in our `recipe-rpg-simple` prototype) to reuse icons for similar ingredients, ensuring visual consistency and speed.
+1.  **Ingredient Nodes (The "Input"):**
+    *   Represent the *new* items being added at a specific step.
+    *   **Visual:** Shows the ingredient in its *prepared* state (e.g., "Chopped Onions", "Raw Meat").
+    *   **Grouping:** If multiple ingredients are added at once (e.g., Salt + Pepper), they appear as a distinct "batch" flowing into the same step.
 
-3.  **Graph Visualization:**
-    *   A dynamic UI that lays out the graph with vertical lanes.
-    *   Arrows connect nodes to show the sequence of operations.
-    *   Nodes display their generated icon and specific instruction text.
+2.  **Action Nodes (The "State"):**
+    *   Represent the *result* of adding ingredients and performing an action (e.g., "Fry", "Boil").
+    *   **Visual:** Shows the *combined state* of the vessel (e.g., "Onions frying in a pan", "Meat browning with onions").
+    *   **Metadata:** Captures time ("5 min") and temperature ("Medium Heat").
+    *   **Flow:** Receives inputs from (a) the Previous State Node and (b) the New Ingredient Nodes.
 
 ## Architecture
 
@@ -42,7 +34,9 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
     *   Text Model: `gemini-2.5-flash`
     *   Image Model: `imagen-3.0-generate-001`
 
-## Examples
+## JSON Structure & Examples
+
+The AI parses text into this Graph JSON structure.
 
 ### Example 1: Simple Carrot Stir Fry
 
@@ -50,7 +44,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
 > "Grate 2 large carrots. Heat a skillet over medium heat. Add the grated carrots to the pan and sauté for 5 minutes."
 
 **Structured Output:**
-*Note: Since the entire process happens in a single cooking vessel (or flow), it uses a single lane. Lane splits are reserved for parallel processes (e.g., Oven + Stovetop).*
+*Single Lane Flow: Prep flows directly into the pan state.*
 
 ```json
 {
@@ -79,12 +73,14 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
 }
 ```
 
-### Example 2: Scrambled Eggs (Two Lanes)
+### Example 2: Scrambled Eggs
 
 **Input Text:**
 > "Crack 3 eggs into a bowl. Whisk them with a pinch of salt. Melt butter in a non-stick pan. Pour the eggs into the pan and stir gently until set."
 
 **Structured Output:**
+*Two Lanes: Prep (Bowl) and Cook (Pan). The Bowl state merges into the Pan state.*
+
 ```json
 {
   "lanes": [
@@ -92,6 +88,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
     { "id": "lane-2", "label": "Non-Stick Pan", "type": "cook" }
   ],
   "nodes": [
+    // --- Batch 1: Eggs & Salt ---
     {
       "id": "node-1",
       "laneId": "lane-1",
@@ -106,6 +103,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
       "visualDescription": "Salt shaker",
       "type": "ingredient"
     },
+    // --- State 1: Whisked Eggs ---
     {
       "id": "node-3",
       "laneId": "lane-1",
@@ -114,6 +112,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
       "type": "action",
       "inputs": ["node-1", "node-2"]
     },
+    // --- Batch 2: Butter ---
     {
       "id": "node-4",
       "laneId": "lane-2",
@@ -121,6 +120,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
       "visualDescription": "Stick of butter",
       "type": "ingredient"
     },
+    // --- State 2: Melted Butter ---
     {
       "id": "node-5",
       "laneId": "lane-2",
@@ -129,6 +129,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
       "type": "action",
       "inputs": ["node-4"]
     },
+    // --- State 3: Scramble (Merge) ---
     {
       "id": "node-6",
       "laneId": "lane-2",
@@ -141,12 +142,14 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
 }
 ```
 
-### Example 3: Spaghetti Bolognese (Merge Flow)
+### Example 3: Spaghetti Bolognese
 
 **Input Text:**
 > "Boil water in a large pot. Add spaghetti and cook for 10 minutes. Drain. In a separate pan, fry chopped onions and garlic until soft. Add minced beef and brown. Stir in tomato sauce and simmer for 15 minutes. Combine the pasta with the sauce and serve."
 
 **Structured Output:**
+*Demonstrates the "State Chain" where each step adds new ingredients to the previous state.*
+
 ```json
 {
   "lanes": [
@@ -154,6 +157,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
     { "id": "lane-2", "label": "Pan (Sauce)", "type": "cook" }
   ],
   "nodes": [
+    // --- Lane 1: Pasta ---
     {
       "id": "node-1",
       "laneId": "lane-1",
@@ -170,6 +174,8 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
       "type": "action",
       "inputs": ["node-1"]
     },
+    // --- Lane 2: Sauce ---
+    // Batch 1: Aromatics
     {
       "id": "node-3",
       "laneId": "lane-2",
@@ -184,6 +190,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
       "visualDescription": "Chopped garlic",
       "type": "ingredient"
     },
+    // State 1: Fried Aromatics
     {
       "id": "node-5",
       "laneId": "lane-2",
@@ -192,6 +199,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
       "type": "action",
       "inputs": ["node-3", "node-4"]
     },
+    // Batch 2: Meat
     {
       "id": "node-6",
       "laneId": "lane-2",
@@ -199,6 +207,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
       "visualDescription": "Raw minced beef",
       "type": "ingredient"
     },
+    // State 2: Browned Meat
     {
       "id": "node-7",
       "laneId": "lane-2",
@@ -207,6 +216,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
       "type": "action",
       "inputs": ["node-5", "node-6"]
     },
+    // Batch 3: Sauce
     {
       "id": "node-8",
       "laneId": "lane-2",
@@ -214,6 +224,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
       "visualDescription": "Can of tomato sauce",
       "type": "ingredient"
     },
+    // State 3: Simmering Sauce
     {
       "id": "node-9",
       "laneId": "lane-2",
@@ -223,6 +234,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
       "duration": "15 min",
       "inputs": ["node-7", "node-8"]
     },
+    // --- Merge: Combine Lanes ---
     {
       "id": "node-10",
       "laneId": "lane-2",

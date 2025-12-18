@@ -1,12 +1,12 @@
 import React, { useMemo, useRef } from 'react';
-import type { RecipeGraph, VisualNode } from '../types';
+import type { RecipeGraph, RecipeNode } from '../types';
 import { calculateLayout } from '../utils/layout';
 
 interface SwimlaneDiagramProps {
   graph: RecipeGraph;
 }
 
-const LANE_WIDTH = 260; // Must match layout.ts (ideally import const)
+const LANE_WIDTH = 260; // Must match layout.ts
 const PADDING_LEFT = 40;
 
 const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
@@ -58,15 +58,15 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
           </marker>
         </defs>
 
-        {/* Lanes (Vertical Columns) */}
+        {/* Lanes */}
         {layout.lanes.map((lane, index) => (
-          <g key={lane.name}>
+          <g key={lane.id}>
             <rect
               x={PADDING_LEFT + index * LANE_WIDTH}
               y={0}
               width={LANE_WIDTH}
               height={layout.height}
-              fill={lane.color}
+              fill={index % 2 === 0 ? '#F9FAFB' : '#FFFFFF'}
             />
             {/* Lane Header */}
             <text
@@ -78,9 +78,8 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
               textAnchor="middle"
               style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}
             >
-              {lane.name}
+              {lane.label}
             </text>
-            {/* Divider Line */}
             <line
               x1={PADDING_LEFT + (index + 1) * LANE_WIDTH}
               y1={0}
@@ -93,9 +92,9 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
         ))}
 
         {/* Edges */}
-        {layout.edges.map((edge) => (
+        {layout.edges.map((edge, i) => (
           <path
-            key={edge.id}
+            key={i}
             d={edge.path}
             stroke="#9CA3AF"
             strokeWidth="2"
@@ -106,7 +105,7 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
 
         {/* Nodes */}
         {layout.nodes.map((node) => (
-          <Node key={node.id} node={node} />
+          <Node key={node.data.id} node={node} />
         ))}
       </svg>
       </div>
@@ -114,9 +113,11 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
   );
 };
 
-const Node: React.FC<{ node: VisualNode }> = ({ node }) => {
-  if (node.type === 'ingredient') {
-    const ing = node.data as any; 
+const Node: React.FC<{ node: any }> = ({ node }) => {
+  const data = node.data as RecipeNode;
+  const isIngredient = data.type === 'ingredient';
+  
+  if (isIngredient) {
     return (
       <g transform={`translate(${node.x}, ${node.y})`}>
         <rect
@@ -128,9 +129,9 @@ const Node: React.FC<{ node: VisualNode }> = ({ node }) => {
           stroke="#D1D5DB"
           strokeWidth="1"
         />
-        {/* Ingredient Icon - Larger */}
-        <text x={25} y={26} fontSize="20" textAnchor="middle" dominantBaseline="middle">
-          {ing.icon}
+        {/* Placeholder Icon (Text for now) */}
+        <text x={25} y={node.height / 2} fontSize="16" textAnchor="middle" dominantBaseline="middle">
+          🥕
         </text>
         <text
           x={50}
@@ -140,21 +141,19 @@ const Node: React.FC<{ node: VisualNode }> = ({ node }) => {
           fill="#111827"
           fontWeight="500"
         >
-          {ing.quantity ? `${ing.quantity} ` : ''}{ing.name}
+          {data.text}
         </text>
       </g>
     );
   }
 
-  const step = node.data as any;
-  const isHeating = step.resourceType === 'cook';
+  // Action Node
+  const isHeating = !!data.temperature;
   const strokeColor = isHeating ? '#FCA5A5' : '#D1D5DB';
   const strokeWidth = isHeating ? 2 : 1;
-  const bgColor = '#FFFFFF';
 
   return (
     <g transform={`translate(${node.x}, ${node.y})`}>
-      {/* Shadow */}
       <rect
         x={3}
         y={3}
@@ -164,13 +163,12 @@ const Node: React.FC<{ node: VisualNode }> = ({ node }) => {
         ry={8}
         fill="rgba(0,0,0,0.05)"
       />
-      {/* Main Box */}
       <rect
         width={node.width}
         height={node.height}
         rx={8}
         ry={8}
-        fill={bgColor}
+        fill="#FFFFFF"
         stroke={strokeColor}
         strokeWidth={strokeWidth}
       />
@@ -181,38 +179,26 @@ const Node: React.FC<{ node: VisualNode }> = ({ node }) => {
         fill={isHeating ? '#FEF2F2' : '#F3F4F6'}
       />
       
-      {/* Step Number */}
       <text x={10} y={21} fontSize="11" fontWeight="bold" fill="#4B5563">
-        STEP {step.label}
+        STEP {data.id.split('-').pop()}
       </text>
-
-      {/* Main Icon - Top Right */}
-      <text x={node.width - 25} y={20} fontSize="22" textAnchor="middle" dominantBaseline="middle">
-        {step.icon}
-      </text>
-
-      {/* Duration Badge - Top Right (Left of Icon) */}
-      <g transform={`translate(${node.width - 50}, 20)`} textAnchor="end">
-         {step.duration && (
-           <text x={0} y={0} fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">
-             ⏱ {step.duration}
-           </text>
-         )}
-      </g>
 
       {/* Description */}
-      <switch>
-        <foreignObject x={10} y={40} width={node.width - 20} height={node.height - 45}>
-          <div style={{ fontSize: '13px', color: '#1F2937', lineHeight: '1.4', overflow: 'hidden', height: '100%' }}>
-            {step.description}
-          </div>
-        </foreignObject>
-      </switch>
+      <foreignObject x={10} y={40} width={node.width - 20} height={node.height - 45}>
+        <div style={{ fontSize: '13px', color: '#1F2937', lineHeight: '1.4', height: '100%', display: 'flex', alignItems: 'center' }}>
+          {data.text}
+        </div>
+      </foreignObject>
       
-      {/* Temperature Label (Bottom Right) */}
-      {step.temperature && (
+      {data.duration && (
+         <text x={node.width - 10} y={21} fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">
+           ⏱ {data.duration}
+         </text>
+      )}
+
+      {data.temperature && (
          <text x={node.width - 10} y={node.height - 8} fontSize="10" fill="#EF4444" textAnchor="end" fontWeight="bold">
-           {step.temperature}
+           {data.temperature}
          </text>
       )}
     </g>

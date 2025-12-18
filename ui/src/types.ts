@@ -1,53 +1,61 @@
-export type ResourceType = 'prep' | 'cook' | 'cool' | 'passive';
+// --- Input Graph (From AI Parser) ---
 
-export interface Ingredient {
+export interface Lane {
   id: string;
-  name: string;
-  quantity?: string;
-  icon?: string; // Emoji or SVG path key
+  label: string; // e.g. "Skillet", "Bowl"
+  type: 'prep' | 'cook' | 'serve';
 }
 
-export interface Step {
+export interface RecipeNode {
   id: string;
-  label: string;
-  description: string;
-  resource: string;
-  resourceType: ResourceType;
-  dependencies: string[]; // IDs of ingredients or previous steps
-  duration?: string; // e.g. "10m", "5m"
-  temperature?: string; // e.g. "165°C"
-  state: 'active' | 'waiting' | 'done';
-  icon?: string;
+  laneId: string;
+  text: string; // "Grate 2 carrots"
+  visualDescription: string; // "A carrot going into a grater"
+  type: 'ingredient' | 'action';
+  inputs?: string[]; // IDs of nodes that flow into this one
+  
+  // Action Metadata
+  temperature?: string; // "Medium Heat"
+  duration?: string; // "5 min"
 }
 
 export interface RecipeGraph {
-  ingredients: Ingredient[];
-  steps: Step[];
-  lanes: string[];
+  lanes: Lane[];
+  nodes: RecipeNode[];
 }
+
+// --- Output Layout (For Rendering) ---
 
 export interface VisualNode {
   id: string;
-  type: 'ingredient' | 'step';
+  type: 'ingredient' | 'action';
   x: number;
   y: number;
   width: number;
   height: number;
-  laneIndex: number;
-  data: Step | Ingredient;
+  data: RecipeNode;
 }
 
 export interface VisualEdge {
   id: string;
   sourceId: string;
   targetId: string;
-  path: string; // SVG path command
+  path: string; // SVG path d attribute
+}
+
+export interface VisualLane {
+  id: string;
+  label: string;
+  x: number;
+  width: number;
+  height: number;
+  color: string;
 }
 
 export interface LayoutGraph {
   nodes: VisualNode[];
   edges: VisualEdge[];
+  lanes: VisualLane[];
   width: number;
   height: number;
-  lanes: { name: string; y: number; height: number; color: string }[];
 }

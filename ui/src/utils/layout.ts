@@ -1,210 +1,163 @@
-import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, Step, Ingredient } from '../types';
+import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, VisualLane, RecipeNode } from '../types';
 
-// Constants for Top-Down Layout
-const LANE_WIDTH = 260; // Column width
+const LANE_WIDTH = 260;
 const NODE_WIDTH = 220;
-const NODE_HEIGHT = 100;
-const INGREDIENT_HEIGHT = 40;
-const PADDING_TOP = 40;
+const PADDING_TOP = 60;
 const PADDING_LEFT = 40;
-const GAP_Y = 40; // Vertical gap between steps
+const GAP_Y = 40;
+const INGREDIENT_HEIGHT = 50;
+const ACTION_HEIGHT = 100;
 
-// Color Palette for Lanes
-const LANE_COLORS: { [key: string]: string } = {
-  bench: '#F3F4F6', // Cool Gray
-  stove: '#FFF7ED', // Warm Orange
-  oven: '#FEF2F2', // Soft Red
-  fridge: '#EFF6FF', // Ice Blue
-  default: '#FAFAFA',
+const LANE_COLORS = {
+  prep: '#EFF6FF', // Blue-50
+  cook: '#FFF7ED', // Orange-50
+  serve: '#F0FDF4', // Green-50
+  default: '#FAFAFA'
 };
 
 export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
   const nodes: VisualNode[] = [];
   const edges: VisualEdge[] = [];
   
-  if (!graph || !graph.lanes || !graph.steps) {
-      return { nodes: [], edges: [], width: 800, height: 600, lanes: [] };
+  if (!graph.lanes.length) {
+      return { nodes: [], edges: [], lanes: [], width: 800, height: 600 };
   }
-  
-  // 1. Assign Lane Indices
+
+  // 1. Setup Lanes
   const laneMap = new Map<string, number>();
-  graph.lanes.forEach((lane, index) => laneMap.set(lane, index));
+  graph.lanes.forEach((lane, idx) => laneMap.set(lane.id, idx));
 
-  // 2. Topological Sort (Ranks) - Used to order processing
+  const visualLanes: VisualLane[] = graph.lanes.map((lane, idx) => ({
+    id: lane.id,
+    label: lane.label,
+    x: PADDING_LEFT + idx * LANE_WIDTH,
+    width: LANE_WIDTH,
+    height: 0, // Updated later
+    color: LANE_COLORS[lane.type] || LANE_COLORS.default
+  }));
+
+  // 2. Index Nodes
+  const nodeMap = new Map<string, RecipeNode>();
+  graph.nodes.forEach(node => nodeMap.set(node.id, node));
+
+  // 3. Topological Sort / Ranking
   const ranks = new Map<string, number>();
-  const idToStep = new Map<string, Step>();
-  const idToIngredient = new Map<string, Ingredient>();
-
-  graph.steps.forEach(s => idToStep.set(s.id, s));
-  graph.ingredients.forEach(i => idToIngredient.set(i.id, i));
-
-  // Recursive function to find rank
   const getRank = (id: string, visited = new Set<string>()): number => {
-    if (visited.has(id)) return 0;
+    if (visited.has(id)) return 0; // Cycle detected
     if (ranks.has(id)) return ranks.get(id)!;
     
     visited.add(id);
-
-    if (idToIngredient.has(id)) {
+    const node = nodeMap.get(id);
+    if (!node || !node.inputs || node.inputs.length === 0) {
       ranks.set(id, 0);
       return 0;
     }
 
-    const step = idToStep.get(id);
-    if (!step) return 0;
-
-    let maxDepRank = -1;
-    if (!step.dependencies || step.dependencies.length === 0) {
-      maxDepRank = -1;
-    } else {
-      step.dependencies.forEach(depId => {
-        if (idToStep.has(depId) || idToIngredient.has(depId)) {
-            const r = getRank(depId, new Set(visited));
-            if (r > maxDepRank) maxDepRank = r;
-        }
-      });
+    let maxInputRank = -1;
+    for (const inputId of node.inputs) {
+      const r = getRank(inputId, new Set(visited));
+      if (r > maxInputRank) maxInputRank = r;
     }
-
-    const rank = maxDepRank + 1;
+    
+    const rank = maxInputRank + 1;
     ranks.set(id, rank);
     return rank;
   };
 
-  graph.steps.forEach(step => getRank(step.id));
+  graph.nodes.forEach(node => getRank(node.id));
 
-  // 3. Place Nodes (Top-Down Logic)
-  // We process nodes by Rank (low to high) to ensure dependencies are placed first.
-  const allIds = [...graph.ingredients.map(i => i.id), ...graph.steps.map(s => s.id)];
-  
-  // Sort by Rank, then by ID to be deterministic
-  allIds.sort((a, b) => {
-    const rA = ranks.get(a) || 0;
-    const rB = ranks.get(b) || 0;
+  // 4. Calculate Positions
+  // Sort nodes by Rank (Dependencies first), then by Lane Order, then ID
+  const sortedNodes = [...graph.nodes].sort((a, b) => {
+    const rA = ranks.get(a.id) || 0;
+    const rB = ranks.get(b.id) || 0;
     if (rA !== rB) return rA - rB;
-    return a.localeCompare(b);
+    
+    const lA = laneMap.get(a.laneId) || 0;
+    const lB = laneMap.get(b.laneId) || 0;
+    if (lA !== lB) return lA - lB;
+    
+    return a.id.localeCompare(b.id);
   });
 
-  const nodePositions = new Map<string, { x: number, y: number, width: number, height: number }>();
+  const nodePosMap = new Map<string, { x: number, y: number, width: number, height: number }>();
   const laneYCursors = new Array(graph.lanes.length).fill(PADDING_TOP);
 
-  allIds.forEach(id => {
-    const isStep = idToStep.has(id);
-    const isIng = idToIngredient.has(id);
+  sortedNodes.forEach(node => {
+    const laneIdx = laneMap.get(node.laneId) || 0;
+    const width = NODE_WIDTH;
+    const height = node.type === 'ingredient' ? INGREDIENT_HEIGHT : ACTION_HEIGHT;
     
-    let laneIdx = 0;
-    let height = NODE_HEIGHT;
-    let data: any = null;
-
-    if (isStep) {
-      const step = idToStep.get(id)!;
-      laneIdx = laneMap.get(step.resource) || 0;
-      data = step;
-    } else if (isIng) {
-      const ing = idToIngredient.get(id)!;
-      height = INGREDIENT_HEIGHT;
-      data = ing;
-      // Find lane of first consumer
-      let foundLane = false;
-      // Heuristic: Place ingredient in the lane of its first user
-      // Or just in the first lane if unused.
-       for (const step of graph.steps) {
-         if (step.dependencies && step.dependencies.includes(ing.id)) {
-            laneIdx = laneMap.get(step.resource) || 0;
-            foundLane = true;
-            break;
-         }
-       }
-       if (!foundLane) laneIdx = 0;
-    } else {
-        return; // Unknown ID
-    }
-
-    // Calculate Y
-    // Constraint 1: Must be below all dependencies
-    let minYFromDeps = 0;
-    if (isStep) {
-        const step = idToStep.get(id)!;
-        step.dependencies?.forEach(depId => {
-            const depPos = nodePositions.get(depId);
-            if (depPos) {
-                minYFromDeps = Math.max(minYFromDeps, depPos.y + depPos.height + GAP_Y);
+    // Y Constraint 1: Must be below all inputs
+    let minDepY = 0;
+    if (node.inputs) {
+        node.inputs.forEach(inputId => {
+            const inputPos = nodePosMap.get(inputId);
+            if (inputPos) {
+                minDepY = Math.max(minDepY, inputPos.y + inputPos.height + GAP_Y);
             }
         });
     }
 
-    // Constraint 2: Must be below current content in this lane
-    const minYFromLane = laneYCursors[laneIdx];
-
-    const y = Math.max(minYFromDeps, minYFromLane);
+    // Y Constraint 2: Must be below current lane content
+    const currentLaneY = laneYCursors[laneIdx];
     
-    // Center in lane
-    const x = PADDING_LEFT + laneIdx * LANE_WIDTH + (LANE_WIDTH - NODE_WIDTH) / 2;
+    const y = Math.max(minDepY, currentLaneY);
+    const x = PADDING_LEFT + laneIdx * LANE_WIDTH + (LANE_WIDTH - width) / 2;
 
-    // Store
-    nodePositions.set(id, { x, y, width: NODE_WIDTH, height });
+    nodePosMap.set(node.id, { x, y, width, height });
     laneYCursors[laneIdx] = y + height + GAP_Y;
 
     nodes.push({
-      id,
-      type: isStep ? 'step' : 'ingredient',
+      id: node.id,
+      type: node.type,
       x,
       y,
-      width: NODE_WIDTH,
+      width,
       height,
-      laneIndex: laneIdx,
-      data
+      data: node
     });
   });
 
-  // 4. Generate Edges
-  graph.steps.forEach(step => {
-    if (step.dependencies) {
-        step.dependencies.forEach(depId => {
-        const source = nodePositions.get(depId);
-        const target = nodePositions.get(step.id);
-
+  // 5. Calculate Edges
+  graph.nodes.forEach(node => {
+    if (node.inputs) {
+      node.inputs.forEach(inputId => {
+        const source = nodePosMap.get(inputId);
+        const target = nodePosMap.get(node.id);
+        
         if (source && target) {
-            // Route Edge: Top-Down
-            // Start: Bottom Center of source
-            const startX = source.x + source.width / 2;
-            const startY = source.y + source.height;
-            
-            // End: Top Center of target
-            const endX = target.x + target.width / 2;
-            const endY = target.y;
-
-            // Elbow curve
-            const midY = (startY + endY) / 2;
-            
-            const path = `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
-
-            edges.push({
-            id: `${depId}-${step.id}`,
-            sourceId: depId,
-            targetId: step.id,
+          const startX = source.x + source.width / 2;
+          const startY = source.y + source.height;
+          const endX = target.x + target.width / 2;
+          const endY = target.y;
+          
+          const midY = (startY + endY) / 2;
+          // Simple Bezier
+          const path = `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
+          
+          edges.push({
+            id: `${inputId}->${node.id}`,
+            sourceId: inputId,
+            targetId: node.id,
             path
-            });
+          });
         }
-        });
+      });
     }
   });
 
-  // 5. Build Layout Graph
+  // 6. Final Layout Dimensions
   const layoutHeight = Math.max(...laneYCursors, 600) + PADDING_TOP;
   const layoutWidth = PADDING_LEFT + graph.lanes.length * LANE_WIDTH + PADDING_LEFT;
-
-  const visualLanes = graph.lanes.map((name, i) => ({
-    name,
-    y: 0, // Not used for drawing rects in the same way, but x is index * WIDTH
-    height: layoutHeight, // Full height
-    color: LANE_COLORS[name.toLowerCase()] || LANE_COLORS['default']
-  }));
+  
+  visualLanes.forEach(l => l.height = layoutHeight);
 
   return {
     nodes,
     edges,
-    width: Math.max(layoutWidth, 800),
-    height: layoutHeight,
-    lanes: visualLanes
+    lanes: visualLanes,
+    width: layoutWidth,
+    height: layoutHeight
   };
 };

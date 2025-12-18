@@ -6,7 +6,7 @@ import { Login } from '@/components/login';
 import SwimlaneDiagram from '@/components/recipe-lanes/swimlane-diagram';
 import { parseRecipeAction, generateGraphIconsAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
-import { Wand2, ChefHat, ArrowRight } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code } from 'lucide-react';
 
 export default function RecipeLanesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -14,6 +14,7 @@ export default function RecipeLanesPage() {
   const [graph, setGraph] = useState<RecipeGraph | null>(null);
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'complete' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [showJson, setShowJson] = useState(false);
 
   const handleVisualize = async () => {
     if (!recipeText.trim()) return;
@@ -30,8 +31,6 @@ export default function RecipeLanesPage() {
         }
         
         const rawGraph = parseRes.graph;
-        // Show the skeleton graph immediately? Or wait for icons?
-        // Let's show skeleton while forging.
         setGraph(rawGraph);
         setStatus('forging');
 
@@ -39,10 +38,9 @@ export default function RecipeLanesPage() {
         const iconRes = await generateGraphIconsAction(rawGraph);
         if (iconRes.error) {
             console.warn('Icon generation incomplete:', iconRes.error);
-            // Non-fatal, show what we have
         }
         
-        setGraph(iconRes.graph);
+        setGraph(iconRes.graph); // This is a new object reference now
         setStatus('complete');
 
     } catch (e: any) {
@@ -114,25 +112,37 @@ export default function RecipeLanesPage() {
                         {error}
                     </div>
                 )}
-                
-                {status === 'complete' && (
-                    <div className="p-4 bg-green-900/20 border border-green-800 rounded-lg text-green-400 text-sm font-mono flex items-center gap-2">
-                        <span>✨</span> Visualization Ready
-                    </div>
-                )}
             </div>
 
             {/* Visualizer Section */}
             <div className="lg:col-span-2">
-                <div className="bg-zinc-100 rounded-xl border border-zinc-800 min-h-[600px] shadow-2xl overflow-hidden relative">
-                    <div className="absolute top-0 left-0 w-full h-8 bg-zinc-200 border-b border-zinc-300 flex items-center px-4 gap-2">
-                        <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                        <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                        <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                <div className="bg-zinc-100 rounded-xl border border-zinc-800 min-h-[600px] shadow-2xl overflow-hidden relative flex flex-col">
+                    <div className="w-full h-10 bg-zinc-200 border-b border-zinc-300 flex items-center justify-between px-4">
+                        <div className="flex gap-2">
+                            <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                            <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                            <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                        </div>
+                        {graph && (
+                            <button 
+                                onClick={() => setShowJson(!showJson)}
+                                className={`p-1.5 rounded hover:bg-zinc-300 transition-colors ${showJson ? 'bg-zinc-300 text-zinc-900' : 'text-zinc-500'}`}
+                                title="Toggle JSON View"
+                            >
+                                <Code className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
-                    <div className="p-8 pt-12 h-full overflow-auto bg-white text-zinc-900">
-                        {graph ? (
-                            <SwimlaneDiagram graph={graph} />
+                    
+                    <div className="flex-1 overflow-auto bg-white text-zinc-900 relative">
+                        {showJson && graph ? (
+                            <pre className="p-4 text-xs font-mono bg-zinc-50 text-zinc-800 overflow-auto h-full">
+                                {JSON.stringify(graph, null, 2)}
+                            </pre>
+                        ) : graph ? (
+                            <div className="p-8 pt-12 min-w-full min-h-full">
+                                <SwimlaneDiagram graph={graph} />
+                            </div>
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4">
                                 <div className="w-16 h-16 border-2 border-zinc-300 border-dashed rounded-full flex items-center justify-center">

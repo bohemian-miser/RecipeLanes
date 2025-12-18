@@ -370,13 +370,14 @@ export async function generateGraphIconsAction(graph: RecipeGraph): Promise<{ gr
         const session = await getAuthService().verifyAuth();
         if (!session) return { error: 'Authentication required', graph };
 
-        const updatedNodes = [];
+        // Clone graph to ensure reference change for React
+        const newGraph: RecipeGraph = JSON.parse(JSON.stringify(graph));
         
         // Process in parallel? Or sequential to avoid rate limits?
         // Parallel chunks of 3 is safe.
         const chunk = 3;
-        for (let i = 0; i < graph.nodes.length; i += chunk) {
-            const batch = graph.nodes.slice(i, i + chunk);
+        for (let i = 0; i < newGraph.nodes.length; i += chunk) {
+            const batch = newGraph.nodes.slice(i, i + chunk);
             await Promise.all(batch.map(async (node) => {
                 if (node.visualDescription) {
                     // Use visual description as the "Ingredient Name" for caching
@@ -387,14 +388,10 @@ export async function generateGraphIconsAction(graph: RecipeGraph): Promise<{ gr
                     }
                 }
             }));
-            updatedNodes.push(...batch);
+            // No need to push, batch elements are references to newGraph.nodes objects
         }
 
-        // Reconstruct graph (actually updated in place due to references, but let's be safe)
-        // Since I pushed to updatedNodes, I have the list.
-        // Wait, graph.nodes elements were modified in place.
-        
-        return { graph };
+        return { graph: newGraph };
 
     } catch (e: any) {
         console.error('generateGraphIconsAction failed:', e);

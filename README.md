@@ -79,13 +79,10 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
 }
 ```
 
-### Example 2: Scrambled Eggs
+### Example 2: Scrambled Eggs (Two Lanes)
 
 **Input Text:**
 > "Crack 3 eggs into a bowl. Whisk them with a pinch of salt. Melt butter in a non-stick pan. Pour the eggs into the pan and stir gently until set."
-
-**Critique & Update:**
-This recipe involves **two** distinct parallel locations initially: the *Bowl* (prep) and the *Pan* (cook). The ingredients merge into the Pan. This justifies **two lanes**.
 
 **Structured Output:**
 ```json
@@ -98,32 +95,142 @@ This recipe involves **two** distinct parallel locations initially: the *Bowl* (
     {
       "id": "node-1",
       "laneId": "lane-1",
-      "text": "Crack 3 eggs & add salt",
-      "visualDescription": "Three cracked eggs in a glass bowl",
+      "text": "3 Eggs",
+      "visualDescription": "Egg",
       "type": "ingredient"
     },
     {
       "id": "node-2",
       "laneId": "lane-1",
-      "text": "Whisk eggs",
-      "visualDescription": "A wire whisk beating yellow eggs in a glass bowl",
-      "type": "action",
-      "inputs": ["node-1"]
+      "text": "Pinch of Salt",
+      "visualDescription": "Salt shaker",
+      "type": "ingredient"
     },
     {
       "id": "node-3",
-      "laneId": "lane-2",
-      "text": "Melt butter",
-      "visualDescription": "A pat of yellow butter melting in a black pan",
-      "type": "ingredient"
+      "laneId": "lane-1",
+      "text": "Whisk eggs",
+      "visualDescription": "Wire whisk in a glass bowl",
+      "type": "action",
+      "inputs": ["node-1", "node-2"]
     },
     {
       "id": "node-4",
       "laneId": "lane-2",
-      "text": "Pour eggs & scramble",
-      "visualDescription": "Yellow liquid eggs pouring into a pan",
+      "text": "Butter",
+      "visualDescription": "Stick of butter",
+      "type": "ingredient"
+    },
+    {
+      "id": "node-5",
+      "laneId": "lane-2",
+      "text": "Melt butter",
+      "visualDescription": "Butter melting in a pan",
       "type": "action",
-      "inputs": ["node-2", "node-3"]
+      "inputs": ["node-4"]
+    },
+    {
+      "id": "node-6",
+      "laneId": "lane-2",
+      "text": "Scramble",
+      "visualDescription": "Scrambled eggs in a pan being stirred by a spoon",
+      "type": "action",
+      "inputs": ["node-3", "node-5"]
+    }
+  ]
+}
+```
+
+### Example 3: Spaghetti Bolognese (Merge Flow)
+
+**Input Text:**
+> "Boil water in a large pot. Add spaghetti and cook for 10 minutes. Drain. In a separate pan, fry chopped onions and garlic until soft. Add minced beef and brown. Stir in tomato sauce and simmer for 15 minutes. Combine the pasta with the sauce and serve."
+
+**Structured Output:**
+```json
+{
+  "lanes": [
+    { "id": "lane-1", "label": "Pot (Pasta)", "type": "cook" },
+    { "id": "lane-2", "label": "Pan (Sauce)", "type": "cook" }
+  ],
+  "nodes": [
+    {
+      "id": "node-1",
+      "laneId": "lane-1",
+      "text": "Spaghetti",
+      "visualDescription": "Bundle of dry spaghetti",
+      "type": "ingredient"
+    },
+    {
+      "id": "node-2",
+      "laneId": "lane-1",
+      "text": "Boil & Cook",
+      "visualDescription": "Spaghetti boiling in a pot of water",
+      "type": "action",
+      "duration": "10 min",
+      "inputs": ["node-1"]
+    },
+    {
+      "id": "node-3",
+      "laneId": "lane-1",
+      "text": "Drain",
+      "visualDescription": "Pasta in a colander",
+      "type": "action",
+      "inputs": ["node-2"]
+    },
+    {
+      "id": "node-4",
+      "laneId": "lane-2",
+      "text": "Onion & Garlic",
+      "visualDescription": "Chopped onion and garlic",
+      "type": "ingredient"
+    },
+    {
+      "id": "node-5",
+      "laneId": "lane-2",
+      "text": "Fry",
+      "visualDescription": "Onions frying in a pan",
+      "type": "action",
+      "inputs": ["node-4"]
+    },
+    {
+      "id": "node-6",
+      "laneId": "lane-2",
+      "text": "Minced Beef",
+      "visualDescription": "Raw minced beef",
+      "type": "ingredient"
+    },
+    {
+      "id": "node-7",
+      "laneId": "lane-2",
+      "text": "Brown Meat",
+      "visualDescription": "Browned mince meat in a pan",
+      "type": "action",
+      "inputs": ["node-5", "node-6"]
+    },
+    {
+      "id": "node-8",
+      "laneId": "lane-2",
+      "text": "Tomato Sauce",
+      "visualDescription": "Can of tomato sauce",
+      "type": "ingredient"
+    },
+    {
+      "id": "node-9",
+      "laneId": "lane-2",
+      "text": "Simmer Sauce",
+      "visualDescription": "Red sauce simmering in a pan",
+      "type": "action",
+      "duration": "15 min",
+      "inputs": ["node-7", "node-8"]
+    },
+    {
+      "id": "node-10",
+      "laneId": "lane-2",
+      "text": "Combine & Serve",
+      "visualDescription": "Spaghetti being tossed in red sauce",
+      "type": "action",
+      "inputs": ["node-3", "node-9"]
     }
   ]
 }

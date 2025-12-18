@@ -1,5 +1,6 @@
 import { cookies, headers } from 'next/headers';
 import { auth, db, isFirebaseEnabled } from '@/lib/firebase-admin';
+import { AUTH_DISABLED } from './config';
 
 export interface AuthSession {
   uid: string;
@@ -14,6 +15,11 @@ export interface AuthService {
 export class RealAuthService implements AuthService {
   async verifyAuth(): Promise<AuthSession | null> {
     
+    // 0. Global Auth Disable Flag
+    if (AUTH_DISABLED) {
+        return { uid: 'disabled-auth-user', email: 'admin@noauth.com', isAdmin: true };
+    }
+
     // 1. Mock/Local Bypass (if Firebase Admin is not configured)
     if (!isFirebaseEnabled) {
         // Check if ANY auth token/cookie is present to simulate "logged in" state

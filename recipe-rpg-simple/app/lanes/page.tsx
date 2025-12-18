@@ -7,6 +7,7 @@ import SwimlaneDiagram from '@/components/recipe-lanes/swimlane-diagram';
 import { parseRecipeAction, generateGraphIconsAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { Wand2, ChefHat, ArrowRight, Code } from 'lucide-react';
+import { AUTH_DISABLED } from '@/lib/config';
 
 export default function RecipeLanesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -52,7 +53,7 @@ export default function RecipeLanesPage() {
 
   if (authLoading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 font-mono">Loading...</div>;
 
-  if (!user) {
+  if (!user && !AUTH_DISABLED) {
       return (
           <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
               <h1 className="text-4xl font-bold text-yellow-500 mb-8 font-mono tracking-tighter">RECIPE LANES</h1>
@@ -72,7 +73,7 @@ export default function RecipeLanesPage() {
                 <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Recipe Lanes</h1>
             </div>
             <div className="text-xs font-mono text-zinc-500">
-                {user.email}
+                {user?.email || 'Guest Admin'}
             </div>
         </header>
 

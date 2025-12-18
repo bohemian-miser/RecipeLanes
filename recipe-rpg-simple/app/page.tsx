@@ -10,6 +10,7 @@ import { Login } from '@/components/login';
 import { useAuth } from '@/components/auth-provider';
 import { getOrCreateIconAction, recordRejectionAction, getAllIconsAction } from './actions';
 import { LogOut } from 'lucide-react';
+import { AUTH_DISABLED } from '@/lib/config';
 
 export default function Home() {
   const { user, loading: authLoading, logout } = useAuth();
@@ -170,9 +171,12 @@ export default function Home() {
             <p className="text-lg text-zinc-400">
               Forge pixel art icons from text! Build your collection.
             </p>
-            {user && (
+            {(user || AUTH_DISABLED) && (
               <div className="absolute top-0 right-0 flex flex-col items-end gap-2">
-                <span className="text-[10px] text-zinc-600 font-mono hidden sm:block">{user.email}</span>
+                <span className="text-[10px] text-zinc-600 font-mono hidden sm:block">
+                  {user?.email || 'Guest Admin'}
+                </span>
+                {user && (
                 <button 
                   onClick={() => logout()}
                   className="p-2 text-zinc-500 hover:text-red-400 transition-colors"
@@ -180,11 +184,12 @@ export default function Home() {
                 >
                   <LogOut className="w-5 h-5" />
                 </button>
+                )}
               </div>
             )}
           </header>
 
-          {!user ? (
+          {(!user && !AUTH_DISABLED) ? (
             <Login />
           ) : (
             <>

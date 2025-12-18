@@ -1,3 +1,25 @@
+import { z } from 'zod';
+import type { RecipeGraph } from '../types';
+
+// Schema Definition (Matching TypeScript Interface)
+const RecipeGraphSchema = z.object({
+  lanes: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    type: z.enum(['prep', 'cook', 'serve'])
+  })),
+  nodes: z.array(z.object({
+    id: z.string(),
+    laneId: z.string(),
+    text: z.string(),
+    visualDescription: z.string(),
+    type: z.enum(['ingredient', 'action']),
+    inputs: z.array(z.string()).optional(),
+    temperature: z.string().optional(),
+    duration: z.string().optional()
+  }))
+});
+
 export function generateRecipePrompt(recipeText: string): string {
   return `
 You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
@@ -12,7 +34,7 @@ Return ONLY raw JSON complying with this TypeScript interface:
 
 \
 interface RecipeGraph {
-  lanes: { 
+  lanes: {
     id: string;
     label: string; // e.g. "Skillet"
     type: 'prep' | 'cook' | 'serve';
@@ -42,4 +64,24 @@ interface RecipeGraph {
 ### Input Recipe
 ("${recipeText}")
 `;
+}
+
+export function parseRecipeGraph(aiResponse: string): RecipeGraph {
+  try {
+    // 1. Clean Markdown code blocks if present
+    let jsonStr = aiResponse.trim();
+    if (jsonStr.startsWith('```')) {
+      jsonStr = jsonStr.replace(/^```(json)?/, '').replace(/```$/, '');
+    }
+    jsonStr = jsonStr.trim();
+
+    // 2. Parse JSON
+    const rawObj = JSON.parse(jsonStr);
+
+    // 3. Validate Schema
+    return RecipeGraphSchema.parse(rawObj);
+  } catch (e) {
+    console.error('Failed to parse recipe graph:', e);
+    throw new Error('Invalid AI Response Format');
+  }
 }

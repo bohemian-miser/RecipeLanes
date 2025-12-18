@@ -22,7 +22,7 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
     *   Input: A simplified visual description from the graph node.
     *   **Guideline:** Descriptions should focus on the *object* and the *action* without showing human body parts (hands). They should capture the state transition or the tool interaction clearly. The state of the ingredient (grated, chopped, whisked) must be reflected in the prompt.
     *   **Examples:**
-        *   "Grated Carrot" -> "A carrot going into a box grater."
+        *   "Grated Carrot" -> "A carrot going into a grater."
         *   "Adding Grated Carrot" -> "Grated orange carrot shreds falling into a skillet."
         *   "Whisked Eggs" -> "A wire whisk beating eggs in a glass bowl."
         *   "Seared Steak" -> "A steak sizzling in a hot cast iron skillet."
@@ -50,34 +50,30 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
 > "Grate 2 large carrots. Heat a skillet over medium heat. Add the grated carrots to the pan and sauté for 5 minutes."
 
 **Structured Output:**
+*Note: Since the entire process happens in a single cooking vessel (or flow), it uses a single lane. Lane splits are reserved for parallel processes (e.g., Oven + Stovetop).*
+
 ```json
 {
   "lanes": [
-    { "id": "lane-1", "label": "Cutting Board", "type": "prep" },
-    { "id": "lane-2", "label": "Skillet", "type": "cook" }
+    { "id": "lane-1", "label": "Skillet (Process)", "type": "cook" }
   ],
   "nodes": [
     {
       "id": "node-1",
       "laneId": "lane-1",
       "text": "Grate 2 large carrots",
-      "visualDescription": "A carrot going into a box grater",
+      "visualDescription": "A carrot going into a grater",
       "type": "ingredient" 
     },
     {
       "id": "node-2",
-      "laneId": "lane-2",
-      "text": "Heat skillet",
-      "visualDescription": "Empty cast iron skillet on a gas burner flame",
-      "type": "action"
-    },
-    {
-      "id": "node-3",
-      "laneId": "lane-2",
-      "text": "Add carrots & sauté",
+      "laneId": "lane-1",
+      "text": "Add carrots to skillet",
       "visualDescription": "Grated orange carrot shreds falling into a hot skillet",
       "type": "action",
-      "inputs": ["node-1", "node-2"] 
+      "temperature": "Medium Heat",
+      "duration": "5 min",
+      "inputs": ["node-1"] 
     }
   ]
 }
@@ -87,6 +83,9 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
 
 **Input Text:**
 > "Crack 3 eggs into a bowl. Whisk them with a pinch of salt. Melt butter in a non-stick pan. Pour the eggs into the pan and stir gently until set."
+
+**Critique & Update:**
+This recipe involves **two** distinct parallel locations initially: the *Bowl* (prep) and the *Pan* (cook). The ingredients merge into the Pan. This justifies **two lanes**.
 
 **Structured Output:**
 ```json

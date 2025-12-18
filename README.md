@@ -19,7 +19,12 @@ This structure allows for a "Swimlane" visualization that clarifies parallel tas
     *   Output: A graph where instructions are assigned to lanes (containers) and linked by dependencies.
 
 2.  **Visual Inventory (Icon Generation):**
-    *   Input: A simplified visual description from the graph node (e.g., "Grated Carrot", not "Grate 2 large carrots").
+    *   Input: A simplified visual description from the graph node.
+    *   **Guideline:** Descriptions should focus on the *object* and the *action* without showing human body parts (hands). They should capture the state transition or the tool interaction clearly.
+    *   **Examples:**
+        *   *Result:* "Grated Carrot" -> *Prompt:* "A carrot going into a box grater."
+        *   *Result:* "Whisked Eggs" -> *Prompt:* "A wire whisk beating eggs in a glass bowl."
+        *   *Result:* "Seared Steak" -> *Prompt:* "A steak sizzling in a hot cast iron skillet."
     *   Process: An image generation model (Imagen 3 via Vertex AI) creates a consistent pixel-art style icon.
     *   **Smart Caching:** We use a caching strategy (proven in our `recipe-rpg-simple` prototype) to reuse icons for similar ingredients, ensuring visual consistency and speed.
 
@@ -51,14 +56,14 @@ The AI is prompted to return a JSON structure roughly following this schema:
       "id": "node-1",
       "laneId": "lane-1",
       "text": "Grate 2 carrots",
-      "visualDescription": "Pile of grated orange carrots",
+      "visualDescription": "A carrot going into a box grater",
       "type": "ingredient" 
     },
     {
       "id": "node-2",
       "laneId": "lane-2",
       "text": "Add carrots to pan",
-      "visualDescription": "Carrots cooking in pan",
+      "visualDescription": "Carrots falling into a skillet",
       "type": "action",
       "inputs": ["node-1"]
     }

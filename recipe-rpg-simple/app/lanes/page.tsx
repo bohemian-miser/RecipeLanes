@@ -6,7 +6,8 @@ import { Login } from '@/components/login';
 import SwimlaneDiagram from '@/components/recipe-lanes/swimlane-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send } from 'lucide-react';
+import { LayoutMode } from '@/lib/recipe-lanes/layout';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph } from 'lucide-react';
 
 export default function RecipeLanesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -16,6 +17,7 @@ export default function RecipeLanesPage() {
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('compact');
 
   const handleVisualize = async () => {
     if (!recipeText.trim()) return;
@@ -73,8 +75,6 @@ export default function RecipeLanesPage() {
 
   if (authLoading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 font-mono">Loading...</div>;
 
-  // Guest access allowed - no Login block
-
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-yellow-500/30">
       <div className="w-full max-w-[95%] mx-auto p-6 space-y-6">
@@ -111,9 +111,6 @@ export default function RecipeLanesPage() {
                             }
                         }}
                     />
-                    <div className="text-[10px] text-zinc-600 text-right">
-                        Cmd + Enter to Submit
-                    </div>
                 </div>
                 
                 <div className="flex flex-col justify-end w-48 gap-2">
@@ -142,7 +139,28 @@ export default function RecipeLanesPage() {
         {/* Visualizer Section */}
         <div className="bg-zinc-100 rounded-xl border border-zinc-800 min-h-[800px] shadow-2xl overflow-hidden relative flex flex-col">
             {/* Toolbar */}
-            <div className="w-full h-12 bg-white border-b border-zinc-200 flex items-center justify-end px-4">
+            <div className="w-full h-12 bg-white border-b border-zinc-200 flex items-center justify-between px-4">
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setLayoutMode('swimlanes')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${layoutMode === 'swimlanes' ? 'bg-zinc-100 text-zinc-900 border border-zinc-300' : 'text-zinc-500 hover:bg-zinc-50'}`}
+                    >
+                        <List className="w-4 h-4" /> Lanes
+                    </button>
+                    <button
+                        onClick={() => setLayoutMode('compact')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${layoutMode === 'compact' ? 'bg-zinc-100 text-zinc-900 border border-zinc-300' : 'text-zinc-500 hover:bg-zinc-50'}`}
+                    >
+                        <LayoutDashboard className="w-4 h-4" /> Compact
+                    </button>
+                    <button
+                        onClick={() => setLayoutMode('waterfall')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${layoutMode === 'waterfall' ? 'bg-zinc-100 text-zinc-900 border border-zinc-300' : 'text-zinc-500 hover:bg-zinc-50'}`}
+                    >
+                        <GitGraph className="w-4 h-4" /> Waterfall
+                    </button>
+                </div>
+
                 {graph && (
                     <button 
                         onClick={() => setShowJson(!showJson)}
@@ -161,7 +179,7 @@ export default function RecipeLanesPage() {
                     </pre>
                 ) : graph ? (
                     <div className="p-8 min-w-full min-h-full pb-32">
-                        <SwimlaneDiagram graph={graph} />
+                        <SwimlaneDiagram graph={graph} mode={layoutMode} />
                     </div>
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4">

@@ -139,9 +139,9 @@ export async function getOrCreateIconAction(
     rawSeenUrls: string[] = []
 ) {
   try {
+      // Guests allowed, but we check session for accounting if needed
       const session = await getAuthService().verifyAuth();
-      if (!session) return { error: 'Authentication required' };
-
+      
       // Validate Input
       const ingredientParse = IngredientSchema.safeParse(rawIngredient);
       if (!ingredientParse.success) return { error: 'Invalid ingredient' };
@@ -214,14 +214,7 @@ export async function getOrCreateIconAction(
           }
 
           if (shouldGenerate) {
-              // If user is NOT authenticated, force them to use cache (if available) or fail
-              if (!session) {
-                  if (sortedCandidates.length > 0) {
-                      shouldGenerate = false; 
-                  } else {
-                      return { error: 'Item not found. Login to forge new items.' };
-                  }
-              }
+              // Guests allowed to generate (removed cache enforcement)
           }
 
           if (!shouldGenerate) {

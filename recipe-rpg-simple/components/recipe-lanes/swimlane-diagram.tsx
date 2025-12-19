@@ -1,16 +1,14 @@
 import React, { useMemo, useRef } from 'react';
 import type { RecipeGraph, RecipeNode } from '../../lib/recipe-lanes/types';
-import { calculateLayout } from '../../lib/recipe-lanes/layout';
+import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 
 interface SwimlaneDiagramProps {
   graph: RecipeGraph;
+  mode?: LayoutMode;
 }
 
-const LANE_WIDTH = 200; // Must match layout.ts
-const PADDING_LEFT = 20;
-
-const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
-  const layout = useMemo(() => calculateLayout(graph), [graph]);
+const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph, mode = 'compact' }) => {
+  const layout = useMemo(() => calculateLayout(graph, mode), [graph, mode]);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const downloadSVG = () => {
@@ -20,9 +18,10 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'recipe-lanes.svg';
+      link.download = `recipe-lanes-${mode}.svg`;
       document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -52,19 +51,19 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
           </marker>
         </defs>
 
-        {/* Lanes Background */}
-        {layout.lanes.map((lane, index) => (
+        {/* Lanes Background (Empty in waterfall mode) */}
+        {layout.lanes.map((lane) => (
           <g key={lane.id}>
             <rect
-              x={PADDING_LEFT + index * LANE_WIDTH}
+              x={lane.x}
               y={0}
-              width={LANE_WIDTH}
+              width={lane.width}
               height={layout.height}
-              fill={index % 2 === 0 ? '#F9FAFB' : '#FFFFFF'}
+              fill={lane.color}
             />
-            {/* Lane Header - Subtle */}
+            {/* Lane Header */}
             <text
-              x={PADDING_LEFT + index * LANE_WIDTH + LANE_WIDTH / 2}
+              x={lane.x + lane.width / 2}
               y={32}
               fontSize="16"
               fontWeight="800"
@@ -74,6 +73,14 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
             >
               {lane.label}
             </text>
+            <line
+              x={lane.x + lane.width}
+              y1={0}
+              x2={lane.x + lane.width}
+              y2={layout.height}
+              stroke="#E5E7EB"
+              strokeWidth="1"
+            />
           </g>
         ))}
 
@@ -105,7 +112,7 @@ const Node: React.FC<{ node: any }> = ({ node }) => {
   const data = node.data as RecipeNode;
   const isIngredient = data.type === 'ingredient';
   
-  // Icon Size logic
+  // Compact sizes
   const iconSize = isIngredient ? 28 : 36;
   const iconX = isIngredient ? 20 : node.width - 25;
   const iconY = isIngredient ? node.height / 2 : 20;

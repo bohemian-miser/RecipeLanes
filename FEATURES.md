@@ -18,9 +18,19 @@
 
 ## 4. Mobile Experience & Layout
 *   **Responsive Graph:**
-    *   "Compact Mode" for small screens.
-    *   Zoom/Pan controls for large graphs.
+    *   [DONE] "Compact Mode" and "Smart Layout" (Dagre).
+    *   [DONE] Zoom/Pan controls for large graphs.
     *   Collapsible Lanes?
 *   **Layout Algorithms:**
     *   "Bending Paths": Optimize edge routing to pack nodes tighter.
     *   "Mise en Place" vs "Just in Time" views.
+
+## 5. Interaction & Export (New)
+*   **Interactive Editing:**
+    *   Drag and Drop nodes to rearrange layout manually.
+    *   Shift+Click to select multiple nodes for bulk moving.
+*   **Export Options:**
+    *   [DONE] Download as SVG.
+    *   Download as PNG (High Res).
+*   **Visual Styles:**
+    *   "Minimal" mode: Just icons + text (no complex headers).

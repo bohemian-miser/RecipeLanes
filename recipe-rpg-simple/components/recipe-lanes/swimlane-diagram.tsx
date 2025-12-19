@@ -1,8 +1,7 @@
-'use client';
-
 import React, { useMemo, useRef } from 'react';
 import type { RecipeGraph, RecipeNode } from '../../lib/recipe-lanes/types';
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
+import { toPng } from 'html-to-image';
 
 interface SwimlaneDiagramProps {
   graph: RecipeGraph;
@@ -13,6 +12,7 @@ interface SwimlaneDiagramProps {
 const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph, mode = 'compact', zoom = 1 }) => {
   const layout = useMemo(() => calculateLayout(graph, mode), [graph, mode]);
   const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const isHorizontal = mode === 'horizontal';
 
   const downloadSVG = () => {
@@ -29,46 +29,38 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph, mode = 'compac
     }
   };
 
-  const downloadPNG = () => {
-    if (svgRef.current) {
-        const svgData = new XMLSerializer().serializeToString(svgRef.current);
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const img = new Image();
-
-        // Scale for high res
-        const scale = 2;
-        canvas.width = layout.width * scale;
-        canvas.height = layout.height * scale;
-
-        img.onload = () => {
-            if (ctx) {
-                ctx.scale(scale, scale);
-                // Fill white background
-                ctx.fillStyle = '#FFFFFF';
-                ctx.fillRect(0, 0, layout.width, layout.height);
-                ctx.drawImage(img, 0, 0);
-                
-                const pngUrl = canvas.toDataURL('image/png');
-                const link = document.createElement('a');
-                link.href = pngUrl;
-                link.download = `recipe-lanes-${mode}.png`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }
-        };
-
-        // Handle SVG loading
-        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(svgBlob);
-        img.src = url;
+  const downloadPNG = async () => {
+    if (containerRef.current) {
+        try {
+            // We capture the container, but we need to ensure it's fully visible/sized?
+            // Actually capturing the SVG element directly is usually better if it has dimensions.
+            // But html-to-image works best on DOM elements.
+            // Let's target the wrapper div or the svg itself.
+            // Note: toPng might need the element to be visible and not scaled down too much.
+            // We might want to temporarily reset zoom or capture a specific node.
+            
+            // Using the SVG ref often works well if styles are inline.
+            const dataUrl = await toPng(containerRef.current as HTMLElement, { 
+                cacheBust: true, 
+                backgroundColor: '#ffffff',
+                pixelRatio: 2 // High res
+            });
+            
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = `recipe-lanes-${mode}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (err) {
+            console.error('PNG Download failed:', err);
+        }
     }
   };
 
   // Determine Node Style based on Mode
-  // "Lanes" (swimlanes) gets the minimal "Icon + Text" style requested by user.
-  const nodeStyle = mode === 'swimlanes' ? 'minimal' : 'card';
+  // "Lanes" and "Smart" (Dagre) get the minimal style.
+  const nodeStyle = (mode === 'swimlanes' || mode === 'dagre') ? 'minimal' : 'card';
 
   return (
     <div className="flex flex-col items-end gap-2">
@@ -86,14 +78,13 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph, mode = 'compac
             Download SVG 📥
         </button>
       </div>
-      <div className="overflow-auto border border-zinc-200 rounded-lg bg-white w-full h-full relative">
+      {/* Container for PNG capture */}
+      <div ref={containerRef} className="overflow-auto border border-zinc-200 rounded-lg bg-white w-full h-full relative p-4">
         <svg 
             ref={svgRef} 
             width={layout.width * zoom} 
             height={layout.height * zoom} 
             style={{ fontFamily: 'Inter, sans-serif' }}
-            // Add viewBox to ensure the content scales correctly if we used viewBox, 
-            // but here we are using transform on <g> and sizing the SVG.
         >
         <g transform={`scale(${zoom})`}>
             <defs>
@@ -195,56 +186,38 @@ const Node: React.FC<{ node: any, style?: 'card' | 'minimal' }> = ({ node, style
   
   if (style === 'minimal') {
       // MINIMAL STYLE (Image + Text Underneath)
-      const iconSize = 48; // Larger icon
+      const iconSize = 56; // Larger icon
       const iconX = node.width / 2;
-      const iconY = node.height / 2 - 10;
+      const iconY = node.height / 2 - 15;
       
       return (
         <g transform={`translate(${node.x}, ${node.y})`}>
-             {/* Background (Optional, maybe just transparent or subtle hover) */}
+             {/* Invisible Hitbox for interactions later */}
              <rect
                 width={node.width}
                 height={node.height}
-                rx={8}
-                ry={8}
-                fill="#FFFFFF"
-                stroke="#E5E7EB"
-                strokeWidth="1"
-                filter="url(#icon-shadow)"
+                fill="transparent"
              />
              
              {data.iconUrl ? (
                  <image 
                     href={data.iconUrl} 
                     x={iconX - iconSize / 2} 
-                    y={10} 
+                    y={5} 
                     width={iconSize} 
                     height={iconSize} 
                     style={{ imageRendering: 'pixelated' }}
+                    filter="url(#icon-shadow)"
                  />
              ) : (
-                <text x={iconX} y={40} fontSize="24" textAnchor="middle">
+                <text x={iconX} y={35} fontSize="32" textAnchor="middle">
                    {isIngredient ? '🥕' : '🍳'}
                 </text>
              )}
 
-             <text
-                x={node.width / 2}
-                y={node.height - 25}
-                textAnchor="middle"
-                fontSize="11"
-                fill="#374151"
-                fontWeight="500"
-                width={node.width - 10}
-             >
-                {/* Simple truncation or multiline? SVG text wrapping is hard without foreignObject */}
-                {data.text.length > 25 ? data.text.substring(0, 22) + '...' : data.text}
-             </text>
-             
-             {/* Full text in ForeignObject for wrapping if needed, but simple text is cleaner for minimal */}
-              <foreignObject x={5} y={node.height - 45} width={node.width - 10} height={40}>
-                 <div className="flex items-center justify-center text-center h-full">
-                    <span className="text-[10px] leading-tight text-zinc-600 line-clamp-2">
+             <foreignObject x={0} y={iconSize + 10} width={node.width} height={node.height - iconSize - 10}>
+                 <div className="flex items-start justify-center text-center h-full px-1">
+                    <span className="text-[11px] leading-tight text-zinc-700 font-semibold line-clamp-3">
                         {data.text}
                     </span>
                  </div>
@@ -252,6 +225,7 @@ const Node: React.FC<{ node: any, style?: 'card' | 'minimal' }> = ({ node, style
         </g>
       );
   }
+// ...
 
   // CARD STYLE (Existing)
   const iconSize = isIngredient ? 28 : 36;

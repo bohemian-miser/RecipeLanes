@@ -39,9 +39,9 @@ const CONSTANTS = {
     PADDING: 40
   },
   dagre: {
-    NODE_WIDTH: 180,
-    NODE_HEIGHT_ING: 40,
-    NODE_HEIGHT_ACT: 80,
+    NODE_WIDTH: 140,
+    NODE_HEIGHT_ING: 80,
+    NODE_HEIGHT_ACT: 120,
     PADDING: 20
   }
 };
@@ -72,7 +72,7 @@ export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact'
 const calculateDagreLayout = (graph: RecipeGraph): LayoutGraph => {
     const C = CONSTANTS.dagre;
     const g = new dagre.graphlib.Graph();
-    g.setGraph({ rankdir: 'TB', nodesep: 20, ranksep: 30, align: 'UL' });
+    g.setGraph({ rankdir: 'TB', nodesep: 10, ranksep: 20 });
     g.setDefaultEdgeLabel(() => ({}));
 
     graph.nodes.forEach(node => {
@@ -97,6 +97,7 @@ const calculateDagreLayout = (graph: RecipeGraph): LayoutGraph => {
 
     g.nodes().forEach(v => {
         const node: any = g.node(v);
+        // Dagre x,y is center. We use top-left.
         nodes.push({
             id: v,
             type: node.data.type,
@@ -121,6 +122,7 @@ const calculateDagreLayout = (graph: RecipeGraph): LayoutGraph => {
         });
     });
 
+    // Calculate bounding box
     const layoutWidth = (g.graph().width || 800) + C.PADDING * 2;
     const layoutHeight = (g.graph().height || 600) + C.PADDING * 2;
 

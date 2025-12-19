@@ -1,16 +1,17 @@
 import React, { useMemo, useRef } from 'react';
 import type { RecipeGraph, RecipeNode } from '../../lib/recipe-lanes/types';
-import { calculateLayout } from '../../lib/recipe-lanes/layout';
+import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 
 interface SwimlaneDiagramProps {
   graph: RecipeGraph;
+  mode?: LayoutMode;
 }
 
-const LANE_WIDTH = 400; // Matches layout.ts
+const LANE_WIDTH = 400; 
 const PADDING_LEFT = 40;
 
-const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
-  const layout = useMemo(() => calculateLayout(graph), [graph]);
+const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph, mode = 'lanes' }) => {
+  const layout = useMemo(() => calculateLayout(graph, mode), [graph, mode]);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const downloadSVG = () => {
@@ -20,7 +21,7 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'recipe-lanes.svg';
+      link.download = `recipe-${mode}.svg`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -53,8 +54,8 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
           </marker>
         </defs>
 
-        {/* Lanes Background */}
-        {layout.lanes.map((lane, index) => (
+        {/* Lanes Background (Only if in Lanes mode) */}
+        {mode === 'lanes' && layout.lanes.map((lane, index) => (
           <g key={lane.id}>
             <rect
               x={PADDING_LEFT + index * LANE_WIDTH}
@@ -69,7 +70,7 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
               y={32}
               fontSize="16"
               fontWeight="800"
-              fill="#E5E7EB" // Very subtle background text
+              fill="#E5E7EB" 
               textAnchor="middle"
               style={{ textTransform: 'uppercase', letterSpacing: '0.1em' }}
             >
@@ -85,7 +86,7 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
             d={edge.path}
             stroke="#9CA3AF"
             strokeWidth="2"
-            strokeDasharray="4 4" // Dashed line for lighter feel? Or solid? Solid is clearer.
+            strokeDasharray="4 4" 
             fill="none"
             markerEnd="url(#arrowhead)"
             opacity="0.6"
@@ -109,7 +110,6 @@ const Node: React.FC<{ node: any }> = ({ node }) => {
   // Visual Specs
   const iconSize = isIngredient ? 64 : 96;
   const centerX = node.width / 2;
-  const centerY = iconSize / 2; // Icon centered at top
 
   const IconImage = () => {
       if (data.iconUrl) {

@@ -2,12 +2,13 @@ import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, VisualLane, Reci
 
 const LANE_WIDTH = 400;
 const ACTION_WIDTH = 140;
-const INGREDIENT_WIDTH_BASE = 100; // Will scale down
+const INGREDIENT_WIDTH_BASE = 100; 
 const PADDING_TOP = 80;
 const PADDING_LEFT = 40;
-const GAP_Y = 140; // Vertical gap between action steps (increased for arcs)
+const GAP_Y = 140;
+const GAP_X = 40;
 const NODE_HEIGHT = 160; 
-const INGREDIENT_HEIGHT_BASE = 120; // Will scale down
+const INGREDIENT_HEIGHT_BASE = 120;
 
 const LANE_COLORS = {
   prep: '#EFF6FF',
@@ -16,7 +17,17 @@ const LANE_COLORS = {
   default: '#FAFAFA'
 };
 
-export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
+export type LayoutMode = 'lanes' | 'compact';
+
+export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'lanes'): LayoutGraph => {
+  if (mode === 'compact') {
+      return calculateCompactLayout(graph);
+  }
+  return calculateSwimlaneLayout(graph);
+};
+
+// --- Original Swimlane Logic ---
+const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
   const nodes: VisualNode[] = [];
   const edges: VisualEdge[] = [];
   
@@ -69,7 +80,7 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
   // 4. Layout Logic
   const nodePosMap = new Map<string, { x: number, y: number, width: number, height: number }>();
   const laneYCursors = new Array(graph.lanes.length).fill(PADDING_TOP);
-  const laneStepCounters = new Array(graph.lanes.length).fill(0); // Track Step Count in Lane
+  const laneStepCounters = new Array(graph.lanes.length).fill(0); 
 
   const sortedNodes = [...graph.nodes].sort((a, b) => {
     const rA = ranks.get(a.id) || 0;
@@ -80,7 +91,6 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
 
   const placedNodes = new Set<string>();
 
-  // Place a node at specific coordinates (or auto-lane if x/y missing)
   const placeNodeAbsolute = (node: RecipeNode, x: number, y: number, scale = 1) => {
       const isIngredient = node.type === 'ingredient';
       const width = (isIngredient ? INGREDIENT_WIDTH_BASE : ACTION_WIDTH) * scale;
@@ -101,22 +111,17 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
       return { x, y, width, height };
   };
 
-  // Main Loop (Spine Placement)
   sortedNodes.forEach(node => {
       if (placedNodes.has(node.id)) return;
-      if (node.type === 'ingredient') return; // Defer ingredients
+      if (node.type === 'ingredient') return;
 
       const laneIdx = laneMap.get(node.laneId) || 0;
       const stepIndex = laneStepCounters[laneIdx]++;
       
-      // Determine Action Position (Center of Lane)
-      // Check inputs for vertical constraint
       let minDepY = 0;
       if (node.inputs) {
           node.inputs.forEach(inputId => {
              const inputPos = nodePosMap.get(inputId);
-             // Only care about Action dependencies for Y constraint, 
-             // because Ingredients will be placed relative to US.
              if (inputPos && nodeMap.get(inputId)?.type === 'action') {
                  minDepY = Math.max(minDepY, inputPos.y + inputPos.height + GAP_Y);
              }
@@ -129,15 +134,10 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
       const actionX = laneX + (LANE_WIDTH - actionWidth) / 2;
       const actionY = Math.max(minDepY, laneYCursors[laneIdx]);
 
-      // Place Action
       placeNodeAbsolute(node, actionX, actionY);
-      
-      // Update Cursor (Base)
       laneYCursors[laneIdx] = actionY + actionHeight + GAP_Y;
 
-      // Handle Ingredients (The Orbitals)
       if (node.inputs) {
-          // Identify unplaced ingredients for this node
           const ingredients = node.inputs
               .map(id => nodeMap.get(id))
               .filter(n => n && n.type === 'ingredient' && !placedNodes.has(n.id)) as RecipeNode[];
@@ -145,30 +145,17 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
           if (ingredients.length > 0) {
               const isFirstStep = stepIndex === 0;
               const count = ingredients.length;
-              
-              // Logic: >8 Vertical, else Arc
-              // Scaling: >4 Shrink
               let scale = 1;
               if (count > 4) scale = 0.8;
               
               const ingWidth = INGREDIENT_WIDTH_BASE * scale;
               const ingHeight = INGREDIENT_HEIGHT_BASE * scale;
               const actionCenterX = actionX + actionWidth / 2;
-              const actionCenterY = actionY + actionHeight / 2; // Center of action box (approx)
-              // Actually visual center of action icon is top half. 
-              // Let's use Top Center of Action Box as anchor for Top Arc?
-              // Or Center for Side Arc?
-              
               const anchorX = actionCenterX;
-              const anchorY = actionY + 40; // Approx icon center
+              const anchorY = actionY + 40; 
 
               if (isFirstStep) {
-                  // --- TOP ARC ---
                   if (count > 8) {
-                      // Vertical Stack Above
-                      // Just place them in a grid above the action?
-                      // Or just force layout engine default?
-                      // Let's stack them in 2 columns above.
                       const startY = actionY - (Math.ceil(count/2) * (ingHeight + 10)) - 20;
                       ingredients.forEach((ing, i) => {
                           const col = i % 2;
@@ -178,15 +165,10 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
                           placeNodeAbsolute(ing, ix, iy, scale);
                       });
                   } else {
-                      // Arc
-                      // Radius needs to be enough to clear the Action
                       const radius = 140 * scale; 
-                      // Arc from -180 (Left) to 0 (Right) -> Top Semicircle
-                      // Or tighter: -135 to -45
-                      // Let's span based on count.
-                      const angleStep = 40; // Degrees
+                      const angleStep = 40; 
                       const totalSpan = (count - 1) * angleStep;
-                      const startAngle = -90 - (totalSpan / 2); // Centered on -90 (Top)
+                      const startAngle = -90 - (totalSpan / 2); 
 
                       ingredients.forEach((ing, i) => {
                           const angleDeg = startAngle + i * angleStep;
@@ -197,35 +179,19 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
                       });
                   }
               } else {
-                  // --- SIDE ARC (Alternating) ---
-                  // Even steps (Index 1, 3... wait index is 0-based. 2nd step is index 1).
-                  // Index 1 (Odd) -> Right?
-                  // Index 2 (Even) -> Left?
-                  // Let's do: Odd -> Right, Even -> Left.
-                  // Step 0 was Top.
-                  
                   const isRight = stepIndex % 2 !== 0;
                   const sideMult = isRight ? 1 : -1;
                   
                   if (count > 5) {
-                      // Vertical Stack on Side
                       ingredients.forEach((ing, i) => {
                           const ix = actionCenterX + (sideMult * (ACTION_WIDTH/2 + 20)) + (isRight ? 0 : -ingWidth);
-                          const iy = actionY + i * (ingHeight + 10); // Start at top of action
+                          const iy = actionY + i * (ingHeight + 10); 
                           placeNodeAbsolute(ing, ix, iy, scale);
                       });
                   } else {
-                      // Side Arc centered at 45 deg (Top Corner)
-                      // -45 (Top Left) or -135 (Top Right)? No.
-                      // 0 is Right. -90 is Top.
-                      // Top Right is -45.
-                      // Top Left is -135.
-                      
                       const centerAngle = isRight ? -45 : -135;
                       const radius = 130 * scale;
-                      
                       const angleStep = 30;
-                      // Distribute around centerAngle
                       const totalSpan = (count - 1) * angleStep;
                       const startAngle = centerAngle - (totalSpan / 2);
 
@@ -242,7 +208,6 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
       }
   });
 
-  // Cleanup orphans
   sortedNodes.forEach(node => {
       if (!placedNodes.has(node.id)) {
           const laneIdx = laneMap.get(node.laneId) || 0;
@@ -253,7 +218,6 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
       }
   });
 
-  // 5. Edges
   graph.nodes.forEach(node => {
     if (node.inputs) {
       node.inputs.forEach(inputId => {
@@ -262,24 +226,10 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
         
         if (source && target) {
           const startX = source.x + source.width / 2;
-          const startY = source.y + source.height / 2; // Center-to-Center for orbit?
-          // Or from edge?
-          // Ingredients are "Orbiting". Maybe center to center is cleanest for organic look?
-          // Or Bottom of Ing to Top of Action?
-          // For Top Arc: Bottom to Top works.
-          // For Side Arc: Side to Side works.
-          
-          // Let's use simple center-to-center straight lines for organic feel, or slight curve.
+          const startY = source.y + source.height / 2; 
           const endX = target.x + target.width / 2;
-          const endY = target.y + target.height / 2; // Target Center
-          
-          // Adjust target point to be closer to edge?
-          // Let's just draw to center but put node on top (z-index).
-          // SVG draws order dependent. Nodes are drawn AFTER edges.
-          // So line to center is fine, it will be hidden by the node icon.
-          
+          const endY = target.y + target.height / 2; 
           const path = `M ${startX} ${startY} L ${endX} ${endY}`;
-          
           edges.push({
             id: `${inputId}->${node.id}`,
             sourceId: inputId,
@@ -291,8 +241,6 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
     }
   });
 
-  // 6. Dimensions
-  // Iterate all nodes to find bounds (since negative/wide arcs might exceed lane)
   let minX = 0, maxX = 0, maxY = 0;
   nodes.forEach(n => {
       minX = Math.min(minX, n.x);
@@ -300,29 +248,144 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
       maxY = Math.max(maxY, n.y + n.height);
   });
   
-  // Shift everything if minX < 0
   if (minX < 0) {
       const shift = -minX + PADDING_LEFT;
       nodes.forEach(n => n.x += shift);
-      // Edges need re-calc or shift?
-      // Re-calc edges simply by iterating nodes again?
-      // Or just shift edge path? Hard to parse path.
-      // Better to calculate bounds BEFORE edges.
   }
-  
-  // Re-calculate edges after shift? 
-  // Let's just add PADDING to initial placements large enough? 
-  // Or do a post-process shift.
-  
-  // Hack: Just recreate edges after shift.
-  // ... (Refactor above)
-  
-  // Simplification: Assume PADDING_LEFT handles it for now.
-  // Or Update visualLanes height.
   
   const layoutHeight = Math.max(maxY + PADDING_TOP, 800);
   const layoutWidth = Math.max(maxX + PADDING_LEFT, graph.lanes.length * LANE_WIDTH + PADDING_LEFT);
   visualLanes.forEach(l => l.height = layoutHeight);
 
   return { nodes, edges, lanes: visualLanes, width: layoutWidth, height: layoutHeight };
+};
+
+// --- New Compact Logic ---
+const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
+  // Simple Layered Graph
+  // Ignore Lanes (visually). Just group by Rank.
+  // Center layers.
+  
+  // 1. Calculate Ranks (Same as above)
+  const nodeMap = new Map<string, RecipeNode>();
+  graph.nodes.forEach(node => nodeMap.set(node.id, node));
+  const ranks = new Map<string, number>();
+  
+  const getRank = (id: string, visited = new Set<string>()): number => {
+    if (visited.has(id)) return 0;
+    if (ranks.has(id)) return ranks.get(id)!;
+    visited.add(id);
+    const node = nodeMap.get(id);
+    if (!node || !node.inputs || node.inputs.length === 0) {
+      ranks.set(id, 0);
+      return 0;
+    }
+    let maxR = -1;
+    for (const i of node.inputs) maxR = Math.max(maxR, getRank(i, new Set(visited)));
+    ranks.set(id, maxR + 1);
+    return maxR + 1;
+  };
+  graph.nodes.forEach(node => getRank(node.id));
+
+  // 2. Group by Rank
+  const layers: RecipeNode[][] = [];
+  graph.nodes.forEach(node => {
+      const r = ranks.get(node.id) || 0;
+      if (!layers[r]) layers[r] = [];
+      layers[r].push(node);
+  });
+
+  const nodes: VisualNode[] = [];
+  const edges: VisualEdge[] = [];
+  const nodePosMap = new Map<string, {x:number, y:number, width:number, height:number}>();
+
+  let currentY = PADDING_TOP;
+  const GAP_LAYER = 120;
+  const GAP_ITEM = 40;
+  
+  let maxWidth = 0;
+
+  layers.forEach((layerNodes, layerIndex) => {
+      // Sort nodes in layer to minimize crossing? 
+      // Simple heuristic: Group by Lane to keep similar items together visually
+      layerNodes.sort((a, b) => a.laneId.localeCompare(b.laneId));
+
+      const layerHeight = Math.max(...layerNodes.map(n => n.type === 'ingredient' ? INGREDIENT_HEIGHT_BASE : NODE_HEIGHT));
+      
+      let currentX = PADDING_LEFT;
+      
+      // Calculate total width of layer to center it?
+      // First pass: placement
+      const layerPositions: any[] = [];
+      
+      layerNodes.forEach(node => {
+          const isIng = node.type === 'ingredient';
+          const w = isIng ? INGREDIENT_WIDTH_BASE : ACTION_WIDTH;
+          const h = isIng ? INGREDIENT_HEIGHT_BASE : NODE_HEIGHT;
+          
+          layerPositions.push({ node, width: w, height: h });
+      });
+
+      const totalLayerWidth = layerPositions.reduce((acc, curr) => acc + curr.width, 0) + (layerPositions.length - 1) * GAP_ITEM;
+      maxWidth = Math.max(maxWidth, totalLayerWidth);
+      
+      // Center the layer?
+      // We don't know total graph width yet.
+      // Let's just align Left for now, maybe center later if we track max.
+      
+      layerPositions.forEach(pos => {
+          const x = currentX;
+          const y = currentY;
+          
+          nodePosMap.set(pos.node.id, { x, y, width: pos.width, height: pos.height });
+          nodes.push({
+              id: pos.node.id,
+              type: pos.node.type,
+              x, 
+              y, 
+              width: pos.width, 
+              height: pos.height, 
+              data: pos.node
+          });
+          
+          currentX += pos.width + GAP_ITEM;
+      });
+      
+      currentY += layerHeight + GAP_LAYER;
+  });
+  
+  // Center layers
+  // Re-iterate and shift X based on maxWidth
+  nodes.forEach(n => {
+       const r = ranks.get(n.id)!;
+       // Re-calculate layer width
+       // Optimization: Store layer widths.
+       // For now, skip centering to keep it simple.
+  });
+
+  // Edges
+  graph.nodes.forEach(node => {
+      if (node.inputs) {
+          node.inputs.forEach(inputId => {
+              const s = nodePosMap.get(inputId);
+              const t = nodePosMap.get(node.id);
+              if (s && t) {
+                  const sx = s.x + s.width/2;
+                  const sy = s.y + s.height; // Bottom
+                  const tx = t.x + t.width/2;
+                  const ty = t.y; // Top
+                  const path = `M ${sx} ${sy} C ${sx} ${(sy+ty)/2}, ${tx} ${(sy+ty)/2}, ${tx} ${ty}`;
+                  edges.push({ id: `${inputId}->${node.id}`, sourceId: inputId, targetId: node.id, path });
+              }
+          });
+      }
+  });
+
+  return {
+      nodes,
+      edges,
+      lanes: [], // No visual lanes in this mode
+      width: Math.max(maxWidth + PADDING_LEFT * 2, 800),
+      height: currentY + PADDING_TOP
+  };
 };

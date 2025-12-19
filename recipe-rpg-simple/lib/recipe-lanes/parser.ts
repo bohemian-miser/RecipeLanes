@@ -65,16 +65,17 @@ ${SCHEMA_INTERFACE}
 ${BLOCK_END}
 
 ### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
 
 1. **INGREDIENT Nodes (The "Item"):**
    - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
-   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "An egg".
-   - **Standard Forms:** For condiments/liquids, show the standard container/dispenser (e.g. "Salt Shaker", "Bottle of Oil", "Jug of Milk"). For bulk solids, show a simple pile (e.g. "Pile of Flour").
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
    - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
    - **Examples:**
-     - "3 Eggs" -> "A single raw egg"
-     - "Salt" -> "Salt Shaker"
-     - "Olive Oil" -> "Bottle of Olive Oil"
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
 
 2. **ACTION Nodes (The "State"):**
 

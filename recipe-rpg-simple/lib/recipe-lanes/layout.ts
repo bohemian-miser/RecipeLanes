@@ -103,21 +103,14 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
   const placedNodes = new Set<string>();
 
   // Helper to place a node
-  const placeNode = (node: RecipeNode, laneIdx: number, preferredY?: number) => {
+  const placeNode = (node: RecipeNode, laneIdx: number, preferredY?: number, ignoreCursor?: boolean) => {
       if (placedNodes.has(node.id)) return nodePosMap.get(node.id)!;
 
       const isIngredient = node.type === 'ingredient';
       const width = isIngredient ? INGREDIENT_WIDTH : ACTION_WIDTH;
       const height = isIngredient ? INGREDIENT_HEIGHT : NODE_HEIGHT;
       
-      // Determine Column X
-      // Action -> Left (Start of lane + Padding)
-      // Ingredient -> Right (Left + ActionWidth + Gap)
-      // Wait, user said "bottom ingredient flowing into that step".
-      // Usually ingredients are on the side or top.
-      // Let's put Actions on the LEFT and Ingredients on the RIGHT of the lane.
-      
-      let relativeX = 20; // Default Left padding
+      let relativeX = 20; 
       if (isIngredient) {
           relativeX = 20 + ACTION_WIDTH + GAP_X; 
       }
@@ -125,29 +118,9 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
       const laneX = PADDING_LEFT + laneIdx * LANE_WIDTH;
       const x = laneX + relativeX;
 
-      // Determine Y
-      // If preferredY is given (alignment), try to use it, but respect constraints.
-      // Constraints: Must be below inputs (that are NOT the aligned one) and below lane cursor.
-      
       let minDepY = 0;
       if (node.inputs) {
           node.inputs.forEach(inputId => {
-             // If input is already placed, respect it.
-             // But if input is the one pulling us (e.g. we are the ingredient), we ignore it?
-             // No, ingredients flow INTO actions. Action is placed AFTER ingredient.
-             // Wait, if we want to align Ingredient NEXT TO Action, we need to place Action, determine Y, then place Ingredient at that Y?
-             // OR place Ingredient, then Action aligns?
-             // Since Dependencies determine Rank: Ingredient Rank < Action Rank.
-             // Ingredient is usually placed first.
-             // This is the problem. Standard topological sort places Ingredient at top.
-             
-             // NEW STRATEGY:
-             // When processing an Action Node, we check its inputs.
-             // If an input is an Ingredient (and hasn't been visually fixed yet?), we move it?
-             // No, better: Skip placing Ingredients in the main loop.
-             // Only place Actions.
-             // When placing an Action, find its unplaced Ingredient inputs and place them NEXT to it.
-             
              const inputPos = nodePosMap.get(inputId);
              if (inputPos) {
                  minDepY = Math.max(minDepY, inputPos.y + inputPos.height + GAP_Y);
@@ -155,10 +128,11 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
           });
       }
 
-      // If we are "Side Placing" an ingredient (preferredY provided), we ignore dependency Y from downstream (impossible)
-      // But we must respect Lane Cursor.
-      
-      let y = Math.max(minDepY, laneYCursors[laneIdx]);
+      // Determine Y
+      let y = minDepY;
+      if (!ignoreCursor) {
+          y = Math.max(y, laneYCursors[laneIdx]);
+      }
       
       if (preferredY !== undefined) {
           y = Math.max(y, preferredY);
@@ -166,27 +140,11 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
 
       nodePosMap.set(node.id, { x, y, width, height });
       
-      // Update Lane Cursor?
-      // If Action, advance cursor significantly.
-      // If Ingredient (Side), maybe don't advance the main cursor? 
-      // Or track separate cursors for Left/Right columns?
-      // Let's track one cursor for simplicity, but if Ingredient is side-by-side, it shares Y space.
-      
-      // If we place Ingredient at Y=100, Action at Y=100.
-      // Next available Y should be 100 + Max(H_Ing, H_Act) + GAP.
-      
-      // However, placeNode is called sequentially.
-      // If we place Action, then Ingredient.
-      // We need to know "This Y row is occupied".
-      
-      // Let's simplify:
-      // We update laneYCursors[laneIdx] ONLY when placing Actions (Spine).
-      // Ingredients just sit there.
-      // BUT if we have multiple ingredients, they stack.
-      
-      if (!isIngredient) {
-          laneYCursors[laneIdx] = y + height + GAP_Y;
-      }
+      // Update Cursor
+      // If we placed an ingredient "alongside", it consumes vertical space.
+      // We should ensure the cursor reflects the bottom of this element if it exceeds current cursor.
+      const bottomY = y + height + GAP_Y;
+      laneYCursors[laneIdx] = Math.max(laneYCursors[laneIdx], bottomY);
       
       placedNodes.add(node.id);
       
@@ -205,67 +163,36 @@ export const calculateLayout = (graph: RecipeGraph): LayoutGraph => {
 
   // Main Loop
   sortedNodes.forEach(node => {
-      // If already placed (e.g. as a dependency of a previous node? No, we place consumers later), skip.
       if (placedNodes.has(node.id)) return;
 
       const laneIdx = laneMap.get(node.laneId) || 0;
       
-      // Strategy:
-      // 1. If it's an Ingredient, SKIP IT for now. We will place it when we encounter its consumer.
-      //    (Unless it has no consumer? Then place at end).
       if (node.type === 'ingredient') {
-          // Check if it's consumed by something in the same lane?
-          // Actually, let's just wait.
           return;
       }
 
-      // 2. It's an Action. Place it.
-      // First, ensure all NON-Ingredient inputs are placed (they should be, due to Sort).
-      // And ensure Ingredient inputs from OTHER lanes are placed (should be).
-      // We only deferred Ingredients in THIS lane (or generic ingredients).
-
-      // Calculate position for Action
       const actionPos = placeNode(node, laneIdx);
       
-      // 3. Look for unplaced Ingredient inputs (that belong to this lane or are floating?)
-      // User said: "Split each lane... have one side be ingredients".
-      // This implies ingredients in this lane.
-      
       if (node.inputs) {
-          let ingredientStackY = actionPos.y;
+          // Align ingredients with the Action's top (or center?)
+          // Action is tall (160), Ingredient is 120.
+          // Center align: ActionY + (ActionH - IngH)/2
+          const centerOffsetY = (actionPos.height - INGREDIENT_HEIGHT) / 2;
+          let ingredientStackY = actionPos.y + centerOffsetY;
           
           node.inputs.forEach(inputId => {
               const inputNode = nodeMap.get(inputId);
               if (inputNode && inputNode.type === 'ingredient' && !placedNodes.has(inputId)) {
-                  // It's an unplaced ingredient. Place it NEXT to this action.
-                  // Which lane? The ingredient's lane.
-                  // If ingredient lane == action lane, perfect.
-                  // If not, we probably shouldn't move it visually to this lane?
-                  // User said "The ingredients need to be added with their step".
-                  // This strongly implies visual proximity.
-                  // Let's force place it in the ACTION'S lane (visually) for the "Input" visual,
-                  // OR assume the parser put it in the correct lane.
-                  // Our parser puts "2 Onions" in Lane 2 (Pan). Correct.
-                  
                   const targetLaneIdx = laneMap.get(inputNode.laneId) || 0;
                   
-                  // If target lane is same as action lane, align perfectly.
                   if (targetLaneIdx === laneIdx) {
-                      const ingPos = placeNode(inputNode, laneIdx, ingredientStackY);
-                      ingredientStackY += ingPos.height + 10; // Stack multiple ingredients
+                      const ingPos = placeNode(inputNode, laneIdx, ingredientStackY, true); // Ignore cursor to allow parallel placement
+                      ingredientStackY += ingPos.height + 10; 
                   } else {
-                      // It's in another lane (e.g. Lane 1 prep flowing into Lane 2).
-                      // Place it standardly in its own lane.
                       placeNode(inputNode, targetLaneIdx);
                   }
               }
           });
-          
-          // Adjust Lane Cursor if ingredients stack taller than action
-          const totalIngHeight = ingredientStackY - actionPos.y;
-          if (totalIngHeight > actionPos.height) {
-               laneYCursors[laneIdx] = actionPos.y + totalIngHeight + GAP_Y;
-          }
       }
   });
 

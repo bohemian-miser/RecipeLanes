@@ -1,17 +1,16 @@
 import React, { useMemo, useRef } from 'react';
 import type { RecipeGraph, RecipeNode } from '../../lib/recipe-lanes/types';
-import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
+import { calculateLayout } from '../../lib/recipe-lanes/layout';
 
 interface SwimlaneDiagramProps {
   graph: RecipeGraph;
-  mode?: LayoutMode;
 }
 
-const LANE_WIDTH = 400; 
-const PADDING_LEFT = 40;
+const LANE_WIDTH = 200; // Must match layout.ts
+const PADDING_LEFT = 20;
 
-const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph, mode = 'lanes' }) => {
-  const layout = useMemo(() => calculateLayout(graph, mode), [graph, mode]);
+const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
+  const layout = useMemo(() => calculateLayout(graph), [graph]);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const downloadSVG = () => {
@@ -21,10 +20,9 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph, mode = 'lanes'
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `recipe-${mode}.svg`;
+      link.download = 'recipe-lanes.svg';
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
     }
   };
 
@@ -54,8 +52,8 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph, mode = 'lanes'
           </marker>
         </defs>
 
-        {/* Lanes Background (Only if in Lanes mode) */}
-        {mode === 'lanes' && layout.lanes.map((lane, index) => (
+        {/* Lanes Background */}
+        {layout.lanes.map((lane, index) => (
           <g key={lane.id}>
             <rect
               x={PADDING_LEFT + index * LANE_WIDTH}
@@ -107,67 +105,113 @@ const Node: React.FC<{ node: any }> = ({ node }) => {
   const data = node.data as RecipeNode;
   const isIngredient = data.type === 'ingredient';
   
-  // Visual Specs
-  const iconSize = isIngredient ? 64 : 96;
-  const centerX = node.width / 2;
+  // Icon Size logic
+  const iconSize = isIngredient ? 28 : 36;
+  const iconX = isIngredient ? 20 : node.width - 25;
+  const iconY = isIngredient ? node.height / 2 : 20;
 
   const IconImage = () => {
       if (data.iconUrl) {
           return (
               <image 
                 href={data.iconUrl} 
-                x={centerX - iconSize / 2} 
-                y={0} 
+                x={iconX - iconSize / 2} 
+                y={iconY - iconSize / 2} 
                 width={iconSize} 
                 height={iconSize} 
-                style={{ imageRendering: 'pixelated', filter: 'url(#icon-shadow)' }}
+                style={{ imageRendering: 'pixelated' }}
               />
           );
       }
       return (
-        <g>
-            <circle cx={centerX} cy={iconSize/2} r={iconSize/2 - 4} fill="#F3F4F6" />
-            <text x={centerX} y={iconSize/2} fontSize="32" textAnchor="middle" dominantBaseline="middle">
-            {isIngredient ? '🥕' : '🍳'}
-            </text>
-        </g>
+        <text x={iconX} y={iconY} fontSize={isIngredient ? "14" : "18"} textAnchor="middle" dominantBaseline="middle">
+          {isIngredient ? '🥕' : '🍳'}
+        </text>
       );
   };
   
+  if (isIngredient) {
+    return (
+      <g transform={`translate(${node.x}, ${node.y})`}>
+        <rect
+          width={node.width}
+          height={node.height}
+          rx={20}
+          ry={20}
+          fill="#FFFFFF"
+          stroke="#D1D5DB"
+          strokeWidth="1"
+        />
+        <IconImage />
+        <text
+          x={45}
+          y={node.height / 2}
+          dominantBaseline="middle"
+          fontSize="11"
+          fill="#111827"
+          fontWeight="500"
+        >
+          {data.text}
+        </text>
+      </g>
+    );
+  }
+
+  // Action Node
+  const isHeating = !!data.temperature;
+  const strokeColor = isHeating ? '#FCA5A5' : '#D1D5DB';
+  const strokeWidth = isHeating ? 2 : 1;
+
   return (
     <g transform={`translate(${node.x}, ${node.y})`}>
+      <rect
+        x={3}
+        y={3}
+        width={node.width}
+        height={node.height}
+        rx={8}
+        ry={8}
+        fill="rgba(0,0,0,0.05)"
+      />
+      <rect
+        width={node.width}
+        height={node.height}
+        rx={8}
+        ry={8}
+        fill="#FFFFFF"
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
+      />
       
+      {/* Header Band */}
+      <path
+        d={`M 0 8 Q 0 0 8 0 L ${node.width - 8} 0 Q ${node.width} 0 ${node.width} 8 L ${node.width} 32 L 0 32 Z`}
+        fill={isHeating ? '#FEF2F2' : '#F3F4F6'}
+      />
+      
+      <text x={10} y={18} fontSize="9" fontWeight="bold" fill="#4B5563">
+        STEP {data.id.split('-').pop()}
+      </text>
+
       <IconImage />
 
-      {/* Text Label - Below Icon */}
-      <switch>
-          <foreignObject x={0} y={iconSize + 8} width={node.width} height={node.height - iconSize - 8}>
-            <div style={{ 
-                fontSize: isIngredient ? '12px' : '13px', 
-                fontWeight: isIngredient ? 500 : 700,
-                color: '#1F2937', 
-                textAlign: 'center', 
-                lineHeight: '1.2',
-                fontFamily: 'Inter, sans-serif'
-            }}>
-              {data.text}
-            </div>
-          </foreignObject>
-      </switch>
-
-      {/* Badges - Floating near icon */}
+      {/* Description */}
+      <foreignObject x={8} y={34} width={node.width - 16} height={node.height - 40}>
+        <div style={{ fontSize: '11px', color: '#1F2937', lineHeight: '1.3', height: '100%', display: 'flex', alignItems: 'center' }}>
+          {data.text}
+        </div>
+      </foreignObject>
+      
       {data.duration && (
-         <g transform={`translate(${centerX + iconSize/2 - 10}, ${iconSize - 10})`}>
-             <rect rx="4" ry="4" width="40" height="16" fill="#FEF3C7" stroke="#F59E0B" strokeWidth="1" />
-             <text x="20" y="11" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#92400E">{data.duration}</text>
-         </g>
+         <text x={node.width - 50} y={18} fontSize="9" fill="#6B7280" textAnchor="end" fontWeight="500">
+           ⏱ {data.duration}
+         </text>
       )}
 
       {data.temperature && (
-         <g transform={`translate(${centerX - iconSize/2 - 30}, ${iconSize - 10})`}>
-             <rect rx="4" ry="4" width="60" height="16" fill="#FEE2E2" stroke="#EF4444" strokeWidth="1" />
-             <text x="30" y="11" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#B91C1C">{data.temperature}</text>
-         </g>
+         <text x={node.width - 8} y={node.height - 6} fontSize="9" fill="#EF4444" textAnchor="end" fontWeight="bold">
+           {data.temperature}
+         </text>
       )}
     </g>
   );

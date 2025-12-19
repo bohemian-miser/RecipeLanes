@@ -6,9 +6,7 @@ import { Login } from '@/components/login';
 import SwimlaneDiagram from '@/components/recipe-lanes/swimlane-diagram';
 import { parseRecipeAction, generateGraphIconsAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
-import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, LayoutDashboard, List } from 'lucide-react';
-import { AUTH_DISABLED } from '@/lib/config';
+import { Wand2, ChefHat, ArrowRight, Code } from 'lucide-react';
 
 export default function RecipeLanesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -17,7 +15,6 @@ export default function RecipeLanesPage() {
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'complete' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>('lanes');
 
   const handleVisualize = async () => {
     if (!recipeText.trim()) return;
@@ -53,7 +50,7 @@ export default function RecipeLanesPage() {
 
   if (authLoading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 font-mono">Loading...</div>;
 
-  if (!user && !AUTH_DISABLED) {
+  if (!user) {
       return (
           <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
               <h1 className="text-4xl font-bold text-yellow-500 mb-8 font-mono tracking-tighter">RECIPE LANES</h1>
@@ -73,7 +70,7 @@ export default function RecipeLanesPage() {
                 <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Recipe Lanes</h1>
             </div>
             <div className="text-xs font-mono text-zinc-500">
-                {user?.email || 'Guest Admin'}
+                {user.email}
             </div>
         </header>
 
@@ -90,7 +87,6 @@ export default function RecipeLanesPage() {
                         value={recipeText}
                         onChange={(e) => setRecipeText(e.target.value)}
                         onKeyDown={(e) => {
-                            // Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux) to submit
                             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                                 e.preventDefault();
                                 if (recipeText && status !== 'parsing' && status !== 'forging') {
@@ -130,22 +126,7 @@ export default function RecipeLanesPage() {
         {/* Visualizer Section */}
         <div className="bg-zinc-100 rounded-xl border border-zinc-800 min-h-[800px] shadow-2xl overflow-hidden relative flex flex-col">
             {/* Toolbar */}
-            <div className="w-full h-12 bg-white border-b border-zinc-200 flex items-center justify-between px-4">
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setLayoutMode('lanes')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${layoutMode === 'lanes' ? 'bg-zinc-100 text-zinc-900 border border-zinc-300' : 'text-zinc-500 hover:bg-zinc-50'}`}
-                    >
-                        <List className="w-4 h-4" /> Lanes
-                    </button>
-                    <button
-                        onClick={() => setLayoutMode('compact')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${layoutMode === 'compact' ? 'bg-zinc-100 text-zinc-900 border border-zinc-300' : 'text-zinc-500 hover:bg-zinc-50'}`}
-                    >
-                        <LayoutDashboard className="w-4 h-4" /> Compact
-                    </button>
-                </div>
-                
+            <div className="w-full h-12 bg-white border-b border-zinc-200 flex items-center justify-end px-4">
                 {graph && (
                     <button 
                         onClick={() => setShowJson(!showJson)}
@@ -164,7 +145,7 @@ export default function RecipeLanesPage() {
                     </pre>
                 ) : graph ? (
                     <div className="p-8 min-w-full min-h-full">
-                        <SwimlaneDiagram graph={graph} mode={layoutMode} />
+                        <SwimlaneDiagram graph={graph} />
                     </div>
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4">

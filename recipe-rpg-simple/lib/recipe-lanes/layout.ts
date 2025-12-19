@@ -1,6 +1,43 @@
 import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, VisualLane, RecipeNode } from './types';
+import dagre from 'dagre';
 
 const LANE_WIDTH = 400;
+const ACTION_WIDTH = 140;
+const INGREDIENT_WIDTH_BASE = 100; 
+const PADDING_TOP = 120; 
+const PADDING_LEFT = 40;
+const GAP_Y = 140; 
+const GAP_X = 40; 
+const NODE_HEIGHT = 160; 
+const INGREDIENT_HEIGHT_BASE = 120;
+
+const LANE_COLORS = {
+// ... existing constants ...
+// ... existing calculateLayout wrapper ...
+
+// --- Swimlane Logic (Orbital) ---
+const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
+  // ... (keep existing implementation) ...
+  const nodes: VisualNode[] = [];
+  const edges: VisualEdge[] = [];
+  
+  if (!graph.lanes.length) {
+      return { nodes: [], edges: [], lanes: [], width: 800, height: 600 };
+  }
+  // ... (rest of calculateSwimlaneLayout as previously written) ...
+  // Wait, I cannot use "..." in write_file. I must provide the full file content or use replace carefully.
+  // I will use replace for the *Compact Logic* section only.
+}; 
+
+// I will assume I am replacing the `calculateCompactLayout` function block.
+// But first I need to add the import.
+
+// Strategy:
+// 1. Add import at top.
+// 2. Replace calculateCompactLayout.
+
+// I will try to replace the import first.
+
 const ACTION_WIDTH = 140;
 const INGREDIENT_WIDTH_BASE = 100; 
 const PADDING_TOP = 120; // Increased padding to prevent top cutoff
@@ -277,145 +314,112 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
   return { nodes, edges, lanes: visualLanes, width: layoutWidth, height: layoutHeight };
 };
 
-// --- New Compact Logic (Optimized) ---
+// --- New Compact Logic (Dagre) ---
 const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
-  const nodeMap = new Map<string, RecipeNode>();
-  graph.nodes.forEach(node => nodeMap.set(node.id, node));
-  const ranks = new Map<string, number>();
+  const g = new dagre.graphlib.Graph();
   
-  const getRank = (id: string, visited = new Set<string>()): number => {
-    if (visited.has(id)) return 0;
-    if (ranks.has(id)) return ranks.get(id)!;
-    visited.add(id);
-    const node = nodeMap.get(id);
-    if (!node || !node.inputs || node.inputs.length === 0) {
-      ranks.set(id, 0);
-      return 0;
-    }
-    let maxR = -1;
-    for (const i of node.inputs) maxR = Math.max(maxR, getRank(i, new Set(visited)));
-    ranks.set(id, maxR + 1);
-    return maxR + 1;
-  };
-  graph.nodes.forEach(node => getRank(node.id));
+  // Set an object for the graph label
+  g.setGraph({
+    rankdir: 'TB',
+    align: 'UL',
+    nodesep: 60, // Horizontal separation
+    ranksep: 100, // Vertical separation
+    marginx: PADDING_LEFT,
+    marginy: PADDING_TOP
+  });
 
-  const layers: RecipeNode[][] = [];
+  g.setDefaultEdgeLabel(() => ({}));
+
+  // Add Nodes
   graph.nodes.forEach(node => {
-      const r = ranks.get(node.id) || 0;
-      if (!layers[r]) layers[r] = [];
-      layers[r].push(node);
-  });
-
-  const nodes: VisualNode[] = [];
-  const edges: VisualEdge[] = [];
-  const nodePosMap = new Map<string, {x:number, y:number, width:number, height:number}>();
-
-  let currentY = PADDING_TOP;
-  const GAP_LAYER = 120;
-  const GAP_ITEM = 40;
-  
-  const laneOrderMap = new Map<string, number>();
-  graph.lanes.forEach((l, i) => laneOrderMap.set(l.id, i));
-
-  // Barycenter Helper
-  const getAvgInputX = (node: RecipeNode) => {
-      if (!node.inputs || node.inputs.length === 0) {
-          return (laneOrderMap.get(node.laneId) || 0) * 1000;
-      }
-      let sum = 0;
-      let count = 0;
-      node.inputs.forEach(id => {
-          // Look up from nodePosMap (already placed in prev layers)
-          const pos = nodePosMap.get(id);
-          if (pos) {
-              sum += pos.x + pos.width / 2;
-              count++;
-          }
-      });
-      return count > 0 ? sum / count : (laneOrderMap.get(node.laneId) || 0) * 1000;
-  };
-
-  layers.forEach((layerNodes, layerIndex) => {
-      // Sort: Minimize crossings by sorting based on input positions (Barycenter)
-      layerNodes.sort((a, b) => {
-          const bcA = getAvgInputX(a);
-          const bcB = getAvgInputX(b);
-          if (Math.abs(bcA - bcB) < 1) {
-              return (laneOrderMap.get(a.laneId)||0) - (laneOrderMap.get(b.laneId)||0);
-          }
-          return bcA - bcB;
-      });
-
-      const layerHeight = Math.max(...layerNodes.map(n => n.type === 'ingredient' ? INGREDIENT_HEIGHT_BASE : NODE_HEIGHT));
+      const isIng = node.type === 'ingredient';
+      const width = isIng ? INGREDIENT_WIDTH_BASE : ACTION_WIDTH;
+      const height = isIng ? INGREDIENT_HEIGHT_BASE : NODE_HEIGHT;
       
-      // Center layer? For now Left align.
-      let currentX = PADDING_LEFT;
-      const layerPositions: any[] = [];
-      
-      layerNodes.forEach(node => {
-          const isIng = node.type === 'ingredient';
-          const w = isIng ? INGREDIENT_WIDTH_BASE : ACTION_WIDTH;
-          const h = isIng ? INGREDIENT_HEIGHT_BASE : NODE_HEIGHT;
-          layerPositions.push({ node, width: w, height: h });
+      g.setNode(node.id, { 
+          width, 
+          height,
+          label: node.id,
+          customData: node // Pass through for later
       });
-
-      layerPositions.forEach(pos => {
-          const x = currentX;
-          const y = currentY;
-          nodePosMap.set(pos.node.id, { x, y, width: pos.width, height: pos.height });
-          nodes.push({ id: pos.node.id, type: pos.node.type, x, y, width: pos.width, height: pos.height, data: pos.node });
-          currentX += pos.width + GAP_ITEM;
-      });
-      
-      currentY += layerHeight + GAP_LAYER;
-  });
-  
-  // Shift/Bounds Check (Standardized)
-  let minX = Infinity, minY = Infinity;
-  nodes.forEach(n => {
-      minX = Math.min(minX, n.x);
-      minY = Math.min(minY, n.y);
-  });
-  
-  const shiftX = PADDING_LEFT - minX;
-  const shiftY = PADDING_TOP - minY;
-  
-  nodes.forEach(n => {
-      n.x += shiftX;
-      n.y += shiftY;
   });
 
-  // Re-calculate Max Bounds
-  let finalMaxX = 0;
-  let finalMaxY = 0;
-  nodes.forEach(n => {
-      finalMaxX = Math.max(finalMaxX, n.x + n.width);
-      finalMaxY = Math.max(finalMaxY, n.y + n.height);
-  });
-
-  const layoutWidth = finalMaxX + PADDING_LEFT;
-  const layoutHeight = finalMaxY + PADDING_TOP;
-
-  // Edges (Regenerate from shifted nodes)
-  const visualNodeMap = new Map<string, VisualNode>();
-  nodes.forEach(n => visualNodeMap.set(n.id, n));
-
+  // Add Edges
   graph.nodes.forEach(node => {
       if (node.inputs) {
           node.inputs.forEach(inputId => {
-              const s = visualNodeMap.get(inputId);
-              const t = visualNodeMap.get(node.id);
-              if (s && t) {
-                  const sx = s.x + s.width/2;
-                  const sy = s.y + s.height; 
-                  const tx = t.x + t.width/2;
-                  const ty = t.y; 
-                  const path = `M ${sx} ${sy} C ${sx} ${(sy+ty)/2}, ${tx} ${(sy+ty)/2}, ${tx} ${ty}`;
-                  edges.push({ id: `${inputId}->${node.id}`, sourceId: inputId, targetId: node.id, path });
-              }
+              // Dagre edge: Source -> Target
+              g.setEdge(inputId, node.id);
           });
       }
   });
 
-  return { nodes, edges, lanes: [], width: Math.max(layoutWidth, 800), height: layoutHeight };
+  // Run Layout
+  dagre.layout(g);
+
+  // Map back to VisualNode/VisualEdge
+  const nodes: VisualNode[] = [];
+  const edges: VisualEdge[] = [];
+  
+  let maxX = 0;
+  let maxY = 0;
+
+  g.nodes().forEach(v => {
+      const n = g.node(v);
+      const data = (n as any).customData; // Recover data
+      
+      // Dagre gives Center X/Y. Convert to Top-Left.
+      const x = n.x - n.width / 2;
+      const y = n.y - n.height / 2;
+      
+      maxX = Math.max(maxX, x + n.width);
+      maxY = Math.max(maxY, y + n.height);
+
+      nodes.push({
+          id: v,
+          type: data.type,
+          x,
+          y,
+          width: n.width,
+          height: n.height,
+          data: data
+      });
+  });
+
+  g.edges().forEach(e => {
+      const edge = g.edge(e);
+      // edge.points is array of {x, y}
+      // Construct path
+      // Simple Polyline: M x0 y0 L x1 y1 L x2 y2 ...
+      
+      if (edge.points && edge.points.length > 0) {
+          const path = edge.points.map((p, i) => {
+              return `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`;
+          }).join(' ');
+          
+          // Smoother: Bezier?
+          // If 3 points (Start, Bend, End)?
+          // Dagre usually gives start, inner points, end.
+          // Let's stick to L for robustness.
+          
+          edges.push({
+              id: `${e.v}->${e.w}`,
+              sourceId: e.v,
+              targetId: e.w,
+              path
+          });
+      }
+  });
+
+  // Padding adjustment if needed (Dagre handles marginx/y but let's be safe)
+  const layoutWidth = Math.max(maxX + PADDING_LEFT, 800);
+  const layoutHeight = Math.max(maxY + PADDING_TOP, 800);
+
+  return {
+      nodes,
+      edges,
+      lanes: [],
+      width: layoutWidth,
+      height: layoutHeight
+  };
 };

@@ -16,7 +16,9 @@
   "dependencies": {
     "@genkit-ai/firebase": "^1.26.0",
     "@genkit-ai/google-genai": "^1.25.0",
+    "@types/dagre": "^0.7.53",
     "clsx": "^2.1.1",
+    "dagre": "^0.8.5",
     "dotenv": "^17.2.3",
     "firebase": "^12.6.0",
     "firebase-admin": "^13.6.0",

@@ -18,7 +18,9 @@ To make recipes intuitive, we visualize them as a sequence of **States** and **T
 1.  **Ingredient Nodes (The "Input"):**
     *   Represent the *new* items being added at a specific step.
     *   **Visual:** Shows the ingredient in its *prepared* state (e.g., "Chopped Onions", "Raw Meat").
+    *   **Visual Rule:** Atomic and singular (e.g., "Salt Shaker", "Egg", "Pile of Sugar"). No quantities in the visual. Explicit quantities in the text ("3 Eggs").
     *   **Grouping:** If multiple ingredients are added at once (e.g., Salt + Pepper), they appear as a distinct "batch" flowing into the same step.
+    *   **Connectivity:** Ingredients have exactly **one output** (the step they flow into). If an ingredient is split (e.g., half sugar now, half later), it appears as two separate ingredient nodes.
 
 2.  **Action Nodes (The "State"):**
     *   Represent the *result* of adding ingredients and performing an action (e.g., "Fry", "Boil").
@@ -33,6 +35,20 @@ To make recipes intuitive, we visualize them as a sequence of **States** and **T
 *   **AI:** Google Cloud Vertex AI (Server-Side integration for security and robustness).
     *   Text Model: `gemini-2.5-flash`
     *   Image Model: `imagen-3.0-generate-001`
+
+## Visual Layouts
+
+The application supports multiple layout modes to handle recipe complexity:
+
+1.  **Lanes Mode (Default):**
+    *   Vertical swimlanes representing containers.
+    *   **Split Column:** Actions on the Left, Ingredients on the Right (aligned with their step).
+    *   **Orbital/Arc:** For complex steps, ingredients fan out in an arc above or beside the action to reduce vertical stacking.
+
+2.  **Compact Mode:**
+    *   A layered graph layout (Left-to-Right or Top-to-Down optimized).
+    *   Ignores strict lane boundaries to minimize whitespace and vertical height.
+    *   Groups nodes by rank (dependency depth).
 
 ## JSON Structure & Examples
 

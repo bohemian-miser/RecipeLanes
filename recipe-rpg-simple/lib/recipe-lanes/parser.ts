@@ -52,6 +52,11 @@ You are an expert recipe parser. Your goal is to convert the following cooking i
 2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
 3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
 
+### Critical Rules
+1. **QUANTITY:** The \`text\` field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+
 ### Schema
 Return ONLY raw JSON complying with this TypeScript interface:
 
@@ -59,24 +64,14 @@ ${BLOCK_START}
 ${SCHEMA_INTERFACE}
 ${BLOCK_END}
 
-### Visual Description Guidelines (CRITICAL)
-
-1. **INGREDIENT Nodes (The "Item"):**
-   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
-   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "An egg".
-   - **NO Containers/Context:** Do not show where it is going (e.g. "falling into bowl"). Show just the item (e.g. "A pile of sugar").
-   - **Examples:**
-     - "3 Eggs" -> "A single raw egg"
-     - "500g Beef" -> "Raw minced beef"
-     - "Cup of Milk" -> "A glass jug of milk"
-
-2. **ACTION Nodes (The "State"):**
-   - **Contextual:** Depict the ingredients *undergoing* the action or the *result state* in the vessel.
-   - **Active:** "Whisking", "Boiling", "Frying".
-   - **No Hands:** Focus on the food and tools.
-   - **Examples:**
-     - "Whisk Ingredients" -> "A wire whisk beating ingredients in a bowl"
-     - "Simmer" -> "Red sauce bubbling gently in a pan"
+### Visual Description Guidelines
+- **Active & Object-Focused:** Descriptions should focus on the *object* and the *action* without showing human body parts (hands).
+- **State Changes:** Capture the transition (e.g., "melting", "falling into", "boiling").
+- **Examples:**
+    - "Grated Carrot" -> "A carrot going into a box grater"
+    - "Whisked Eggs" -> "A wire whisk beating yellow eggs in a glass bowl"
+    - "Sauté Onions" -> "Onions frying in a pan"
+    - "Combine" -> "Spaghetti being tossed in red sauce"
 
 ### Input Recipe
 "${recipeText}"

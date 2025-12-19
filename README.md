@@ -22,9 +22,9 @@ To make recipes intuitive, we visualize them as a sequence of **States** and **T
 2.  **Action Nodes (The "State" & "Prep"):**
     *   Represent the *result* of a process.
     *   **Visual:** Shows the *combined state* (e.g., "Onions frying in pan", "Whisked Eggs").
-    *   **Prep Rules:**
-        *   Significant prep (e.g. "Grate Cheese") is an **Action Node** that takes the raw ingredient ("Cheese") as input.
-        *   The flow is `[Cheese] -> [Grate] -> [Add to Pan]`.
+    *   **Prep Granularity:**
+        *   **Combined Node:** If a prep step (e.g. "Grate Cheese") feeds into a step that has *only* ingredient/prep inputs (i.e. starting a new chain), combine them into one node: "Grate Cheese".
+        *   **Split Nodes:** If the prep step feeds into an existing process (e.g. adding cheese to an active pan), keep them split: "Cheese" (Ingredient) -> "Grate" (Action) -> "Add to Pan".
     *   **Merge Logic:** If an action combines inputs from different lanes (e.g. pouring bowl into pan), it sits in the *receiving* lane and accepts arrows from the source lanes.
 
 3.  **Lanes (Containers):**
@@ -33,11 +33,10 @@ To make recipes intuitive, we visualize them as a sequence of **States** and **T
 
 ## Layout Concept (Vision)
 
-We aim for a "Mise en Place" flow:
-1.  **Top Row:** All raw ingredients start here, aligned with the lane they first enter.
-2.  **Vertical Flow:** Ingredients drop down into Action nodes (Prep/Cook).
-3.  **Merge:** Lanes merge via diagonal arrows (e.g. Whisked Eggs in Lane 1 flow into Pan in Lane 2).
-4.  **Grid Alignment:** Steps align horizontally by "Rank" (Time step), minimizing line crossings.
+We aim for a **Compact State-Flow**:
+1.  **Just-in-Time:** Ingredients appear close to where they are used, not forced to the top.
+2.  **Tight Packing:** Minimize vertical gaps to keep the graph dense and readable.
+3.  **Flow:** Logic flows top-down, with parallel lanes merging inwards to the main dish.
 
 ## Architecture
 

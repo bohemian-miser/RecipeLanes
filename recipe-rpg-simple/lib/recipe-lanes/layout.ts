@@ -12,42 +12,6 @@ const NODE_HEIGHT = 160;
 const INGREDIENT_HEIGHT_BASE = 120;
 
 const LANE_COLORS = {
-// ... existing constants ...
-// ... existing calculateLayout wrapper ...
-
-// --- Swimlane Logic (Orbital) ---
-const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
-  // ... (keep existing implementation) ...
-  const nodes: VisualNode[] = [];
-  const edges: VisualEdge[] = [];
-  
-  if (!graph.lanes.length) {
-      return { nodes: [], edges: [], lanes: [], width: 800, height: 600 };
-  }
-  // ... (rest of calculateSwimlaneLayout as previously written) ...
-  // Wait, I cannot use "..." in write_file. I must provide the full file content or use replace carefully.
-  // I will use replace for the *Compact Logic* section only.
-}; 
-
-// I will assume I am replacing the `calculateCompactLayout` function block.
-// But first I need to add the import.
-
-// Strategy:
-// 1. Add import at top.
-// 2. Replace calculateCompactLayout.
-
-// I will try to replace the import first.
-
-const ACTION_WIDTH = 140;
-const INGREDIENT_WIDTH_BASE = 100; 
-const PADDING_TOP = 120; // Increased padding to prevent top cutoff
-const PADDING_LEFT = 40;
-const GAP_Y = 140; 
-const GAP_X = 40; 
-const NODE_HEIGHT = 160; 
-const INGREDIENT_HEIGHT_BASE = 120;
-
-const LANE_COLORS = {
   prep: '#EFF6FF',
   cook: '#FFF7ED',
   serve: '#F0FDF4',
@@ -156,7 +120,6 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
       if (node.inputs) {
           node.inputs.forEach(inputId => {
              const inputPos = nodePosMap.get(inputId);
-             // Only care about Action dependencies for Y constraint
              if (inputPos && nodeMap.get(inputId)?.type === 'action') {
                  minDepY = Math.max(minDepY, inputPos.y + inputPos.height + GAP_Y);
              }
@@ -255,15 +218,13 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
       }
   });
 
-  // 5. Calculate Bounds & Shift
+  // 5. Calculate Bounds & Shift (Normalized)
   let minX = Infinity, minY = Infinity;
-  
   nodes.forEach(n => {
       minX = Math.min(minX, n.x);
       minY = Math.min(minY, n.y);
   });
   
-  // Shift to ensure Top-Left alignment with Padding
   const shiftX = PADDING_LEFT - minX;
   const shiftY = PADDING_TOP - minY;
   
@@ -272,7 +233,7 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
       n.y += shiftY;
   });
   
-  // Re-calculate Max Bounds for Canvas Size
+  // Re-calculate Max for Dimensions
   let finalMaxX = 0;
   let finalMaxY = 0;
   nodes.forEach(n => {
@@ -284,7 +245,7 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
   const layoutHeight = finalMaxY + PADDING_TOP;
   visualLanes.forEach(l => l.height = layoutHeight);
 
-  // 6. Generate Edges (After placement and shift)
+  // 6. Generate Edges
   const visualNodeMap = new Map<string, VisualNode>();
   nodes.forEach(n => visualNodeMap.set(n.id, n));
 
@@ -314,23 +275,21 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
   return { nodes, edges, lanes: visualLanes, width: layoutWidth, height: layoutHeight };
 };
 
-// --- New Compact Logic (Dagre) ---
+// --- Compact Logic (Dagre) ---
 const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
   const g = new dagre.graphlib.Graph();
   
-  // Set an object for the graph label
   g.setGraph({
     rankdir: 'TB',
     align: 'UL',
-    nodesep: 60, // Horizontal separation
-    ranksep: 100, // Vertical separation
+    nodesep: 60, 
+    ranksep: 100, 
     marginx: PADDING_LEFT,
     marginy: PADDING_TOP
   });
 
   g.setDefaultEdgeLabel(() => ({}));
 
-  // Add Nodes
   graph.nodes.forEach(node => {
       const isIng = node.type === 'ingredient';
       const width = isIng ? INGREDIENT_WIDTH_BASE : ACTION_WIDTH;
@@ -340,24 +299,20 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
           width, 
           height,
           label: node.id,
-          customData: node // Pass through for later
+          customData: node 
       });
   });
 
-  // Add Edges
   graph.nodes.forEach(node => {
       if (node.inputs) {
           node.inputs.forEach(inputId => {
-              // Dagre edge: Source -> Target
               g.setEdge(inputId, node.id);
           });
       }
   });
 
-  // Run Layout
   dagre.layout(g);
 
-  // Map back to VisualNode/VisualEdge
   const nodes: VisualNode[] = [];
   const edges: VisualEdge[] = [];
   
@@ -366,9 +321,8 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
 
   g.nodes().forEach(v => {
       const n = g.node(v);
-      const data = (n as any).customData; // Recover data
+      const data = (n as any).customData; 
       
-      // Dagre gives Center X/Y. Convert to Top-Left.
       const x = n.x - n.width / 2;
       const y = n.y - n.height / 2;
       
@@ -388,19 +342,10 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
 
   g.edges().forEach(e => {
       const edge = g.edge(e);
-      // edge.points is array of {x, y}
-      // Construct path
-      // Simple Polyline: M x0 y0 L x1 y1 L x2 y2 ...
-      
       if (edge.points && edge.points.length > 0) {
           const path = edge.points.map((p, i) => {
               return `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`;
           }).join(' ');
-          
-          // Smoother: Bezier?
-          // If 3 points (Start, Bend, End)?
-          // Dagre usually gives start, inner points, end.
-          // Let's stick to L for robustness.
           
           edges.push({
               id: `${e.v}->${e.w}`,
@@ -411,7 +356,6 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
       }
   });
 
-  // Padding adjustment if needed (Dagre handles marginx/y but let's be safe)
   const layoutWidth = Math.max(maxX + PADDING_LEFT, 800);
   const layoutHeight = Math.max(maxY + PADDING_TOP, 800);
 

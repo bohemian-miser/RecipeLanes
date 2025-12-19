@@ -219,31 +219,35 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
   });
 
   // 5. Calculate Bounds & Shift
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  let minX = Infinity, minY = Infinity;
   
   nodes.forEach(n => {
       minX = Math.min(minX, n.x);
-      maxX = Math.max(maxX, n.x + n.width);
       minY = Math.min(minY, n.y);
-      maxY = Math.max(maxY, n.y + n.height);
   });
   
-  // Shift Logic
+  // Shift to ensure Top-Left alignment with Padding
   const shiftX = PADDING_LEFT - minX;
   const shiftY = PADDING_TOP - minY;
   
-  // Apply Shift to Nodes AND update PosMap (for edges)
   nodes.forEach(n => {
       n.x += shiftX;
       n.y += shiftY;
   });
   
-  // Re-calculate layout bounds
-  const layoutWidth = maxX - minX + PADDING_LEFT * 2;
-  const layoutHeight = maxY - minY + PADDING_TOP * 2;
+  // Re-calculate Max Bounds for Canvas Size
+  let finalMaxX = 0;
+  let finalMaxY = 0;
+  nodes.forEach(n => {
+      finalMaxX = Math.max(finalMaxX, n.x + n.width);
+      finalMaxY = Math.max(finalMaxY, n.y + n.height);
+  });
+
+  const layoutWidth = finalMaxX + PADDING_LEFT;
+  const layoutHeight = finalMaxY + PADDING_TOP;
   visualLanes.forEach(l => l.height = layoutHeight);
 
-  // 6. Generate Edges (After Shift)
+  // 6. Generate Edges (After placement and shift)
   const visualNodeMap = new Map<string, VisualNode>();
   nodes.forEach(n => visualNodeMap.set(n.id, n));
 
@@ -366,29 +370,33 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
       currentY += layerHeight + GAP_LAYER;
   });
   
-  // Bounds & Shift (Same logic as Swimlane)
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  // Shift/Bounds Check (Standardized)
+  let minX = Infinity, minY = Infinity;
   nodes.forEach(n => {
       minX = Math.min(minX, n.x);
-      maxX = Math.max(maxX, n.x + n.width);
       minY = Math.min(minY, n.y);
-      maxY = Math.max(maxY, n.y + n.height);
   });
   
   const shiftX = PADDING_LEFT - minX;
   const shiftY = PADDING_TOP - minY;
   
-  if (minX !== Infinity) {
-      nodes.forEach(n => {
-          n.x += shiftX;
-          n.y += shiftY;
-      });
-  }
+  nodes.forEach(n => {
+      n.x += shiftX;
+      n.y += shiftY;
+  });
 
-  const layoutWidth = maxX - minX + PADDING_LEFT * 2;
-  const layoutHeight = maxY - minY + PADDING_TOP * 2;
+  // Re-calculate Max Bounds
+  let finalMaxX = 0;
+  let finalMaxY = 0;
+  nodes.forEach(n => {
+      finalMaxX = Math.max(finalMaxX, n.x + n.width);
+      finalMaxY = Math.max(finalMaxY, n.y + n.height);
+  });
 
-  // Edges (Regenerate)
+  const layoutWidth = finalMaxX + PADDING_LEFT;
+  const layoutHeight = finalMaxY + PADDING_TOP;
+
+  // Edges (Regenerate from shifted nodes)
   const visualNodeMap = new Map<string, VisualNode>();
   nodes.forEach(n => visualNodeMap.set(n.id, n));
 

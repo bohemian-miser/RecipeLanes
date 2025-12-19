@@ -1,6 +1,7 @@
 import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, VisualLane, RecipeNode } from './types';
+import dagre from 'dagre';
 
-export type LayoutMode = 'swimlanes' | 'compact' | 'waterfall' | 'centered' | 'horizontal';
+export type LayoutMode = 'swimlanes' | 'compact' | 'waterfall' | 'centered' | 'horizontal' | 'dagre';
 
 const CONSTANTS = {
   standard: {
@@ -31,11 +32,17 @@ const CONSTANTS = {
   },
   horizontal: {
     LANE_HEIGHT: 150,
-    NODE_HEIGHT: 100, // Fixed height for horizontal
+    NODE_HEIGHT: 100,
     NODE_WIDTH_ING: 120,
     NODE_WIDTH_ACT: 180,
     GAP_X: 40,
     PADDING: 40
+  },
+  dagre: {
+    NODE_WIDTH: 180,
+    NODE_HEIGHT_ING: 40,
+    NODE_HEIGHT_ACT: 80,
+    PADDING: 20
   }
 };
 
@@ -48,6 +55,8 @@ const LANE_COLORS = {
 
 export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact'): LayoutGraph => {
   switch (mode) {
+    case 'dagre':
+      return calculateDagreLayout(graph);
     case 'waterfall':
       return calculateWaterfallLayout(graph, false);
     case 'centered':
@@ -58,6 +67,72 @@ export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact'
       return calculateSwimlaneLayout(graph, mode === 'swimlanes' ? 'standard' : 'compact');
   }
 };
+
+// --- DAGRE ALGORITHM ---
+const calculateDagreLayout = (graph: RecipeGraph): LayoutGraph => {
+    const C = CONSTANTS.dagre;
+    const g = new dagre.graphlib.Graph();
+    g.setGraph({ rankdir: 'TB', nodesep: 20, ranksep: 30, align: 'UL' });
+    g.setDefaultEdgeLabel(() => ({}));
+
+    graph.nodes.forEach(node => {
+        const height = node.type === 'ingredient' ? C.NODE_HEIGHT_ING : C.NODE_HEIGHT_ACT;
+        g.setNode(node.id, { width: C.NODE_WIDTH, height: height, data: node });
+    });
+
+    graph.nodes.forEach(node => {
+        if (node.inputs) {
+            node.inputs.forEach(inputId => {
+                if (graph.nodes.find(n => n.id === inputId)) {
+                   g.setEdge(inputId, node.id);
+                }
+            });
+        }
+    });
+
+    dagre.layout(g);
+
+    const nodes: VisualNode[] = [];
+    const edges: VisualEdge[] = [];
+
+    g.nodes().forEach(v => {
+        const node: any = g.node(v);
+        nodes.push({
+            id: v,
+            type: node.data.type,
+            x: node.x - node.width / 2 + C.PADDING,
+            y: node.y - node.height / 2 + C.PADDING,
+            width: node.width,
+            height: node.height,
+            data: node.data
+        });
+    });
+
+    g.edges().forEach(e => {
+        const edge = g.edge(e);
+        const pathPoints = edge.points.map((p: any) => `${p.x + C.PADDING},${p.y + C.PADDING}`);
+        const d = `M ${pathPoints.join(' L ')}`;
+        
+        edges.push({
+            id: `${e.v}->${e.w}`,
+            sourceId: e.v,
+            targetId: e.w,
+            path: d
+        });
+    });
+
+    const layoutWidth = (g.graph().width || 800) + C.PADDING * 2;
+    const layoutHeight = (g.graph().height || 600) + C.PADDING * 2;
+
+    return {
+        nodes,
+        edges,
+        lanes: [],
+        width: layoutWidth,
+        height: layoutHeight
+    };
+};
+
 
 // --- SWIMLANE / COMPACT ALGORITHM ---
 const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'standard' | 'compact'): LayoutGraph => {

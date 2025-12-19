@@ -7,7 +7,7 @@ import SwimlaneDiagram from '@/components/recipe-lanes/swimlane-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
 
 export default function RecipeLanesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -18,6 +18,7 @@ export default function RecipeLanesPage() {
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('compact');
+  const [zoom, setZoom] = useState(1);
 
   const handleVisualize = async () => {
     if (!recipeText.trim()) return;
@@ -139,47 +140,93 @@ export default function RecipeLanesPage() {
         {/* Visualizer Section */}
         <div className="bg-zinc-100 rounded-xl border border-zinc-800 min-h-[800px] shadow-2xl overflow-hidden relative flex flex-col">
             {/* Toolbar */}
-            <div className="w-full h-12 bg-white border-b border-zinc-200 flex items-center justify-between px-4">
+            <div className="w-full h-14 bg-white border-b border-zinc-200 flex items-center justify-between px-4 overflow-x-auto">
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setLayoutMode('swimlanes')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${layoutMode === 'swimlanes' ? 'bg-zinc-100 text-zinc-900 border border-zinc-300' : 'text-zinc-500 hover:bg-zinc-50'}`}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'swimlanes' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
                     >
                         <List className="w-4 h-4" /> Lanes
                     </button>
                     <button
                         onClick={() => setLayoutMode('compact')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${layoutMode === 'compact' ? 'bg-zinc-100 text-zinc-900 border border-zinc-300' : 'text-zinc-500 hover:bg-zinc-50'}`}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'compact' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
                     >
                         <LayoutDashboard className="w-4 h-4" /> Compact
                     </button>
                     <button
                         onClick={() => setLayoutMode('waterfall')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${layoutMode === 'waterfall' ? 'bg-zinc-100 text-zinc-900 border border-zinc-300' : 'text-zinc-500 hover:bg-zinc-50'}`}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'waterfall' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
                     >
                         <GitGraph className="w-4 h-4" /> Waterfall
                     </button>
+                    <button
+                        onClick={() => setLayoutMode('centered')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'centered' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                    >
+                        <AlignCenter className="w-4 h-4" /> Centered
+                    </button>
+                    <button
+                        onClick={() => setLayoutMode('horizontal')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'horizontal' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                    >
+                        <Columns className="w-4 h-4" /> Timeline
+                    </button>
+                    <button
+                        onClick={() => setLayoutMode('dagre')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'dagre' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                    >
+                        <Network className="w-4 h-4" /> Smart
+                    </button>
                 </div>
 
-                {graph && (
-                    <button 
-                        onClick={() => setShowJson(!showJson)}
-                        className={`p-1.5 rounded hover:bg-zinc-100 transition-colors ${showJson ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-400'}`}
-                        title="Toggle JSON View"
-                    >
-                        <Code className="w-4 h-4" />
-                    </button>
-                )}
+                <div className="flex items-center gap-4">
+                    {/* Zoom Controls */}
+                    <div className="flex items-center gap-1 bg-zinc-50 rounded-lg p-1 border border-zinc-200">
+                        <button 
+                            onClick={() => setZoom(z => Math.max(0.1, z - 0.1))} 
+                            className="p-1 hover:bg-zinc-200 rounded text-zinc-600"
+                        >
+                            <ZoomOut className="w-4 h-4" />
+                        </button>
+                        <span className="text-xs font-mono w-10 text-center text-zinc-500">{Math.round(zoom * 100)}%</span>
+                        <button 
+                            onClick={() => setZoom(z => Math.min(3, z + 0.1))} 
+                            className="p-1 hover:bg-zinc-200 rounded text-zinc-600"
+                        >
+                            <ZoomIn className="w-4 h-4" />
+                        </button>
+                        <button 
+                            onClick={() => setZoom(1)} 
+                            className="p-1 hover:bg-zinc-200 rounded text-zinc-400 hover:text-zinc-900 border-l border-zinc-200 ml-1"
+                            title="Reset Zoom"
+                        >
+                            <RotateCw className="w-3 h-3" />
+                        </button>
+                    </div>
+
+                    {graph && (
+                        <button 
+                            onClick={() => setShowJson(!showJson)}
+                            className={`p-1.5 rounded hover:bg-zinc-100 transition-colors ${showJson ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-400'}`}
+                            title="Toggle JSON View"
+                        >
+                            <Code className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
             </div>
             
-            <div className="flex-1 overflow-auto bg-white text-zinc-900 relative">
+            <div className="flex-1 overflow-hidden bg-white text-zinc-900 relative">
                 {showJson && graph ? (
                     <pre className="p-4 text-xs font-mono bg-zinc-50 text-zinc-800 overflow-auto h-full">
                         {JSON.stringify(graph, null, 2)}
                     </pre>
                 ) : graph ? (
-                    <div className="p-8 min-w-full min-h-full pb-32">
-                        <SwimlaneDiagram graph={graph} mode={layoutMode} />
+                    <div className="w-full h-full overflow-auto bg-zinc-50/50">
+                        <div className="p-8 min-w-full min-h-full pb-32">
+                            <SwimlaneDiagram graph={graph} mode={layoutMode} zoom={zoom} />
+                        </div>
                     </div>
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4">

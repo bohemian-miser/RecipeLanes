@@ -4,6 +4,8 @@
 *   **Personal Library:** Allow users to save parsed recipes to their profile.
 *   **History:** View previously generated lanes.
 *   **Edits:** Allow users to tweak the graph (change text, drag nodes) and save changes.
+*   **Profile Page:** View saved recipes with custom thumbnail icons.
+*   [DONE] **Sharing:** Shareable UUID links.
 
 ## 2. Public & Social
 *   **Public Gallery:** Make recipes public / sharable via link.
@@ -18,20 +20,23 @@
 
 ## 4. Mobile Experience & Layout
 *   **Responsive Graph:**
-    *   [DONE] "Compact Mode" and "Smart Layout" (Dagre).
-    *   [DONE] Zoom/Pan controls for large graphs.
-    *   Collapsible Lanes?
+    *   [DONE] "Compact Mode", "Micro Mode" (Dots), "Smart Layout" (Dagre), "Organic" (ELK).
+    *   [DONE] Zoom/Pan controls.
+    *   **Layout Tuning:** Controls for spacing, force strength (Partial).
 *   **Layout Algorithms:**
     *   "Bending Paths": Optimize edge routing to pack nodes tighter.
-    *   "Mise en Place" vs "Just in Time" views.
+    *   "Upward Arc": Refine radial layout to prevent sprawl and strictly flow up.
+    *   "Dense Tree": The most densely packed tree possible.
+*   **Visuals:**
+    *   [DONE] "Minimal" node style (No background, large icon, text halo).
+    *   **Better Arrows:** Improve edge styling and markers.
 
-## 5. Interaction & Export (New)
+## 5. Interaction & Export
 *   **Interactive Editing:**
-    *   Drag and Drop nodes to rearrange layout manually.
-    *   Shift+Click to select multiple nodes for bulk moving.
+    *   [DONE] Drag and Drop nodes to rearrange layout manually.
+    *   [DONE] Shift+Click / Selection Box.
+    *   **Persistence:** Remember manual node positions after save.
     *   **Reroll Icons:** Regenerate specific icons that don't match the ingredient.
 *   **Export Options:**
     *   [DONE] Download as SVG.
-    *   Download as PNG (High Res).
-*   **Visual Styles:**
-    *   "Minimal" mode: Just icons + text (no complex headers).
+    *   [DONE] Download as PNG (High Res).

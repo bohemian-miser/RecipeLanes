@@ -8,7 +8,8 @@ import ReactFlow, {
     useReactFlow,
     Node,
     Edge,
-    Panel
+    Panel,
+    MarkerType
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -87,8 +88,14 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 id: e.id,
                 source: e.sourceId,
                 target: e.targetId,
-                type: 'smoothstep', // Orthogonal lines requested
+                type: mode === 'upward' ? 'default' : 'smoothstep',
                 style: { stroke: '#9ca3af', strokeWidth: 1.5 },
+                markerEnd: {
+                    type: MarkerType.ArrowClosed,
+                    color: '#9ca3af',
+                    width: 20,
+                    height: 20
+                },
                 animated: false
             }));
 

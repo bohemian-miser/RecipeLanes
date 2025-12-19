@@ -8,14 +8,13 @@ const INGREDIENT_RADIUS = 100;
 export const calculateUpwardLayout = (graph: RecipeGraph, spacing: number = 1): LayoutGraph => {
     // Constants
     const NODE_SIZE = 60; 
-    const MIN_RADIUS = 120 * spacing;
+    const MIN_RADIUS = 80 * spacing; // Tighter
     const INGREDIENT_RADIUS = 100 * spacing;
     
     const nodes: VisualNode[] = [];
     const edges: VisualEdge[] = [];
     
-    // 1. Find Sink (Node with no consumers, or the one with id 'serve' or last in list)
-    // Build adjacency
+    // ... (rest of Sink finding logic is same, keep it)
     const consumedBy = new Map<string, string[]>();
     const consumersOf = new Map<string, string[]>(); // node -> inputs
     
@@ -30,38 +29,26 @@ export const calculateUpwardLayout = (graph: RecipeGraph, spacing: number = 1): 
     });
 
     const sinks = graph.nodes.filter(n => !consumedBy.has(n.id) || consumedBy.get(n.id)!.length === 0);
-    // If multiple sinks, pick the 'action' one or the last one.
     const rootNode = sinks.find(n => n.type === 'action') || sinks[sinks.length - 1];
 
     if (!rootNode) return { nodes: [], edges: [], lanes: [], width: 100, height: 100 };
 
     const visited = new Set<string>();
-    const positions = new Map<string, { x: number, y: number, angle: number }>();
+    const positions = new Map<string, { x: number, y: number }>();
 
-    // Initial placement: Root at bottom center
-    const startX = 0;
-    const startY = 0;
-    
-    // Recursive placement
-    // angleCenter: direction "up" is -90 degrees (in screen coords, y goes down). 
-    // Wait, standard math: 0 is Right, -90 is Up.
-    // Let's use radians. Up = -PI/2.
-    
-    const placeRecursive = (nodeId: string, x: number, y: number, centerAngle: number, wedge: number, level: number) => {
-        if (visited.has(nodeId)) return; // Handle DAGs by ignoring multi-parents for now (or treat as tree)
-        // Ideally we handle shared nodes by placing them "between" parents, but recursion is tree-like.
-        // We'll mark visited to prevent loops/re-placement.
+    // Recursion
+    const placeRecursive = (nodeId: string, x: number, y: number, centerAngle: number, availableWedge: number) => {
+        if (visited.has(nodeId)) return;
         visited.add(nodeId);
         
         const node = graph.nodes.find(n => n.id === nodeId);
         if (!node) return;
 
-        // Store position
-        positions.set(nodeId, { x, y, angle: centerAngle });
+        positions.set(nodeId, { x, y });
         nodes.push({
             id: nodeId,
-            type: node.type, // Use original type
-            x: x - NODE_SIZE/2, // Centered
+            type: node.type, // Use correct type
+            x: x - NODE_SIZE/2,
             y: y - NODE_SIZE/2,
             width: NODE_SIZE,
             height: NODE_SIZE,
@@ -74,90 +61,56 @@ export const calculateUpwardLayout = (graph: RecipeGraph, spacing: number = 1): 
         const ingredients = inputs.filter(id => graph.nodes.find(n => n.id === id)?.type === 'ingredient');
         const actions = inputs.filter(id => graph.nodes.find(n => n.id === id)?.type === 'action');
 
-        // Placement Logic:
-        // "Ingredients default to just going up... splay in an arc"
-        // "Steps... splay around at 45 degrees... alternate"
-
-        // 1. Place Ingredients
+        // 1. Ingredients: Fan out in immediate proximity
         if (ingredients.length > 0) {
-            // Arc above the node.
-            // Center angle is centerAngle.
-            // Spread depends on count.
-            const spread = Math.min(Math.PI, ingredients.length * (Math.PI / 6)); // max 180 deg, ~30 deg per item
+            // Place ingredients in a local arc "above" the node relative to its incoming angle?
+            // Or just strictly UP relative to screen.
+            // Let's bias them towards the "outside" of the tree.
+            
+            // Simple approach: Arc centered on `centerAngle`
+            const spread = Math.min(Math.PI * 0.8, ingredients.length * (Math.PI / 8));
             const startAng = centerAngle - spread / 2;
-            const stepAng = spread / (ingredients.length + 1 || 1); // evenly space?
-            // Actually, distribute evenly between start and end
+            const stepAng = spread / (ingredients.length + 1 || 1);
             
             ingredients.forEach((ingId, idx) => {
-                // Splay arc
-                // If only 1, goes straight up (centerAngle)
-                let ang = centerAngle;
-                if (ingredients.length > 1) {
-                     ang = startAng + stepAng * (idx + 1);
-                }
-                
-                // Radius
-                const r = INGREDIENT_RADIUS; // + Math.random() * 20 for bunching?
-                
+                const ang = startAng + stepAng * (idx + 1);
+                // Ensure angle is somewhat Up (-PI to 0)
+                // Clamp Y to be above parent
+                const r = INGREDIENT_RADIUS;
                 const px = x + r * Math.cos(ang);
-                const py = y + r * Math.sin(ang);
+                const py = Math.min(y - 20, y + r * Math.sin(ang)); // Force Y up at least 20px
                 
-                placeRecursive(ingId, px, py, ang, 0, level + 1);
+                placeRecursive(ingId, px, py, ang, 0);
             });
         }
 
-        // 2. Place Actions (Previous Steps)
+        // 2. Actions: Divide the wedge
         if (actions.length > 0) {
-            // "Forks go left and up... alternate"
-            // We split the available wedge for actions.
-            // Actions are typically heavier/larger subtrees, so give them more space.
-            const r = MIN_RADIUS * 1.8; // Further out
+            const r = MIN_RADIUS * 1.5;
             
-            // "Alternate each step" -> maybe zig-zag radius?
-            
-            // Calculate angles
-            // If 1 action: 45 deg from vertical? Or just Up?
-            // "if there is a previous step coming in, then splay around at 45 degrees from the vertical"
-            // Vertical relative to current node is `centerAngle`.
-            // So if 1 action: centerAngle - 45deg (Left-Up?) or +45?
-            // User said "go left and up".
-            
+            // Constrain wedge to avoid downward
+            // Max wedge is PI (180).
+            const safeWedge = Math.min(availableWedge, Math.PI * 0.9);
+            const startAng = centerAngle - safeWedge / 2;
+            const stepAng = safeWedge / (actions.length + 1);
+
             actions.forEach((actId, idx) => {
-                let ang = centerAngle;
-                let thisR = r;
-
-                if (actions.length === 1) {
-                     // Single previous step -> 45 deg offset to allow ingredients to be "up"?
-                     // Or just straight up if no ingredients.
-                     if (ingredients.length > 0) {
-                         ang = centerAngle - Math.PI / 4; // Left-Up
-                     } else {
-                         ang = centerAngle; // Straight up
-                     }
-                } else if (actions.length === 2) {
-                    // "Left up and up left" -> maybe -30 and -60? Or -45 and +45?
-                    // User said "2 in the middle... share space... angle inbetween"
-                    ang = centerAngle + (idx === 0 ? -1 : 1) * (Math.PI / 4); // +/- 45
-                } else {
-                    // Evenly spread
-                    const spread = Math.PI; 
-                    const start = centerAngle - spread/2;
-                    const step = spread / (actions.length + 1);
-                    ang = start + step * (idx + 1);
-                }
-
-                // Alternate radius to "bunch"
-                if (idx % 2 === 1) thisR *= 1.2;
-
-                const px = x + thisR * Math.cos(ang);
-                const py = y + thisR * Math.sin(ang);
+                const ang = startAng + stepAng * (idx + 1);
                 
-                placeRecursive(actId, px, py, ang, wedge / actions.length, level + 1);
+                // Radius increases with depth to splay out? Or constant?
+                // Constant is cleaner for "Layers".
+                
+                const px = x + r * Math.cos(ang);
+                const py = Math.min(y - MIN_RADIUS, y + r * Math.sin(ang)); // Strict Up constraint
+
+                // Pass reduced wedge for children to avoid overlap
+                placeRecursive(actId, px, py, ang, safeWedge / 2);
             });
         }
     };
 
-    placeRecursive(rootNode.id, startX, startY, -Math.PI / 2, Math.PI, 0);
+    placeRecursive(rootNode.id, 0, 0, -Math.PI / 2, Math.PI); // Start pointing UP
+// ... (rest is same)
 
     // Generate Edges
     graph.nodes.forEach(node => {

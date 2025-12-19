@@ -80,12 +80,24 @@ export default function RecipeLanesPage() {
         {/* Input Section (Above Graph) */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 shadow-xl">
              <div className="flex gap-4">
-                <textarea 
-                    className="flex-1 h-32 bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 outline-none resize-none leading-relaxed"
-                    placeholder="Paste your recipe here (e.g. 'Boil water, add pasta...')"
-                    value={recipeText}
-                    onChange={(e) => setRecipeText(e.target.value)}
-                />
+                    <label className="block text-sm font-medium text-zinc-400 mb-2 uppercase tracking-wider font-mono">
+                        Input Recipe
+                    </label>
+                    <textarea 
+                        className="w-full h-64 bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 outline-none resize-none leading-relaxed"
+                        placeholder="Paste your recipe here (e.g. 'Boil water, add pasta...')"
+                        value={recipeText}
+                        onChange={(e) => setRecipeText(e.target.value)}
+                        onKeyDown={(e) => {
+                            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                                e.preventDefault();
+                                if (recipeText && status !== 'parsing' && status !== 'forging') {
+                                    handleVisualize();
+                                }
+                            }
+                        }}
+                    />
+                    <div className="mt-4 flex justify-end">
                 <div className="flex flex-col justify-between w-48">
                     <div className="text-xs text-zinc-500 font-mono">
                         PARSE & VISUALIZE

@@ -64,14 +64,19 @@ ${BLOCK_START}
 ${SCHEMA_INTERFACE}
 ${BLOCK_END}
 
-### Visual Description Guidelines
-- **Active & Object-Focused:** Descriptions should focus on the *object* and the *action* without showing human body parts (hands).
-- **State Changes:** Capture the transition (e.g., "melting", "falling into", "boiling").
-- **Examples:**
-    - "Grated Carrot" -> "A carrot going into a box grater"
-    - "Whisked Eggs" -> "A wire whisk beating yellow eggs in a glass bowl"
-    - "Sauté Onions" -> "Onions frying in a pan"
-    - "Combine" -> "Spaghetti being tossed in red sauce"
+### Visual Description Guidelines (CRITICAL)
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "An egg".
+   - **Standard Forms:** For condiments/liquids, show the standard container/dispenser (e.g. "Salt Shaker", "Bottle of Oil", "Jug of Milk"). For bulk solids, show a simple pile (e.g. "Pile of Flour").
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "A single raw egg"
+     - "Salt" -> "Salt Shaker"
+     - "Olive Oil" -> "Bottle of Olive Oil"
+
+2. **ACTION Nodes (The "State"):**
 
 ### Input Recipe
 "${recipeText}"

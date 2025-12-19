@@ -89,7 +89,8 @@ export default function RecipeLanesPage() {
                         value={recipeText}
                         onChange={(e) => setRecipeText(e.target.value)}
                         onKeyDown={(e) => {
-                            if ((e.metaKey || e.ctrlKey || e.shiftKey) && e.key === 'Enter') {
+                            // Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux) to submit
+                            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                                 e.preventDefault();
                                 if (recipeText && status !== 'parsing' && status !== 'forging') {
                                     handleVisualize();
@@ -112,7 +113,7 @@ export default function RecipeLanesPage() {
                         ) : status === 'forging' ? (
                             <>Forging <Wand2 className="w-4 h-4 animate-spin" /></>
                         ) : (
-                            <>Visualize <ArrowRight className="w-5 h-5" /></>
+                            <>Visualise <ArrowRight className="w-5 h-5" /></>
                         )}
                     </button>
                 </div>

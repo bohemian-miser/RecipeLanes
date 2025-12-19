@@ -9,24 +9,35 @@ A visual recipe editor that transforms text into clear, lane-based process graph
 *   **Lanes** represent physical locations or containers (e.g., "Chopping Board", "Fry Pan", "Oven").
 *   **Edges** represent the flow of ingredients between steps.
 
-This structure allows for a "Swimlane" visualization that clarifies parallel tasks and ingredient flow at a glance.
-
 ## Core Philosophy: The State-Flow Pattern
 
 To make recipes intuitive, we visualize them as a sequence of **States** and **Transitions**:
 
 1.  **Ingredient Nodes (The "Input"):**
-    *   Represent the *new* items being added at a specific step.
-    *   **Visual:** Shows the ingredient in its *prepared* state (e.g., "Chopped Onions", "Raw Meat").
-    *   **Visual Rule:** Atomic and singular (e.g., "Salt Shaker", "Egg", "Pile of Sugar"). No quantities in the visual. Explicit quantities in the text ("3 Eggs").
-    *   **Grouping:** If multiple ingredients are added at once (e.g., Salt + Pepper), they appear as a distinct "batch" flowing into the same step.
-    *   **Connectivity:** Ingredients have exactly **one output** (the step they flow into). If an ingredient is split (e.g., half sugar now, half later), it appears as two separate ingredient nodes.
+    *   Represent the *new* items being added.
+    *   **Visual Rule:** Atomic and singular (e.g., "Salt Shaker", "Egg", "Pile of Sugar"). **NO quantities** in the visual (quantities belong in text).
+    *   **Strict Connectivity:** Every ingredient node has exactly **one output** (the step it feeds into).
+    *   **Splitting:** If an ingredient is used in multiple places (e.g. "half the sugar"), it appears as **two separate nodes**.
 
-2.  **Action Nodes (The "State"):**
-    *   Represent the *result* of adding ingredients and performing an action (e.g., "Fry", "Boil").
-    *   **Visual:** Shows the *combined state* of the vessel (e.g., "Onions frying in a pan", "Meat browning with onions").
-    *   **Metadata:** Captures time ("5 min") and temperature ("Medium Heat").
-    *   **Flow:** Receives inputs from (a) the Previous State Node and (b) the New Ingredient Nodes.
+2.  **Action Nodes (The "State" & "Prep"):**
+    *   Represent the *result* of a process.
+    *   **Visual:** Shows the *combined state* (e.g., "Onions frying in pan", "Whisked Eggs").
+    *   **Prep Rules:**
+        *   Significant prep (e.g. "Grate Cheese") is an **Action Node** that takes the raw ingredient ("Cheese") as input.
+        *   The flow is `[Cheese] -> [Grate] -> [Add to Pan]`.
+    *   **Merge Logic:** If an action combines inputs from different lanes (e.g. pouring bowl into pan), it sits in the *receiving* lane and accepts arrows from the source lanes.
+
+3.  **Lanes (Containers):**
+    *   Represent the physical vessel.
+    *   Vertical flow represents time/progress.
+
+## Layout Concept (Vision)
+
+We aim for a "Mise en Place" flow:
+1.  **Top Row:** All raw ingredients start here, aligned with the lane they first enter.
+2.  **Vertical Flow:** Ingredients drop down into Action nodes (Prep/Cook).
+3.  **Merge:** Lanes merge via diagonal arrows (e.g. Whisked Eggs in Lane 1 flow into Pan in Lane 2).
+4.  **Grid Alignment:** Steps align horizontally by "Rank" (Time step), minimizing line crossings.
 
 ## Architecture
 
@@ -36,23 +47,7 @@ To make recipes intuitive, we visualize them as a sequence of **States** and **T
     *   Text Model: `gemini-2.5-flash`
     *   Image Model: `imagen-3.0-generate-001`
 
-## Visual Layouts
-
-The application supports multiple layout modes to handle recipe complexity:
-
-1.  **Lanes Mode (Default):**
-    *   Vertical swimlanes representing containers.
-    *   **Split Column:** Actions on the Left, Ingredients on the Right (aligned with their step).
-    *   **Orbital/Arc:** For complex steps, ingredients fan out in an arc above or beside the action to reduce vertical stacking.
-
-2.  **Compact Mode:**
-    *   A layered graph layout (Left-to-Right or Top-to-Down optimized).
-    *   Ignores strict lane boundaries to minimize whitespace and vertical height.
-    *   Groups nodes by rank (dependency depth).
-
-## JSON Structure & Examples
-
-The AI parses text into this Graph JSON structure.
+## Examples
 
 ### Example 1: Simple Carrot Stir Fry
 
@@ -60,205 +55,50 @@ The AI parses text into this Graph JSON structure.
 > "Grate 2 large carrots. Heat a skillet over medium heat. Add the grated carrots to the pan and sauté for 5 minutes."
 
 **Structured Output:**
-*Single Lane Flow: Prep flows directly into the pan state.*
-
 ```json
 {
   "lanes": [
-    { "id": "lane-1", "label": "Skillet (Process)", "type": "cook" }
+    { "id": "lane-1", "label": "Cutting Board", "type": "prep" },
+    { "id": "lane-2", "label": "Skillet", "type": "cook" }
   ],
   "nodes": [
-    {
-      "id": "node-1",
-      "laneId": "lane-1",
-      "text": "Grate 2 large carrots",
-      "visualDescription": "A carrot going into a grater",
-      "type": "ingredient" 
-    },
-    {
-      "id": "node-2",
-      "laneId": "lane-1",
-      "text": "Add carrots to skillet",
-      "visualDescription": "Grated orange carrot shreds falling into a hot skillet",
-      "type": "action",
-      "temperature": "Medium Heat",
-      "duration": "5 min",
-      "inputs": ["node-1"] 
-    }
+    { "id": "node-1", "laneId": "lane-1", "text": "2 Carrots", "visualDescription": "Carrot", "type": "ingredient" },
+    { "id": "node-2", "laneId": "lane-1", "text": "Grate", "visualDescription": "A carrot going into a grater", "type": "action", "inputs": ["node-1"] },
+    { "id": "node-3", "laneId": "lane-2", "text": "Sauté", "visualDescription": "Grated carrots sizzling in a pan", "type": "action", "inputs": ["node-2"], "temperature": "Medium", "duration": "5 min" }
   ]
 }
 ```
 
-### Example 2: Scrambled Eggs
+### Example 2: Scrambled Eggs (Merge Flow)
 
 **Input Text:**
-> "Crack 3 eggs into a bowl. Whisk them with a pinch of salt. Melt butter in a non-stick pan. Pour the eggs into the pan and stir gently until set."
+> "Crack 3 eggs into a bowl. Whisk them with a pinch of salt. Melt butter in a non-stick pan. Pour the eggs into the pan and stir gently until set. Top with grated cheese."
 
 **Structured Output:**
-*Two Lanes: Prep (Bowl) and Cook (Pan). The Bowl state merges into the Pan state.*
-
 ```json
 {
   "lanes": [
     { "id": "lane-1", "label": "Bowl", "type": "prep" },
-    { "id": "lane-2", "label": "Non-Stick Pan", "type": "cook" }
+    { "id": "lane-2", "label": "Pan", "type": "cook" },
+    { "id": "lane-3", "label": "Board", "type": "prep" }
   ],
   "nodes": [
-    // --- Batch 1: Eggs & Salt ---
-    {
-      "id": "node-1",
-      "laneId": "lane-1",
-      "text": "3 Eggs",
-      "visualDescription": "Egg",
-      "type": "ingredient"
-    },
-    {
-      "id": "node-2",
-      "laneId": "lane-1",
-      "text": "Pinch of Salt",
-      "visualDescription": "Salt shaker",
-      "type": "ingredient"
-    },
-    // --- State 1: Whisked Eggs ---
-    {
-      "id": "node-3",
-      "laneId": "lane-1",
-      "text": "Whisk eggs",
-      "visualDescription": "Wire whisk beating yellow eggs in a glass bowl",
-      "type": "action",
-      "inputs": ["node-1", "node-2"]
-    },
-    // --- Batch 2: Butter ---
-    {
-      "id": "node-4",
-      "laneId": "lane-2",
-      "text": "Butter",
-      "visualDescription": "Stick of butter",
-      "type": "ingredient"
-    },
-    // --- State 2: Melted Butter ---
-    {
-      "id": "node-5",
-      "laneId": "lane-2",
-      "text": "Melt butter",
-      "visualDescription": "Butter melting in a pan",
-      "type": "action",
-      "inputs": ["node-4"]
-    },
-    // --- State 3: Scramble (Merge) ---
-    {
-      "id": "node-6",
-      "laneId": "lane-2",
-      "text": "Scramble",
-      "visualDescription": "Scrambled eggs in a pan being stirred by a spoon",
-      "type": "action",
-      "inputs": ["node-3", "node-5"]
-    }
-  ]
-}
-```
+    // Row 1 (Ingredients)
+    { "id": "n1", "laneId": "lane-1", "text": "3 Eggs", "visualDescription": "Egg", "type": "ingredient" },
+    { "id": "n2", "laneId": "lane-1", "text": "Salt", "visualDescription": "Salt Shaker", "type": "ingredient" },
+    { "id": "n3", "laneId": "lane-2", "text": "Butter", "visualDescription": "Stick of butter", "type": "ingredient" },
+    { "id": "n4", "laneId": "lane-3", "text": "Cheese", "visualDescription": "Block of cheese", "type": "ingredient" },
 
-### Example 3: Spaghetti Bolognese
+    // Row 2 (Prep/Actions)
+    { "id": "n5", "laneId": "lane-1", "text": "Whisk", "visualDescription": "Whisk beating eggs", "type": "action", "inputs": ["n1", "n2"] },
+    { "id": "n6", "laneId": "lane-2", "text": "Melt", "visualDescription": "Butter melting in pan", "type": "action", "inputs": ["n3"] },
+    { "id": "n7", "laneId": "lane-3", "text": "Grate", "visualDescription": "Cheese grating", "type": "action", "inputs": ["n4"] },
 
-**Input Text:**
-> "Boil water in a large pot. Add spaghetti and cook for 10 minutes. Drain. In a separate pan, fry chopped onions and garlic until soft. Add minced beef and brown. Stir in tomato sauce and simmer for 15 minutes. Combine the pasta with the sauce and serve."
+    // Row 3 (Merge)
+    { "id": "n8", "laneId": "lane-2", "text": "Scramble", "visualDescription": "Eggs cooking in pan", "type": "action", "inputs": ["n5", "n6"] },
 
-**Structured Output:**
-*Demonstrates the "State Chain" where each step adds new ingredients to the previous state.*
-
-```json
-{
-  "lanes": [
-    { "id": "lane-1", "label": "Pot (Pasta)", "type": "cook" },
-    { "id": "lane-2", "label": "Pan (Sauce)", "type": "cook" }
-  ],
-  "nodes": [
-    // --- Lane 1: Pasta ---
-    {
-      "id": "node-1",
-      "laneId": "lane-1",
-      "text": "Add Spaghetti to boiling water",
-      "visualDescription": "Spaghetti boiling in a pot of water",
-      "type": "action",
-      "duration": "10 min"
-    },
-    {
-      "id": "node-2",
-      "laneId": "lane-1",
-      "text": "Drain",
-      "visualDescription": "Pasta in a colander",
-      "type": "action",
-      "inputs": ["node-1"]
-    },
-    // --- Lane 2: Sauce ---
-    // Batch 1: Aromatics
-    {
-      "id": "node-3",
-      "laneId": "lane-2",
-      "text": "2 Onions",
-      "visualDescription": "Chopped onion",
-      "type": "ingredient"
-    },
-    {
-      "id": "node-4",
-      "laneId": "lane-2",
-      "text": "3 cloves garlic",
-      "visualDescription": "Chopped garlic",
-      "type": "ingredient"
-    },
-    // State 1: Fried Aromatics
-    {
-      "id": "node-5",
-      "laneId": "lane-2",
-      "text": "Fry until soft",
-      "visualDescription": "Onions and garlic frying in a pan",
-      "type": "action",
-      "inputs": ["node-3", "node-4"]
-    },
-    // Batch 2: Meat
-    {
-      "id": "node-6",
-      "laneId": "lane-2",
-      "text": "500g Minced Beef",
-      "visualDescription": "Raw minced beef",
-      "type": "ingredient"
-    },
-    // State 2: Browned Meat
-    {
-      "id": "node-7",
-      "laneId": "lane-2",
-      "text": "Add Meat & Brown",
-      "visualDescription": "Browned mince meat in a pan",
-      "type": "action",
-      "inputs": ["node-5", "node-6"]
-    },
-    // Batch 3: Sauce
-    {
-      "id": "node-8",
-      "laneId": "lane-2",
-      "text": "Can of Tomato Sauce",
-      "visualDescription": "Can of tomato sauce",
-      "type": "ingredient"
-    },
-    // State 3: Simmering Sauce
-    {
-      "id": "node-9",
-      "laneId": "lane-2",
-      "text": "Add Sauce & Simmer",
-      "visualDescription": "Red sauce simmering in a pan",
-      "type": "action",
-      "duration": "15 min",
-      "inputs": ["node-7", "node-8"]
-    },
-    // --- Merge: Combine Lanes ---
-    {
-      "id": "node-10",
-      "laneId": "lane-2",
-      "text": "Combine & Serve",
-      "visualDescription": "Spaghetti being tossed in red sauce",
-      "type": "action",
-      "inputs": ["node-2", "node-9"]
-    }
+    // Row 4 (Finish)
+    { "id": "n9", "laneId": "lane-2", "text": "Add Cheese", "visualDescription": "Cheese melting on eggs", "type": "action", "inputs": ["n8", "n7"] }
   ]
 }
 ```
@@ -266,13 +106,4 @@ The AI parses text into this Graph JSON structure.
 ## Development Workflow
 
 We adhere to a strict **Test Driven Development (TDD)** workflow.
-
-1.  **Tests First:** All new features or bug fixes start with a failing test.
-2.  **Green Build:** We do not push failing builds. CI/CD (GitHub Actions) runs on every push to enforce this.
-3.  **Local Simulation:** We use local scripts and mocks (e.g., `npm run verify` in the sub-projects) to ensure stability before deployment.
-4.  **Mock Services:** We rely on robust mocking for AI, Auth, and Data services during testing to ensure deterministic and fast builds.
-
-## Directory Structure
-
-*   `recipe-rpg-simple/`: A functional toy prototype demonstrating the Icon Forge and Caching logic.
-*   `ui/`: (Experimental) The initial frontend implementation for the graph visualization. This will be the base for the main application.
+...

@@ -6,6 +6,7 @@ import { getDataService } from '@/lib/data-service';
 import { getAuthService } from '@/lib/auth-service';
 import { z } from 'zod';
 import { generateRecipePrompt, parseRecipeGraph } from '@/lib/recipe-lanes/parser';
+import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import { generateIconFlow } from '@/lib/flows';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 
@@ -339,11 +340,8 @@ export async function deleteIngredientCategoryAction(rawIngredient: string): Pro
 
 export async function parseRecipeAction(recipeText: string): Promise<{ graph?: RecipeGraph; error?: string }> {
     try {
-        const session = await getAuthService().verifyAuth();
-        // Allow unauthenticated usage? Maybe limit rate?
-        // For now, let's require auth to prevent abuse of the complex prompt.
-        if (!session) return { error: 'Authentication required' };
-
+        // Guests allowed
+        
         const prompt = generateRecipePrompt(recipeText);
         
         // Use Genkit to generate the JSON
@@ -365,10 +363,34 @@ export async function parseRecipeAction(recipeText: string): Promise<{ graph?: R
     }
 }
 
+export async function adjustRecipeAction(currentGraph: RecipeGraph, instruction: string): Promise<{ graph?: RecipeGraph; error?: string }> {
+    try {
+        // Guests allowed
+        const prompt = generateAdjustmentPrompt(currentGraph, instruction);
+        
+        const response = await ai.generate({
+            model: textModel,
+            prompt: prompt,
+            config: { temperature: 0.2 }
+        });
+
+        const text = response.text;
+        const newGraph = parseRecipeGraph(text);
+        
+        // Auto-forge icons for new nodes
+        const iconRes = await generateGraphIconsAction(newGraph);
+        return { graph: iconRes.graph || newGraph };
+
+    } catch (e: any) {
+        console.error('adjustRecipeAction failed:', e);
+        return { error: e.message || 'Failed to adjust recipe.' };
+    }
+}
+
 export async function generateGraphIconsAction(graph: RecipeGraph): Promise<{ graph: RecipeGraph; error?: string }> {
     try {
-        const session = await getAuthService().verifyAuth();
-        if (!session) return { error: 'Authentication required', graph };
+        // Guests allowed to forge (uses cache mostly, or generates if needed)
+        // Note: Cost implications for unauth generation, but requested by user.
 
         // Clone graph to ensure reference change for React
         const newGraph: RecipeGraph = JSON.parse(JSON.stringify(graph));
@@ -379,9 +401,8 @@ export async function generateGraphIconsAction(graph: RecipeGraph): Promise<{ gr
         for (let i = 0; i < newGraph.nodes.length; i += chunk) {
             const batch = newGraph.nodes.slice(i, i + chunk);
             await Promise.all(batch.map(async (node) => {
-                if (node.visualDescription) {
-                    // Use visual description as the "Ingredient Name" for caching
-                    // This creates a group like "A carrot going into a grater"
+                // If iconUrl is already present (preserved from previous graph), skip!
+                if (node.visualDescription && !node.iconUrl) {
                     const result = await getOrCreateIconAction(node.visualDescription);
                     if (result && 'iconUrl' in result) {
                         node.iconUrl = result.iconUrl;

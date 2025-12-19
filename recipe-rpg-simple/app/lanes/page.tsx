@@ -4,15 +4,16 @@ import { useState } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { Login } from '@/components/login';
 import SwimlaneDiagram from '@/components/recipe-lanes/swimlane-diagram';
-import { parseRecipeAction, generateGraphIconsAction } from '@/app/actions';
+import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
-import { Wand2, ChefHat, ArrowRight, Code } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send } from 'lucide-react';
 
 export default function RecipeLanesPage() {
   const { user, loading: authLoading } = useAuth();
   const [recipeText, setRecipeText] = useState('');
+  const [chatInput, setChatInput] = useState('');
   const [graph, setGraph] = useState<RecipeGraph | null>(null);
-  const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'complete' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
 
@@ -48,16 +49,31 @@ export default function RecipeLanesPage() {
     }
   };
 
+  const handleAdjust = async () => {
+      if (!graph || !chatInput.trim()) return;
+      
+      const prompt = chatInput;
+      setChatInput(''); // Clear immediately
+      setStatus('adjusting');
+      setError(null);
+
+      try {
+          const res = await adjustRecipeAction(graph, prompt);
+          if (res.error || !res.graph) {
+              throw new Error(res.error || 'Failed to adjust graph.');
+          }
+          setGraph(res.graph);
+          setStatus('complete');
+      } catch (e: any) {
+          console.error('Adjustment failed:', e);
+          setError(e.message);
+          setStatus('error'); // Keep graph visible
+      }
+  };
+
   if (authLoading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 font-mono">Loading...</div>;
 
-  if (!user) {
-      return (
-          <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
-              <h1 className="text-4xl font-bold text-yellow-500 mb-8 font-mono tracking-tighter">RECIPE LANES</h1>
-              <Login />
-          </div>
-      );
-  }
+  // Guest access allowed - no Login block
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-yellow-500/30">
@@ -70,7 +86,7 @@ export default function RecipeLanesPage() {
                 <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Recipe Lanes</h1>
             </div>
             <div className="text-xs font-mono text-zinc-500">
-                {user.email}
+                {user?.email || 'Guest Mode'}
             </div>
         </header>
 
@@ -109,7 +125,7 @@ export default function RecipeLanesPage() {
                         {status === 'parsing' ? (
                             <>Parsing <span className="animate-pulse">...</span></>
                         ) : status === 'forging' ? (
-                            <>Forging <Wand2 className="w-4 h-4 animate-spin" /></>
+                            <>Forging Icons <Wand2 className="w-4 h-4 animate-spin" /></>
                         ) : (
                             <>Visualise <ArrowRight className="w-5 h-5" /></>
                         )}
@@ -144,7 +160,7 @@ export default function RecipeLanesPage() {
                         {JSON.stringify(graph, null, 2)}
                     </pre>
                 ) : graph ? (
-                    <div className="p-8 min-w-full min-h-full">
+                    <div className="p-8 min-w-full min-h-full pb-32">
                         <SwimlaneDiagram graph={graph} />
                     </div>
                 ) : (
@@ -156,6 +172,34 @@ export default function RecipeLanesPage() {
                     </div>
                 )}
             </div>
+
+            {/* Chat Adjustment Interface (Floating at bottom of graph) */}
+            {graph && (
+                <div className="absolute bottom-6 left-6 right-6 flex justify-center">
+                    <div className="w-full max-w-2xl bg-white border border-zinc-200 rounded-full shadow-xl flex items-center p-1.5 pl-5 gap-2 transition-all focus-within:ring-2 focus-within:ring-yellow-500/50 focus-within:border-yellow-500">
+                        <MessageSquare className="w-5 h-5 text-zinc-400" />
+                        <input 
+                            className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10"
+                            placeholder="Adjust recipe (e.g. 'Add garlic to the sauce', 'Make it spicy')..."
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}
+                            disabled={status === 'adjusting'}
+                        />
+                        <button
+                            onClick={handleAdjust}
+                            disabled={!chatInput.trim() || status === 'adjusting'}
+                            className="p-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-full transition-colors disabled:opacity-50"
+                        >
+                            {status === 'adjusting' ? (
+                                <Wand2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Send className="w-4 h-4" />
+                            )}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
       </div>
     </div>

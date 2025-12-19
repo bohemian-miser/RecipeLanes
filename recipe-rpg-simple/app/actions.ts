@@ -435,3 +435,29 @@ export async function generateGraphIconsAction(graph: RecipeGraph): Promise<{ gr
         return { graph, error: e.message };
     }
 }
+
+export async function rerollIconAction(nodeId: string, ingredientName: string, currentIconUrl: string) {
+    try {
+        // Record Rejection if possible
+        if (currentIconUrl) {
+             const ingMatch = await getDataService().getIngredientByName(ingredientName);
+             if (ingMatch) {
+                 await getDataService().recordRejection(currentIconUrl, ingredientName, ingMatch.id);
+             }
+        }
+
+        // Get New Icon
+        const result = await getOrCreateIconAction(ingredientName, 0, [currentIconUrl]);
+        
+        if ('error' in result) return { error: result.error };
+        
+        return { 
+            iconUrl: result.iconUrl,
+            nodeId 
+        };
+
+    } catch (e: any) {
+        console.error('rerollIconAction failed:', e);
+        return { error: e.message };
+    }
+}

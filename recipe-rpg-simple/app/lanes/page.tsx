@@ -1,23 +1,67 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth-provider';
 import { Login } from '@/components/login';
 import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
-import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction } from '@/app/actions';
+import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2 } from 'lucide-react';
 
-export default function RecipeLanesPage() {
+function RecipeLanesContent() {
   const { user, loading: authLoading } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
   const [recipeText, setRecipeText] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [graph, setGraph] = useState<RecipeGraph | null>(null);
-  const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'elk' | 'micro'>('compact');
+
+  useEffect(() => {
+      const id = searchParams.get('id');
+      if (id && !graph) {
+          setStatus('loading');
+          getRecipeAction(id).then(res => {
+              if (res.graph) {
+                  setGraph(res.graph);
+                  setStatus('complete');
+              } else {
+                  setError('Recipe not found');
+                  setStatus('error');
+              }
+          });
+      }
+  }, [searchParams]);
+
+  const handleShare = async () => {
+      if (!graph) return;
+      const currentId = searchParams.get('id');
+      if (currentId) {
+          navigator.clipboard.writeText(window.location.href);
+          alert('Link copied to clipboard!');
+          return;
+      }
+
+      setStatus('loading');
+      const res = await saveRecipeAction(graph);
+      if (res.id) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('id', res.id);
+          router.push(url.pathname + url.search);
+          navigator.clipboard.writeText(url.toString());
+          setStatus('complete');
+          alert('Recipe saved! Link copied to clipboard.');
+      } else {
+          setError('Failed to save recipe');
+          setStatus('complete');
+      }
+  };
 
   const handleVisualize = async () => {
     if (!recipeText.trim()) return;
@@ -192,6 +236,16 @@ export default function RecipeLanesPage() {
                 </div>
 
                 <div className="flex items-center gap-4">
+                    {/* Share Button */}
+                    {graph && (
+                        <button 
+                            onClick={handleShare}
+                            className="p-1.5 rounded hover:bg-zinc-100 transition-colors text-zinc-500 hover:text-zinc-900"
+                            title="Share Recipe"
+                        >
+                            <Share2 className="w-4 h-4" />
+                        </button>
+                    )}
                     {/* JSON Toggle */}
                     {graph && (
                         <button 
@@ -254,5 +308,13 @@ export default function RecipeLanesPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RecipeLanesPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-zinc-500 font-mono">Loading...</div>}>
+      <RecipeLanesContent />
+    </Suspense>
   );
 }

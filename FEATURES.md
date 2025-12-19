@@ -29,6 +29,7 @@
 *   **Interactive Editing:**
     *   Drag and Drop nodes to rearrange layout manually.
     *   Shift+Click to select multiple nodes for bulk moving.
+    *   **Reroll Icons:** Regenerate specific icons that don't match the ingredient.
 *   **Export Options:**
     *   [DONE] Download as SVG.
     *   Download as PNG (High Res).

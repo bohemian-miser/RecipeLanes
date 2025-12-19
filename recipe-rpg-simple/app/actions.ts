@@ -356,28 +356,51 @@ export async function parseRecipeAction(recipeText: string): Promise<{ graph?: R
     }
 }
 
-export async function adjustRecipeAction(currentGraph: RecipeGraph, instruction: string): Promise<{ graph?: RecipeGraph; error?: string }> {
-    try {
-        // Guests allowed
-        const prompt = generateAdjustmentPrompt(currentGraph, instruction);
-        
-        const response = await ai.generate({
-            model: textModel,
-            prompt: prompt,
-            config: { temperature: 0.2 }
-        });
+export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: string) {
+  try {
+    const fullPrompt = generateAdjustmentPrompt(currentGraph, prompt);
+    const response = await ai.generate({
+        model: textModel,
+        prompt: fullPrompt,
+        config: { temperature: 0.2 }
+    });
 
-        const text = response.text;
-        const newGraph = parseRecipeGraph(text);
-        
-        // Auto-forge icons for new nodes
-        const iconRes = await generateGraphIconsAction(newGraph);
-        return { graph: iconRes.graph || newGraph };
+    const text = response.text;
+    const newGraph = parseRecipeGraph(text);
 
-    } catch (e: any) {
-        console.error('adjustRecipeAction failed:', e);
-        return { error: e.message || 'Failed to adjust recipe.' };
-    }
+    // Restore icons if ID matches and AI forgot them
+    newGraph.nodes.forEach(n => {
+        if (!n.iconUrl) {
+            const old = currentGraph.nodes.find(o => o.id === n.id);
+            if (old && old.iconUrl) n.iconUrl = old.iconUrl;
+        }
+    });
+
+    return { graph: newGraph, adjustment: prompt };
+  } catch (e: any) {
+    console.error('adjustRecipeAction failed:', e);
+    return { error: e.message };
+  }
+}
+
+export async function saveRecipeAction(graph: RecipeGraph) {
+  try {
+    const dataService = getDataService();
+    const id = await dataService.saveRecipe(graph);
+    return { id };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function getRecipeAction(id: string) {
+  try {
+    const dataService = getDataService();
+    const graph = await dataService.getRecipe(id);
+    return { graph };
+  } catch (e: any) {
+    return { error: e.message };
+  }
 }
 
 export async function generateGraphIconsAction(graph: RecipeGraph): Promise<{ graph: RecipeGraph; error?: string }> {

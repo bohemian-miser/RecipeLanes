@@ -2,6 +2,7 @@ import { db, storage } from './firebase-admin';
 import { memoryStore, IconData, IngredientData } from './store';
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
+import type { RecipeGraph } from './recipe-lanes/types';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -20,6 +21,9 @@ export interface DataService {
       imageBuffer: ArrayBuffer, 
       meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string }
   ): Promise<string>;
+  
+  saveRecipe(graph: RecipeGraph): Promise<string>;
+  getRecipe(id: string): Promise<RecipeGraph | null>;
 
   recordRejection(iconUrl: string, ingredientName: string, ingredientId: string): Promise<void>;
   
@@ -33,6 +37,21 @@ export interface DataService {
 
 // --- Firebase Implementation ---
 export class FirebaseDataService implements DataService {
+  
+  async saveRecipe(graph: RecipeGraph): Promise<string> {
+      const doc = await db.collection('recipes').add({
+          graph,
+          created_at: FieldValue.serverTimestamp()
+      });
+      return doc.id;
+  }
+
+  async getRecipe(id: string): Promise<RecipeGraph | null> {
+      const doc = await db.collection('recipes').doc(id).get();
+      if (!doc.exists) return null;
+      return doc.data()?.graph as RecipeGraph;
+  }
+// ...
   
   async getIngredientByName(name: string) {
     const snapshot = await db.collection('ingredients').get();
@@ -284,6 +303,18 @@ export class FirebaseDataService implements DataService {
 
 // --- Memory Implementation ---
 export class MemoryDataService implements DataService {
+  private recipes = new Map<string, RecipeGraph>();
+
+  async saveRecipe(graph: RecipeGraph): Promise<string> {
+      const id = randomUUID();
+      this.recipes.set(id, graph);
+      return id;
+  }
+
+  async getRecipe(id: string): Promise<RecipeGraph | null> {
+      return this.recipes.get(id) || null;
+  }
+
   async getIngredientByName(name: string) {
     const ingredients = memoryStore.getIngredients();
     const match = ingredients.find(i => i.name.toLowerCase() === name.toLowerCase());

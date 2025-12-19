@@ -80,11 +80,12 @@ export default function RecipeLanesPage() {
         {/* Input Section (Above Graph) */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 shadow-xl">
              <div className="flex gap-4">
-                    <label className="block text-sm font-medium text-zinc-400 mb-2 uppercase tracking-wider font-mono">
-                        Input Recipe
+                <div className="flex-1 space-y-2">
+                    <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">
+                        Recipe Instructions
                     </label>
                     <textarea 
-                        className="w-full h-64 bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 outline-none resize-none leading-relaxed"
+                        className="w-full h-32 bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 outline-none resize-none leading-relaxed font-mono"
                         placeholder="Paste your recipe here (e.g. 'Boil water, add pasta...')"
                         value={recipeText}
                         onChange={(e) => setRecipeText(e.target.value)}
@@ -98,11 +99,12 @@ export default function RecipeLanesPage() {
                             }
                         }}
                     />
-                    <div className="mt-4 flex justify-end">
-                <div className="flex flex-col justify-between w-48">
-                    <div className="text-xs text-zinc-500 font-mono">
-                        PARSE & VISUALIZE
+                    <div className="text-[10px] text-zinc-600 text-right">
+                        Cmd + Enter to Submit
                     </div>
+                </div>
+                
+                <div className="flex flex-col justify-end w-48 gap-2">
                     <button
                         onClick={handleVisualize}
                         disabled={status === 'parsing' || status === 'forging' || !recipeText}
@@ -169,7 +171,7 @@ export default function RecipeLanesPage() {
                         <div className="w-20 h-20 border-2 border-zinc-200 border-dashed rounded-full flex items-center justify-center bg-zinc-50">
                             <Wand2 className="w-8 h-8 opacity-20" />
                         </div>
-                        <p className="text-sm font-medium text-zinc-400">Ready to Visualize</p>
+                        <p className="text-sm font-medium text-zinc-400">Ready to Visualise</p>
                     </div>
                 )}
             </div>

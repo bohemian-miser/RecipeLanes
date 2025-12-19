@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useCallback, useEffect, useMemo } from 'react';
 import ReactFlow, { 
     Background, 
@@ -15,83 +13,97 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
+import { calculateElkLayout } from '../../lib/recipe-lanes/layout-elk';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import MinimalNode from './nodes/minimal-node';
 import CardNode from './nodes/card-node';
 import LaneNode from './nodes/lane-node';
+import MicroNode from './nodes/micro-node';
 import { toPng } from 'html-to-image';
 import { Download } from 'lucide-react';
 
 const nodeTypes = {
   minimal: MinimalNode,
   card: CardNode,
-  lane: LaneNode
+  lane: LaneNode,
+  micro: MicroNode
 };
 
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
-  mode: LayoutMode;
+  mode: LayoutMode | 'elk' | 'micro';
 }
 
 // Inner component to access ReactFlow context
 const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode }) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-    const { fitView, getNodes } = useReactFlow();
+    const { fitView } = useReactFlow();
 
-    // Re-calculate layout when graph or mode changes
     useEffect(() => {
-        const layout = calculateLayout(graph, mode);
-        const isHorizontal = mode === 'horizontal';
-        
-        const newNodes: Node[] = [];
-        
-        // 1. Lanes (Background Layer)
-        layout.lanes.forEach(lane => {
-             newNodes.push({
-                 id: lane.id,
-                 type: 'lane',
-                 position: { x: lane.x, y: lane.y }, // Note: LaneNode needs width/height in data or style
-                 data: { label: lane.label, color: lane.color },
-                 style: { width: lane.width, height: lane.height, zIndex: -1 },
-                 draggable: false,
-                 selectable: false,
-                 zIndex: -1
-             });
-        });
+        const runLayout = async () => {
+            let layout;
+            
+            if (mode === 'elk' || mode === 'micro') {
+                layout = await calculateElkLayout(graph, mode === 'micro');
+            } else {
+                // Cast mode to LayoutMode for TS if needed, assuming generic string for now
+                layout = calculateLayout(graph, mode as LayoutMode);
+            }
 
-        // 2. Recipe Nodes
-        const nodeType = (mode === 'swimlanes' || mode === 'dagre' || mode === 'compact') ? 'minimal' : 'card';
-        
-        layout.nodes.forEach(n => {
-             newNodes.push({
-                 id: n.id,
-                 type: nodeType,
-                 position: { x: n.x, y: n.y },
-                 data: n.data,
-                 draggable: true, // Allow user to rearrange! (FR)
-             });
-        });
+            const newNodes: Node[] = [];
+            
+            // 1. Lanes (Background Layer)
+            layout.lanes.forEach(lane => {
+                 newNodes.push({
+                     id: lane.id,
+                     type: 'lane',
+                     position: { x: lane.x, y: lane.y },
+                     data: { label: lane.label, color: lane.color },
+                     style: { width: lane.width, height: lane.height, zIndex: -1 },
+                     draggable: false,
+                     selectable: false,
+                     zIndex: -1
+                 });
+            });
 
-        // 3. Edges
-        const newEdges: Edge[] = layout.edges.map(e => ({
-            id: e.id,
-            source: e.sourceId,
-            target: e.targetId,
-            type: 'default', // 'smoothstep' or 'bezier'
-            style: { stroke: '#9ca3af', strokeWidth: 1.5 },
-            animated: false
-        }));
+            // 2. Recipe Nodes
+            let nodeType = 'card';
+            if (mode === 'micro') nodeType = 'micro';
+            else if (mode === 'swimlanes' || mode === 'dagre' || mode === 'compact' || mode === 'elk') nodeType = 'minimal';
+            
+            layout.nodes.forEach(n => {
+                 newNodes.push({
+                     id: n.id,
+                     type: nodeType,
+                     position: { x: n.x, y: n.y },
+                     data: n.data,
+                     draggable: true,
+                 });
+            });
 
-        setNodes(newNodes);
-        setEdges(newEdges);
+            // 3. Edges
+            const newEdges: Edge[] = layout.edges.map(e => ({
+                id: e.id,
+                source: e.sourceId,
+                target: e.targetId,
+                type: 'default',
+                style: { stroke: '#9ca3af', strokeWidth: 1.5 },
+                animated: false
+            }));
 
-        // Fit view after a brief delay to allow rendering
-        setTimeout(() => {
-            fitView({ padding: 0.1 });
-        }, 50);
+            setNodes(newNodes);
+            setEdges(newEdges);
+
+            setTimeout(() => {
+                fitView({ padding: 0.1 });
+            }, 50);
+        };
+
+        runLayout();
 
     }, [graph, mode, setNodes, setEdges, fitView]);
+// ...
 
     const downloadImage = () => {
         const viewport = document.querySelector('.react-flow__viewport') as HTMLElement;

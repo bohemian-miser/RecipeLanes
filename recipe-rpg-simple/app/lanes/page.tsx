@@ -7,7 +7,7 @@ import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot } from 'lucide-react';
 
 export default function RecipeLanesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -17,7 +17,7 @@ export default function RecipeLanesPage() {
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>('compact');
+  const [layoutMode, setLayoutMode] = useState<LayoutMode | 'elk' | 'micro'>('compact');
 
   const handleVisualize = async () => {
     if (!recipeText.trim()) return;
@@ -176,6 +176,18 @@ export default function RecipeLanesPage() {
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'dagre' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
                     >
                         <Network className="w-4 h-4" /> Smart
+                    </button>
+                    <button
+                        onClick={() => setLayoutMode('elk')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'elk' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                    >
+                        <Sparkles className="w-4 h-4" /> Organic
+                    </button>
+                    <button
+                        onClick={() => setLayoutMode('micro')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'micro' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                    >
+                        <CircleDot className="w-4 h-4" /> Micro
                     </button>
                 </div>
 

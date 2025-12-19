@@ -8,7 +8,7 @@ import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move } from 'lucide-react';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading } = useAuth();
@@ -21,7 +21,8 @@ function RecipeLanesContent() {
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<LayoutMode | 'elk' | 'micro'>('compact');
+  const [layoutMode, setLayoutMode] = useState<LayoutMode | 'elk' | 'micro' | 'force'>('compact');
+  const [spacing, setSpacing] = useState(1);
 
   useEffect(() => {
       const id = searchParams.get('id');
@@ -239,9 +240,29 @@ function RecipeLanesContent() {
                     >
                         <CircleDot className="w-4 h-4" /> Micro
                     </button>
+                    <button
+                        onClick={() => setLayoutMode('force')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'force' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                    >
+                        <Move className="w-4 h-4" /> Force
+                    </button>
                 </div>
 
                 <div className="flex items-center gap-4">
+                    {/* Spacing Slider */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-zinc-400">Spacing</span>
+                        <input 
+                            type="range" 
+                            min="0.2" 
+                            max="3" 
+                            step="0.1" 
+                            value={spacing} 
+                            onChange={(e) => setSpacing(parseFloat(e.target.value))}
+                            className="w-20 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer"
+                        />
+                    </div>
+
                     {/* Share Button */}
                     {graph && (
                         <button 
@@ -272,7 +293,7 @@ function RecipeLanesContent() {
                     </pre>
                 ) : graph ? (
                     <div className="absolute inset-0 bg-zinc-50/50">
-                        <ReactFlowDiagram graph={graph} mode={layoutMode} />
+                        <ReactFlowDiagram graph={graph} mode={layoutMode} spacing={spacing} />
                     </div>
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4">

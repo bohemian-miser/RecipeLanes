@@ -31,11 +31,12 @@ const nodeTypes = {
 
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
-  mode: LayoutMode | 'elk' | 'micro';
+  mode: LayoutMode | 'elk' | 'micro' | 'force';
+  spacing?: number;
 }
 
 // Inner component to access ReactFlow context
-const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode }) => {
+const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 1 }) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const { fitView } = useReactFlow();
@@ -44,11 +45,10 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode }) => {
         const runLayout = async () => {
             let layout;
             
-            if (mode === 'elk' || mode === 'micro') {
-                layout = await calculateElkLayout(graph, mode === 'micro');
+            if (mode === 'elk' || mode === 'micro' || mode === 'force') {
+                layout = await calculateElkLayout(graph, mode === 'micro', spacing, mode === 'force');
             } else {
-                // Cast mode to LayoutMode for TS if needed, assuming generic string for now
-                layout = calculateLayout(graph, mode as LayoutMode);
+                layout = calculateLayout(graph, mode as LayoutMode, spacing);
             }
 
             const newNodes: Node[] = [];
@@ -87,7 +87,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode }) => {
                 id: e.id,
                 source: e.sourceId,
                 target: e.targetId,
-                type: 'default',
+                type: 'smoothstep', // Orthogonal lines requested
                 style: { stroke: '#9ca3af', strokeWidth: 1.5 },
                 animated: false
             }));

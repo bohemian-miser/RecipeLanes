@@ -54,28 +54,33 @@ const LANE_COLORS = {
   default: '#FAFAFA'
 };
 
-export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact'): LayoutGraph => {
+export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact', spacing: number = 1): LayoutGraph => {
   switch (mode) {
     case 'upward':
-      return calculateUpwardLayout(graph);
+      return calculateUpwardLayout(graph, spacing);
     case 'dagre':
-      return calculateDagreLayout(graph);
+      return calculateDagreLayout(graph, spacing);
     case 'waterfall':
-      return calculateWaterfallLayout(graph, false);
+      return calculateWaterfallLayout(graph, false, spacing);
     case 'centered':
-      return calculateWaterfallLayout(graph, true);
+      return calculateWaterfallLayout(graph, true, spacing);
     case 'horizontal':
-      return calculateHorizontalLayout(graph);
+      return calculateHorizontalLayout(graph, spacing);
     default:
-      return calculateSwimlaneLayout(graph, mode === 'swimlanes' ? 'standard' : 'compact');
+      return calculateSwimlaneLayout(graph, mode === 'swimlanes' ? 'standard' : 'compact', spacing);
   }
 };
 
 // --- DAGRE ALGORITHM ---
-const calculateDagreLayout = (graph: RecipeGraph): LayoutGraph => {
+const calculateDagreLayout = (graph: RecipeGraph, spacing: number): LayoutGraph => {
     const C = CONSTANTS.dagre;
     const g = new dagre.graphlib.Graph();
-    g.setGraph({ rankdir: 'TB', nodesep: 10, ranksep: 20 });
+    g.setGraph({ 
+        rankdir: 'TB', 
+        nodesep: 10 * spacing, 
+        ranksep: 20 * spacing, 
+        align: 'UL' 
+    });
     g.setDefaultEdgeLabel(() => ({}));
 
     graph.nodes.forEach(node => {
@@ -114,35 +119,8 @@ const calculateDagreLayout = (graph: RecipeGraph): LayoutGraph => {
 
     g.edges().forEach(e => {
         const edge = g.edge(e);
-        // Simple cubic bezier curve for smoothness
-        const points = edge.points.map((p: any) => ({ x: p.x + C.PADDING, y: p.y + C.PADDING }));
-        
-        let d = `M ${points[0].x} ${points[0].y}`;
-        
-        // If we have intermediate points, use them as control points?
-        // Dagre points are polyline points. 
-        // We can just use L for now, or a simple spline.
-        // Let's use a simple Basis spline approximation or Catmull-Rom.
-        // Or just L is cleaner if points are dense.
-        // User asked for "arc approach".
-        // Let's try simple L first to ensure it works, then curve if needed.
-        // Actually, let's use a simple curve function.
-        
-        if (points.length > 2) {
-             // Simple curve through points
-             d = `M ${points[0].x} ${points[0].y}`;
-             for (let i = 1; i < points.length; i++) {
-                 // For smooth curve, we'd need control points.
-                 // L is safe.
-                 d += ` L ${points[i].x} ${points[i].y}`;
-             }
-        } else {
-            // Just start and end
-             d += ` L ${points[points.length-1].x} ${points[points.length-1].y}`;
-        }
-        
-        // Basic L implementation for now to fix the file.
-        // The user wanted "arc approach" for LANES. Dagre is "Smart".
+        const pathPoints = edge.points.map((p: any) => `${p.x + C.PADDING},${p.y + C.PADDING}`);
+        const d = `M ${pathPoints.join(' L ')}`;
         
         edges.push({
             id: `${e.v}->${e.w}`,
@@ -152,14 +130,13 @@ const calculateDagreLayout = (graph: RecipeGraph): LayoutGraph => {
         });
     });
 
-    // Calculate bounding box
     const layoutWidth = (g.graph().width || 800) + C.PADDING * 2;
     const layoutHeight = (g.graph().height || 600) + C.PADDING * 2;
 
     return {
         nodes,
         edges,
-        lanes: [], // No lanes in pure Dagre
+        lanes: [],
         width: layoutWidth,
         height: layoutHeight
     };
@@ -167,8 +144,14 @@ const calculateDagreLayout = (graph: RecipeGraph): LayoutGraph => {
 
 
 // --- SWIMLANE / COMPACT ALGORITHM ---
-const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'standard' | 'compact'): LayoutGraph => {
-  const C = CONSTANTS[mode];
+const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'standard' | 'compact', spacing: number): LayoutGraph => {
+  const BaseC = CONSTANTS[mode];
+  const C = {
+      ...BaseC,
+      GAP_Y: BaseC.GAP_Y * spacing,
+      PADDING_TOP: BaseC.PADDING_TOP * spacing,
+      // Keep other dims fixed or scale? Spacing usually affects gaps.
+  };
   const nodes: VisualNode[] = [];
   const edges: VisualEdge[] = [];
   
@@ -240,8 +223,14 @@ const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'standard' | 'compact
 };
 
 // --- WATERFALL / CENTERED ALGORITHM ---
-const calculateWaterfallLayout = (graph: RecipeGraph, centered: boolean): LayoutGraph => {
-  const C = CONSTANTS.waterfall;
+const calculateWaterfallLayout = (graph: RecipeGraph, centered: boolean, spacing: number): LayoutGraph => {
+  const BaseC = CONSTANTS.waterfall;
+  const C = {
+      ...BaseC,
+      GAP_X: BaseC.GAP_X * spacing,
+      GAP_Y: BaseC.GAP_Y * spacing,
+      PADDING: BaseC.PADDING * spacing
+  };
   const nodes: VisualNode[] = [];
   const edges: VisualEdge[] = [];
   
@@ -322,8 +311,14 @@ const calculateWaterfallLayout = (graph: RecipeGraph, centered: boolean): Layout
 };
 
 // --- HORIZONTAL ALGORITHM ---
-const calculateHorizontalLayout = (graph: RecipeGraph): LayoutGraph => {
-  const C = CONSTANTS.horizontal;
+const calculateHorizontalLayout = (graph: RecipeGraph, spacing: number): LayoutGraph => {
+  const BaseC = CONSTANTS.horizontal;
+  const C = {
+      ...BaseC,
+      GAP_X: BaseC.GAP_X * spacing,
+      PADDING: BaseC.PADDING * spacing,
+      LANE_HEIGHT: BaseC.LANE_HEIGHT * spacing // Maybe scale lane height?
+  };
   const nodes: VisualNode[] = [];
   const edges: VisualEdge[] = [];
   

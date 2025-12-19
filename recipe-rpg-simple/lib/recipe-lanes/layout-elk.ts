@@ -10,26 +10,38 @@ const ELK_CONSTANTS = {
     MICRO_HEIGHT: 20,
 };
 
-export const calculateElkLayout = async (graph: RecipeGraph, useMicroMode: boolean = false): Promise<LayoutGraph> => {
+export const calculateElkLayout = async (graph: RecipeGraph, useMicroMode: boolean = false, spacing: number = 1, useForce: boolean = false): Promise<LayoutGraph> => {
     const width = useMicroMode ? ELK_CONSTANTS.MICRO_WIDTH : ELK_CONSTANTS.NODE_WIDTH;
     const height = useMicroMode ? ELK_CONSTANTS.MICRO_HEIGHT : ELK_CONSTANTS.NODE_HEIGHT;
+    
+    const nodeSep = (useMicroMode ? 10 : 20) * spacing;
+    const layerSep = (useMicroMode ? 15 : 40) * spacing;
+    const padding = 20 * spacing;
+
+    const layoutOptions: any = {
+        'elk.algorithm': useForce ? 'force' : 'layered',
+        'elk.direction': 'DOWN',
+        'elk.spacing.nodeNode': String(nodeSep),
+        'elk.padding': `[top=${padding},left=${padding},bottom=${padding},right=${padding}]`
+    };
+
+    if (!useForce) {
+        layoutOptions['elk.layered.spacing.nodeNodeBetweenLayers'] = String(layerSep);
+        layoutOptions['elk.layered.nodePlacement.strategy'] = 'BRANDES_KOEPF';
+        layoutOptions['elk.aspectRatio'] = '1.6';
+    } else {
+        layoutOptions['elk.force.iterations'] = '100';
+        layoutOptions['elk.force.repulsion'] = String(200 * spacing);
+    }
 
     const elkGraph = {
         id: 'root',
-        layoutOptions: {
-            'elk.algorithm': 'layered',
-            'elk.direction': 'DOWN',
-            'elk.spacing.nodeNode': useMicroMode ? '10' : '20', // Tighter spacing
-            'elk.layered.spacing.nodeNodeBetweenLayers': useMicroMode ? '15' : '40',
-            'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-            'elk.aspectRatio': '1.6', // Try to keep it somewhat rectangular/wide
-            'elk.padding': '[top=20,left=20,bottom=20,right=20]'
-        },
+        layoutOptions,
         children: graph.nodes.map(n => ({
             id: n.id,
             width: width,
             height: height,
-            labels: [{ text: n.text }] // For debugging, ELK doesn't render
+            labels: [{ text: n.text }]
         })),
         edges: [] as any[]
     };
@@ -80,18 +92,6 @@ export const calculateElkLayout = async (graph: RecipeGraph, useMicroMode: boole
         // Map Edges
         if (layoutNode.edges) {
             layoutNode.edges.forEach((e: any) => {
-                // ELK returns sections/bendpoints
-                // React Flow handles routing if we just give source/target,
-                // BUT ELK gives optimized routes. Let's use React Flow's simple routing first
-                // to avoid complexity with sections. 
-                // OR we can use the sections for a custom edge.
-                // For now, let's just return logical edges and let React Flow route them.
-                // Wait, React Flow routing might be messy if ELK packed them assuming bends.
-                
-                // Let's rely on React Flow 'default' or 'smoothstep' edge type for now, 
-                // but we need the IDs.
-                
-                // ELK edge IDs are ours.
                 const sourceId = e.sources[0];
                 const targetId = e.targets[0];
                 

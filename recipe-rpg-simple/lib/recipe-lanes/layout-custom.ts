@@ -5,7 +5,12 @@ const NODE_SIZE = 60; // Micro/Minimal style
 const MIN_RADIUS = 120;
 const INGREDIENT_RADIUS = 100;
 
-export const calculateUpwardLayout = (graph: RecipeGraph): LayoutGraph => {
+export const calculateUpwardLayout = (graph: RecipeGraph, spacing: number = 1): LayoutGraph => {
+    // Constants
+    const NODE_SIZE = 60; 
+    const MIN_RADIUS = 120 * spacing;
+    const INGREDIENT_RADIUS = 100 * spacing;
+    
     const nodes: VisualNode[] = [];
     const edges: VisualEdge[] = [];
     

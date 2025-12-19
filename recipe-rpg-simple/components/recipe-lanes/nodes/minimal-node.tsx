@@ -7,26 +7,26 @@ const MinimalNode = ({ data }: NodeProps<RecipeNode>) => {
   
   return (
     <div className="flex flex-col items-center justify-center w-[100px]">
-      <Handle type="target" position={Position.Top} className="!bg-zinc-400 !w-1 !h-1" />
+      <Handle type="target" position={Position.Top} className="!bg-zinc-400 !w-1 !h-1 !opacity-50" />
       
-      <div className="relative w-16 h-16 flex items-center justify-center bg-white rounded-full shadow-sm border border-zinc-200 hover:shadow-md transition-shadow">
+      <div className="relative w-16 h-16 flex items-center justify-center transition-transform hover:scale-110">
           {data.iconUrl ? (
               <img 
                 src={data.iconUrl} 
                 alt="" 
-                className="w-12 h-12 object-contain"
+                className="w-16 h-16 object-contain drop-shadow-md"
                 style={{ imageRendering: 'pixelated' }}
               />
           ) : (
-             <span className="text-3xl">{isIngredient ? '🥕' : '🍳'}</span>
+             <span className="text-4xl drop-shadow-sm">{isIngredient ? '🥕' : '🍳'}</span>
           )}
       </div>
 
-      <div className="mt-2 text-[10px] leading-tight text-center font-medium text-zinc-700 w-full break-words line-clamp-3 bg-white/80 rounded px-1 backdrop-blur-sm">
+      <div className="mt-1 text-[10px] leading-tight text-center font-medium text-zinc-800 w-full break-words line-clamp-3 px-1" style={{ textShadow: '0 0 4px rgba(255,255,255,0.8), 0 0 2px rgba(255,255,255,1)' }}>
           {data.text}
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="!bg-zinc-400 !w-1 !h-1" />
+      <Handle type="source" position={Position.Bottom} className="!bg-zinc-400 !w-1 !h-1 !opacity-50" />
     </div>
   );
 };

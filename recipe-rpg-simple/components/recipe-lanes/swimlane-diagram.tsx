@@ -6,7 +6,7 @@ interface SwimlaneDiagramProps {
   graph: RecipeGraph;
 }
 
-const LANE_WIDTH = 360; // Matches layout.ts
+const LANE_WIDTH = 400; // Matches layout.ts
 const PADDING_LEFT = 40;
 
 const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
@@ -38,6 +38,9 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
       <div className="overflow-auto border border-zinc-200 rounded-lg bg-white w-full">
         <svg ref={svgRef} width={layout.width} height={layout.height} style={{ fontFamily: 'Inter, sans-serif' }}>
         <defs>
+          <filter id="icon-shadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#000000" floodOpacity="0.15" />
+          </filter>
           <marker
             id="arrowhead"
             markerWidth="10"
@@ -50,7 +53,7 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
           </marker>
         </defs>
 
-        {/* Lanes */}
+        {/* Lanes Background */}
         {layout.lanes.map((lane, index) => (
           <g key={lane.id}>
             <rect
@@ -60,26 +63,18 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
               height={layout.height}
               fill={index % 2 === 0 ? '#F9FAFB' : '#FFFFFF'}
             />
-            {/* Lane Header */}
+            {/* Lane Header - Subtle */}
             <text
               x={PADDING_LEFT + index * LANE_WIDTH + LANE_WIDTH / 2}
-              y={24}
-              fontSize="14"
-              fontWeight="700"
-              fill="#374151"
+              y={32}
+              fontSize="16"
+              fontWeight="800"
+              fill="#E5E7EB" // Very subtle background text
               textAnchor="middle"
-              style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}
+              style={{ textTransform: 'uppercase', letterSpacing: '0.1em' }}
             >
               {lane.label}
             </text>
-            <line
-              x1={PADDING_LEFT + (index + 1) * LANE_WIDTH}
-              y1={0}
-              x2={PADDING_LEFT + (index + 1) * LANE_WIDTH}
-              y2={layout.height}
-              stroke="#E5E7EB"
-              strokeWidth="1"
-            />
           </g>
         ))}
 
@@ -90,8 +85,10 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {
             d={edge.path}
             stroke="#9CA3AF"
             strokeWidth="2"
+            strokeDasharray="4 4" // Dashed line for lighter feel? Or solid? Solid is clearer.
             fill="none"
             markerEnd="url(#arrowhead)"
+            opacity="0.6"
           />
         ))}
 
@@ -109,116 +106,70 @@ const Node: React.FC<{ node: any }> = ({ node }) => {
   const data = node.data as RecipeNode;
   const isIngredient = data.type === 'ingredient';
   
-  // Icon Size logic
-  const iconSize = isIngredient ? 32 : 48;
-  const iconX = isIngredient ? 25 : node.width - 30;
-  const iconY = isIngredient ? node.height / 2 : 24;
+  // Visual Specs
+  const iconSize = isIngredient ? 64 : 96;
+  const centerX = node.width / 2;
+  const centerY = iconSize / 2; // Icon centered at top
 
   const IconImage = () => {
       if (data.iconUrl) {
           return (
               <image 
                 href={data.iconUrl} 
-                x={iconX - iconSize / 2} 
-                y={iconY - iconSize / 2} 
+                x={centerX - iconSize / 2} 
+                y={0} 
                 width={iconSize} 
                 height={iconSize} 
-                style={{ imageRendering: 'pixelated' }}
+                style={{ imageRendering: 'pixelated', filter: 'url(#icon-shadow)' }}
               />
           );
       }
       return (
-        <text x={iconX} y={iconY} fontSize={isIngredient ? "16" : "22"} textAnchor="middle" dominantBaseline="middle">
-          {isIngredient ? '🥕' : '🍳'}
-        </text>
+        <g>
+            <circle cx={centerX} cy={iconSize/2} r={iconSize/2 - 4} fill="#F3F4F6" />
+            <text x={centerX} y={iconSize/2} fontSize="32" textAnchor="middle" dominantBaseline="middle">
+            {isIngredient ? '🥕' : '🍳'}
+            </text>
+        </g>
       );
   };
   
-  if (isIngredient) {
-    return (
-      <g transform={`translate(${node.x}, ${node.y})`}>
-        <rect
-          width={node.width}
-          height={node.height}
-          rx={20}
-          ry={20}
-          fill="#FFFFFF"
-          stroke="#D1D5DB"
-          strokeWidth="1"
-        />
-        <IconImage />
-        <text
-          x={55}
-          y={node.height / 2}
-          dominantBaseline="middle"
-          fontSize="13"
-          fill="#111827"
-          fontWeight="500"
-        >
-          {data.text}
-        </text>
-      </g>
-    );
-  }
-
-  // Action Node
-  const isHeating = !!data.temperature;
-  const strokeColor = isHeating ? '#FCA5A5' : '#D1D5DB';
-  const strokeWidth = isHeating ? 2 : 1;
-
   return (
     <g transform={`translate(${node.x}, ${node.y})`}>
-      <rect
-        x={3}
-        y={3}
-        width={node.width}
-        height={node.height}
-        rx={8}
-        ry={8}
-        fill="rgba(0,0,0,0.05)"
-      />
-      <rect
-        width={node.width}
-        height={node.height}
-        rx={8}
-        ry={8}
-        fill="#FFFFFF"
-        stroke={strokeColor}
-        strokeWidth={strokeWidth}
-      />
       
-      {/* Header Band */}
-      <path
-        d={`M 0 8 Q 0 0 8 0 L ${node.width - 8} 0 Q ${node.width} 0 ${node.width} 8 L ${node.width} 32 L 0 32 Z`}
-        fill={isHeating ? '#FEF2F2' : '#F3F4F6'}
-      />
-      
-      <text x={10} y={21} fontSize="11" fontWeight="bold" fill="#4B5563">
-        STEP {data.id.split('-').pop()}
-      </text>
-
       <IconImage />
 
-      {/* Description */}
-      <foreignObject x={10} y={40} width={node.width - 20} height={node.height - 45}>
-        <div style={{ fontSize: '13px', color: '#1F2937', lineHeight: '1.4', height: '100%', display: 'flex', alignItems: 'center' }}>
-          {data.text}
-        </div>
-      </foreignObject>
-      
+      {/* Text Label - Below Icon */}
+      <switch>
+          <foreignObject x={0} y={iconSize + 8} width={node.width} height={node.height - iconSize - 8}>
+            <div style={{ 
+                fontSize: isIngredient ? '12px' : '13px', 
+                fontWeight: isIngredient ? 500 : 700,
+                color: '#1F2937', 
+                textAlign: 'center', 
+                lineHeight: '1.2',
+                fontFamily: 'Inter, sans-serif'
+            }}>
+              {data.text}
+            </div>
+          </foreignObject>
+      </switch>
+
+      {/* Badges - Floating near icon */}
       {data.duration && (
-         <text x={node.width - 60} y={21} fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">
-           ⏱ {data.duration}
-         </text>
+         <g transform={`translate(${centerX + iconSize/2 - 10}, ${iconSize - 10})`}>
+             <rect rx="4" ry="4" width="40" height="16" fill="#FEF3C7" stroke="#F59E0B" strokeWidth="1" />
+             <text x="20" y="11" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#92400E">{data.duration}</text>
+         </g>
       )}
 
       {data.temperature && (
-         <text x={node.width - 10} y={node.height - 8} fontSize="10" fill="#EF4444" textAnchor="end" fontWeight="bold">
-           {data.temperature}
-         </text>
+         <g transform={`translate(${centerX - iconSize/2 - 30}, ${iconSize - 10})`}>
+             <rect rx="4" ry="4" width="60" height="16" fill="#FEE2E2" stroke="#EF4444" strokeWidth="1" />
+             <text x="30" y="11" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#B91C1C">{data.temperature}</text>
+         </g>
       )}
     </g>
   );
 };
 
-export default SwimlaneDiagram;

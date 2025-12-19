@@ -1,14 +1,14 @@
 import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, VisualLane, RecipeNode } from './types';
 
-const LANE_WIDTH = 360; // Wider to fit Ingredient + Action side-by-side
-const ACTION_WIDTH = 200;
-const INGREDIENT_WIDTH = 120; // Narrower ingredients
-const PADDING_TOP = 60;
+const LANE_WIDTH = 400; // Wider lanes
+const ACTION_WIDTH = 140; // Focused on Icon width
+const INGREDIENT_WIDTH = 100;
+const PADDING_TOP = 80;
 const PADDING_LEFT = 40;
-const GAP_Y = 60; // Gap between action steps
-const GAP_X = 20; // Gap between Action and Ingredient columns
-const NODE_HEIGHT = 100;
-const INGREDIENT_HEIGHT = 80;
+const GAP_Y = 80; // More vertical breathing room
+const GAP_X = 40; // Wider gap between Action and Ingredient
+const NODE_HEIGHT = 160; // Taller for Icon + Text stack
+const INGREDIENT_HEIGHT = 120;
 
 const LANE_COLORS = {
   prep: '#EFF6FF', // Blue-50

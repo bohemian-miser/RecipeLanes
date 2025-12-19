@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { Login } from '@/components/login';
-import SwimlaneDiagram from '@/components/recipe-lanes/swimlane-diagram';
+import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network } from 'lucide-react';
 
 export default function RecipeLanesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -18,7 +18,6 @@ export default function RecipeLanesPage() {
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('compact');
-  const [zoom, setZoom] = useState(1);
 
   const handleVisualize = async () => {
     if (!recipeText.trim()) return;
@@ -181,30 +180,7 @@ export default function RecipeLanesPage() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    {/* Zoom Controls */}
-                    <div className="flex items-center gap-1 bg-zinc-50 rounded-lg p-1 border border-zinc-200">
-                        <button 
-                            onClick={() => setZoom(z => Math.max(0.1, z - 0.1))} 
-                            className="p-1 hover:bg-zinc-200 rounded text-zinc-600"
-                        >
-                            <ZoomOut className="w-4 h-4" />
-                        </button>
-                        <span className="text-xs font-mono w-10 text-center text-zinc-500">{Math.round(zoom * 100)}%</span>
-                        <button 
-                            onClick={() => setZoom(z => Math.min(3, z + 0.1))} 
-                            className="p-1 hover:bg-zinc-200 rounded text-zinc-600"
-                        >
-                            <ZoomIn className="w-4 h-4" />
-                        </button>
-                        <button 
-                            onClick={() => setZoom(1)} 
-                            className="p-1 hover:bg-zinc-200 rounded text-zinc-400 hover:text-zinc-900 border-l border-zinc-200 ml-1"
-                            title="Reset Zoom"
-                        >
-                            <RotateCw className="w-3 h-3" />
-                        </button>
-                    </div>
-
+                    {/* JSON Toggle */}
                     {graph && (
                         <button 
                             onClick={() => setShowJson(!showJson)}
@@ -223,10 +199,8 @@ export default function RecipeLanesPage() {
                         {JSON.stringify(graph, null, 2)}
                     </pre>
                 ) : graph ? (
-                    <div className="w-full h-full overflow-auto bg-zinc-50/50">
-                        <div className="p-8 min-w-full min-h-full pb-32">
-                            <SwimlaneDiagram graph={graph} mode={layoutMode} zoom={zoom} />
-                        </div>
+                    <div className="w-full h-full bg-zinc-50/50">
+                        <ReactFlowDiagram graph={graph} mode={layoutMode} />
                     </div>
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4">
@@ -240,7 +214,7 @@ export default function RecipeLanesPage() {
 
             {/* Chat Adjustment Interface (Floating at bottom of graph) */}
             {graph && (
-                <div className="absolute bottom-6 left-6 right-6 flex justify-center">
+                <div className="absolute bottom-6 left-6 right-6 flex justify-center z-10">
                     <div className="w-full max-w-2xl bg-white border border-zinc-200 rounded-full shadow-xl flex items-center p-1.5 pl-5 gap-2 transition-all focus-within:ring-2 focus-within:ring-yellow-500/50 focus-within:border-yellow-500">
                         <MessageSquare className="w-5 h-5 text-zinc-400" />
                         <input 

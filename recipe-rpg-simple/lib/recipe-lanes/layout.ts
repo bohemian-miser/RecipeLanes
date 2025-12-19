@@ -101,6 +101,14 @@ const calculateDagreLayout = (graph: RecipeGraph, spacing: number, rankDir: 'TB'
 
     dagre.layout(g);
 
+    if (rankDir === 'LR') {
+       // Flip Y coordinates to ensure Top-to-Bottom reading order
+       let maxY = 0;
+       g.nodes().forEach(v => { const n = g.node(v); maxY = Math.max(maxY, n.y + n.height/2); });
+       g.nodes().forEach(v => { const n = g.node(v); n.y = maxY - n.y; });
+       g.edges().forEach(e => { g.edge(e).points.forEach((p: any) => p.y = maxY - p.y); });
+    }
+
     const nodes: VisualNode[] = [];
     const edges: VisualEdge[] = [];
 

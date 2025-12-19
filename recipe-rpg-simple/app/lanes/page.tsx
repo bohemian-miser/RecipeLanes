@@ -259,13 +259,13 @@ function RecipeLanesContent() {
                 </div>
             </div>
             
-            <div className="flex-1 overflow-hidden bg-white text-zinc-900 relative">
+            <div className="flex-1 overflow-hidden bg-white text-zinc-900 relative min-h-[600px]">
                 {showJson && graph ? (
-                    <pre className="p-4 text-xs font-mono bg-zinc-50 text-zinc-800 overflow-auto h-full">
+                    <pre className="p-4 text-xs font-mono bg-zinc-50 text-zinc-800 overflow-auto h-full z-20 relative">
                         {JSON.stringify(graph, null, 2)}
                     </pre>
                 ) : graph ? (
-                    <div className="w-full h-full bg-zinc-50/50">
+                    <div className="absolute inset-0 bg-zinc-50/50">
                         <ReactFlowDiagram graph={graph} mode={layoutMode} />
                     </div>
                 ) : (

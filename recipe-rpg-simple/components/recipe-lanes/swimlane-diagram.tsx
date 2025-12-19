@@ -6,7 +6,7 @@ interface SwimlaneDiagramProps {
   graph: RecipeGraph;
 }
 
-const LANE_WIDTH = 260; // Must match layout.ts
+const LANE_WIDTH = 360; // Matches layout.ts
 const PADDING_LEFT = 40;
 
 const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph }) => {

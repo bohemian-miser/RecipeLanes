@@ -218,11 +218,44 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
       }
   });
 
+  // 5. Calculate Bounds & Shift
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  
+  nodes.forEach(n => {
+      minX = Math.min(minX, n.x);
+      maxX = Math.max(maxX, n.x + n.width);
+      minY = Math.min(minY, n.y);
+      maxY = Math.max(maxY, n.y + n.height);
+  });
+  
+  // Ensure PADDING_TOP and PADDING_LEFT are respected
+  // If minY is 10, and PADDING_TOP is 80, we shift by 70.
+  // If minY is 100, we don't shift up? Or do we normalize to 0 then add padding?
+  // Let's Normalize to (PADDING_LEFT, PADDING_TOP).
+  
+  const shiftX = PADDING_LEFT - minX;
+  const shiftY = PADDING_TOP - minY;
+  
+  nodes.forEach(n => {
+      n.x += shiftX;
+      n.y += shiftY;
+  });
+  
+  // Update Bounds for Canvas Size
+  const layoutWidth = maxX - minX + PADDING_LEFT * 2;
+  const layoutHeight = maxY - minY + PADDING_TOP * 2;
+  visualLanes.forEach(l => l.height = layoutHeight);
+
+  // 6. Generate Edges (After placement and shift)
+  // Re-index visual nodes for lookup
+  const visualNodeMap = new Map<string, VisualNode>();
+  nodes.forEach(n => visualNodeMap.set(n.id, n));
+
   graph.nodes.forEach(node => {
     if (node.inputs) {
       node.inputs.forEach(inputId => {
-        const source = nodePosMap.get(inputId);
-        const target = nodePosMap.get(node.id);
+        const source = visualNodeMap.get(inputId);
+        const target = visualNodeMap.get(node.id);
         
         if (source && target) {
           const startX = source.x + source.width / 2;
@@ -240,22 +273,6 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
       });
     }
   });
-
-  let minX = 0, maxX = 0, maxY = 0;
-  nodes.forEach(n => {
-      minX = Math.min(minX, n.x);
-      maxX = Math.max(maxX, n.x + n.width);
-      maxY = Math.max(maxY, n.y + n.height);
-  });
-  
-  if (minX < 0) {
-      const shift = -minX + PADDING_LEFT;
-      nodes.forEach(n => n.x += shift);
-  }
-  
-  const layoutHeight = Math.max(maxY + PADDING_TOP, 800);
-  const layoutWidth = Math.max(maxX + PADDING_LEFT, graph.lanes.length * LANE_WIDTH + PADDING_LEFT);
-  visualLanes.forEach(l => l.height = layoutHeight);
 
   return { nodes, edges, lanes: visualLanes, width: layoutWidth, height: layoutHeight };
 };
@@ -297,8 +314,11 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
 
   const nodes: VisualNode[] = [];
   const edges: VisualEdge[] = [];
-  const nodePosMap = new Map<string, {x:number, y:number, width:number, height:number}>();
-
+  
+  // We track positions in a map for edge generation later
+  // But wait, if we shift, we should update this map or rebuild it.
+  // Let's generate edges AFTER shift, just like Swimlane mode.
+  
   let currentY = PADDING_TOP;
   const GAP_LAYER = 120;
   const GAP_ITEM = 40;
@@ -306,16 +326,13 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
   let maxWidth = 0;
 
   layers.forEach((layerNodes, layerIndex) => {
-      // Sort nodes in layer to minimize crossing? 
-      // Simple heuristic: Group by Lane to keep similar items together visually
+      // Sort nodes in layer
       layerNodes.sort((a, b) => a.laneId.localeCompare(b.laneId));
 
       const layerHeight = Math.max(...layerNodes.map(n => n.type === 'ingredient' ? INGREDIENT_HEIGHT_BASE : NODE_HEIGHT));
       
       let currentX = PADDING_LEFT;
       
-      // Calculate total width of layer to center it?
-      // First pass: placement
       const layerPositions: any[] = [];
       
       layerNodes.forEach(node => {
@@ -329,15 +346,10 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
       const totalLayerWidth = layerPositions.reduce((acc, curr) => acc + curr.width, 0) + (layerPositions.length - 1) * GAP_ITEM;
       maxWidth = Math.max(maxWidth, totalLayerWidth);
       
-      // Center the layer?
-      // We don't know total graph width yet.
-      // Let's just align Left for now, maybe center later if we track max.
-      
       layerPositions.forEach(pos => {
           const x = currentX;
           const y = currentY;
           
-          nodePosMap.set(pos.node.id, { x, y, width: pos.width, height: pos.height });
           nodes.push({
               id: pos.node.id,
               type: pos.node.type,
@@ -354,21 +366,39 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
       currentY += layerHeight + GAP_LAYER;
   });
   
-  // Center layers
-  // Re-iterate and shift X based on maxWidth
+  // Shift/Bounds Check (Standardized)
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   nodes.forEach(n => {
-       const r = ranks.get(n.id)!;
-       // Re-calculate layer width
-       // Optimization: Store layer widths.
-       // For now, skip centering to keep it simple.
+      minX = Math.min(minX, n.x);
+      maxX = Math.max(maxX, n.x + n.width);
+      minY = Math.min(minY, n.y);
+      maxY = Math.max(maxY, n.y + n.height);
   });
+  
+  // Normalize
+  const shiftX = PADDING_LEFT - minX;
+  const shiftY = PADDING_TOP - minY;
+  
+  // Only shift if needed (or always to align to padding)
+  if (minX !== Infinity) {
+      nodes.forEach(n => {
+          n.x += shiftX;
+          n.y += shiftY;
+      });
+  }
 
-  // Edges
+  const layoutWidth = maxX - minX + PADDING_LEFT * 2;
+  const layoutHeight = maxY - minY + PADDING_TOP * 2;
+
+  // Edges (Regenerate from shifted nodes)
+  const visualNodeMap = new Map<string, VisualNode>();
+  nodes.forEach(n => visualNodeMap.set(n.id, n));
+
   graph.nodes.forEach(node => {
       if (node.inputs) {
           node.inputs.forEach(inputId => {
-              const s = nodePosMap.get(inputId);
-              const t = nodePosMap.get(node.id);
+              const s = visualNodeMap.get(inputId);
+              const t = visualNodeMap.get(node.id);
               if (s && t) {
                   const sx = s.x + s.width/2;
                   const sy = s.y + s.height; // Bottom
@@ -385,7 +415,7 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
       nodes,
       edges,
       lanes: [], // No visual lanes in this mode
-      width: Math.max(maxWidth + PADDING_LEFT * 2, 800),
-      height: currentY + PADDING_TOP
+      width: Math.max(layoutWidth, 800),
+      height: layoutHeight
   };
 };

@@ -173,3 +173,4 @@ const Node: React.FC<{ node: any }> = ({ node }) => {
   );
 };
 
+export default SwimlaneDiagram;

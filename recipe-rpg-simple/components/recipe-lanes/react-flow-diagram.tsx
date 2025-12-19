@@ -70,7 +70,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode }) => {
             // 2. Recipe Nodes
             let nodeType = 'card';
             if (mode === 'micro') nodeType = 'micro';
-            else if (mode === 'swimlanes' || mode === 'dagre' || mode === 'compact' || mode === 'elk') nodeType = 'minimal';
+            else if (mode === 'swimlanes' || mode === 'dagre' || mode === 'compact' || mode === 'elk' || mode === 'upward') nodeType = 'minimal';
             
             layout.nodes.forEach(n => {
                  newNodes.push({

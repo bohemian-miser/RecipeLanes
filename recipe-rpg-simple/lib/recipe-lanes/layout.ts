@@ -1,7 +1,8 @@
 import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, VisualLane, RecipeNode } from './types';
 import dagre from 'dagre';
+import { calculateUpwardLayout } from './layout-custom';
 
-export type LayoutMode = 'swimlanes' | 'compact' | 'waterfall' | 'centered' | 'horizontal' | 'dagre';
+export type LayoutMode = 'swimlanes' | 'compact' | 'waterfall' | 'centered' | 'horizontal' | 'dagre' | 'upward';
 
 const CONSTANTS = {
   standard: {
@@ -55,6 +56,8 @@ const LANE_COLORS = {
 
 export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact'): LayoutGraph => {
   switch (mode) {
+    case 'upward':
+      return calculateUpwardLayout(graph);
     case 'dagre':
       return calculateDagreLayout(graph);
     case 'waterfall':

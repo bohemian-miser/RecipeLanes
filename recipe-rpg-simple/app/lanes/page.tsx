@@ -8,7 +8,7 @@ import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2 } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout } from 'lucide-react';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading } = useAuth();
@@ -222,6 +222,12 @@ function RecipeLanesContent() {
                         <Network className="w-4 h-4" /> Smart
                     </button>
                     <button
+                        onClick={() => setLayoutMode('upward')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'upward' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                    >
+                        <Sprout className="w-4 h-4" /> Upward
+                    </button>
+                    <button
                         onClick={() => setLayoutMode('elk')}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'elk' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
                     >
@@ -259,7 +265,7 @@ function RecipeLanesContent() {
                 </div>
             </div>
             
-            <div className="flex-1 overflow-hidden bg-white text-zinc-900 relative min-h-[600px]">
+            <div className="flex-1 overflow-hidden bg-white text-zinc-900 relative">
                 {showJson && graph ? (
                     <pre className="p-4 text-xs font-mono bg-zinc-50 text-zinc-800 overflow-auto h-full z-20 relative">
                         {JSON.stringify(graph, null, 2)}

@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useCallback, useEffect, useMemo } from 'react';
 import ReactFlow, { 
     Background, 
@@ -20,6 +22,7 @@ import MinimalNode from './nodes/minimal-node';
 import CardNode from './nodes/card-node';
 import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
+import FloatingEdge from './edges/floating-edge';
 import { toPng } from 'html-to-image';
 import { Download } from 'lucide-react';
 
@@ -30,9 +33,13 @@ const nodeTypes = {
   micro: MicroNode
 };
 
+const edgeTypes = {
+  floating: FloatingEdge
+};
+
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
-  mode: LayoutMode | 'elk' | 'micro' | 'force';
+  mode: LayoutMode | 'elk' | 'micro' | 'force' | 'dagre-lr';
   spacing?: number;
 }
 
@@ -71,7 +78,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             // 2. Recipe Nodes
             let nodeType = 'card';
             if (mode === 'micro') nodeType = 'micro';
-            else if (mode === 'swimlanes' || mode === 'dagre' || mode === 'dagre-lr' || mode === 'compact' || mode === 'elk' || mode === 'upward') nodeType = 'minimal';
+            else if (['swimlanes', 'dagre', 'dagre-lr', 'compact', 'elk', 'upward'].includes(mode as string)) nodeType = 'minimal';
             
             layout.nodes.forEach(n => {
                  newNodes.push({
@@ -79,6 +86,8 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                      type: nodeType,
                      position: { x: n.x, y: n.y },
                      data: n.data,
+                     width: n.width,
+                     height: n.height,
                      draggable: true,
                  });
             });
@@ -88,7 +97,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 id: e.id,
                 source: e.sourceId,
                 target: e.targetId,
-                type: 'straight', // "Straight lines"
+                type: 'floating', // Always use floating for perimeter connection
                 style: { stroke: '#9ca3af', strokeWidth: 1.5 },
                 markerEnd: {
                     type: MarkerType.ArrowClosed,
@@ -109,8 +118,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
 
         runLayout();
 
-    }, [graph, mode, setNodes, setEdges, fitView]);
-// ...
+    }, [graph, mode, spacing, setNodes, setEdges, fitView]);
 
     const downloadImage = () => {
         const viewport = document.querySelector('.react-flow__viewport') as HTMLElement;
@@ -129,9 +137,6 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             link.href = dataUrl;
             link.click();
         });
-        // Note: react-flow has specific image export examples that are more robust (using getNodesBounds), 
-        // but simple viewport capture is a start. 
-        // Better way: use the specific `download` function from RF examples if this fails.
     };
 
     return (
@@ -142,10 +147,11 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
                 fitView
                 minZoom={0.1}
                 maxZoom={4}
-                defaultEdgeOptions={{ type: 'smoothstep' }}
+                defaultEdgeOptions={{ type: 'floating' }}
             >
                 <Background color="#f4f4f5" gap={20} />
                 <Controls showInteractive={false} />

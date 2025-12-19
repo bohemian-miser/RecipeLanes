@@ -6,8 +6,18 @@ const MinimalNode = ({ data }: NodeProps<RecipeNode>) => {
   const isIngredient = data.type === 'ingredient';
   
   return (
-    <div className="flex flex-col items-center justify-center w-[100px]">
-      <Handle type="target" position={Position.Top} className="!bg-zinc-400 !w-1 !h-1 !opacity-50" />
+    <div className="flex flex-col items-center justify-center w-[100px] relative">
+      {/* Central Handle for Floating Edges */}
+      <Handle 
+        type="target" 
+        position={Position.Top} 
+        className="!bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" 
+      />
+      <Handle 
+        type="source" 
+        position={Position.Top} 
+        className="!bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" 
+      />
       
       <div className="relative w-16 h-16 flex items-center justify-center transition-transform hover:scale-110">
           {data.iconUrl ? (

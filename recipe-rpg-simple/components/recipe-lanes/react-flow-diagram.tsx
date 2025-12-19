@@ -71,7 +71,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             // 2. Recipe Nodes
             let nodeType = 'card';
             if (mode === 'micro') nodeType = 'micro';
-            else if (mode === 'swimlanes' || mode === 'dagre' || mode === 'compact' || mode === 'elk' || mode === 'upward') nodeType = 'minimal';
+            else if (mode === 'swimlanes' || mode === 'dagre' || mode === 'dagre-lr' || mode === 'compact' || mode === 'elk' || mode === 'upward') nodeType = 'minimal';
             
             layout.nodes.forEach(n => {
                  newNodes.push({
@@ -88,7 +88,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 id: e.id,
                 source: e.sourceId,
                 target: e.targetId,
-                type: mode === 'upward' ? 'default' : 'smoothstep',
+                type: 'straight', // "Straight lines"
                 style: { stroke: '#9ca3af', strokeWidth: 1.5 },
                 markerEnd: {
                     type: MarkerType.ArrowClosed,

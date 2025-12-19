@@ -2,7 +2,7 @@ import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, VisualLane, Reci
 import dagre from 'dagre';
 import { calculateUpwardLayout } from './layout-custom';
 
-export type LayoutMode = 'swimlanes' | 'compact' | 'waterfall' | 'centered' | 'horizontal' | 'dagre' | 'upward';
+export type LayoutMode = 'swimlanes' | 'compact' | 'waterfall' | 'centered' | 'horizontal' | 'dagre' | 'dagre-lr' | 'upward';
 
 const CONSTANTS = {
   standard: {
@@ -59,7 +59,9 @@ export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact'
     case 'upward':
       return calculateUpwardLayout(graph, spacing);
     case 'dagre':
-      return calculateDagreLayout(graph, spacing);
+      return calculateDagreLayout(graph, spacing, 'TB');
+    case 'dagre-lr':
+      return calculateDagreLayout(graph, spacing, 'LR');
     case 'waterfall':
       return calculateWaterfallLayout(graph, false, spacing);
     case 'centered':
@@ -72,17 +74,16 @@ export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact'
 };
 
 // --- DAGRE ALGORITHM ---
-const calculateDagreLayout = (graph: RecipeGraph, spacing: number): LayoutGraph => {
+const calculateDagreLayout = (graph: RecipeGraph, spacing: number, rankDir: 'TB' | 'LR' = 'TB'): LayoutGraph => {
     const C = CONSTANTS.dagre;
     const g = new dagre.graphlib.Graph();
-    g.setGraph({ 
-        rankdir: 'TB', 
-        nodesep: 10 * spacing, 
-        ranksep: 20 * spacing, 
-        align: 'UL' 
+    g.setGraph({
+        rankdir: rankDir,
+        nodesep: 10 * spacing,
+        ranksep: 20 * spacing,
+        align: 'UL'
     });
     g.setDefaultEdgeLabel(() => ({}));
-
     graph.nodes.forEach(node => {
         const height = node.type === 'ingredient' ? C.NODE_HEIGHT_ING : C.NODE_HEIGHT_ACT;
         g.setNode(node.id, { width: C.NODE_WIDTH, height: height, data: node });

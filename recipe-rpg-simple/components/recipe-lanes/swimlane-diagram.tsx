@@ -7,9 +7,12 @@ interface SwimlaneDiagramProps {
   mode?: LayoutMode;
 }
 
+const PADDING_LEFT = 20;
+
 const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph, mode = 'compact' }) => {
   const layout = useMemo(() => calculateLayout(graph, mode), [graph, mode]);
   const svgRef = useRef<SVGSVGElement>(null);
+  const isHorizontal = mode === 'horizontal';
 
   const downloadSVG = () => {
     if (svgRef.current) {
@@ -51,38 +54,78 @@ const SwimlaneDiagram: React.FC<SwimlaneDiagramProps> = ({ graph, mode = 'compac
           </marker>
         </defs>
 
-        {/* Lanes Background (Empty in waterfall mode) */}
-        {layout.lanes.map((lane) => (
-          <g key={lane.id}>
-            <rect
-              x={lane.x}
-              y={0}
-              width={lane.width}
-              height={layout.height}
-              fill={lane.color}
-            />
-            {/* Lane Header */}
-            <text
-              x={lane.x + lane.width / 2}
-              y={32}
-              fontSize="16"
-              fontWeight="800"
-              fill="#E5E7EB" 
-              textAnchor="middle"
-              style={{ textTransform: 'uppercase', letterSpacing: '0.1em' }}
-            >
-              {lane.label}
-            </text>
-            <line
-              x={lane.x + lane.width}
-              y1={0}
-              x2={lane.x + lane.width}
-              y2={layout.height}
-              stroke="#E5E7EB"
-              strokeWidth="1"
-            />
-          </g>
-        ))}
+        {/* Lanes Background */}
+        {layout.lanes.map((lane) => {
+          // Horizontal vs Vertical rendering logic
+          const headerX = isHorizontal ? 20 : lane.x + lane.width / 2;
+          const headerY = isHorizontal ? lane.y + lane.height / 2 : 32;
+          const textAnchor = isHorizontal ? "start" : "middle";
+          const headerTransform = isHorizontal ? `rotate(-90 ${headerX} ${headerY})` : undefined; // Maybe vertical text for horizontal lanes?
+          // Actually horizontal lanes usually have text on the left side.
+          
+          return (
+            <g key={lane.id}>
+              <rect
+                x={lane.x}
+                y={lane.y}
+                width={lane.width}
+                height={lane.height}
+                fill={lane.color}
+              />
+              
+              {/* Lane Header */}
+              {isHorizontal ? (
+                  // Horizontal Mode: Label on the left edge, rotated or stacked?
+                  // Let's put it top-left or centered-left
+                   <text
+                    x={lane.x + 10}
+                    y={lane.y + 20}
+                    fontSize="14"
+                    fontWeight="800"
+                    fill="#9CA3AF" 
+                    textAnchor="start"
+                    style={{ textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                  >
+                    {lane.label}
+                  </text>
+              ) : (
+                  // Vertical Mode (Standard/Compact)
+                  <text
+                    x={headerX}
+                    y={headerY}
+                    fontSize="16"
+                    fontWeight="800"
+                    fill="#E5E7EB" 
+                    textAnchor={textAnchor}
+                    style={{ textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                  >
+                    {lane.label}
+                  </text>
+              )}
+
+              {/* Divider Line */}
+              {isHorizontal ? (
+                 <line
+                    x1={0}
+                    y1={lane.y + lane.height}
+                    x2={layout.width}
+                    y2={lane.y + lane.height}
+                    stroke="#E5E7EB"
+                    strokeWidth="1"
+                 />
+              ) : (
+                 <line
+                    x1={lane.x + lane.width}
+                    y1={0}
+                    x2={lane.x + lane.width}
+                    y2={layout.height}
+                    stroke="#E5E7EB"
+                    strokeWidth="1"
+                 />
+              )}
+            </g>
+          );
+        })}
 
         {/* Edges */}
         {layout.edges.map((edge, i) => (
@@ -112,8 +155,11 @@ const Node: React.FC<{ node: any }> = ({ node }) => {
   const data = node.data as RecipeNode;
   const isIngredient = data.type === 'ingredient';
   
-  // Compact sizes
+  // Icon Size logic
   const iconSize = isIngredient ? 28 : 36;
+  
+  // Adaptive positioning based on node aspect ratio?
+  // Use standard logic for now.
   const iconX = isIngredient ? 20 : node.width - 25;
   const iconY = isIngredient ? node.height / 2 : 20;
 
@@ -143,8 +189,8 @@ const Node: React.FC<{ node: any }> = ({ node }) => {
         <rect
           width={node.width}
           height={node.height}
-          rx={20}
-          ry={20}
+          rx={node.height / 2} // Fully rounded caps for ingredients
+          ry={node.height / 2}
           fill="#FFFFFF"
           stroke="#D1D5DB"
           strokeWidth="1"

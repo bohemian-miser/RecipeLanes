@@ -1,27 +1,26 @@
 import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, VisualLane, RecipeNode } from './types';
 
-export type LayoutMode = 'swimlanes' | 'compact' | 'waterfall';
+export type LayoutMode = 'swimlanes' | 'compact' | 'waterfall' | 'centered' | 'horizontal';
 
 const CONSTANTS = {
-  swimlanes: {
-    LANE_WIDTH: 260,
-    NODE_WIDTH: 220,
+  standard: {
+    LANE_WIDTH: 220,
+    NODE_WIDTH: 200,
     PADDING_TOP: 40,
-    PADDING_LEFT: 40,
-    GAP_Y: 40,
+    PADDING_LEFT: 30,
+    GAP_Y: 30,
     INGREDIENT_HEIGHT: 50,
     ACTION_HEIGHT: 100
   },
   compact: {
-    LANE_WIDTH: 160,
+    LANE_WIDTH: 150,
     NODE_WIDTH: 140,
     PADDING_TOP: 20,
-    PADDING_LEFT: 20,
-    GAP_Y: 20,
+    PADDING_LEFT: 5,
+    GAP_Y: 15,
     INGREDIENT_HEIGHT: 40,
     ACTION_HEIGHT: 80
   },
-  // Waterfall uses compact node sizes but ignores lane width constraints
   waterfall: {
     NODE_WIDTH: 140,
     NODE_HEIGHT_ING: 40,
@@ -29,6 +28,14 @@ const CONSTANTS = {
     GAP_X: 20,
     GAP_Y: 40,
     PADDING: 20
+  },
+  horizontal: {
+    LANE_HEIGHT: 150,
+    NODE_HEIGHT: 100, // Fixed height for horizontal
+    NODE_WIDTH_ING: 120,
+    NODE_WIDTH_ACT: 180,
+    GAP_X: 40,
+    PADDING: 40
   }
 };
 
@@ -40,21 +47,26 @@ const LANE_COLORS = {
 };
 
 export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact'): LayoutGraph => {
-  if (mode === 'waterfall') {
-      return calculateWaterfallLayout(graph);
+  switch (mode) {
+    case 'waterfall':
+      return calculateWaterfallLayout(graph, false);
+    case 'centered':
+      return calculateWaterfallLayout(graph, true);
+    case 'horizontal':
+      return calculateHorizontalLayout(graph);
+    default:
+      return calculateSwimlaneLayout(graph, mode === 'swimlanes' ? 'standard' : 'compact');
   }
-  return calculateSwimlaneLayout(graph, mode);
 };
 
 // --- SWIMLANE / COMPACT ALGORITHM ---
-const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'swimlanes' | 'compact'): LayoutGraph => {
+const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'standard' | 'compact'): LayoutGraph => {
   const C = CONSTANTS[mode];
   const nodes: VisualNode[] = [];
   const edges: VisualEdge[] = [];
   
   if (!graph.lanes.length) return emptyGraph();
 
-  // 1. Setup Lanes
   const laneMap = new Map<string, number>();
   graph.lanes.forEach((lane, idx) => laneMap.set(lane.id, idx));
 
@@ -62,15 +74,15 @@ const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'swimlanes' | 'compac
     id: lane.id,
     label: lane.label,
     x: C.PADDING_LEFT + idx * C.LANE_WIDTH,
+    y: 0,
     width: C.LANE_WIDTH,
     height: 0,
     color: LANE_COLORS[lane.type] || LANE_COLORS.default
   }));
 
-  // 2. Index & Rank
-  const { nodeMap, ranks, consumerMap } = analyzeGraph(graph);
+  const { ranks, consumerMap } = analyzeGraph(graph);
 
-  // 3. Sort
+  // Sort nodes
   const sortedNodes = [...graph.nodes].sort((a, b) => {
     const rA = ranks.get(a.id) || 0;
     const rB = ranks.get(b.id) || 0;
@@ -82,7 +94,6 @@ const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'swimlanes' | 'compac
     return a.id.localeCompare(b.id);
   });
 
-  // 4. Place
   const nodePosMap = new Map<string, { x: number, y: number, width: number, height: number }>();
   const laneYCursors = new Array(graph.lanes.length).fill(C.PADDING_TOP);
 
@@ -91,7 +102,6 @@ const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'swimlanes' | 'compac
     const width = C.NODE_WIDTH;
     const height = node.type === 'ingredient' ? C.INGREDIENT_HEIGHT : C.ACTION_HEIGHT;
     
-    // Constraint 1: Inputs
     let minDepY = 0;
     if (node.inputs) {
         node.inputs.forEach(inputId => {
@@ -102,9 +112,7 @@ const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'swimlanes' | 'compac
         });
     }
 
-    // Constraint 2: Lane Stack
     const currentLaneY = laneYCursors[laneIdx];
-    
     const y = Math.max(minDepY, currentLaneY);
     const laneX = C.PADDING_LEFT + laneIdx * C.LANE_WIDTH;
     const x = laneX + (C.LANE_WIDTH - width) / 2;
@@ -112,19 +120,10 @@ const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'swimlanes' | 'compac
     nodePosMap.set(node.id, { x, y, width, height });
     laneYCursors[laneIdx] = y + height + C.GAP_Y;
 
-    nodes.push({
-      id: node.id,
-      type: node.type,
-      x,
-      y,
-      width,
-      height,
-      data: node
-    });
+    nodes.push({ id: node.id, type: node.type, x, y, width, height, data: node });
   });
 
-  // 5. Edges & Finalize
-  generateEdges(graph, nodes, nodePosMap, edges);
+  generateEdges(graph, nodes, nodePosMap, edges, 'vertical');
   
   const layoutHeight = Math.max(...laneYCursors, 600) + C.PADDING_TOP;
   const layoutWidth = C.PADDING_LEFT + graph.lanes.length * C.LANE_WIDTH + C.PADDING_LEFT;
@@ -133,15 +132,15 @@ const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'swimlanes' | 'compac
   return { nodes, edges, lanes: visualLanes, width: layoutWidth, height: layoutHeight };
 };
 
-// --- WATERFALL ALGORITHM ---
-const calculateWaterfallLayout = (graph: RecipeGraph): LayoutGraph => {
+// --- WATERFALL / CENTERED ALGORITHM ---
+const calculateWaterfallLayout = (graph: RecipeGraph, centered: boolean): LayoutGraph => {
   const C = CONSTANTS.waterfall;
   const nodes: VisualNode[] = [];
   const edges: VisualEdge[] = [];
   
   if (!graph.lanes.length) return emptyGraph();
 
-  const { ranks, nodeMap } = analyzeGraph(graph);
+  const { ranks } = analyzeGraph(graph);
   
   // Group by Rank
   const rankGroups = new Map<number, RecipeNode[]>();
@@ -157,51 +156,55 @@ const calculateWaterfallLayout = (graph: RecipeGraph): LayoutGraph => {
   let currentY = C.PADDING;
   let layoutWidth = 800;
 
-  // Process Ranks Top-Down
+  // Track widths for centering
+  const rowWidths: number[] = [];
+
+  // First pass: Calculate Row Widths
   for (let r = 0; r <= maxRank; r++) {
       const rowNodes = rankGroups.get(r) || [];
-      // Sort row nodes to keep similar lanes together?
+      let w = C.PADDING;
+      rowNodes.forEach(node => {
+          w += C.NODE_WIDTH + C.GAP_X;
+      });
+      rowWidths[r] = w;
+      layoutWidth = Math.max(layoutWidth, w);
+  }
+
+  // Second pass: Place
+  for (let r = 0; r <= maxRank; r++) {
+      const rowNodes = rankGroups.get(r) || [];
+      // Sort by lane to cluster related items
       rowNodes.sort((a, b) => a.laneId.localeCompare(b.laneId));
 
-      let currentX = C.PADDING;
       let maxHeightInRow = 0;
+      let startX = C.PADDING;
+
+      if (centered) {
+          const rowW = rowWidths[r];
+          startX = (layoutWidth - rowW) / 2 + C.PADDING; 
+      }
+
+      let currentX = startX;
 
       rowNodes.forEach(node => {
           const width = C.NODE_WIDTH;
           const height = node.type === 'ingredient' ? C.NODE_HEIGHT_ING : C.NODE_HEIGHT_ACT;
           
-          // Simple flow: place next to each other
-          // TODO: Center below parents? That requires force-directed or complex logic.
-          // Simple Grid packing is robust.
-          
           const x = currentX;
           const y = currentY;
 
           nodePosMap.set(node.id, { x, y, width, height });
-          nodes.push({
-            id: node.id,
-            type: node.type,
-            x,
-            y,
-            width,
-            height,
-            data: node
-          });
+          nodes.push({ id: node.id, type: node.type, x, y, width, height, data: node });
 
           currentX += width + C.GAP_X;
           maxHeightInRow = Math.max(maxHeightInRow, height);
       });
 
-      layoutWidth = Math.max(layoutWidth, currentX);
       currentY += maxHeightInRow + C.GAP_Y;
   }
 
-  generateEdges(graph, nodes, nodePosMap, edges);
+  generateEdges(graph, nodes, nodePosMap, edges, 'vertical');
 
-  // Waterfall mode doesn't really have "Lanes" in the visual column sense, 
-  // but we can return them for coloring or legend if needed.
-  // We'll return empty visual lanes to disable the background rects.
-  
   return {
       nodes,
       edges,
@@ -210,6 +213,80 @@ const calculateWaterfallLayout = (graph: RecipeGraph): LayoutGraph => {
       height: currentY + C.PADDING
   };
 };
+
+// --- HORIZONTAL ALGORITHM ---
+const calculateHorizontalLayout = (graph: RecipeGraph): LayoutGraph => {
+  const C = CONSTANTS.horizontal;
+  const nodes: VisualNode[] = [];
+  const edges: VisualEdge[] = [];
+  
+  if (!graph.lanes.length) return emptyGraph();
+
+  // Lanes are Rows
+  const laneMap = new Map<string, number>();
+  graph.lanes.forEach((lane, idx) => laneMap.set(lane.id, idx));
+
+  const visualLanes: VisualLane[] = graph.lanes.map((lane, idx) => ({
+    id: lane.id,
+    label: lane.label,
+    x: 0,
+    y: C.PADDING + idx * C.LANE_HEIGHT,
+    width: 0, // Updated later
+    height: C.LANE_HEIGHT,
+    color: LANE_COLORS[lane.type] || LANE_COLORS.default
+  }));
+
+  const { ranks, consumerMap } = analyzeGraph(graph);
+
+  // Sort nodes
+  const sortedNodes = [...graph.nodes].sort((a, b) => {
+    const rA = ranks.get(a.id) || 0;
+    const rB = ranks.get(b.id) || 0;
+    if (rA !== rB) return rA - rB;
+    return a.id.localeCompare(b.id);
+  });
+
+  const nodePosMap = new Map<string, { x: number, y: number, width: number, height: number }>();
+  const laneXCursors = new Array(graph.lanes.length).fill(C.PADDING);
+
+  sortedNodes.forEach(node => {
+    const laneIdx = laneMap.get(node.laneId) || 0;
+    const width = node.type === 'ingredient' ? C.NODE_WIDTH_ING : C.NODE_WIDTH_ACT;
+    const height = C.NODE_HEIGHT;
+    
+    // X Constraint: Must be to the right of all inputs
+    let minDepX = 0;
+    if (node.inputs) {
+        node.inputs.forEach(inputId => {
+            const inputPos = nodePosMap.get(inputId);
+            if (inputPos) {
+                minDepX = Math.max(minDepX, inputPos.x + inputPos.width + C.GAP_X);
+            }
+        });
+    }
+
+    // X Constraint: Must be to the right of current lane content
+    const currentLaneX = laneXCursors[laneIdx];
+    
+    const x = Math.max(minDepX, currentLaneX);
+    const laneY = C.PADDING + laneIdx * C.LANE_HEIGHT;
+    const y = laneY + (C.LANE_HEIGHT - height) / 2;
+
+    nodePosMap.set(node.id, { x, y, width, height });
+    laneXCursors[laneIdx] = x + width + C.GAP_X;
+
+    nodes.push({ id: node.id, type: node.type, x, y, width, height, data: node });
+  });
+
+  generateEdges(graph, nodes, nodePosMap, edges, 'horizontal');
+  
+  const layoutWidth = Math.max(...laneXCursors, 800) + C.PADDING;
+  const layoutHeight = C.PADDING + graph.lanes.length * C.LANE_HEIGHT + C.PADDING;
+  visualLanes.forEach(l => l.width = layoutWidth);
+
+  return { nodes, edges, lanes: visualLanes, width: layoutWidth, height: layoutHeight };
+};
+
 
 // --- HELPERS ---
 
@@ -274,7 +351,7 @@ function analyzeGraph(graph: RecipeGraph) {
   return { nodeMap, ranks, consumerMap };
 }
 
-function generateEdges(graph: RecipeGraph, nodes: VisualNode[], nodePosMap: Map<string, any>, edges: VisualEdge[]) {
+function generateEdges(graph: RecipeGraph, nodes: VisualNode[], nodePosMap: Map<string, any>, edges: VisualEdge[], direction: 'vertical' | 'horizontal') {
     graph.nodes.forEach(node => {
         if (node.inputs) {
           node.inputs.forEach(inputId => {
@@ -282,13 +359,23 @@ function generateEdges(graph: RecipeGraph, nodes: VisualNode[], nodePosMap: Map<
             const target = nodePosMap.get(node.id);
             
             if (source && target) {
-              const startX = source.x + source.width / 2;
-              const startY = source.y + source.height;
-              const endX = target.x + target.width / 2;
-              const endY = target.y;
-              const midY = (startY + endY) / 2;
-              
-              const path = `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
+              let path = '';
+              if (direction === 'vertical') {
+                  const startX = source.x + source.width / 2;
+                  const startY = source.y + source.height;
+                  const endX = target.x + target.width / 2;
+                  const endY = target.y;
+                  const midY = (startY + endY) / 2;
+                  path = `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
+              } else {
+                  // Horizontal
+                  const startX = source.x + source.width;
+                  const startY = source.y + source.height / 2;
+                  const endX = target.x;
+                  const endY = target.y + target.height / 2;
+                  const midX = (startX + endX) / 2;
+                  path = `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`;
+              }
               
               edges.push({
                 id: `${inputId}->${node.id}`,

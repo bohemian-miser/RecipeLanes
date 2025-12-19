@@ -48,6 +48,7 @@ export interface VisualLane {
   id: string;
   label: string;
   x: number;
+  y: number;
   width: number;
   height: number;
   color: string;

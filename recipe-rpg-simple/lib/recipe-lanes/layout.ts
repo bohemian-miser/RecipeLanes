@@ -3,10 +3,10 @@ import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, VisualLane, Reci
 const LANE_WIDTH = 400;
 const ACTION_WIDTH = 140;
 const INGREDIENT_WIDTH_BASE = 100; 
-const PADDING_TOP = 80;
+const PADDING_TOP = 120; // Increased padding to prevent top cutoff
 const PADDING_LEFT = 40;
-const GAP_Y = 140;
-const GAP_X = 40;
+const GAP_Y = 140; 
+const GAP_X = 40; 
 const NODE_HEIGHT = 160; 
 const INGREDIENT_HEIGHT_BASE = 120;
 
@@ -26,7 +26,7 @@ export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'lanes'):
   return calculateSwimlaneLayout(graph);
 };
 
-// --- Original Swimlane Logic ---
+// --- Swimlane Logic (Orbital) ---
 const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
   const nodes: VisualNode[] = [];
   const edges: VisualEdge[] = [];
@@ -48,29 +48,26 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
     color: LANE_COLORS[lane.type] || LANE_COLORS.default
   }));
 
-  // 2. Index Nodes & Helper Maps
+  // 2. Index Nodes
   const nodeMap = new Map<string, RecipeNode>();
   graph.nodes.forEach(node => nodeMap.set(node.id, node));
 
-  // 3. Topological Sort (Global Rank)
+  // 3. Topological Sort
   const ranks = new Map<string, number>();
   const getRank = (id: string, visited = new Set<string>()): number => {
     if (visited.has(id)) return 0;
     if (ranks.has(id)) return ranks.get(id)!;
-    
     visited.add(id);
     const node = nodeMap.get(id);
     if (!node || !node.inputs || node.inputs.length === 0) {
       ranks.set(id, 0);
       return 0;
     }
-
     let maxInputRank = -1;
     for (const inputId of node.inputs) {
       const r = getRank(inputId, new Set(visited));
       if (r > maxInputRank) maxInputRank = r;
     }
-    
     const rank = maxInputRank + 1;
     ranks.set(id, rank);
     return rank;
@@ -122,6 +119,7 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
       if (node.inputs) {
           node.inputs.forEach(inputId => {
              const inputPos = nodePosMap.get(inputId);
+             // Only care about Action dependencies for Y constraint
              if (inputPos && nodeMap.get(inputId)?.type === 'action') {
                  minDepY = Math.max(minDepY, inputPos.y + inputPos.height + GAP_Y);
              }
@@ -155,6 +153,7 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
               const anchorY = actionY + 40; 
 
               if (isFirstStep) {
+                  // Top Arc
                   if (count > 8) {
                       const startY = actionY - (Math.ceil(count/2) * (ingHeight + 10)) - 20;
                       ingredients.forEach((ing, i) => {
@@ -179,6 +178,7 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
                       });
                   }
               } else {
+                  // Side Arc
                   const isRight = stepIndex % 2 !== 0;
                   const sideMult = isRight ? 1 : -1;
                   
@@ -228,26 +228,22 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
       maxY = Math.max(maxY, n.y + n.height);
   });
   
-  // Ensure PADDING_TOP and PADDING_LEFT are respected
-  // If minY is 10, and PADDING_TOP is 80, we shift by 70.
-  // If minY is 100, we don't shift up? Or do we normalize to 0 then add padding?
-  // Let's Normalize to (PADDING_LEFT, PADDING_TOP).
-  
+  // Shift Logic
   const shiftX = PADDING_LEFT - minX;
   const shiftY = PADDING_TOP - minY;
   
+  // Apply Shift to Nodes AND update PosMap (for edges)
   nodes.forEach(n => {
       n.x += shiftX;
       n.y += shiftY;
   });
   
-  // Update Bounds for Canvas Size
+  // Re-calculate layout bounds
   const layoutWidth = maxX - minX + PADDING_LEFT * 2;
   const layoutHeight = maxY - minY + PADDING_TOP * 2;
   visualLanes.forEach(l => l.height = layoutHeight);
 
-  // 6. Generate Edges (After placement and shift)
-  // Re-index visual nodes for lookup
+  // 6. Generate Edges (After Shift)
   const visualNodeMap = new Map<string, VisualNode>();
   nodes.forEach(n => visualNodeMap.set(n.id, n));
 
@@ -277,13 +273,8 @@ const calculateSwimlaneLayout = (graph: RecipeGraph): LayoutGraph => {
   return { nodes, edges, lanes: visualLanes, width: layoutWidth, height: layoutHeight };
 };
 
-// --- New Compact Logic ---
+// --- New Compact Logic (Optimized) ---
 const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
-  // Simple Layered Graph
-  // Ignore Lanes (visually). Just group by Rank.
-  // Center layers.
-  
-  // 1. Calculate Ranks (Same as above)
   const nodeMap = new Map<string, RecipeNode>();
   graph.nodes.forEach(node => nodeMap.set(node.id, node));
   const ranks = new Map<string, number>();
@@ -304,7 +295,6 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
   };
   graph.nodes.forEach(node => getRank(node.id));
 
-  // 2. Group by Rank
   const layers: RecipeNode[][] = [];
   graph.nodes.forEach(node => {
       const r = ranks.get(node.id) || 0;
@@ -314,59 +304,69 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
 
   const nodes: VisualNode[] = [];
   const edges: VisualEdge[] = [];
-  
-  // We track positions in a map for edge generation later
-  // But wait, if we shift, we should update this map or rebuild it.
-  // Let's generate edges AFTER shift, just like Swimlane mode.
-  
+  const nodePosMap = new Map<string, {x:number, y:number, width:number, height:number}>();
+
   let currentY = PADDING_TOP;
   const GAP_LAYER = 120;
   const GAP_ITEM = 40;
   
-  let maxWidth = 0;
+  const laneOrderMap = new Map<string, number>();
+  graph.lanes.forEach((l, i) => laneOrderMap.set(l.id, i));
+
+  // Barycenter Helper
+  const getAvgInputX = (node: RecipeNode) => {
+      if (!node.inputs || node.inputs.length === 0) {
+          return (laneOrderMap.get(node.laneId) || 0) * 1000;
+      }
+      let sum = 0;
+      let count = 0;
+      node.inputs.forEach(id => {
+          // Look up from nodePosMap (already placed in prev layers)
+          const pos = nodePosMap.get(id);
+          if (pos) {
+              sum += pos.x + pos.width / 2;
+              count++;
+          }
+      });
+      return count > 0 ? sum / count : (laneOrderMap.get(node.laneId) || 0) * 1000;
+  };
 
   layers.forEach((layerNodes, layerIndex) => {
-      // Sort nodes in layer
-      layerNodes.sort((a, b) => a.laneId.localeCompare(b.laneId));
+      // Sort: Minimize crossings by sorting based on input positions (Barycenter)
+      layerNodes.sort((a, b) => {
+          const bcA = getAvgInputX(a);
+          const bcB = getAvgInputX(b);
+          if (Math.abs(bcA - bcB) < 1) {
+              return (laneOrderMap.get(a.laneId)||0) - (laneOrderMap.get(b.laneId)||0);
+          }
+          return bcA - bcB;
+      });
 
       const layerHeight = Math.max(...layerNodes.map(n => n.type === 'ingredient' ? INGREDIENT_HEIGHT_BASE : NODE_HEIGHT));
       
+      // Center layer? For now Left align.
       let currentX = PADDING_LEFT;
-      
       const layerPositions: any[] = [];
       
       layerNodes.forEach(node => {
           const isIng = node.type === 'ingredient';
           const w = isIng ? INGREDIENT_WIDTH_BASE : ACTION_WIDTH;
           const h = isIng ? INGREDIENT_HEIGHT_BASE : NODE_HEIGHT;
-          
           layerPositions.push({ node, width: w, height: h });
       });
 
-      const totalLayerWidth = layerPositions.reduce((acc, curr) => acc + curr.width, 0) + (layerPositions.length - 1) * GAP_ITEM;
-      maxWidth = Math.max(maxWidth, totalLayerWidth);
-      
       layerPositions.forEach(pos => {
           const x = currentX;
           const y = currentY;
-          
-          nodes.push({
-              id: pos.node.id,
-              type: pos.node.type,
-              x, 
-              y, 
-              width: pos.width, 
-              height: pos.height, 
-              data: pos.node
-          });
-          
+          nodePosMap.set(pos.node.id, { x, y, width: pos.width, height: pos.height });
+          nodes.push({ id: pos.node.id, type: pos.node.type, x, y, width: pos.width, height: pos.height, data: pos.node });
           currentX += pos.width + GAP_ITEM;
       });
       
       currentY += layerHeight + GAP_LAYER;
   });
   
-  // Shift/Bounds Check (Standardized)
+  // Bounds & Shift (Same logic as Swimlane)
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   nodes.forEach(n => {
       minX = Math.min(minX, n.x);
@@ -375,11 +375,9 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
       maxY = Math.max(maxY, n.y + n.height);
   });
   
-  // Normalize
   const shiftX = PADDING_LEFT - minX;
   const shiftY = PADDING_TOP - minY;
   
-  // Only shift if needed (or always to align to padding)
   if (minX !== Infinity) {
       nodes.forEach(n => {
           n.x += shiftX;
@@ -390,7 +388,7 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
   const layoutWidth = maxX - minX + PADDING_LEFT * 2;
   const layoutHeight = maxY - minY + PADDING_TOP * 2;
 
-  // Edges (Regenerate from shifted nodes)
+  // Edges (Regenerate)
   const visualNodeMap = new Map<string, VisualNode>();
   nodes.forEach(n => visualNodeMap.set(n.id, n));
 
@@ -401,9 +399,9 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
               const t = visualNodeMap.get(node.id);
               if (s && t) {
                   const sx = s.x + s.width/2;
-                  const sy = s.y + s.height; // Bottom
+                  const sy = s.y + s.height; 
                   const tx = t.x + t.width/2;
-                  const ty = t.y; // Top
+                  const ty = t.y; 
                   const path = `M ${sx} ${sy} C ${sx} ${(sy+ty)/2}, ${tx} ${(sy+ty)/2}, ${tx} ${ty}`;
                   edges.push({ id: `${inputId}->${node.id}`, sourceId: inputId, targetId: node.id, path });
               }
@@ -411,11 +409,5 @@ const calculateCompactLayout = (graph: RecipeGraph): LayoutGraph => {
       }
   });
 
-  return {
-      nodes,
-      edges,
-      lanes: [], // No visual lanes in this mode
-      width: Math.max(layoutWidth, 800),
-      height: layoutHeight
-  };
+  return { nodes, edges, lanes: [], width: Math.max(layoutWidth, 800), height: layoutHeight };
 };

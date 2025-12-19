@@ -89,7 +89,7 @@ export default function RecipeLanesPage() {
                         value={recipeText}
                         onChange={(e) => setRecipeText(e.target.value)}
                         onKeyDown={(e) => {
-                            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                            if ((e.metaKey || e.ctrlKey || e.shiftKey) && e.key === 'Enter') {
                                 e.preventDefault();
                                 if (recipeText && status !== 'parsing' && status !== 'forging') {
                                     handleVisualize();

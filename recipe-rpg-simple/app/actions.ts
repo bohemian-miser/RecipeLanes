@@ -348,6 +348,7 @@ export async function parseRecipeAction(recipeText: string): Promise<{ graph?: R
 
         const text = response.text;
         const graph = parseRecipeGraph(text);
+        graph.originalText = recipeText;
         return { graph };
 
     } catch (e: any) {

@@ -67,39 +67,37 @@ export const calculateRepulsiveCurvesLayout = (graph: RecipeGraph, spacing: numb
     const treeLayout = tree().size([2 * Math.PI, 800 * spacing]); // 360 deg, radius scaled by spacing
     treeLayout(hRoot);
 
-    // Map initial positions
+    // Map initial positions and DEPTH
     hRoot.descendants().forEach((d: any) => {
         const node = nodeMap.get(d.data.id);
         if (node) {
-            // Convert Polar to Cartesian
             const angle = d.x;
             const radius = d.y;
-            // Rotate so root is top or center?
-            const x = radius * Math.cos(angle - Math.PI / 2);
-            const y = radius * Math.sin(angle - Math.PI / 2);
-            
             // @ts-ignore
-            node.x = x; 
+            node.x = radius * Math.cos(angle - Math.PI / 2); 
             // @ts-ignore
-            node.y = y;
+            node.y = radius * Math.sin(angle - Math.PI / 2);
+            // @ts-ignore
+            node.depth = d.depth; // Save depth for forceY
         }
     });
 
-    // Handle disconnected nodes (not visited in tree traversal)
+    // Handle disconnected nodes
     nodes.forEach((n: any) => {
         if (n.x === undefined) {
             n.x = (Math.random() - 0.5) * 1000;
             n.y = (Math.random() - 0.5) * 1000;
+            n.depth = 0;
         }
     });
 
     // 4. Physics Simulation (d3-force)
     const simulation = forceSimulation(nodes as any)
         .force("link", forceLink(links).id((d: any) => d.id).distance(DEFAULT_LINK_DISTANCE * spacing))
-        .force("charge", forceManyBody().strength(-400 * spacing))
+        .force("charge", forceManyBody().strength(-300 * spacing))
         .force("collide", forceCollide().radius(NODE_RADIUS * spacing).iterations(2))
+        .force("y", forceY((d: any) => d.depth * 150 * spacing).strength(0.3)) // Preserve Rank/Order
         .force("x", forceX().strength(0.05)) // Gentle centering
-        .force("y", forceY().strength(0.05))
         .stop();
 
     // Run simulation

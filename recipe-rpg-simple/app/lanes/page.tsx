@@ -8,7 +8,7 @@ import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause } from 'lucide-react';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading } = useAuth();
@@ -25,6 +25,7 @@ function RecipeLanesContent() {
   const [spacing, setSpacing] = useState(1);
   const [edgeStyle, setEdgeStyle] = useState<'straight' | 'step' | 'bezier'>('straight');
   const [textPos, setTextPos] = useState<'bottom' | 'top' | 'left' | 'right'>('bottom');
+  const [isLive, setIsLive] = useState(false);
 
   useEffect(() => {
       const id = searchParams.get('id');
@@ -249,12 +250,6 @@ function RecipeLanesContent() {
                         <CircleDot className="w-4 h-4" /> Micro
                     </button>
                     <button
-                        onClick={() => setLayoutMode('force')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'force' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
-                    >
-                        <Move className="w-4 h-4" /> Force
-                    </button>
-                     <button
                         onClick={() => { setLayoutMode('repulsive'); setEdgeStyle('bezier'); }}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'repulsive' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
                     >
@@ -263,6 +258,15 @@ function RecipeLanesContent() {
                 </div>
 
                 <div className="flex items-center gap-4">
+                    {/* Live Toggle */}
+                    <button 
+                         onClick={() => setIsLive(!isLive)}
+                         className={`p-1.5 rounded transition-colors ${isLive ? 'bg-green-100 text-green-600' : 'bg-zinc-50 text-zinc-400 hover:text-zinc-900'}`}
+                         title={isLive ? "Pause Physics" : "Start Physics"}
+                    >
+                        {isLive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    </button>
+
                     {/* Text Position */}
                     <div className="flex items-center gap-2 border-r border-zinc-200 pr-4">
                          <Type className="w-4 h-4 text-zinc-400" />
@@ -336,7 +340,7 @@ function RecipeLanesContent() {
                     </pre>
                 ) : graph ? (
                     <div className="absolute inset-0 bg-zinc-50/50">
-                        <ReactFlowDiagram graph={graph} mode={layoutMode} spacing={spacing} edgeStyle={edgeStyle} textPos={textPos} />
+                        <ReactFlowDiagram graph={graph} mode={layoutMode} spacing={spacing} edgeStyle={edgeStyle} textPos={textPos} isLive={isLive} />
                     </div>
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4">

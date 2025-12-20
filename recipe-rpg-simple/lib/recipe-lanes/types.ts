@@ -42,6 +42,7 @@ export interface VisualNode {
   y: number;
   width: number;
   height: number;
+  depth?: number;
   data: RecipeNode;
 }
 

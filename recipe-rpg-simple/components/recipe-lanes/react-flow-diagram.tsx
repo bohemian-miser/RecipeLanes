@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import ReactFlow, { 
     Background, 
     Controls, 
@@ -15,6 +15,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX } from 'd3-force';
 
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateElkLayout } from '../../lib/recipe-lanes/layout-elk';
@@ -46,20 +47,22 @@ interface ReactFlowDiagramProps {
   spacing?: number;
   edgeStyle?: 'straight' | 'step' | 'bezier';
   textPos?: 'bottom' | 'top' | 'left' | 'right';
+  isLive?: boolean;
 }
 
-const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom' }) => {
+const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false }) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const { fitView, getNodes } = useReactFlow();
     const searchParams = useSearchParams();
     const router = useRouter();
     const flowWrapper = useRef<HTMLDivElement>(null);
+    const simulationRef = useRef<any>(null);
 
+    // Initial Layout Calculation
     const runLayout = useCallback(async (preservePositions = false) => {
         let layout;
         
-        // Check if we should preserve positions (only if graph has them and we are not forcing recalc)
         const canPreserve = preservePositions && graph.nodes.some(n => n.x !== undefined);
 
         if (canPreserve) {
@@ -96,7 +99,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                  id: n.id,
                  type: nodeType,
                  position: { x: n.x, y: n.y },
-                 data: { ...n.data, textPos },
+                 data: { ...n.data, textPos, depth: n.depth }, // Pass depth
                  width: n.width,
                  height: n.height,
                  draggable: true,
@@ -130,13 +133,56 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
 
     }, [graph, mode, spacing, edgeStyle, textPos, setNodes, setEdges, fitView]);
 
+    // Apply Static Layout on props change
     useEffect(() => {
         runLayout(true); 
     }, [graph, mode, spacing, edgeStyle, textPos, runLayout]);
 
+    // Live Force Simulation Effect
+    useEffect(() => {
+        if (!isLive) {
+            if (simulationRef.current) simulationRef.current.stop();
+            return;
+        }
+
+        // Init simulation with CURRENT nodes
+        // We use a copy to avoid mutating React state directly until tick
+        const d3Nodes = nodes.filter(n => n.type !== 'lane').map(n => ({ 
+            id: n.id, 
+            x: n.position.x, 
+            y: n.position.y,
+            width: n.width || 100,
+            depth: n.data.depth || 0
+        }));
+        
+        const d3Links = edges.map(e => ({ source: e.source, target: e.target }));
+
+        const sim = forceSimulation(d3Nodes as any)
+            .force("link", forceLink(d3Links).id((d: any) => d.id).distance(100 * spacing))
+            .force("charge", forceManyBody().strength(-300))
+            .force("collide", forceCollide().radius((d: any) => (d.width/2) + 20))
+            .force("y", forceY((d: any) => d.depth * 150 * spacing).strength(0.1)) // Gentle depth force
+            .force("x", forceX().strength(0.01))
+            .alphaDecay(0) // Keep moving? User said "keep force layout on". 0 decay means it never stops.
+            .on('tick', () => {
+                 setNodes(nds => nds.map(n => {
+                     const d3n = d3Nodes.find(dn => dn.id === n.id);
+                     if (d3n) {
+                         // Only update position if significantly changed to save renders? 
+                         // React Flow creates new objects anyway.
+                         return { ...n, position: { x: d3n.x, y: d3n.y } };
+                     }
+                     return n;
+                 }));
+            });
+        
+        simulationRef.current = sim;
+
+        return () => { sim.stop(); };
+    }, [isLive, spacing, graph]); // Restart if isLive toggled or graph changes (new nodes)
+
     const downloadImage = () => {
         if (!flowWrapper.current) return;
-
         toPng(flowWrapper.current, {
             backgroundColor: '#ffffff',
             style: { width: 'auto', height: 'auto', transform: 'none' }
@@ -156,7 +202,6 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         });
         
         const graphToSave = { ...graph, nodes: nodesWithPos, layoutMode: mode };
-        
         const res = await saveRecipeAction(graphToSave);
         if (res.id) {
             const url = new URL(window.location.href);
@@ -176,29 +221,18 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
         if (event.shiftKey) {
             const allNodes = getNodes();
-            // Identify the group to rotate (currently selected + the clicked one)
             const group = allNodes.filter(n => n.selected || n.id === node.id);
-            
             if (group.length > 0) {
-                // Calculate Centroid
                 const cx = group.reduce((sum, n) => sum + n.position.x, 0) / group.length;
                 const cy = group.reduce((sum, n) => sum + n.position.y, 0) / group.length;
-                
                 setNodes((nds) => nds.map((n) => {
                     if (group.find(gn => gn.id === n.id)) {
-                        // Rotate 90 deg clockwise around (cx, cy)
-                        // x' = cx - (y - cy)
-                        // y' = cy + (x - cx)
                         const dx = n.position.x - cx;
                         const dy = n.position.y - cy;
-                        
                         return {
                             ...n,
-                            position: {
-                                x: cx - dy,
-                                y: cy + dx
-                            },
-                            selected: true // Keep selected to allow continued rotation
+                            position: { x: cx - dy, y: cy + dx },
+                            selected: true 
                         };
                     }
                     return n;

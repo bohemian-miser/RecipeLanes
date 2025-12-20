@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "npx tsx scripts/test-lifecycle.ts",
+    "test": "npx tsx scripts/test-lifecycle.ts && npx tsx scripts/test-penrose-bulk.ts",
     "verify": "npm run build && npm test"
   },
   "engines": {

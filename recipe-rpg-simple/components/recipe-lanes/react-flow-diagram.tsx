@@ -29,18 +29,7 @@ import MicroNode from './nodes/micro-node';
 import FloatingEdge from './edges/floating-edge';
 import { toPng } from 'html-to-image';
 import { Download, Share2, RotateCcw, RefreshCw, Undo, Redo } from 'lucide-react';
-import { saveRecipeAction } from '@/app/actions';
-
-const nodeTypes = {
-  minimal: MinimalNode,
-  card: CardNode,
-  lane: LaneNode,
-  micro: MicroNode
-};
-
-const edgeTypes = {
-  floating: FloatingEdge
-};
+import { saveRecipeAction, calculatePenroseLayoutAction } from '@/app/actions';
 
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
@@ -59,6 +48,17 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     const router = useRouter();
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
+    
+    const nodeTypes = useMemo(() => ({
+        minimal: MinimalNode,
+        card: CardNode,
+        lane: LaneNode,
+        micro: MicroNode
+    }), []);
+
+    const edgeTypes = useMemo(() => ({
+        floating: FloatingEdge
+    }), []);
     
     // Undo/Redo History
     const [past, setPast] = useState<Node[][]>([]);

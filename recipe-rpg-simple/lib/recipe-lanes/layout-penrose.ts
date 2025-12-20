@@ -57,7 +57,11 @@ export const calculatePenroseLayout = async (graph: RecipeGraph, spacing: number
                 center: (n.x, n.y)
                 r: 50.0
             }
-            ensure onCanvas(n.shape)
+            -- onCanvas replacement
+            ensure lessThan(n.x, 400.0)
+            ensure greaterThan(n.x, -400.0)
+            ensure lessThan(n.y, 400.0)
+            ensure greaterThan(n.y, -400.0)
         }
 
         forall Node u; Node v {

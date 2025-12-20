@@ -20,6 +20,7 @@ import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateElkLayout } from '../../lib/recipe-lanes/layout-elk';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
+import { calculatePenroseLayout } from '../../lib/recipe-lanes/layout-penrose';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import MinimalNode from './nodes/minimal-node';
 import CardNode from './nodes/card-node';
@@ -28,7 +29,7 @@ import MicroNode from './nodes/micro-node';
 import FloatingEdge from './edges/floating-edge';
 import { toPng } from 'html-to-image';
 import { Download, Share2, RotateCcw, RefreshCw, Undo, Redo } from 'lucide-react';
-import { saveRecipeAction, calculatePenroseLayoutAction } from '@/app/actions';
+import { saveRecipeAction } from '@/app/actions';
 
 const nodeTypes = {
   minimal: MinimalNode,
@@ -128,12 +129,12 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         } else if (mode === 'repulsive') {
             layout = calculateRepulsiveCurvesLayout(graph, spacing);
         } else if (mode === 'penrose') {
-            const res = await calculatePenroseLayoutAction(graph, spacing);
-            if (res.error || !res.layout) {
-                console.error("Penrose Error", res.error);
+            try {
+                layout = await calculatePenroseLayout(graph, spacing);
+            } catch (e) {
+                console.error("Penrose Error", e);
+                // Fallback
                 layout = calculateLayout(graph, 'compact', spacing);
-            } else {
-                layout = res.layout;
             }
         } else {
             layout = calculateLayout(graph, mode as LayoutMode, spacing);

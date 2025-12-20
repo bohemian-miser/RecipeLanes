@@ -55,7 +55,7 @@ const MinimalNode = ({ id, data }: NodeProps<RecipeNode>) => {
               <img 
                 src={data.iconUrl} 
                 alt="" 
-                className={`w-16 h-16 object-contain drop-shadow-md ${isRerolling ? 'opacity-50' : ''}`}
+                className={`w-16 h-16 object-contain drop-shadow-md mix-blend-multiply ${isRerolling ? 'opacity-50' : ''}`}
                 style={{ imageRendering: 'pixelated' }}
               />
           ) : (

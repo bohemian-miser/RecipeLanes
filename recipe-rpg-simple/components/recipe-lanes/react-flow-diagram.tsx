@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, { 
     Background, 
     Controls, 
@@ -27,7 +27,7 @@ import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
 import FloatingEdge from './edges/floating-edge';
 import { toPng } from 'html-to-image';
-import { Download, Share2, RotateCcw, RefreshCw } from 'lucide-react';
+import { Download, Share2, RotateCcw, RefreshCw, Undo, Redo } from 'lucide-react';
 import { saveRecipeAction } from '@/app/actions';
 
 const nodeTypes = {
@@ -59,6 +59,53 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
     
+    // Undo/Redo History
+    const [past, setPast] = useState<Node[][]>([]);
+    const [future, setFuture] = useState<Node[][]>([]);
+
+    const takeSnapshot = useCallback(() => {
+        setPast(p => [...p, JSON.parse(JSON.stringify(getNodes()))]);
+        setFuture([]);
+    }, [getNodes]);
+
+    const undo = useCallback(() => {
+        if (past.length === 0) return;
+        const newPast = [...past];
+        const previous = newPast.pop();
+        setPast(newPast);
+        setFuture(f => [JSON.parse(JSON.stringify(getNodes())), ...f]);
+        setNodes(previous!);
+    }, [past, getNodes, setNodes]);
+
+    const redo = useCallback(() => {
+        if (future.length === 0) return;
+        const newFuture = [...future];
+        const next = newFuture.shift();
+        setFuture(newFuture);
+        setPast(p => [...p, JSON.parse(JSON.stringify(getNodes()))]);
+        setNodes(next!);
+    }, [future, getNodes, setNodes]);
+
+    // Keyboard Shortcuts for Undo/Redo
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    redo();
+                } else {
+                    undo();
+                }
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+                 e.preventDefault();
+                 redo();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [undo, redo]);
+
     // Drag State for Branch Rotation
     const dragRef = useRef<{
         active: boolean;
@@ -141,12 +188,28 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             }, 50);
         }
 
-    }, [graph, mode, spacing, edgeStyle, textPos, setNodes, setEdges, fitView]);
+    }, [graph, mode, spacing, setNodes, setEdges, fitView]); // Removed edgeStyle/textPos dependencies
 
-    // Apply Static Layout on props change
+    // Layout Effect (Mode/Graph/Spacing changes)
     useEffect(() => {
         runLayout(true); 
-    }, [graph, mode, spacing, edgeStyle, textPos, runLayout]);
+    }, [graph, mode, spacing, runLayout]);
+
+    // Text Position Update Effect (Preserve positions)
+    useEffect(() => {
+        setNodes(nds => nds.map(n => ({
+            ...n,
+            data: { ...n.data, textPos }
+        })));
+    }, [textPos, setNodes]);
+
+    // Edge Style Update Effect
+    useEffect(() => {
+        setEdges(eds => eds.map(e => ({
+            ...e,
+            data: { ...e.data, variant: edgeStyle }
+        })));
+    }, [edgeStyle, setEdges]);
 
     // Live Force Simulation Effect
     useEffect(() => {
@@ -172,7 +235,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             .force("y", forceY((d: any) => d.depth * 150 * spacing).strength(0.1))
             .force("x", forceX().strength(0.01))
             .alphaDecay(0) 
-            .velocityDecay(0.95) // Very High Viscosity (Slow motion)
+            .velocityDecay(0.95) 
             .on('tick', () => {
                  setNodes(nds => nds.map(n => {
                      const d3n = d3Nodes.find(dn => dn.id === n.id);
@@ -186,7 +249,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         simulationRef.current = sim;
 
         return () => { sim.stop(); };
-    }, [isLive, spacing, graph]); 
+    }, [isLive, spacing, graph]); // Depend on Graph? If graph changes, layout runs first.
 
     const downloadImage = () => {
         if (!flowWrapper.current) return;
@@ -222,14 +285,15 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     };
 
     const handleReset = () => {
+        takeSnapshot();
         runLayout(false); 
     };
 
     const handleRotateSelection = () => {
+        takeSnapshot();
         const currentNodes = getNodes();
         const selected = currentNodes.filter(n => n.selected);
         if (selected.length > 0) {
-            // Centroid
             const cx = selected.reduce((sum, n) => sum + n.position.x, 0) / selected.length;
             const cy = selected.reduce((sum, n) => sum + n.position.y, 0) / selected.length;
             
@@ -237,7 +301,6 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 if (n.selected) {
                     const dx = n.position.x - cx;
                     const dy = n.position.y - cy;
-                    // Rotate 90 deg clockwise
                     return {
                         ...n,
                         position: { x: cx - dy, y: cy + dx }
@@ -249,16 +312,15 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     };
 
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
-        // Shift+Click Logic
         if (event.shiftKey) {
-            // Check if we are in "Multi-Select" mode (other items selected)
-            // If so, let React Flow handle standard toggle behavior (Add/Remove)
+            // If Multi-Select active, allow toggle
             const hasOtherSelection = nodes.some(n => n.selected && n.id !== node.id);
             if (hasOtherSelection) {
+                takeSnapshot(); // Snapshot before toggle?
                 return;
             }
 
-            // Otherwise, Select Branch (Ancestors)
+            takeSnapshot(); // Snapshot before Branch Select
             const getAncestors = (id: string, visited = new Set<string>()): string[] => {
                 if (visited.has(id)) return [];
                 visited.add(id);
@@ -278,6 +340,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     };
 
     const onNodeDragStart = (event: React.MouseEvent, node: Node) => {
+        takeSnapshot(); // Snapshot before drag
         if (event.shiftKey) {
             const allNodes = getNodes();
             const outgoing = edges.find(e => e.source === node.id);
@@ -378,6 +441,26 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 <Background color="#f4f4f5" gap={20} />
                 <Controls showInteractive={false} />
                 <Panel position="top-right" className="flex gap-2">
+                    {/* Undo/Redo Buttons */}
+                    <div className="flex gap-1 mr-2 border-r border-zinc-200 pr-2">
+                        <button 
+                            onClick={undo} 
+                            disabled={past.length === 0}
+                            className="bg-white p-2 rounded shadow-md border border-zinc-200 hover:bg-zinc-50 text-zinc-600 disabled:opacity-50"
+                            title="Undo (Ctrl+Z)"
+                        >
+                            <Undo className="w-4 h-4" />
+                        </button>
+                        <button 
+                            onClick={redo} 
+                            disabled={future.length === 0}
+                            className="bg-white p-2 rounded shadow-md border border-zinc-200 hover:bg-zinc-50 text-zinc-600 disabled:opacity-50"
+                            title="Redo (Ctrl+Shift+Z)"
+                        >
+                            <Redo className="w-4 h-4" />
+                        </button>
+                    </div>
+
                     {hasSelection && (
                         <button 
                             onClick={handleRotateSelection}

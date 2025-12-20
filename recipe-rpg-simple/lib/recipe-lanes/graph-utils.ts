@@ -1,22 +1,36 @@
 import { Position, Node } from 'reactflow';
 
 // Get the intersection point between the line (source-target) and the node border
-function getNodeIntersection(intersectionNode: Node, targetNode: Node) {
-  // https://math.stackexchange.com/questions/256100/how-can-i-find-the-points-at-which-two-circles-intersect
-  // Actually simpler: intersection of line and circle/rect.
+// Modified to accept precise centers (Handle Positions)
+function getNodeIntersection(
+    node: Node, 
+    otherNode: Node, 
+    nodeCenter?: { x: number, y: number }, 
+    otherNodeCenter?: { x: number, y: number }
+) {
+  let x1c, y1c;
+  if (nodeCenter) {
+      x1c = nodeCenter.x;
+      y1c = nodeCenter.y;
+  } else {
+      const { x, y } = node.positionAbsolute || node.position;
+      const w = node.width ?? 100;
+      const h = node.height ?? 50;
+      x1c = x + w / 2;
+      y1c = y + h / 2;
+  }
 
-  // Dimensions
-  const w = intersectionNode.width ?? 100;
-  const h = intersectionNode.height ?? 50;
-
-  // Center
-  const { x: x1, y: y1 } = intersectionNode.positionAbsolute || intersectionNode.position;
-  const { x: x2, y: y2 } = targetNode.positionAbsolute || targetNode.position;
-
-  const x1c = x1 + w / 2;
-  const y1c = y1 + h / 2;
-  const x2c = x2 + (targetNode.width ?? 0) / 2;
-  const y2c = y2 + (targetNode.height ?? 0) / 2;
+  let x2c, y2c;
+  if (otherNodeCenter) {
+      x2c = otherNodeCenter.x;
+      y2c = otherNodeCenter.y;
+  } else {
+      const { x, y } = otherNode.positionAbsolute || otherNode.position;
+      const w = otherNode.width ?? 100;
+      const h = otherNode.height ?? 50;
+      x2c = x + w / 2;
+      y2c = y + h / 2;
+  }
 
   // Vector
   const dx = x2c - x1c;
@@ -24,27 +38,20 @@ function getNodeIntersection(intersectionNode: Node, targetNode: Node) {
   
   if (dx === 0 && dy === 0) return { x: x1c, y: y1c };
 
-  // Assume Circle for "invisible circle around each icon"
-  // Radius is half of width (or height if smaller/larger, usually min or average)
-  // User said "invisible circle around each icon, no padding, it should touch top and bottom of the image"
-  // MinimalNode icon is 64px. Node width is 100px.
-  // Let's approximate radius based on node type or width.
-  // Ideally we use a circle that fits the content.
-  // Let's use `Math.min(w, h) / 2` as radius for a tight circle, or slightly larger.
-  // Actually, standard `MinimalNode` is 100w x ~100h. Radius 50?
-  // User said "invisible circle around each icon". Icon is 64x64. Radius 32.
-  // But node includes text below.
-  // If we want arrows to touch the *icon*, we should use the icon radius (32) + padding?
-  // Or if we treat the whole node as the target?
-  // "every arrow should go from and to this invisible circle"
-  // I'll assume radius = width / 2 is safe-ish, or hardcode ~36px.
-  
-  // Add buffer as requested ("invisible concentric buffer")
-  const buffer = 10;
-  const radius = (Math.min(w, h) / 2) + buffer; 
+  // Radius Logic
+  // If we have specific handle center, assume we target the Icon (Radius ~32 + buffer)
+  // Else use node dimensions.
+  let radius;
+  if (nodeCenter) {
+      // It's likely a MinimalNode with centered handles
+      radius = 32 + 8; // 64px icon / 2 + buffer
+  } else {
+      const w = node.width ?? 100;
+      const h = node.height ?? 50;
+      radius = (Math.min(w, h) / 2) + 10; 
+  }
 
-  // Intersection with Circle at (x1c, y1c) with radius r
-  // Point = Center + Radius * NormalizedVector
+  // Intersection
   const distance = Math.sqrt(dx * dx + dy * dy);
   const nx = dx / distance;
   const ny = dy / distance;
@@ -55,16 +62,21 @@ function getNodeIntersection(intersectionNode: Node, targetNode: Node) {
   };
 }
 
-export function getEdgeParams(source: Node, target: Node) {
-  const sourceIntersection = getNodeIntersection(source, target);
-  const targetIntersection = getNodeIntersection(target, source);
+export function getEdgeParams(
+    source: Node, 
+    target: Node,
+    sourceHandlePos?: { x: number, y: number },
+    targetHandlePos?: { x: number, y: number }
+) {
+  const sourceIntersection = getNodeIntersection(source, target, sourceHandlePos, targetHandlePos);
+  const targetIntersection = getNodeIntersection(target, source, targetHandlePos, sourceHandlePos);
 
   return {
     sx: sourceIntersection.x,
     sy: sourceIntersection.y,
     tx: targetIntersection.x,
     ty: targetIntersection.y,
-    sourcePos: Position.Top, // irrelevant for straight lines usually
+    sourcePos: Position.Top, 
     targetPos: Position.Bottom,
   };
 }

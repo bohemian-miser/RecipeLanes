@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { useStore, getStraightPath, getBezierPath, getSmoothStepPath, EdgeProps, MarkerType } from 'reactflow';
 import { getEdgeParams } from '../../../lib/recipe-lanes/graph-utils';
 
-function FloatingEdge({ id, source, target, markerEnd, style, data }: EdgeProps) {
+function FloatingEdge({ id, source, target, markerEnd, style, data, sourceX, sourceY, targetX, targetY }: EdgeProps) {
   const sourceNode = useStore(useCallback((store) => store.nodeInternals.get(source), [source]));
   const targetNode = useStore(useCallback((store) => store.nodeInternals.get(target), [target]));
 
@@ -10,7 +10,12 @@ function FloatingEdge({ id, source, target, markerEnd, style, data }: EdgeProps)
     return null;
   }
 
-  const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(sourceNode, targetNode);
+  const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(
+      sourceNode, 
+      targetNode,
+      { x: sourceX, y: sourceY },
+      { x: targetX, y: targetY }
+  );
 
   const variant = data?.variant || 'straight';
   let edgePath = '';

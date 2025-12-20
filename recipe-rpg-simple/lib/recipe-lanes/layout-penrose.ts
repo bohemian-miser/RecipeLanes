@@ -111,9 +111,14 @@ export const calculatePenroseLayout = async (graph: RecipeGraph, spacing: number
         const shape: any = shapes[i]; 
         
         if (shape && shape.shapeType === 'Circle') {
-            const center = shape.properties.center; 
-            const x = (center as any).contents[0];
-            const y = (center as any).contents[1];
+            const center = shape.center;
+            if (!center) {
+                console.warn(`[Penrose] Shape ${i} missing center`);
+                return;
+            }
+
+            const x = center.contents[0];
+            const y = center.contents[1];
             
             nodes.push({
                 id: n.id,
@@ -124,6 +129,8 @@ export const calculatePenroseLayout = async (graph: RecipeGraph, spacing: number
                 height: 100,
                 data: n
             });
+        } else {
+            // ...
         }
     });
 

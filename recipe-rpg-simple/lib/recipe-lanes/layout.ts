@@ -1,9 +1,8 @@
 import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, VisualLane, RecipeNode } from './types';
 import dagre from 'dagre';
-import { calculateUpwardLayout } from './layout-custom';
-import { calculateRepulsiveCurvesLayout } from './layout-force';
 
-export type LayoutMode = 'swimlanes' | 'compact' | 'waterfall' | 'centered' | 'horizontal' | 'dagre' | 'dagre-lr' | 'upward' | 'elk' | 'micro' | 'force' | 'repulsive' | 'penrose';
+// Only keeping Lanes, Smart, Smart LR
+export type LayoutMode = 'swimlanes' | 'dagre' | 'dagre-lr';
 
 const CONSTANTS = {
   standard: {
@@ -15,7 +14,7 @@ const CONSTANTS = {
     INGREDIENT_HEIGHT: 50,
     ACTION_HEIGHT: 100
   },
-  compact: {
+  compact: { // Used as internal fallback for swimlanes compact mode if needed, or remove?
     LANE_WIDTH: 150,
     NODE_WIDTH: 140,
     PADDING_TOP: 20,
@@ -23,22 +22,6 @@ const CONSTANTS = {
     GAP_Y: 15,
     INGREDIENT_HEIGHT: 40,
     ACTION_HEIGHT: 80
-  },
-  waterfall: {
-    NODE_WIDTH: 140,
-    NODE_HEIGHT_ING: 40,
-    NODE_HEIGHT_ACT: 80,
-    GAP_X: 20,
-    GAP_Y: 40,
-    PADDING: 20
-  },
-  horizontal: {
-    LANE_HEIGHT: 150,
-    NODE_HEIGHT: 100,
-    NODE_WIDTH_ING: 120,
-    NODE_WIDTH_ACT: 180,
-    GAP_X: 40,
-    PADDING: 40
   },
   dagre: {
     NODE_WIDTH: 140,
@@ -55,16 +38,17 @@ const LANE_COLORS = {
   default: '#FAFAFA'
 };
 
-export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact', spacing: number = 1, preservePositions: boolean = false): LayoutGraph => {
+export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'dagre', spacing: number = 1, preservePositions: boolean = false): LayoutGraph => {
   // If preserving positions (and at least one exists), bypass algo
   if (preservePositions && graph.nodes.some(n => n.x !== undefined)) {
       const nodes: VisualNode[] = graph.nodes.map(n => ({
           id: n.id,
           type: n.type,
-          x: n.x ?? 0, // Default to 0 if missing
+          x: n.x ?? 0,
           y: n.y ?? 0,
-          width: 140, // Estimate
+          width: 140,
           height: 100,
+          depth: (n as any).depth, // Preserve depth if available
           data: n
       }));
       
@@ -83,22 +67,14 @@ export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact'
   }
 
   switch (mode) {
-    case 'repulsive':
-      return calculateRepulsiveCurvesLayout(graph, spacing);
-    case 'upward':
-      return calculateUpwardLayout(graph, spacing);
     case 'dagre':
       return calculateDagreLayout(graph, spacing, 'TB');
     case 'dagre-lr':
       return calculateDagreLayout(graph, spacing, 'LR');
-    case 'waterfall':
-      return calculateWaterfallLayout(graph, false, spacing);
-    case 'centered':
-      return calculateWaterfallLayout(graph, true, spacing);
-    case 'horizontal':
-      return calculateHorizontalLayout(graph, spacing);
+    case 'swimlanes':
     default:
-      return calculateSwimlaneLayout(graph, mode === 'swimlanes' ? 'standard' : 'compact', spacing);
+      // Default to standard swimlane if 'swimlanes' selected
+      return calculateSwimlaneLayout(graph, 'standard', spacing);
   }
 };
 
@@ -132,7 +108,16 @@ const calculateDagreLayout = (graph: RecipeGraph, spacing: number, rankDir: 'TB'
     dagre.layout(g);
 
     if (rankDir === 'LR') {
-       // Flip Y coordinates to ensure Top-to-Bottom reading order
+       // Flip Y coordinates to ensure Top-to-Bottom reading order logic if needed
+       // Dagre LR naturally goes Left to Right.
+       // Usually we don't need to flip Y for LR unless we want upside down?
+       // Step 20 logic: "flip Y coordinates to ensure Top-to-Bottom reading order".
+       // Actually Dagre LR puts 0,0 at top left.
+       // If I flip Y, I might mirror it.
+       // I'll keep the flip logic if it was requested to fix "upside down feel".
+       // "Smart (LR) layout to be top-to-bottom" -> Wait, LR is Left-Right.
+       // Maybe they meant the *content* order?
+       // I'll trust previous fix logic.
        let maxY = 0;
        g.nodes().forEach(v => { const n = g.node(v); maxY = Math.max(maxY, n.y + n.height/2); });
        g.nodes().forEach(v => { const n = g.node(v); n.y = maxY - n.y; });
@@ -185,7 +170,7 @@ const calculateDagreLayout = (graph: RecipeGraph, spacing: number, rankDir: 'TB'
 
 // --- SWIMLANE / COMPACT ALGORITHM ---
 const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'standard' | 'compact', spacing: number): LayoutGraph => {
-  const BaseC = CONSTANTS[mode];
+  const BaseC = CONSTANTS[mode] || CONSTANTS.standard;
   const C = {
       ...BaseC,
       PADDING_TOP: BaseC.PADDING_TOP * spacing,
@@ -262,174 +247,6 @@ const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'standard' | 'compact
 
   return { nodes, edges, lanes: visualLanes, width: layoutWidth, height: layoutHeight };
 };
-
-// --- WATERFALL / CENTERED ALGORITHM ---
-const calculateWaterfallLayout = (graph: RecipeGraph, centered: boolean, spacing: number): LayoutGraph => {
-  const BaseC = CONSTANTS.waterfall;
-  const C = {
-      ...BaseC,
-      GAP_X: BaseC.GAP_X * spacing,
-      GAP_Y: BaseC.GAP_Y * spacing,
-      PADDING: BaseC.PADDING * spacing
-  };
-  const nodes: VisualNode[] = [];
-  const edges: VisualEdge[] = [];
-  
-  if (!graph.lanes.length) return emptyGraph();
-
-  const { ranks } = analyzeGraph(graph);
-  
-  // Group by Rank
-  const rankGroups = new Map<number, RecipeNode[]>();
-  let maxRank = 0;
-  graph.nodes.forEach(node => {
-      const r = ranks.get(node.id) || 0;
-      if (!rankGroups.has(r)) rankGroups.set(r, []);
-      rankGroups.get(r)!.push(node);
-      if (r > maxRank) maxRank = r;
-  });
-
-  const nodePosMap = new Map<string, { x: number, y: number, width: number, height: number }>();
-  let currentY = C.PADDING;
-  let layoutWidth = 800;
-
-  // Track widths for centering
-  const rowWidths: number[] = [];
-
-  // First pass: Calculate Row Widths
-  for (let r = 0; r <= maxRank; r++) {
-      const rowNodes = rankGroups.get(r) || [];
-      let w = C.PADDING;
-      rowNodes.forEach(node => {
-          w += C.NODE_WIDTH + C.GAP_X;
-      });
-      rowWidths[r] = w;
-      layoutWidth = Math.max(layoutWidth, w);
-  }
-
-  // Second pass: Place
-  for (let r = 0; r <= maxRank; r++) {
-      const rowNodes = rankGroups.get(r) || [];
-      // Sort by lane to cluster related items
-      rowNodes.sort((a, b) => a.laneId.localeCompare(b.laneId));
-
-      let maxHeightInRow = 0;
-      let startX = C.PADDING;
-
-      if (centered) {
-          const rowW = rowWidths[r];
-          startX = (layoutWidth - rowW) / 2 + C.PADDING; 
-      }
-
-      let currentX = startX;
-
-      rowNodes.forEach(node => {
-          const width = C.NODE_WIDTH;
-          const height = node.type === 'ingredient' ? C.NODE_HEIGHT_ING : C.NODE_HEIGHT_ACT;
-          
-          const x = currentX;
-          const y = currentY;
-
-          nodePosMap.set(node.id, { x, y, width, height });
-          nodes.push({ id: node.id, type: node.type, x, y, width, height, data: node });
-
-          currentX += width + C.GAP_X;
-          maxHeightInRow = Math.max(maxHeightInRow, height);
-      });
-
-      currentY += maxHeightInRow + C.GAP_Y;
-  }
-
-  generateEdges(graph, nodes, nodePosMap, edges, 'vertical');
-
-  return {
-      nodes,
-      edges,
-      lanes: [], 
-      width: layoutWidth + C.PADDING,
-      height: currentY + C.PADDING
-  };
-};
-
-// --- HORIZONTAL ALGORITHM ---
-const calculateHorizontalLayout = (graph: RecipeGraph, spacing: number): LayoutGraph => {
-  const BaseC = CONSTANTS.horizontal;
-  const C = {
-      ...BaseC,
-      GAP_X: BaseC.GAP_X * spacing,
-      PADDING: BaseC.PADDING * spacing,
-      LANE_HEIGHT: BaseC.LANE_HEIGHT * spacing // Maybe scale lane height?
-  };
-  const nodes: VisualNode[] = [];
-  const edges: VisualEdge[] = [];
-  
-  if (!graph.lanes.length) return emptyGraph();
-
-  // Lanes are Rows
-  const laneMap = new Map<string, number>();
-  graph.lanes.forEach((lane, idx) => laneMap.set(lane.id, idx));
-
-  const visualLanes: VisualLane[] = graph.lanes.map((lane, idx) => ({
-    id: lane.id,
-    label: lane.label,
-    x: 0,
-    y: C.PADDING + idx * C.LANE_HEIGHT,
-    width: 0, // Updated later
-    height: C.LANE_HEIGHT,
-    color: LANE_COLORS[lane.type] || LANE_COLORS.default
-  }));
-
-  const { ranks, consumerMap } = analyzeGraph(graph);
-
-  // Sort nodes
-  const sortedNodes = [...graph.nodes].sort((a, b) => {
-    const rA = ranks.get(a.id) || 0;
-    const rB = ranks.get(b.id) || 0;
-    if (rA !== rB) return rA - rB;
-    return a.id.localeCompare(b.id);
-  });
-
-  const nodePosMap = new Map<string, { x: number, y: number, width: number, height: number }>();
-  const laneXCursors = new Array(graph.lanes.length).fill(C.PADDING);
-
-  sortedNodes.forEach(node => {
-    const laneIdx = laneMap.get(node.laneId) || 0;
-    const width = node.type === 'ingredient' ? C.NODE_WIDTH_ING : C.NODE_WIDTH_ACT;
-    const height = C.NODE_HEIGHT;
-    
-    // X Constraint: Must be to the right of all inputs
-    let minDepX = 0;
-    if (node.inputs) {
-        node.inputs.forEach(inputId => {
-            const inputPos = nodePosMap.get(inputId);
-            if (inputPos) {
-                minDepX = Math.max(minDepX, inputPos.x + inputPos.width + C.GAP_X);
-            }
-        });
-    }
-
-    // X Constraint: Must be to the right of current lane content
-    const currentLaneX = laneXCursors[laneIdx];
-    
-    const x = Math.max(minDepX, currentLaneX);
-    const laneY = C.PADDING + laneIdx * C.LANE_HEIGHT;
-    const y = laneY + (C.LANE_HEIGHT - height) / 2;
-
-    nodePosMap.set(node.id, { x, y, width, height });
-    laneXCursors[laneIdx] = x + width + C.GAP_X;
-
-    nodes.push({ id: node.id, type: node.type, x, y, width, height, data: node });
-  });
-
-  generateEdges(graph, nodes, nodePosMap, edges, 'horizontal');
-  
-  const layoutWidth = Math.max(...laneXCursors, 800) + C.PADDING;
-  const layoutHeight = C.PADDING + graph.lanes.length * C.LANE_HEIGHT + C.PADDING;
-  visualLanes.forEach(l => l.width = layoutWidth);
-
-  return { nodes, edges, lanes: visualLanes, width: layoutWidth, height: layoutHeight };
-};
-
 
 // --- HELPERS ---
 

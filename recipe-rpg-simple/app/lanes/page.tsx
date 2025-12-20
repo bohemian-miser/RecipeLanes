@@ -4,7 +4,6 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
-import { Login } from '@/components/login';
 import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
@@ -22,7 +21,7 @@ function RecipeLanesContent() {
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<LayoutMode | 'elk' | 'micro' | 'force' | 'dagre-lr' | 'repulsive' | 'penrose'>('compact');
+  const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
   const [spacing, setSpacing] = useState(1);
   const [edgeStyle, setEdgeStyle] = useState<'straight' | 'step' | 'bezier'>('straight');
   const [textPos, setTextPos] = useState<'bottom' | 'top' | 'left' | 'right'>('bottom');
@@ -37,7 +36,6 @@ function RecipeLanesContent() {
                   setGraph(res.graph);
                   setRecipeText(res.graph.originalText || '');
                   
-                  // Check/Generate missing icons
                   if (res.graph.nodes.some(n => !n.iconUrl)) {
                       generateGraphIconsAction(res.graph).then(iconRes => {
                           if (iconRes.graph) setGraph(iconRes.graph);
@@ -220,41 +218,11 @@ function RecipeLanesContent() {
                     >
                         <RotateCw className="w-4 h-4" /> Smart (LR)
                     </button>
-                    <button
-                        onClick={() => setLayoutMode('upward')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'upward' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
-                    >
-                        <Sprout className="w-4 h-4" /> Upward
-                    </button>
-                    <button
-                        onClick={() => setLayoutMode('elk')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'elk' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
-                    >
-                        <Sparkles className="w-4 h-4" /> Organic
-                    </button>
-                    <button
-                        onClick={() => setLayoutMode('micro')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'micro' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
-                    >
-                        <CircleDot className="w-4 h-4" /> Micro
-                    </button>
-                    <button
-                        onClick={() => setLayoutMode('force')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'force' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
-                    >
-                        <Move className="w-4 h-4" /> Force
-                    </button>
                      <button
                         onClick={() => { setLayoutMode('repulsive'); setEdgeStyle('bezier'); }}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'repulsive' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
                     >
                         <Orbit className="w-4 h-4" /> Repulsive
-                    </button>
-                    <button
-                        onClick={() => setLayoutMode('penrose')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'penrose' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
-                    >
-                        <Pentagon className="w-4 h-4" /> Penrose
                     </button>
                 </div>
 

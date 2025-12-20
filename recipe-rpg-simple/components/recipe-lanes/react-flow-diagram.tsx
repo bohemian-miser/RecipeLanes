@@ -18,9 +18,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX } from 'd3-force';
 
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
-import { calculateElkLayout } from '../../lib/recipe-lanes/layout-elk';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
-import { calculatePenroseLayout } from '../../lib/recipe-lanes/layout-penrose';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import MinimalNode from './nodes/minimal-node';
 import CardNode from './nodes/card-node';
@@ -33,7 +31,7 @@ import { saveRecipeAction } from '@/app/actions';
 
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
-  mode: LayoutMode | 'elk' | 'micro' | 'force' | 'dagre-lr' | 'repulsive' | 'penrose';
+  mode: LayoutMode | 'repulsive'; // 'force' is removed as dedicated layout, physics is global feature
   spacing?: number;
   edgeStyle?: 'straight' | 'step' | 'bezier';
   textPos?: 'bottom' | 'top' | 'left' | 'right';
@@ -124,25 +122,19 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         const canPreserve = preservePositions && graph.nodes.some(n => n.x !== undefined);
 
         if (canPreserve) {
-            layout = calculateLayout(graph, mode as LayoutMode, spacing, true);
-        } else if (mode === 'elk' || mode === 'micro' || mode === 'force') {
-            layout = await calculateElkLayout(graph, mode === 'micro', spacing, mode === 'force');
+            // Use 'dagre' as safe fallback mode for preservation logic, or mode if valid
+            const safeMode = (['swimlanes', 'dagre', 'dagre-lr'].includes(mode as string)) ? (mode as LayoutMode) : 'dagre';
+            layout = calculateLayout(graph, safeMode, spacing, true);
         } else if (mode === 'repulsive') {
             layout = calculateRepulsiveCurvesLayout(graph, spacing);
-        } else if (mode === 'penrose') {
-            try {
-                layout = await calculatePenroseLayout(graph, spacing);
-            } catch (e) {
-                console.error("Penrose Error", e);
-                // Fallback
-                layout = calculateLayout(graph, 'compact', spacing);
-            }
         } else {
+            // mode is LayoutMode ('swimlanes' | 'dagre' | 'dagre-lr')
             layout = calculateLayout(graph, mode as LayoutMode, spacing);
         }
 
         const newNodes: Node[] = [];
         
+        // Add Lanes
         layout.lanes.forEach(lane => {
              newNodes.push({
                  id: lane.id,
@@ -156,9 +148,16 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
              });
         });
 
-        let nodeType = 'card';
-        if (mode === 'micro') nodeType = 'micro';
-        else if (['swimlanes', 'dagre', 'dagre-lr', 'compact', 'elk', 'upward', 'repulsive', 'penrose'].includes(mode as string)) nodeType = 'minimal';
+        // Add Nodes
+        // All kept modes use 'minimal' node style except maybe swimlanes?
+        // User said "lanes are not showing".
+        // If mode is swimlanes, we might want CardNode?
+        // But MinimalNode is preferred generally.
+        // Let's stick to MinimalNode for consistency unless mode='swimlanes' specifically requested cards?
+        // Step 32 used 'card' for non-minimal modes.
+        // "Compact looks alright..."
+        // I'll use 'minimal' for all current modes as per recent preference for consistency.
+        const nodeType = 'minimal'; 
         
         layout.nodes.forEach(n => {
              newNodes.push({
@@ -197,7 +196,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             }, 50);
         }
 
-    }, [graph, mode, spacing, setNodes, setEdges, fitView]); // Remove visual props deps
+    }, [graph, mode, spacing, setNodes, setEdges, fitView]); 
 
     // Layout Effect
     useEffect(() => {
@@ -258,7 +257,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         simulationRef.current = sim;
 
         return () => { sim.stop(); };
-    }, [isLive, spacing, graph]); 
+    }, [isLive, spacing, graph]); // Removed 'nodes' dependency to avoid loop
 
     const downloadImage = () => {
         if (!flowWrapper.current) return;

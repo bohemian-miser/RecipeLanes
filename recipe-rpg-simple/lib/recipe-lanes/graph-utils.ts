@@ -1,65 +1,22 @@
 import { Position, Node } from 'reactflow';
 
-// Get the intersection point between the line (source-target) and the node border
-// Modified to accept precise centers (Handle Positions)
-function getNodeIntersection(
-    node: Node, 
-    otherNode: Node, 
-    nodeCenter?: { x: number, y: number }, 
-    otherNodeCenter?: { x: number, y: number }
-) {
-  let x1c, y1c;
-  if (nodeCenter) {
-      x1c = nodeCenter.x;
-      y1c = nodeCenter.y;
-  } else {
-      const { x, y } = node.positionAbsolute || node.position;
-      const w = node.width ?? 100;
-      const h = node.height ?? 50;
-      x1c = x + w / 2;
-      y1c = y + h / 2;
-  }
+// Helper to get center
+function getCenter(node: Node, handlePos?: { x: number, y: number }) {
+    if (handlePos) return handlePos;
+    const { x, y } = node.positionAbsolute || node.position;
+    const w = node.width ?? 100;
+    const h = node.height ?? 50;
+    return { x: x + w / 2, y: y + h / 2 };
+}
 
-  let x2c, y2c;
-  if (otherNodeCenter) {
-      x2c = otherNodeCenter.x;
-      y2c = otherNodeCenter.y;
-  } else {
-      const { x, y } = otherNode.positionAbsolute || otherNode.position;
-      const w = otherNode.width ?? 100;
-      const h = otherNode.height ?? 50;
-      x2c = x + w / 2;
-      y2c = y + h / 2;
-  }
-
-  // Vector
-  const dx = x2c - x1c;
-  const dy = y2c - y1c;
-  
-  if (dx === 0 && dy === 0) return { x: x1c, y: y1c };
-
-  // Radius Logic
-  // If we have specific handle center, assume we target the Icon (Radius ~32 + buffer)
-  // Else use node dimensions.
-  let radius;
-  if (nodeCenter) {
-      // It's likely a MinimalNode with centered handles
-      radius = 32 + 8; // 64px icon / 2 + buffer
-  } else {
-      const w = node.width ?? 100;
-      const h = node.height ?? 50;
-      radius = (Math.min(w, h) / 2) + 10; 
-  }
-
-  // Intersection
-  const distance = Math.sqrt(dx * dx + dy * dy);
-  const nx = dx / distance;
-  const ny = dy / distance;
-
-  return {
-      x: x1c + nx * radius,
-      y: y1c + ny * radius
-  };
+function getNodeIntersection(center: {x:number, y:number}, otherCenter: {x:number, y:number}, radius: number) {
+    const dx = otherCenter.x - center.x;
+    const dy = otherCenter.y - center.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    return {
+        x: center.x + (dx / dist) * radius,
+        y: center.y + (dy / dist) * radius
+    };
 }
 
 export function getEdgeParams(
@@ -68,15 +25,52 @@ export function getEdgeParams(
     sourceHandlePos?: { x: number, y: number },
     targetHandlePos?: { x: number, y: number }
 ) {
-  const sourceIntersection = getNodeIntersection(source, target, sourceHandlePos, targetHandlePos);
-  const targetIntersection = getNodeIntersection(target, source, targetHandlePos, sourceHandlePos);
+    const c1 = getCenter(source, sourceHandlePos);
+    const c2 = getCenter(target, targetHandlePos);
 
-  return {
-    sx: sourceIntersection.x,
-    sy: sourceIntersection.y,
-    tx: targetIntersection.x,
-    ty: targetIntersection.y,
-    sourcePos: Position.Top, 
-    targetPos: Position.Bottom,
-  };
+    // Calculate Radius
+    // If handle provided (MinimalNode with centered handles), use Icon Radius (~32) + Buffer (~8).
+    // Else use approximate node radius based on dimensions.
+    const r1 = sourceHandlePos ? 40 : (Math.min(source.width??100, source.height??50)/2 + 10);
+    const r2 = targetHandlePos ? 40 : (Math.min(target.width??100, target.height??50)/2 + 10);
+
+    const sInter = getNodeIntersection(c1, c2, r1);
+    const tInter = getNodeIntersection(c2, c1, r2);
+
+    const dx = c2.x - c1.x;
+    const dy = c2.y - c1.y;
+    
+    // Dynamic Handle Position for Bezier Curves
+    let sourcePos = Position.Bottom;
+    let targetPos = Position.Top;
+
+    // Simple Quadrant Check
+    if (Math.abs(dx) > Math.abs(dy)) {
+        // Horizontal Dominant
+        if (dx > 0) {
+            sourcePos = Position.Right;
+            targetPos = Position.Left;
+        } else {
+            sourcePos = Position.Left;
+            targetPos = Position.Right;
+        }
+    } else {
+        // Vertical Dominant
+        if (dy > 0) {
+            sourcePos = Position.Bottom;
+            targetPos = Position.Top;
+        } else {
+            sourcePos = Position.Top;
+            targetPos = Position.Bottom;
+        }
+    }
+
+    return {
+        sx: sInter.x,
+        sy: sInter.y,
+        tx: tInter.x,
+        ty: tInter.y,
+        sourcePos,
+        targetPos
+    };
 }

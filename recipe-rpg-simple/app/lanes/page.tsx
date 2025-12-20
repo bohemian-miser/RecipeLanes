@@ -196,30 +196,6 @@ function RecipeLanesContent() {
                         <List className="w-4 h-4" /> Lanes
                     </button>
                     <button
-                        onClick={() => setLayoutMode('compact')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'compact' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
-                    >
-                        <LayoutDashboard className="w-4 h-4" /> Compact
-                    </button>
-                    <button
-                        onClick={() => setLayoutMode('waterfall')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'waterfall' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
-                    >
-                        <GitGraph className="w-4 h-4" /> Waterfall
-                    </button>
-                    <button
-                        onClick={() => setLayoutMode('centered')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'centered' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
-                    >
-                        <AlignCenter className="w-4 h-4" /> Centered
-                    </button>
-                    <button
-                        onClick={() => setLayoutMode('horizontal')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'horizontal' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
-                    >
-                        <Columns className="w-4 h-4" /> Timeline
-                    </button>
-                    <button
                         onClick={() => setLayoutMode('dagre')}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'dagre' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
                     >

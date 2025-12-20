@@ -27,6 +27,7 @@ export interface RecipeNode {
 }
 
 export interface RecipeGraph {
+  title?: string;
   originalText?: string;
   layoutMode?: string;
   lanes: Lane[];

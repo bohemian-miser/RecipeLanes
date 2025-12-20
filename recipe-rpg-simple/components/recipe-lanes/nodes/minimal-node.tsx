@@ -14,13 +14,14 @@ const MinimalNode = ({ id, data }: NodeProps<RecipeNode>) => {
       setIsRerolling(true);
       
       const ingredientName = data.visualDescription || data.text;
-      // Optimistic update or wait? Wait is safer for URL.
       
       try {
         const res = await rerollIconAction(id, ingredientName, data.iconUrl || '');
         if (res && res.iconUrl) {
             setNodes((nodes) => nodes.map(n => {
-                if (n.id === id) {
+                // Update all nodes that share the same visual description/text
+                const nName = n.data.visualDescription || n.data.text;
+                if (nName === ingredientName) {
                     return { ...n, data: { ...n.data, iconUrl: res.iconUrl } };
                 }
                 return n;
@@ -34,8 +35,10 @@ const MinimalNode = ({ id, data }: NodeProps<RecipeNode>) => {
   };
   
   return (
-    <div className="flex flex-col items-center justify-center w-[100px] relative group">
-      {/* Central Handle for Floating Edges */}
+    <div 
+        className="flex flex-col items-center justify-center w-[100px] relative group"
+        title={data.visualDescription || data.text}
+    >
       <Handle 
         type="target" 
         position={Position.Top} 
@@ -59,7 +62,6 @@ const MinimalNode = ({ id, data }: NodeProps<RecipeNode>) => {
              <span className="text-4xl drop-shadow-sm">{isIngredient ? '🥕' : '🍳'}</span>
           )}
           
-          {/* Reroll Button (Visible on Hover) */}
           <button 
               onClick={handleReroll}
               className={`absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-blue-500 transition-all z-50 ${isRerolling ? 'opacity-100 block' : 'opacity-0 group-hover:opacity-100'}`}

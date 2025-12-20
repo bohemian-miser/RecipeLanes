@@ -39,7 +39,9 @@ function getNodeIntersection(intersectionNode: Node, targetNode: Node) {
   // "every arrow should go from and to this invisible circle"
   // I'll assume radius = width / 2 is safe-ish, or hardcode ~36px.
   
-  const radius = Math.min(w, h) / 2; 
+  // Add buffer as requested ("invisible concentric buffer")
+  const buffer = 10;
+  const radius = (Math.min(w, h) / 2) + buffer; 
 
   // Intersection with Circle at (x1c, y1c) with radius r
   // Point = Center + Radius * NormalizedVector

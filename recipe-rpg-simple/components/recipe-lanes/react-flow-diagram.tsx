@@ -14,6 +14,7 @@ import ReactFlow, {
     MarkerType
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateElkLayout } from '../../lib/recipe-lanes/layout-elk';
@@ -24,7 +25,8 @@ import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
 import FloatingEdge from './edges/floating-edge';
 import { toPng } from 'html-to-image';
-import { Download } from 'lucide-react';
+import { Download, Share2, RotateCcw } from 'lucide-react';
+import { saveRecipeAction } from '@/app/actions';
 
 const nodeTypes = {
   minimal: MinimalNode,
@@ -41,84 +43,90 @@ interface ReactFlowDiagramProps {
   graph: RecipeGraph;
   mode: LayoutMode | 'elk' | 'micro' | 'force' | 'dagre-lr';
   spacing?: number;
+  edgeStyle?: 'straight' | 'step' | 'bezier';
 }
 
-// Inner component to access ReactFlow context
-const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 1 }) => {
+const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 1, edgeStyle = 'straight' }) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-    const { fitView } = useReactFlow();
+    const { fitView, getNodes } = useReactFlow();
+    const searchParams = useSearchParams();
+    const router = useRouter();
 
-    useEffect(() => {
-        const runLayout = async () => {
-            let layout;
-            
-            if (mode === 'elk' || mode === 'micro' || mode === 'force') {
-                layout = await calculateElkLayout(graph, mode === 'micro', spacing, mode === 'force');
-            } else {
-                layout = calculateLayout(graph, mode as LayoutMode, spacing);
-            }
+    const runLayout = useCallback(async (preservePositions = false) => {
+        let layout;
+        
+        const canPreserve = preservePositions && graph.nodes.some(n => n.x !== undefined);
 
-            const newNodes: Node[] = [];
-            
-            // 1. Lanes (Background Layer)
-            layout.lanes.forEach(lane => {
-                 newNodes.push({
-                     id: lane.id,
-                     type: 'lane',
-                     position: { x: lane.x, y: lane.y },
-                     data: { label: lane.label, color: lane.color },
-                     style: { width: lane.width, height: lane.height, zIndex: -1 },
-                     draggable: false,
-                     selectable: false,
-                     zIndex: -1
-                 });
-            });
+        if (canPreserve) {
+            layout = calculateLayout(graph, mode as LayoutMode, spacing, true);
+        } else if (mode === 'elk' || mode === 'micro' || mode === 'force') {
+            layout = await calculateElkLayout(graph, mode === 'micro', spacing, mode === 'force');
+        } else {
+            layout = calculateLayout(graph, mode as LayoutMode, spacing);
+        }
 
-            // 2. Recipe Nodes
-            let nodeType = 'card';
-            if (mode === 'micro') nodeType = 'micro';
-            else if (['swimlanes', 'dagre', 'dagre-lr', 'compact', 'elk', 'upward'].includes(mode as string)) nodeType = 'minimal';
-            
-            layout.nodes.forEach(n => {
-                 newNodes.push({
-                     id: n.id,
-                     type: nodeType,
-                     position: { x: n.x, y: n.y },
-                     data: n.data,
-                     width: n.width,
-                     height: n.height,
-                     draggable: true,
-                 });
-            });
+        const newNodes: Node[] = [];
+        
+        layout.lanes.forEach(lane => {
+             newNodes.push({
+                 id: lane.id,
+                 type: 'lane',
+                 position: { x: lane.x, y: lane.y },
+                 data: { label: lane.label, color: lane.color },
+                 style: { width: lane.width, height: lane.height, zIndex: -1 },
+                 draggable: false,
+                 selectable: false,
+                 zIndex: -1
+             });
+        });
 
-            // 3. Edges
-            const newEdges: Edge[] = layout.edges.map(e => ({
-                id: e.id,
-                source: e.sourceId,
-                target: e.targetId,
-                type: 'floating', // Always use floating for perimeter connection
-                style: { stroke: '#9ca3af', strokeWidth: 1.5 },
-                markerEnd: {
-                    type: MarkerType.ArrowClosed,
-                    color: '#9ca3af',
-                    width: 20,
-                    height: 20
-                },
-                animated: false
-            }));
+        let nodeType = 'card';
+        if (mode === 'micro') nodeType = 'micro';
+        else if (['swimlanes', 'dagre', 'dagre-lr', 'compact', 'elk', 'upward'].includes(mode as string)) nodeType = 'minimal';
+        
+        layout.nodes.forEach(n => {
+             newNodes.push({
+                 id: n.id,
+                 type: nodeType,
+                 position: { x: n.x, y: n.y },
+                 data: n.data,
+                 width: n.width,
+                 height: n.height,
+                 draggable: true,
+             });
+        });
 
-            setNodes(newNodes);
-            setEdges(newEdges);
+        const newEdges: Edge[] = layout.edges.map(e => ({
+            id: e.id,
+            source: e.sourceId,
+            target: e.targetId,
+            type: 'floating',
+            data: { variant: edgeStyle },
+            style: { stroke: '#9ca3af', strokeWidth: 1.5 },
+            markerEnd: {
+                type: MarkerType.ArrowClosed,
+                color: '#9ca3af',
+                width: 20,
+                height: 20
+            },
+            animated: false
+        }));
 
+        setNodes(newNodes);
+        setEdges(newEdges);
+
+        if (!canPreserve) {
             setTimeout(() => {
                 fitView({ padding: 0.1 });
             }, 50);
-        };
+        }
 
-        runLayout();
+    }, [graph, mode, spacing, edgeStyle, setNodes, setEdges, fitView]);
 
-    }, [graph, mode, spacing, setNodes, setEdges, fitView]);
+    useEffect(() => {
+        runLayout(true); 
+    }, [graph, mode, spacing, edgeStyle, runLayout]);
 
     const downloadImage = () => {
         const viewport = document.querySelector('.react-flow__viewport') as HTMLElement;
@@ -126,17 +134,38 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
 
         toPng(viewport, {
             backgroundColor: '#ffffff',
-            style: {
-                width: 'auto',
-                height: 'auto',
-                transform: 'none' // Reset transform for capture? Usually handled by library but tricky with RF
-            }
+            style: { width: 'auto', height: 'auto', transform: 'none' }
         }).then((dataUrl) => {
             const link = document.createElement('a');
             link.download = `recipe-lanes-${mode}.png`;
             link.href = dataUrl;
             link.click();
         });
+    };
+
+    const handleShare = async () => {
+        const currentNodes = getNodes();
+        const nodesWithPos = graph.nodes.map(n => {
+           const rfn = currentNodes.find(rn => rn.id === n.id);
+           return rfn ? { ...n, x: rfn.position.x, y: rfn.position.y } : n;
+        });
+        
+        const graphToSave = { ...graph, nodes: nodesWithPos, layoutMode: mode };
+        
+        const res = await saveRecipeAction(graphToSave);
+        if (res.id) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('id', res.id);
+            router.push(url.pathname + url.search);
+            navigator.clipboard.writeText(url.toString());
+            alert('Layout saved & Link copied!');
+        } else {
+            alert('Failed to save layout.');
+        }
+    };
+
+    const handleReset = () => {
+        runLayout(false); 
     };
 
     return (
@@ -155,7 +184,21 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             >
                 <Background color="#f4f4f5" gap={20} />
                 <Controls showInteractive={false} />
-                <Panel position="top-right">
+                <Panel position="top-right" className="flex gap-2">
+                    <button 
+                        onClick={handleReset} 
+                        className="bg-white p-2 rounded shadow-md border border-zinc-200 hover:bg-zinc-50 text-zinc-600"
+                        title="Reset Layout"
+                    >
+                        <RotateCcw className="w-4 h-4" />
+                    </button>
+                     <button 
+                        onClick={handleShare} 
+                        className="bg-white p-2 rounded shadow-md border border-zinc-200 hover:bg-zinc-50 text-zinc-600"
+                        title="Save & Share Layout"
+                    >
+                        <Share2 className="w-4 h-4" />
+                    </button>
                     <button 
                         onClick={downloadImage} 
                         className="bg-white p-2 rounded shadow-md border border-zinc-200 hover:bg-zinc-50 text-zinc-600"
@@ -163,6 +206,12 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                     >
                         <Download className="w-4 h-4" />
                     </button>
+                </Panel>
+                
+                <Panel position="bottom-left" className="bg-white/90 backdrop-blur p-3 rounded-lg shadow-lg border border-zinc-200 text-xs text-zinc-700 flex flex-col gap-2">
+                    <div className="font-bold text-zinc-400 uppercase tracking-widest text-[10px]">Legend</div>
+                    <div className="flex items-center gap-2"><span className="text-xl">🥕</span> Ingredients</div>
+                    <div className="flex items-center gap-2"><span className="text-xl">🍳</span> Actions</div>
                 </Panel>
             </ReactFlow>
         </div>

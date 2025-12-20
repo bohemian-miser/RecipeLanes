@@ -23,6 +23,7 @@ function RecipeLanesContent() {
   const [showJson, setShowJson] = useState(false);
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'elk' | 'micro' | 'force' | 'dagre-lr'>('compact');
   const [spacing, setSpacing] = useState(1);
+  const [edgeStyle, setEdgeStyle] = useState<'straight' | 'step' | 'bezier'>('straight');
 
   useEffect(() => {
       const id = searchParams.get('id');
@@ -255,6 +256,20 @@ function RecipeLanesContent() {
                 </div>
 
                 <div className="flex items-center gap-4">
+                    {/* Line Style */}
+                    <div className="flex items-center gap-2 border-r border-zinc-200 pr-4">
+                         <span className="text-xs font-mono text-zinc-400">Lines</span>
+                         <select 
+                             value={edgeStyle} 
+                             onChange={(e) => setEdgeStyle(e.target.value as any)}
+                             className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1"
+                         >
+                             <option value="straight">Straight</option>
+                             <option value="step">Step</option>
+                             <option value="bezier">Curve</option>
+                         </select>
+                    </div>
+
                     {/* Spacing Slider */}
                     <div className="flex items-center gap-2">
                         <span className="text-xs font-mono text-zinc-400">Spacing</span>
@@ -299,7 +314,7 @@ function RecipeLanesContent() {
                     </pre>
                 ) : graph ? (
                     <div className="absolute inset-0 bg-zinc-50/50">
-                        <ReactFlowDiagram graph={graph} mode={layoutMode} spacing={spacing} />
+                        <ReactFlowDiagram graph={graph} mode={layoutMode} spacing={spacing} edgeStyle={edgeStyle} />
                     </div>
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4">

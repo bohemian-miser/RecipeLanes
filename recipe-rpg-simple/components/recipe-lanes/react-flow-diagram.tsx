@@ -249,22 +249,39 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         return () => { sim.stop(); };
     }, [isLive, spacing, graph]); 
 
-    const downloadImage = () => {
+    const downloadImage = async () => {
         if (!flowWrapper.current) return;
-        toPng(flowWrapper.current, {
-            backgroundColor: '#ffffff',
-            style: { width: 'auto', height: 'auto', transform: 'none' },
-            cacheBust: true, // Fix for some images
-            pixelRatio: 2 // High res
-        }).then((dataUrl) => {
+        
+        const download = (dataUrl: string) => {
             const link = document.createElement('a');
             link.download = `recipe-lanes-${mode}.png`;
             link.href = dataUrl;
             link.click();
-        }).catch(err => {
-            console.error("Download failed:", err);
-            alert("Download failed. Please try again.");
-        });
+        };
+
+        try {
+            const dataUrl = await toPng(flowWrapper.current, {
+                backgroundColor: '#ffffff',
+                style: { width: 'auto', height: 'auto', transform: 'none' },
+                cacheBust: true, 
+                pixelRatio: 2 
+            });
+            download(dataUrl);
+        } catch (err) {
+            console.warn("Download failed (CORS?), retrying without font embedding...", err);
+            try {
+                const dataUrl = await toPng(flowWrapper.current, {
+                    backgroundColor: '#ffffff',
+                    style: { width: 'auto', height: 'auto', transform: 'none' },
+                    pixelRatio: 2,
+                    fontEmbedCSS: '' // Disable font embedding
+                });
+                download(dataUrl);
+            } catch (e2) {
+                console.error("Download failed again:", e2);
+                alert("Download failed. Please try again or check console.");
+            }
+        }
     };
 
     const handleShare = async () => {

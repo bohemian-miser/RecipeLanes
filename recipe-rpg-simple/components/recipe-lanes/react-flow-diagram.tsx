@@ -20,6 +20,7 @@ import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateElkLayout } from '../../lib/recipe-lanes/layout-elk';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
+import { calculatePenroseLayout } from '../../lib/recipe-lanes/layout-penrose';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import MinimalNode from './nodes/minimal-node';
 import CardNode from './nodes/card-node';
@@ -43,7 +44,7 @@ const edgeTypes = {
 
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
-  mode: LayoutMode | 'elk' | 'micro' | 'force' | 'dagre-lr' | 'repulsive';
+  mode: LayoutMode | 'elk' | 'micro' | 'force' | 'dagre-lr' | 'repulsive' | 'penrose';
   spacing?: number;
   edgeStyle?: 'straight' | 'step' | 'bezier';
   textPos?: 'bottom' | 'top' | 'left' | 'right';
@@ -128,6 +129,8 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             layout = await calculateElkLayout(graph, mode === 'micro', spacing, mode === 'force');
         } else if (mode === 'repulsive') {
             layout = calculateRepulsiveCurvesLayout(graph, spacing);
+        } else if (mode === 'penrose') {
+            layout = await calculatePenroseLayout(graph, spacing);
         } else {
             layout = calculateLayout(graph, mode as LayoutMode, spacing);
         }
@@ -149,7 +152,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
 
         let nodeType = 'card';
         if (mode === 'micro') nodeType = 'micro';
-        else if (['swimlanes', 'dagre', 'dagre-lr', 'compact', 'elk', 'upward', 'repulsive'].includes(mode as string)) nodeType = 'minimal';
+        else if (['swimlanes', 'dagre', 'dagre-lr', 'compact', 'elk', 'upward', 'repulsive', 'penrose'].includes(mode as string)) nodeType = 'minimal';
         
         layout.nodes.forEach(n => {
              newNodes.push({

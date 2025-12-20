@@ -2,8 +2,9 @@ import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, VisualLane, Reci
 import dagre from 'dagre';
 import { calculateUpwardLayout } from './layout-custom';
 import { calculateRepulsiveCurvesLayout } from './layout-force';
+import { calculatePenroseLayout } from './layout-penrose'; // Just for type/reference? No, don't import if unused here.
 
-export type LayoutMode = 'swimlanes' | 'compact' | 'waterfall' | 'centered' | 'horizontal' | 'dagre' | 'dagre-lr' | 'upward' | 'elk' | 'micro' | 'force' | 'repulsive';
+export type LayoutMode = 'swimlanes' | 'compact' | 'waterfall' | 'centered' | 'horizontal' | 'dagre' | 'dagre-lr' | 'upward' | 'elk' | 'micro' | 'force' | 'repulsive' | 'penrose';
 
 const CONSTANTS = {
   standard: {

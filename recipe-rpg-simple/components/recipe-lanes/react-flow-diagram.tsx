@@ -99,7 +99,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                  id: n.id,
                  type: nodeType,
                  position: { x: n.x, y: n.y },
-                 data: { ...n.data, textPos, depth: n.depth }, // Pass depth
+                 data: { ...n.data, textPos, depth: n.depth }, 
                  width: n.width,
                  height: n.height,
                  draggable: true,
@@ -145,8 +145,6 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             return;
         }
 
-        // Init simulation with CURRENT nodes
-        // We use a copy to avoid mutating React state directly until tick
         const d3Nodes = nodes.filter(n => n.type !== 'lane').map(n => ({ 
             id: n.id, 
             x: n.position.x, 
@@ -161,15 +159,13 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             .force("link", forceLink(d3Links).id((d: any) => d.id).distance(100 * spacing))
             .force("charge", forceManyBody().strength(-300))
             .force("collide", forceCollide().radius((d: any) => (d.width/2) + 20))
-            .force("y", forceY((d: any) => d.depth * 150 * spacing).strength(0.1)) // Gentle depth force
+            .force("y", forceY((d: any) => d.depth * 150 * spacing).strength(0.1))
             .force("x", forceX().strength(0.01))
-            .alphaDecay(0) // Keep moving? User said "keep force layout on". 0 decay means it never stops.
+            .alphaDecay(0) 
             .on('tick', () => {
                  setNodes(nds => nds.map(n => {
                      const d3n = d3Nodes.find(dn => dn.id === n.id);
                      if (d3n) {
-                         // Only update position if significantly changed to save renders? 
-                         // React Flow creates new objects anyway.
                          return { ...n, position: { x: d3n.x, y: d3n.y } };
                      }
                      return n;
@@ -179,7 +175,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         simulationRef.current = sim;
 
         return () => { sim.stop(); };
-    }, [isLive, spacing, graph]); // Restart if isLive toggled or graph changes (new nodes)
+    }, [isLive, spacing, graph]); 
 
     const downloadImage = () => {
         if (!flowWrapper.current) return;
@@ -223,16 +219,25 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             const allNodes = getNodes();
             const group = allNodes.filter(n => n.selected || n.id === node.id);
             if (group.length > 0) {
+                // Calculate Centroid
                 const cx = group.reduce((sum, n) => sum + n.position.x, 0) / group.length;
                 const cy = group.reduce((sum, n) => sum + n.position.y, 0) / group.length;
+                
                 setNodes((nds) => nds.map((n) => {
                     if (group.find(gn => gn.id === n.id)) {
+                        // Rotate 90 deg clockwise around (cx, cy)
+                        // x' = cx - (y - cy)
+                        // y' = cy + (x - cx)
                         const dx = n.position.x - cx;
                         const dy = n.position.y - cy;
+                        
                         return {
                             ...n,
-                            position: { x: cx - dy, y: cy + dx },
-                            selected: true 
+                            position: {
+                                x: cx - dy,
+                                y: cy + dx
+                            },
+                            selected: true // Force keep selected
                         };
                     }
                     return n;
@@ -286,7 +291,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                     <div className="font-bold text-zinc-400 uppercase tracking-widest text-[10px]">Legend</div>
                     <div className="flex items-center gap-2"><span className="text-xl">🥕</span> Ingredients</div>
                     <div className="flex items-center gap-2"><span className="text-xl">🍳</span> Actions</div>
-                    <div className="flex items-center gap-1 opacity-50 border-t border-zinc-100 pt-2"><span className="text-xs font-bold">Shift+Click</span> Rotate</div>
+                    <div className="flex items-center gap-1 opacity-50 border-t border-zinc-100 pt-2"><span className="text-xs font-bold">Shift+Click</span> Rotate Group</div>
                 </Panel>
             </ReactFlow>
         </div>

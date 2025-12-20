@@ -41,7 +41,7 @@ const edgeTypes = {
 
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
-  mode: LayoutMode | 'elk' | 'micro' | 'force' | 'dagre-lr';
+  mode: LayoutMode | 'elk' | 'micro' | 'force' | 'dagre-lr' | 'repulsive';
   spacing?: number;
   edgeStyle?: 'straight' | 'step' | 'bezier';
 }
@@ -83,7 +83,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
 
         let nodeType = 'card';
         if (mode === 'micro') nodeType = 'micro';
-        else if (['swimlanes', 'dagre', 'dagre-lr', 'compact', 'elk', 'upward'].includes(mode as string)) nodeType = 'minimal';
+        else if (['swimlanes', 'dagre', 'dagre-lr', 'compact', 'elk', 'upward', 'repulsive'].includes(mode as string)) nodeType = 'minimal';
         
         layout.nodes.forEach(n => {
              newNodes.push({

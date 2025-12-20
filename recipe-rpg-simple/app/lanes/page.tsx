@@ -8,7 +8,7 @@ import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit } from 'lucide-react';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading } = useAuth();
@@ -21,7 +21,7 @@ function RecipeLanesContent() {
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<LayoutMode | 'elk' | 'micro' | 'force' | 'dagre-lr'>('compact');
+  const [layoutMode, setLayoutMode] = useState<LayoutMode | 'elk' | 'micro' | 'force' | 'dagre-lr' | 'repulsive'>('compact');
   const [spacing, setSpacing] = useState(1);
   const [edgeStyle, setEdgeStyle] = useState<'straight' | 'step' | 'bezier'>('straight');
 
@@ -252,6 +252,12 @@ function RecipeLanesContent() {
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'force' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
                     >
                         <Move className="w-4 h-4" /> Force
+                    </button>
+                     <button
+                        onClick={() => { setLayoutMode('repulsive'); setEdgeStyle('bezier'); }}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'repulsive' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                    >
+                        <Orbit className="w-4 h-4" /> Repulsive
                     </button>
                 </div>
 

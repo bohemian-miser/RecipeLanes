@@ -1,8 +1,9 @@
 import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, VisualLane, RecipeNode } from './types';
 import dagre from 'dagre';
 import { calculateUpwardLayout } from './layout-custom';
+import { calculateRepulsiveCurvesLayout } from './layout-force';
 
-export type LayoutMode = 'swimlanes' | 'compact' | 'waterfall' | 'centered' | 'horizontal' | 'dagre' | 'dagre-lr' | 'upward';
+export type LayoutMode = 'swimlanes' | 'compact' | 'waterfall' | 'centered' | 'horizontal' | 'dagre' | 'dagre-lr' | 'upward' | 'elk' | 'micro' | 'force' | 'repulsive';
 
 const CONSTANTS = {
   standard: {
@@ -54,8 +55,36 @@ const LANE_COLORS = {
   default: '#FAFAFA'
 };
 
-export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact', spacing: number = 1): LayoutGraph => {
+export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact', spacing: number = 1, preservePositions: boolean = false): LayoutGraph => {
+  // If preserving positions (and they exist), bypass algo
+  if (preservePositions && graph.nodes.every(n => n.x !== undefined)) {
+      const nodes: VisualNode[] = graph.nodes.map(n => ({
+          id: n.id,
+          type: n.type,
+          x: n.x!,
+          y: n.y!,
+          width: 140, // Estimate
+          height: 100,
+          data: n
+      }));
+      
+      const edges: VisualEdge[] = [];
+      const nodePosMap = new Map();
+      nodes.forEach(n => nodePosMap.set(n.id, n));
+      generateEdges(graph, nodes, nodePosMap, edges, 'vertical'); 
+
+      return {
+          nodes,
+          edges,
+          lanes: [], 
+          width: 2000,
+          height: 2000
+      };
+  }
+
   switch (mode) {
+    case 'repulsive':
+      return calculateRepulsiveCurvesLayout(graph, spacing);
     case 'upward':
       return calculateUpwardLayout(graph, spacing);
     case 'dagre':
@@ -77,13 +106,14 @@ export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact'
 const calculateDagreLayout = (graph: RecipeGraph, spacing: number, rankDir: 'TB' | 'LR' = 'TB'): LayoutGraph => {
     const C = CONSTANTS.dagre;
     const g = new dagre.graphlib.Graph();
-    g.setGraph({
-        rankdir: rankDir,
-        nodesep: 10 * spacing,
-        ranksep: 20 * spacing,
-        align: 'UL'
+    g.setGraph({ 
+        rankdir: rankDir, 
+        nodesep: 10 * spacing, 
+        ranksep: 20 * spacing, 
+        align: 'UL' 
     });
     g.setDefaultEdgeLabel(() => ({}));
+
     graph.nodes.forEach(node => {
         const height = node.type === 'ingredient' ? C.NODE_HEIGHT_ING : C.NODE_HEIGHT_ACT;
         g.setNode(node.id, { width: C.NODE_WIDTH, height: height, data: node });
@@ -139,13 +169,14 @@ const calculateDagreLayout = (graph: RecipeGraph, spacing: number, rankDir: 'TB'
         });
     });
 
+    // Calculate bounding box
     const layoutWidth = (g.graph().width || 800) + C.PADDING * 2;
     const layoutHeight = (g.graph().height || 600) + C.PADDING * 2;
 
     return {
         nodes,
         edges,
-        lanes: [],
+        lanes: [], // No lanes in pure Dagre
         width: layoutWidth,
         height: layoutHeight
     };
@@ -157,9 +188,10 @@ const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'standard' | 'compact
   const BaseC = CONSTANTS[mode];
   const C = {
       ...BaseC,
-      GAP_Y: BaseC.GAP_Y * spacing,
       PADDING_TOP: BaseC.PADDING_TOP * spacing,
-      // Keep other dims fixed or scale? Spacing usually affects gaps.
+      PADDING_LEFT: BaseC.PADDING_LEFT * spacing,
+      GAP_Y: BaseC.GAP_Y * spacing,
+      LANE_WIDTH: BaseC.LANE_WIDTH * spacing
   };
   const nodes: VisualNode[] = [];
   const edges: VisualEdge[] = [];

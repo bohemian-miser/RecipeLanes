@@ -18,6 +18,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateElkLayout } from '../../lib/recipe-lanes/layout-elk';
+import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import MinimalNode from './nodes/minimal-node';
 import CardNode from './nodes/card-node';
@@ -44,9 +45,10 @@ interface ReactFlowDiagramProps {
   mode: LayoutMode | 'elk' | 'micro' | 'force' | 'dagre-lr' | 'repulsive';
   spacing?: number;
   edgeStyle?: 'straight' | 'step' | 'bezier';
+  textPos?: 'bottom' | 'top' | 'left' | 'right';
 }
 
-const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 1, edgeStyle = 'straight' }) => {
+const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom' }) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const { fitView, getNodes } = useReactFlow();
@@ -62,6 +64,8 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             layout = calculateLayout(graph, mode as LayoutMode, spacing, true);
         } else if (mode === 'elk' || mode === 'micro' || mode === 'force') {
             layout = await calculateElkLayout(graph, mode === 'micro', spacing, mode === 'force');
+        } else if (mode === 'repulsive') {
+            layout = calculateRepulsiveCurvesLayout(graph, spacing);
         } else {
             layout = calculateLayout(graph, mode as LayoutMode, spacing);
         }
@@ -90,7 +94,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                  id: n.id,
                  type: nodeType,
                  position: { x: n.x, y: n.y },
-                 data: n.data,
+                 data: { ...n.data, textPos },
                  width: n.width,
                  height: n.height,
                  draggable: true,
@@ -122,11 +126,11 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             }, 50);
         }
 
-    }, [graph, mode, spacing, edgeStyle, setNodes, setEdges, fitView]);
+    }, [graph, mode, spacing, edgeStyle, textPos, setNodes, setEdges, fitView]);
 
     useEffect(() => {
         runLayout(true); 
-    }, [graph, mode, spacing, edgeStyle, runLayout]);
+    }, [graph, mode, spacing, edgeStyle, textPos, runLayout]);
 
     const downloadImage = () => {
         const viewport = document.querySelector('.react-flow__viewport') as HTMLElement;

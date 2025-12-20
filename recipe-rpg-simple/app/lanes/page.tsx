@@ -8,7 +8,7 @@ import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type } from 'lucide-react';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading } = useAuth();
@@ -24,6 +24,7 @@ function RecipeLanesContent() {
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'elk' | 'micro' | 'force' | 'dagre-lr' | 'repulsive'>('compact');
   const [spacing, setSpacing] = useState(1);
   const [edgeStyle, setEdgeStyle] = useState<'straight' | 'step' | 'bezier'>('straight');
+  const [textPos, setTextPos] = useState<'bottom' | 'top' | 'left' | 'right'>('bottom');
 
   useEffect(() => {
       const id = searchParams.get('id');
@@ -262,6 +263,21 @@ function RecipeLanesContent() {
                 </div>
 
                 <div className="flex items-center gap-4">
+                    {/* Text Position */}
+                    <div className="flex items-center gap-2 border-r border-zinc-200 pr-4">
+                         <Type className="w-4 h-4 text-zinc-400" />
+                         <select 
+                             value={textPos} 
+                             onChange={(e) => setTextPos(e.target.value as any)}
+                             className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1"
+                         >
+                             <option value="bottom">Bottom</option>
+                             <option value="top">Top</option>
+                             <option value="right">Right</option>
+                             <option value="left">Left</option>
+                         </select>
+                    </div>
+
                     {/* Line Style */}
                     <div className="flex items-center gap-2 border-r border-zinc-200 pr-4">
                          <span className="text-xs font-mono text-zinc-400">Lines</span>
@@ -320,7 +336,7 @@ function RecipeLanesContent() {
                     </pre>
                 ) : graph ? (
                     <div className="absolute inset-0 bg-zinc-50/50">
-                        <ReactFlowDiagram graph={graph} mode={layoutMode} spacing={spacing} edgeStyle={edgeStyle} />
+                        <ReactFlowDiagram graph={graph} mode={layoutMode} spacing={spacing} edgeStyle={edgeStyle} textPos={textPos} />
                     </div>
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4">

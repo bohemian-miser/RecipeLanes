@@ -18,9 +18,16 @@ export interface RecipeNode {
   // Action Metadata
   temperature?: string; // "Medium Heat"
   duration?: string; // "5 min"
+  
+  // Layout Persistence
+  x?: number;
+  y?: number;
+  textPos?: 'bottom' | 'top' | 'left' | 'right';
 }
 
 export interface RecipeGraph {
+  originalText?: string;
+  layoutMode?: string;
   lanes: Lane[];
   nodes: RecipeNode[];
 }

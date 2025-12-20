@@ -8,6 +8,16 @@ const MinimalNode = ({ id, data }: NodeProps<RecipeNode>) => {
   const isIngredient = data.type === 'ingredient';
   const [isRerolling, setIsRerolling] = useState(false);
   const { setNodes } = useReactFlow();
+  
+  const textPos = data.textPos || 'bottom';
+  const isVertical = textPos === 'top' || textPos === 'bottom';
+  
+  const flexClass = {
+      bottom: 'flex-col',
+      top: 'flex-col-reverse',
+      right: 'flex-row',
+      left: 'flex-row-reverse'
+  }[textPos];
 
   const handleReroll = async (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -19,7 +29,6 @@ const MinimalNode = ({ id, data }: NodeProps<RecipeNode>) => {
         const res = await rerollIconAction(id, ingredientName, data.iconUrl || '');
         if (res && res.iconUrl) {
             setNodes((nodes) => nodes.map(n => {
-                // Update all nodes that share the same visual description/text
                 const nName = n.data.visualDescription || n.data.text;
                 if (nName === ingredientName) {
                     return { ...n, data: { ...n.data, iconUrl: res.iconUrl } };
@@ -36,7 +45,8 @@ const MinimalNode = ({ id, data }: NodeProps<RecipeNode>) => {
   
   return (
     <div 
-        className="flex flex-col items-center justify-center w-[100px] relative group"
+        className={`flex ${flexClass} items-center justify-center relative group`}
+        style={{ width: isVertical ? 100 : 'auto', minWidth: isVertical ? 100 : 160 }}
         title={data.visualDescription || data.text}
     >
       <Handle 
@@ -50,7 +60,8 @@ const MinimalNode = ({ id, data }: NodeProps<RecipeNode>) => {
         className="!bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" 
       />
       
-      <div className="relative w-16 h-16 flex items-center justify-center transition-transform hover:scale-110">
+      {/* Icon Container */}
+      <div className="relative w-16 h-16 flex-shrink-0 flex items-center justify-center transition-transform hover:scale-110 z-10">
           {data.iconUrl ? (
               <img 
                 src={data.iconUrl} 
@@ -71,7 +82,11 @@ const MinimalNode = ({ id, data }: NodeProps<RecipeNode>) => {
           </button>
       </div>
 
-      <div className="mt-1 text-[10px] leading-tight text-center font-medium text-zinc-800 w-full break-words line-clamp-3 px-1" style={{ textShadow: '0 0 4px rgba(255,255,255,0.8), 0 0 2px rgba(255,255,255,1)' }}>
+      {/* Text Container */}
+      <div 
+        className={`text-[10px] leading-tight text-center font-medium text-zinc-800 break-words px-1 z-20 ${isVertical ? 'mt-1 w-full' : 'mx-2 w-24'}`} 
+        style={{ textShadow: '0 0 4px rgba(255,255,255,0.8), 0 0 2px rgba(255,255,255,1)' }}
+      >
           {data.text}
       </div>
     </div>

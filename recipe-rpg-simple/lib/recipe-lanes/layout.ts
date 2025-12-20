@@ -85,8 +85,7 @@ const calculateDagreLayout = (graph: RecipeGraph, spacing: number, rankDir: 'TB'
     g.setGraph({ 
         rankdir: rankDir, 
         nodesep: 10 * spacing, 
-        ranksep: 20 * spacing, 
-        align: 'UL' 
+        ranksep: 20 * spacing
     });
     g.setDefaultEdgeLabel(() => ({}));
 

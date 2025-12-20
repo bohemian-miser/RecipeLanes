@@ -2,28 +2,31 @@ import { Position, Node } from 'reactflow';
 
 // Helper to get center
 function getCenter(node: Node, handlePos?: { x: number, y: number }) {
+    // For MinimalNode, we know exact geometry relative to node position
+    // Trusting manual calc avoids React Flow handle pos issues (e.g. if transforms aren't tracked)
+    if (node.type === 'minimal') {
+        const { x, y } = node.positionAbsolute || node.position;
+        // Check for dimensions, default to standard MinimalNode size if missing
+        const w = node.width ?? (node.data?.textPos === 'right' || node.data?.textPos === 'left' ? 160 : 100);
+        const h = node.height ?? 100;
+        const textPos = node.data?.textPos || 'bottom';
+        
+        // Icon is 64x64. Radius 32.
+        // If bottom: Icon is at top. Center is (w/2, 32).
+        if (textPos === 'bottom') return { x: x + w / 2, y: y + 32 };
+        // If top: Icon is at bottom. Center is (w/2, h - 32).
+        if (textPos === 'top') return { x: x + w / 2, y: y + h - 32 };
+        // If right: Icon is left. Center is (32, h/2).
+        if (textPos === 'right') return { x: x + 32, y: y + h / 2 };
+        // If left: Icon is right. Center is (w - 32, h/2).
+        if (textPos === 'left') return { x: x + w - 32, y: y + h / 2 };
+    }
+
     if (handlePos && typeof handlePos.x === 'number' && typeof handlePos.y === 'number') return handlePos;
     
     const { x, y } = node.positionAbsolute || node.position;
     const w = node.width ?? 100;
     const h = node.height ?? 100;
-    
-    // Fallback: Estimate Icon Center based on text position
-    // Icon is 64x64 (Radius 32)
-    const textPos = node.data?.textPos || 'bottom';
-    
-    if (textPos === 'bottom') {
-        return { x: x + w / 2, y: y + 32 };
-    } else if (textPos === 'top') {
-        return { x: x + w / 2, y: y + h - 32 };
-    } else if (textPos === 'right') {
-        // Text is right, Icon is left
-        return { x: x + 32, y: y + h / 2 };
-    } else if (textPos === 'left') {
-        // Text is left, Icon is right
-        return { x: x + w - 32, y: y + h / 2 };
-    }
-
     return { x: x + w / 2, y: y + h / 2 };
 }
 

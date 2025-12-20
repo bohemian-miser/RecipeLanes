@@ -3,9 +3,27 @@ import { Position, Node } from 'reactflow';
 // Helper to get center
 function getCenter(node: Node, handlePos?: { x: number, y: number }) {
     if (handlePos && typeof handlePos.x === 'number' && typeof handlePos.y === 'number') return handlePos;
+    
     const { x, y } = node.positionAbsolute || node.position;
     const w = node.width ?? 100;
-    const h = node.height ?? 50;
+    const h = node.height ?? 100;
+    
+    // Fallback: Estimate Icon Center based on text position
+    // Icon is 64x64 (Radius 32)
+    const textPos = node.data?.textPos || 'bottom';
+    
+    if (textPos === 'bottom') {
+        return { x: x + w / 2, y: y + 32 };
+    } else if (textPos === 'top') {
+        return { x: x + w / 2, y: y + h - 32 };
+    } else if (textPos === 'right') {
+        // Text is right, Icon is left
+        return { x: x + 32, y: y + h / 2 };
+    } else if (textPos === 'left') {
+        // Text is left, Icon is right
+        return { x: x + w - 32, y: y + h / 2 };
+    }
+
     return { x: x + w / 2, y: y + h / 2 };
 }
 

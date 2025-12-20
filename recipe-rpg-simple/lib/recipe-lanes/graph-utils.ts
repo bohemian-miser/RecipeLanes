@@ -2,7 +2,7 @@ import { Position, Node } from 'reactflow';
 
 // Helper to get center
 function getCenter(node: Node, handlePos?: { x: number, y: number }) {
-    if (handlePos) return handlePos;
+    if (handlePos && typeof handlePos.x === 'number' && typeof handlePos.y === 'number') return handlePos;
     const { x, y } = node.positionAbsolute || node.position;
     const w = node.width ?? 100;
     const h = node.height ?? 50;

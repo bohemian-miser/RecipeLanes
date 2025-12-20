@@ -13,8 +13,8 @@ function FloatingEdge({ id, source, target, markerEnd, style, data, sourceX, sou
   const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(
       sourceNode, 
       targetNode,
-      { x: sourceX, y: sourceY },
-      { x: targetX, y: targetY }
+      (typeof sourceX === 'number' && typeof sourceY === 'number') ? { x: sourceX, y: sourceY } : undefined,
+      (typeof targetX === 'number' && typeof targetY === 'number') ? { x: targetX, y: targetY } : undefined
   );
 
   const variant = data?.variant || 'straight';

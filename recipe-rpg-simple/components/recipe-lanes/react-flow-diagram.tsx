@@ -58,6 +58,16 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     const router = useRouter();
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
+    
+    // Drag State for Branch Rotation
+    const dragRef = useRef<{
+        active: boolean;
+        pivot?: { x: number, y: number };
+        startAngle?: number;
+        startDist?: number;
+        ancestors?: string[];
+        initialPositions?: Record<string, { x: number, y: number }>;
+    }>({ active: false });
 
     // Initial Layout Calculation
     const runLayout = useCallback(async (preservePositions = false) => {
@@ -99,7 +109,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                  id: n.id,
                  type: nodeType,
                  position: { x: n.x, y: n.y },
-                 data: { ...n.data, textPos, depth: n.depth }, 
+                 data: { ...n.data, textPos, depth: n.depth },
                  width: n.width,
                  height: n.height,
                  draggable: true,
@@ -215,35 +225,116 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     };
 
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
+        // Shift+Click: Rotate Group 90 deg around Centroid
         if (event.shiftKey) {
             const allNodes = getNodes();
             const group = allNodes.filter(n => n.selected || n.id === node.id);
             if (group.length > 0) {
-                // Calculate Centroid
                 const cx = group.reduce((sum, n) => sum + n.position.x, 0) / group.length;
                 const cy = group.reduce((sum, n) => sum + n.position.y, 0) / group.length;
-                
                 setNodes((nds) => nds.map((n) => {
                     if (group.find(gn => gn.id === n.id)) {
-                        // Rotate 90 deg clockwise around (cx, cy)
-                        // x' = cx - (y - cy)
-                        // y' = cy + (x - cx)
                         const dx = n.position.x - cx;
                         const dy = n.position.y - cy;
-                        
                         return {
                             ...n,
-                            position: {
-                                x: cx - dy,
-                                y: cy + dx
-                            },
-                            selected: true // Force keep selected
+                            position: { x: cx - dy, y: cy + dx },
+                            selected: true 
                         };
                     }
                     return n;
                 }));
             }
         }
+    };
+
+    // Shift+Drag: Rotate Branch around Child (Pivot)
+    const onNodeDragStart = (event: React.MouseEvent, node: Node) => {
+        if (event.shiftKey) {
+            const allNodes = getNodes();
+            // Find child (Pivot) - Node that this one flows INTO
+            const outgoing = edges.find(e => e.source === node.id);
+            const child = outgoing ? allNodes.find(n => n.id === outgoing.target) : null;
+
+            if (child) {
+                // Find ancestors (subtree feeding into node)
+                const getAncestors = (id: string, visited = new Set<string>()): string[] => {
+                    if (visited.has(id)) return [];
+                    visited.add(id);
+                    const incoming = edges.filter(e => e.target === id);
+                    const parents = incoming.map(e => e.source);
+                    return [...parents, ...parents.flatMap(p => getAncestors(p, visited))];
+                };
+                
+                const ancestors = getAncestors(node.id);
+                
+                // Store initial state
+                const initialPositions: Record<string, { x: number, y: number }> = {};
+                // Include drag node? React Flow handles drag node position. We handle ancestors.
+                // We also need drag node's START pos relative to pivot to calc delta.
+                [node.id, ...ancestors].forEach(id => {
+                    const n = allNodes.find(an => an.id === id);
+                    if (n) initialPositions[id] = { ...n.position };
+                });
+
+                const dx = node.position.x - child.position.x;
+                const dy = node.position.y - child.position.y;
+                
+                dragRef.current = {
+                    active: true,
+                    pivot: { x: child.position.x, y: child.position.y },
+                    startAngle: Math.atan2(dy, dx),
+                    startDist: Math.sqrt(dx*dx + dy*dy),
+                    ancestors,
+                    initialPositions
+                };
+            }
+        }
+    };
+
+    const onNodeDrag = (event: React.MouseEvent, node: Node) => {
+        if (dragRef.current.active && dragRef.current.pivot && dragRef.current.initialPositions) {
+            const { pivot, startAngle, startDist, ancestors, initialPositions } = dragRef.current;
+            
+            // Current vector from pivot to dragged node
+            const dx = node.position.x - pivot.x;
+            const dy = node.position.y - pivot.y;
+            const currAngle = Math.atan2(dy, dx);
+            const currDist = Math.sqrt(dx*dx + dy*dy);
+            
+            const rotation = currAngle - (startAngle || 0);
+            const scale = (startDist && startDist > 0) ? currDist / startDist : 1;
+
+            if (ancestors) {
+                setNodes(nds => nds.map(n => {
+                    if (ancestors.includes(n.id)) {
+                        const initPos = initialPositions[n.id];
+                        // Vector from pivot to ancestor initial
+                        const vx = initPos.x - pivot.x;
+                        const vy = initPos.y - pivot.y;
+                        
+                        // Rotate and Scale
+                        // x' = x cos - y sin
+                        // y' = x sin + y cos
+                        const rx = vx * Math.cos(rotation) - vy * Math.sin(rotation);
+                        const ry = vx * Math.sin(rotation) + vy * Math.cos(rotation);
+                        
+                        return {
+                            ...n,
+                            position: {
+                                x: pivot.x + rx * scale,
+                                y: pivot.y + ry * scale
+                            }
+                        };
+                    }
+                    return n;
+                }));
+            }
+        }
+    };
+
+    const onNodeDragStop = () => {
+        dragRef.current = { active: false };
     };
 
     return (
@@ -254,6 +345,9 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onNodeClick={onNodeClick}
+                onNodeDragStart={onNodeDragStart}
+                onNodeDrag={onNodeDrag}
+                onNodeDragStop={onNodeDragStop}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 fitView
@@ -292,6 +386,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                     <div className="flex items-center gap-2"><span className="text-xl">🥕</span> Ingredients</div>
                     <div className="flex items-center gap-2"><span className="text-xl">🍳</span> Actions</div>
                     <div className="flex items-center gap-1 opacity-50 border-t border-zinc-100 pt-2"><span className="text-xs font-bold">Shift+Click</span> Rotate Group</div>
+                    <div className="flex items-center gap-1 opacity-50"><span className="text-xs font-bold">Shift+Drag</span> Rotate Branch</div>
                 </Panel>
             </ReactFlow>
         </div>

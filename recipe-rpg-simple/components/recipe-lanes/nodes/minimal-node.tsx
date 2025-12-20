@@ -55,13 +55,6 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode>) => {
         }}
         title={data.visualDescription || data.text}
     >
-      {/* Rotate Indicator (visible when selected) */}
-      {selected && (
-          <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-zinc-400 bg-white/80 rounded-full p-0.5 animate-pulse" title="Shift+Click to Rotate Group">
-              <RotateCw className="w-3 h-3" />
-          </div>
-      )}
-
       <Handle 
         type="target" 
         position={Position.Top} 

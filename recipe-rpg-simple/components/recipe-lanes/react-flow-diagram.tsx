@@ -27,7 +27,7 @@ import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
 import FloatingEdge from './edges/floating-edge';
 import { toPng } from 'html-to-image';
-import { Download, Share2, RotateCcw } from 'lucide-react';
+import { Download, Share2, RotateCcw, RefreshCw } from 'lucide-react';
 import { saveRecipeAction } from '@/app/actions';
 
 const nodeTypes = {
@@ -172,7 +172,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             .force("y", forceY((d: any) => d.depth * 150 * spacing).strength(0.1))
             .force("x", forceX().strength(0.01))
             .alphaDecay(0) 
-            .velocityDecay(0.9) // Slower movement (Viscous)
+            .velocityDecay(0.95) // Very High Viscosity (Slow motion)
             .on('tick', () => {
                  setNodes(nds => nds.map(n => {
                      const d3n = d3Nodes.find(dn => dn.id === n.id);
@@ -225,13 +225,35 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         runLayout(false); 
     };
 
+    const handleRotateSelection = () => {
+        const currentNodes = getNodes();
+        const selected = currentNodes.filter(n => n.selected);
+        if (selected.length > 0) {
+            // Centroid
+            const cx = selected.reduce((sum, n) => sum + n.position.x, 0) / selected.length;
+            const cy = selected.reduce((sum, n) => sum + n.position.y, 0) / selected.length;
+            
+            setNodes(nds => nds.map(n => {
+                if (n.selected) {
+                    const dx = n.position.x - cx;
+                    const dy = n.position.y - cy;
+                    // Rotate 90 deg clockwise
+                    return {
+                        ...n,
+                        position: { x: cx - dy, y: cy + dx }
+                    };
+                }
+                return n;
+            }));
+        }
+    };
+
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
         // Shift+Click: Select Branch (Ancestors)
         if (event.shiftKey) {
             const getAncestors = (id: string, visited = new Set<string>()): string[] => {
                 if (visited.has(id)) return [];
                 visited.add(id);
-                // Incoming edges are parents/ancestors in recipe flow
                 const incoming = edges.filter(e => e.target === id);
                 const parents = incoming.map(e => e.source);
                 return [...parents, ...parents.flatMap(p => getAncestors(p, visited))];
@@ -242,12 +264,11 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
 
             setNodes((nds) => nds.map((n) => ({
                 ...n,
-                selected: toSelect.has(n.id) || n.selected // Add to selection
+                selected: toSelect.has(n.id) || n.selected
             })));
         }
     };
 
-    // Shift+Drag: Rotate Branch around Child (Pivot)
     const onNodeDragStart = (event: React.MouseEvent, node: Node) => {
         if (event.shiftKey) {
             const allNodes = getNodes();
@@ -326,6 +347,8 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         dragRef.current = { active: false };
     };
 
+    const hasSelection = nodes.some(n => n.selected);
+
     return (
         <div className="w-full h-full" ref={flowWrapper}>
             <ReactFlow
@@ -347,6 +370,15 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 <Background color="#f4f4f5" gap={20} />
                 <Controls showInteractive={false} />
                 <Panel position="top-right" className="flex gap-2">
+                    {hasSelection && (
+                        <button 
+                            onClick={handleRotateSelection}
+                            className="bg-white p-2 rounded shadow-md border border-zinc-200 hover:bg-zinc-50 text-blue-600 animate-in fade-in zoom-in"
+                            title="Rotate Selection 90°"
+                        >
+                            <RefreshCw className="w-4 h-4" />
+                        </button>
+                    )}
                     <button 
                         onClick={handleReset} 
                         className="bg-white p-2 rounded shadow-md border border-zinc-200 hover:bg-zinc-50 text-zinc-600"

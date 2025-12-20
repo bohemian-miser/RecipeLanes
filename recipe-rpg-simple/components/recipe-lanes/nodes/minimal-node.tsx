@@ -4,6 +4,9 @@ import { RefreshCw, RotateCw } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { rerollIconAction } from '@/app/actions';
 
+// Track rejected URLs for the session to prevent them from reappearing immediately
+const sessionRejectedUrls = new Set<string>();
+
 const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode>) => {
   const isIngredient = data.type === 'ingredient';
   const [isRerolling, setIsRerolling] = useState(false);
@@ -25,9 +28,14 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode>) => {
       setIsRerolling(true);
       
       const ingredientName = data.visualDescription || data.text;
+      const currentUrl = data.iconUrl || '';
       
+      if (currentUrl) {
+          sessionRejectedUrls.add(currentUrl);
+      }
+
       try {
-        const res = await rerollIconAction(id, ingredientName, data.iconUrl || '');
+        const res = await rerollIconAction(id, ingredientName, currentUrl, Array.from(sessionRejectedUrls));
         if (res && res.iconUrl) {
             setNodes((nodes) => nodes.map(n => {
                 // Update all nodes that share the same visual description/text

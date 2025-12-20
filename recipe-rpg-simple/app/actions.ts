@@ -437,7 +437,7 @@ export async function generateGraphIconsAction(graph: RecipeGraph): Promise<{ gr
     }
 }
 
-export async function rerollIconAction(nodeId: string, ingredientName: string, currentIconUrl: string) {
+export async function rerollIconAction(nodeId: string, ingredientName: string, currentIconUrl: string, seenUrls: string[] = []) {
     try {
         // Record Rejection if possible
         if (currentIconUrl) {
@@ -448,7 +448,9 @@ export async function rerollIconAction(nodeId: string, ingredientName: string, c
         }
 
         // Get New Icon
-        const result = await getOrCreateIconAction(ingredientName, 0, [currentIconUrl]);
+        // Combine current bad one with history of bad ones
+        const allSeen = Array.from(new Set([...seenUrls, currentIconUrl]));
+        const result = await getOrCreateIconAction(ingredientName, 0, allSeen);
         
         if ('error' in result) return { error: result.error };
         

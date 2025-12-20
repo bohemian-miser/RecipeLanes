@@ -29,10 +29,10 @@ export function getEdgeParams(
     const c2 = getCenter(target, targetHandlePos);
 
     // Calculate Radius
-    // If handle provided (MinimalNode with centered handles), use Icon Radius (~32) + Buffer (~8).
+    // If handle provided (MinimalNode with centered handles), use Icon Radius (~32) + Buffer (~4).
     // Else use approximate node radius based on dimensions.
-    const r1 = sourceHandlePos ? 40 : (Math.min(source.width??100, source.height??50)/2 + 10);
-    const r2 = targetHandlePos ? 40 : (Math.min(target.width??100, target.height??50)/2 + 10);
+    const r1 = sourceHandlePos ? 36 : (Math.min(source.width??100, source.height??50)/2 + 5);
+    const r2 = targetHandlePos ? 36 : (Math.min(target.width??100, target.height??50)/2 + 5);
 
     const sInter = getNodeIntersection(c1, c2, r1);
     const tInter = getNodeIntersection(c2, c1, r2);

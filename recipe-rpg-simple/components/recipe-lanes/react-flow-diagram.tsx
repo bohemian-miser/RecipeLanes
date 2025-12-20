@@ -249,8 +249,16 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     };
 
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
-        // Shift+Click: Select Branch (Ancestors)
+        // Shift+Click Logic
         if (event.shiftKey) {
+            // Check if we are in "Multi-Select" mode (other items selected)
+            // If so, let React Flow handle standard toggle behavior (Add/Remove)
+            const hasOtherSelection = nodes.some(n => n.selected && n.id !== node.id);
+            if (hasOtherSelection) {
+                return;
+            }
+
+            // Otherwise, Select Branch (Ancestors)
             const getAncestors = (id: string, visited = new Set<string>()): string[] => {
                 if (visited.has(id)) return [];
                 visited.add(id);

@@ -67,12 +67,12 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode>) => {
       />
       
       {/* Icon Container */}
-      <div className="relative w-16 h-16 flex-shrink-0 flex items-center justify-center transition-transform hover:scale-110 z-10">
+      <div className={`relative w-16 h-16 flex-shrink-0 flex items-center justify-center transition-all duration-200 z-10 ${selected ? 'border-2 border-dashed border-blue-500 rounded-lg bg-blue-50/10' : ''}`}>
           {data.iconUrl ? (
               <img 
                 src={data.iconUrl} 
                 alt="" 
-                className={`w-16 h-16 object-contain drop-shadow-md mix-blend-multiply ${isRerolling ? 'opacity-50' : ''}`}
+                className={`w-14 h-14 object-contain drop-shadow-md mix-blend-multiply ${isRerolling ? 'opacity-50' : ''}`}
                 style={{ imageRendering: 'pixelated' }}
               />
           ) : (

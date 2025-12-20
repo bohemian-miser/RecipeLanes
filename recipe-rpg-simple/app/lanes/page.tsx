@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
 import { Login } from '@/components/login';
 import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
@@ -132,6 +133,9 @@ function RecipeLanesContent() {
             <div className="flex items-center gap-3">
                 <ChefHat className="w-8 h-8 text-yellow-500" />
                 <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Recipe Lanes</h1>
+                <Link href="/gallery" className="ml-4 text-xs font-mono text-zinc-500 hover:text-white transition-colors bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800 hover:border-zinc-600">
+                    Gallery
+                </Link>
             </div>
             <div className="text-xs font-mono text-zinc-500">
                 {user?.email || 'Guest Mode'}

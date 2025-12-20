@@ -32,12 +32,51 @@ export interface DataService {
   
   incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number): Promise<void>;
 
+  getPublicRecipes(limit: number): Promise<any[]>;
+
   listDebugFiles(): Promise<any[]>;
 }
 
 // --- Firebase Implementation ---
 export class FirebaseDataService implements DataService {
   
+  async getPublicRecipes(limit: number = 50): Promise<any[]> {
+      try {
+          const snapshot = await db.collection('recipes')
+              .orderBy('created_at', 'desc')
+              .limit(limit)
+              .get();
+          
+          return snapshot.docs.map(doc => {
+              const data = doc.data();
+              let title = 'Untitled Recipe';
+              if (data.graph?.originalText) {
+                  title = data.graph.originalText.split('\n')[0].trim();
+                  if (title.length > 50) title = title.substring(0, 50) + '...';
+              } else if (data.graph?.nodes?.length > 0) {
+                  // Fallback: Use first action or ingredient
+                  const first = data.graph.nodes[0];
+                  title = first.text || first.visualDescription || 'Recipe';
+              }
+
+              return {
+                  id: doc.id,
+                  title,
+                  createdAt: data.created_at?.toDate?.()?.toISOString() || null,
+                  nodeCount: data.graph?.nodes?.length || 0,
+                  previewIcon: data.graph?.nodes?.find((n: any) => n.iconUrl)?.iconUrl
+              };
+          });
+      } catch (e: any) {
+          console.warn('getPublicRecipes failed (likely missing index):', e.message);
+          // Fallback without ordering if index missing
+          try {
+              const snapshot = await db.collection('recipes').limit(limit).get();
+              return snapshot.docs.map(doc => ({ id: doc.id, title: 'Recipe (Unordered)' }));
+          } catch (e2) { return []; }
+      }
+  }
+
   async saveRecipe(graph: RecipeGraph): Promise<string> {
       const doc = await db.collection('recipes').add({
           graph,
@@ -304,6 +343,17 @@ export class FirebaseDataService implements DataService {
 // --- Memory Implementation ---
 export class MemoryDataService implements DataService {
   private recipes = new Map<string, RecipeGraph>();
+
+  async getPublicRecipes(limit: number): Promise<any[]> {
+      return Array.from(this.recipes.entries())
+          .map(([id, graph]) => ({
+              id,
+              title: graph.originalText?.split('\n')[0].substring(0, 50) || 'Untitled',
+              createdAt: new Date().toISOString(),
+              nodeCount: graph.nodes.length
+          }))
+          .slice(0, limit);
+  }
 
   async saveRecipe(graph: RecipeGraph): Promise<string> {
       const id = randomUUID();

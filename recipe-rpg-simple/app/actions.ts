@@ -475,3 +475,13 @@ export async function calculatePenroseLayoutAction(graph: RecipeGraph, spacing: 
         return { error: e.message || 'Penrose calculation failed' };
     }
 }
+
+export async function getPublicGalleryAction() {
+    try {
+        const service = getDataService();
+        return await service.getPublicRecipes(50);
+    } catch (e: any) {
+        console.error('getPublicGalleryAction failed:', e);
+        return [];
+    }
+}

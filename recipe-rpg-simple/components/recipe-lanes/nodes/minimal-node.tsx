@@ -77,27 +77,57 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode>) => {
   
           
   
-          {/* Icon Container */}
+                {/* Icon Container */}
+  
+          
   
                 <div className={`relative w-16 h-16 flex-shrink-0 flex items-center justify-center transition-all duration-200 z-10 ${selected ? 'border-2 border-dashed border-blue-500 rounded-lg bg-blue-50/10' : ''}`}>
   
+          
+  
                     <Handle 
+  
+          
+  
+                      id="target"
+  
+          
   
                       type="target" 
   
+          
+  
                       position={Position.Top} 
   
+          
+  
                       className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" 
+  
+          
   
                     />
   
+          
+  
                     <Handle 
+  
+          
+  
+                      id="source"
+  
+          
   
                       type="source" 
   
+          
+  
                       position={Position.Top} 
   
+          
+  
                       className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" 
+  
+          
   
                     />
   

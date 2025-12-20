@@ -50,14 +50,14 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode>) => {
         className={`flex ${flexClass} items-center justify-center relative group transition-transform duration-300`}
         style={{ 
             width: isVertical ? 100 : 'auto', 
-            minWidth: isVertical ? 100 : 160,
-            transform: `rotate(${rotation}deg)` 
+            minWidth: isVertical ? 100 : 160
+            // No rotation transform here, so text/icon stay upright
         }}
         title={data.visualDescription || data.text}
     >
       {/* Rotate Indicator (visible when selected) */}
       {selected && (
-          <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-zinc-400 bg-white/80 rounded-full p-0.5 animate-pulse">
+          <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-zinc-400 bg-white/80 rounded-full p-0.5 animate-pulse" title="Shift+Click to Rotate Group">
               <RotateCw className="w-3 h-3" />
           </div>
       )}

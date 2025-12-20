@@ -175,13 +175,35 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
 
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
         if (event.shiftKey) {
-            setNodes((nds) => nds.map((n) => {
-                if (n.id === node.id) {
-                    const rot = (n.data.rotation || 0) + 90;
-                    return { ...n, data: { ...n.data, rotation: rot } };
-                }
-                return n;
-            }));
+            const allNodes = getNodes();
+            // Identify the group to rotate (currently selected + the clicked one)
+            const group = allNodes.filter(n => n.selected || n.id === node.id);
+            
+            if (group.length > 0) {
+                // Calculate Centroid
+                const cx = group.reduce((sum, n) => sum + n.position.x, 0) / group.length;
+                const cy = group.reduce((sum, n) => sum + n.position.y, 0) / group.length;
+                
+                setNodes((nds) => nds.map((n) => {
+                    if (group.find(gn => gn.id === n.id)) {
+                        // Rotate 90 deg clockwise around (cx, cy)
+                        // x' = cx - (y - cy)
+                        // y' = cy + (x - cx)
+                        const dx = n.position.x - cx;
+                        const dy = n.position.y - cy;
+                        
+                        return {
+                            ...n,
+                            position: {
+                                x: cx - dy,
+                                y: cy + dx
+                            },
+                            selected: true // Keep selected to allow continued rotation
+                        };
+                    }
+                    return n;
+                }));
+            }
         }
     };
 

@@ -20,7 +20,6 @@ import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateElkLayout } from '../../lib/recipe-lanes/layout-elk';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
-import { calculatePenroseLayout } from '../../lib/recipe-lanes/layout-penrose';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import MinimalNode from './nodes/minimal-node';
 import CardNode from './nodes/card-node';
@@ -29,7 +28,7 @@ import MicroNode from './nodes/micro-node';
 import FloatingEdge from './edges/floating-edge';
 import { toPng } from 'html-to-image';
 import { Download, Share2, RotateCcw, RefreshCw, Undo, Redo } from 'lucide-react';
-import { saveRecipeAction } from '@/app/actions';
+import { saveRecipeAction, calculatePenroseLayoutAction } from '@/app/actions';
 
 const nodeTypes = {
   minimal: MinimalNode,
@@ -87,7 +86,6 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         setNodes(next!);
     }, [future, getNodes, setNodes]);
 
-    // Keyboard Shortcuts for Undo/Redo
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
@@ -130,7 +128,13 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         } else if (mode === 'repulsive') {
             layout = calculateRepulsiveCurvesLayout(graph, spacing);
         } else if (mode === 'penrose') {
-            layout = await calculatePenroseLayout(graph, spacing);
+            const res = await calculatePenroseLayoutAction(graph, spacing);
+            if (res.error || !res.layout) {
+                console.error("Penrose Error", res.error);
+                layout = calculateLayout(graph, 'compact', spacing);
+            } else {
+                layout = res.layout;
+            }
         } else {
             layout = calculateLayout(graph, mode as LayoutMode, spacing);
         }
@@ -191,14 +195,14 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             }, 50);
         }
 
-    }, [graph, mode, spacing, setNodes, setEdges, fitView]); // Removed edgeStyle/textPos dependencies
+    }, [graph, mode, spacing, setNodes, setEdges, fitView]); // Remove visual props deps
 
-    // Layout Effect (Mode/Graph/Spacing changes)
+    // Layout Effect
     useEffect(() => {
         runLayout(true); 
     }, [graph, mode, spacing, runLayout]);
 
-    // Text Position Update Effect (Preserve positions)
+    // Text Position Update Effect
     useEffect(() => {
         setNodes(nds => nds.map(n => ({
             ...n,
@@ -214,7 +218,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         })));
     }, [edgeStyle, setEdges]);
 
-    // Live Force Simulation Effect
+    // Live Force Simulation
     useEffect(() => {
         if (!isLive) {
             if (simulationRef.current) simulationRef.current.stop();
@@ -252,7 +256,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         simulationRef.current = sim;
 
         return () => { sim.stop(); };
-    }, [isLive, spacing, graph]); // Depend on Graph? If graph changes, layout runs first.
+    }, [isLive, spacing, graph]); 
 
     const downloadImage = () => {
         if (!flowWrapper.current) return;
@@ -316,14 +320,13 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
 
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
         if (event.shiftKey) {
-            // If Multi-Select active, allow toggle
             const hasOtherSelection = nodes.some(n => n.selected && n.id !== node.id);
             if (hasOtherSelection) {
-                takeSnapshot(); // Snapshot before toggle?
+                takeSnapshot(); 
                 return;
             }
 
-            takeSnapshot(); // Snapshot before Branch Select
+            takeSnapshot(); 
             const getAncestors = (id: string, visited = new Set<string>()): string[] => {
                 if (visited.has(id)) return [];
                 visited.add(id);
@@ -343,7 +346,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     };
 
     const onNodeDragStart = (event: React.MouseEvent, node: Node) => {
-        takeSnapshot(); // Snapshot before drag
+        takeSnapshot(); 
         if (event.shiftKey) {
             const allNodes = getNodes();
             const outgoing = edges.find(e => e.source === node.id);
@@ -444,7 +447,6 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 <Background color="#f4f4f5" gap={20} />
                 <Controls showInteractive={false} />
                 <Panel position="top-right" className="flex gap-2">
-                    {/* Undo/Redo Buttons */}
                     <div className="flex gap-1 mr-2 border-r border-zinc-200 pr-2">
                         <button 
                             onClick={undo} 

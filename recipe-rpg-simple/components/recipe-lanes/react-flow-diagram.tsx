@@ -28,8 +28,8 @@ import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
 import FloatingEdge from './edges/floating-edge';
 import { toPng } from 'html-to-image';
-import { Download, Share2, RotateCcw, RefreshCw, Undo, Redo } from 'lucide-react';
-import { saveRecipeAction, calculatePenroseLayoutAction } from '@/app/actions';
+import { Download, Share2, RotateCcw, RefreshCw, Undo, Redo, Check } from 'lucide-react';
+import { saveRecipeAction } from '@/app/actions';
 
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
@@ -48,6 +48,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     const router = useRouter();
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
+    const [copied, setCopied] = useState(false);
     
     const nodeTypes = useMemo(() => ({
         minimal: MinimalNode,
@@ -286,9 +287,10 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             url.searchParams.set('id', res.id);
             router.push(url.pathname + url.search);
             navigator.clipboard.writeText(url.toString());
-            alert('Layout saved & Link copied!');
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
         } else {
-            alert('Failed to save layout.');
+            console.error('Failed to save layout.');
         }
     };
 
@@ -485,10 +487,10 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                     </button>
                      <button 
                         onClick={handleShare} 
-                        className="bg-white p-2 rounded shadow-md border border-zinc-200 hover:bg-zinc-50 text-zinc-600"
-                        title="Save & Share Layout"
+                        className={`p-2 rounded shadow-md border border-zinc-200 transition-colors ${copied ? 'bg-green-50 text-green-600 border-green-200' : 'bg-white text-zinc-600 hover:bg-zinc-50'}`}
+                        title={copied ? "Copied!" : "Save & Share Layout"}
                     >
-                        <Share2 className="w-4 h-4" />
+                        {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
                     </button>
                     <button 
                         onClick={downloadImage} 

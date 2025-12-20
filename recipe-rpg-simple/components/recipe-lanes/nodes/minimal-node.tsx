@@ -173,23 +173,63 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode>) => {
   
     
   
-          {/* Text Container */}
+                {/* Text Container */}
   
-          <div 
+    
   
-            className={`text-[10px] leading-[0.8rem] text-center font-medium text-zinc-800 break-words px-1 z-20 ${isVertical ? 'w-full mt-[-4px]' : 'w-24'}`} 
+                <div 
   
-            style={{ textShadow: '0 0 4px rgba(255,255,255,0.8), 0 0 2px rgba(255,255,255,1)' }}
+    
   
-          >
+                  className={`text-[10px] leading-[0.8rem] text-center font-medium text-zinc-800 break-words px-1 z-20 ${isVertical ? 'w-full mt-[-4px]' : 'w-24'}`} 
   
-              {data.text}
+    
   
-          </div>
+                  style={{ textShadow: '0 0 4px rgba(255,255,255,0.8), 0 0 2px rgba(255,255,255,1)' }}
   
-        </div>
+    
   
-      );
+                >
+  
+    
+  
+                    {data.text}
+  
+    
+  
+                    {(data.temperature || data.duration) && (
+  
+    
+  
+                        <div className="flex flex-col items-center mt-1 space-y-0.5 opacity-80">
+  
+    
+  
+                            {data.temperature && <span className="text-[8px] bg-red-100/80 px-1 rounded text-red-800 border border-red-200">{data.temperature}</span>}
+  
+    
+  
+                            {data.duration && <span className="text-[8px] bg-blue-100/80 px-1 rounded text-blue-800 border border-blue-200">{data.duration}</span>}
+  
+    
+  
+                        </div>
+  
+    
+  
+                    )}
+  
+    
+  
+                </div>
+  
+    
+  
+              </div>
+  
+    
+  
+            );
   
   
 };

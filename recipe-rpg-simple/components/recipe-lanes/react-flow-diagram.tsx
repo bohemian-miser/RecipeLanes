@@ -19,6 +19,7 @@ import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX
 
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
+import { calculatePenroseLayout } from '../../lib/recipe-lanes/layout-penrose';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import MinimalNode from './nodes/minimal-node';
 import CardNode from './nodes/card-node';
@@ -31,7 +32,7 @@ import { saveRecipeAction } from '@/app/actions';
 
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
-  mode: LayoutMode | 'repulsive'; // 'force' is removed as dedicated layout, physics is global feature
+  mode: LayoutMode | 'repulsive';
   spacing?: number;
   edgeStyle?: 'straight' | 'step' | 'bezier';
   textPos?: 'bottom' | 'top' | 'left' | 'right';
@@ -122,13 +123,11 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         const canPreserve = preservePositions && graph.nodes.some(n => n.x !== undefined);
 
         if (canPreserve) {
-            // Use 'dagre' as safe fallback mode for preservation logic, or mode if valid
             const safeMode = (['swimlanes', 'dagre', 'dagre-lr'].includes(mode as string)) ? (mode as LayoutMode) : 'dagre';
             layout = calculateLayout(graph, safeMode, spacing, true);
         } else if (mode === 'repulsive') {
             layout = calculateRepulsiveCurvesLayout(graph, spacing);
         } else {
-            // mode is LayoutMode ('swimlanes' | 'dagre' | 'dagre-lr')
             layout = calculateLayout(graph, mode as LayoutMode, spacing);
         }
 
@@ -148,15 +147,6 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
              });
         });
 
-        // Add Nodes
-        // All kept modes use 'minimal' node style except maybe swimlanes?
-        // User said "lanes are not showing".
-        // If mode is swimlanes, we might want CardNode?
-        // But MinimalNode is preferred generally.
-        // Let's stick to MinimalNode for consistency unless mode='swimlanes' specifically requested cards?
-        // Step 32 used 'card' for non-minimal modes.
-        // "Compact looks alright..."
-        // I'll use 'minimal' for all current modes as per recent preference for consistency.
         const nodeType = 'minimal'; 
         
         layout.nodes.forEach(n => {
@@ -257,18 +247,23 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         simulationRef.current = sim;
 
         return () => { sim.stop(); };
-    }, [isLive, spacing, graph]); // Removed 'nodes' dependency to avoid loop
+    }, [isLive, spacing, graph]); 
 
     const downloadImage = () => {
         if (!flowWrapper.current) return;
         toPng(flowWrapper.current, {
             backgroundColor: '#ffffff',
-            style: { width: 'auto', height: 'auto', transform: 'none' }
+            style: { width: 'auto', height: 'auto', transform: 'none' },
+            cacheBust: true, // Fix for some images
+            pixelRatio: 2 // High res
         }).then((dataUrl) => {
             const link = document.createElement('a');
             link.download = `recipe-lanes-${mode}.png`;
             link.href = dataUrl;
             link.click();
+        }).catch(err => {
+            console.error("Download failed:", err);
+            alert("Download failed. Please try again.");
         });
     };
 
@@ -321,6 +316,24 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         }
     };
 
+    const selectBranch = (nodeId: string) => {
+        const getAncestors = (id: string, visited = new Set<string>()): string[] => {
+            if (visited.has(id)) return [];
+            visited.add(id);
+            const incoming = edges.filter(e => e.target === id);
+            const parents = incoming.map(e => e.source);
+            return [...parents, ...parents.flatMap(p => getAncestors(p, visited))];
+        };
+
+        const ancestors = getAncestors(nodeId);
+        const toSelect = new Set([nodeId, ...ancestors]);
+
+        setNodes((nds) => nds.map((n) => ({
+            ...n,
+            selected: toSelect.has(n.id) || n.selected
+        })));
+    };
+
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
         if (event.shiftKey) {
             const hasOtherSelection = nodes.some(n => n.selected && n.id !== node.id);
@@ -328,24 +341,15 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 takeSnapshot(); 
                 return;
             }
-
             takeSnapshot(); 
-            const getAncestors = (id: string, visited = new Set<string>()): string[] => {
-                if (visited.has(id)) return [];
-                visited.add(id);
-                const incoming = edges.filter(e => e.target === id);
-                const parents = incoming.map(e => e.source);
-                return [...parents, ...parents.flatMap(p => getAncestors(p, visited))];
-            };
-
-            const ancestors = getAncestors(node.id);
-            const toSelect = new Set([node.id, ...ancestors]);
-
-            setNodes((nds) => nds.map((n) => ({
-                ...n,
-                selected: toSelect.has(n.id) || n.selected
-            })));
+            selectBranch(node.id);
         }
+    };
+
+    const onNodeContextMenu = (event: React.MouseEvent, node: Node) => {
+        event.preventDefault();
+        // Long Press / Right Click -> Select Branch
+        selectBranch(node.id);
     };
 
     const onNodeDragStart = (event: React.MouseEvent, node: Node) => {
@@ -437,6 +441,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onNodeClick={onNodeClick}
+                onNodeContextMenu={onNodeContextMenu}
                 onNodeDragStart={onNodeDragStart}
                 onNodeDrag={onNodeDrag}
                 onNodeDragStop={onNodeDragStop}
@@ -507,6 +512,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                     <div className="flex items-center gap-2"><span className="text-xl">🍳</span> Actions</div>
                     <div className="flex items-center gap-1 opacity-50 border-t border-zinc-100 pt-2"><span className="text-xs font-bold">Shift+Click</span> Select Branch</div>
                     <div className="flex items-center gap-1 opacity-50"><span className="text-xs font-bold">Shift+Drag</span> Rotate Branch</div>
+                    <div className="flex items-center gap-1 opacity-50"><span className="text-xs font-bold">Long Press</span> Select Branch</div>
                 </Panel>
             </ReactFlow>
         </div>

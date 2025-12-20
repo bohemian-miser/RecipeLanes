@@ -92,7 +92,13 @@ function RecipeLanesContent() {
         }
         
         const rawGraph = parseRes.graph;
-        rawGraph.title = recipeTitle; // Attach Title
+        
+        // Use LLM title if available and user didn't override
+        if (!recipeTitle && rawGraph.title) {
+            setRecipeTitle(rawGraph.title);
+        } else {
+            rawGraph.title = recipeTitle || rawGraph.title;
+        }
         
         setGraph(rawGraph);
         setStatus('forging');

@@ -3,6 +3,7 @@ import type { RecipeGraph } from './types';
 
 // Schema Definition (Matching TypeScript Interface)
 const RecipeGraphSchema = z.object({
+  title: z.string().optional(),
   lanes: z.array(z.object({
     id: z.string(),
     label: z.string(),
@@ -22,6 +23,7 @@ const RecipeGraphSchema = z.object({
 
 const SCHEMA_INTERFACE = `
 interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
   lanes: {
     id: string;
     label: string; // e.g. "Skillet"
@@ -53,9 +55,12 @@ You are an expert recipe parser. Your goal is to convert the following cooking i
 3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
 
 ### Critical Rules
-1. **QUANTITY:** The \`text\` field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+1. **QUANTITY:** The 
+text\n field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
 2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
 3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_\n for the recipe.
 
 ### Schema
 Return ONLY raw JSON complying with this TypeScript interface:
@@ -77,7 +82,7 @@ These are cached, so simplicity and consistency is key.
      - "Bottle of Olive Oil" -> "Olive Oil"
      - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
 
-2. **ACTION Nodes (The "State"):**
+2. **ACTION Nodes (The "State"):
 
 ### Input Recipe
 "${recipeText}"
@@ -88,8 +93,8 @@ export function parseRecipeGraph(aiResponse: string): RecipeGraph {
   try {
     // 1. Clean Markdown code blocks if present
     let jsonStr = aiResponse.trim();
-    if (jsonStr.startsWith('\`\`\`')) {
-      jsonStr = jsonStr.replace(/^\`\`\`(json)?/, '').replace(/\`\`\`$/, '');
+    if (jsonStr.startsWith("```")) {
+      jsonStr = jsonStr.replace(/^```(json)?/, "").replace(/```$/, "");
     }
     jsonStr = jsonStr.trim();
 

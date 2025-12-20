@@ -35,6 +35,15 @@ function RecipeLanesContent() {
           getRecipeAction(id).then(res => {
               if (res.graph) {
                   setGraph(res.graph);
+                  setRecipeText(res.graph.originalText || '');
+                  
+                  // Check/Generate missing icons
+                  if (res.graph.nodes.some(n => !n.iconUrl)) {
+                      generateGraphIconsAction(res.graph).then(iconRes => {
+                          if (iconRes.graph) setGraph(iconRes.graph);
+                      });
+                  }
+
                   setStatus('complete');
               } else {
                   setError('Recipe not found');

@@ -281,7 +281,8 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         });
         
         const graphToSave = { ...graph, nodes: nodesWithPos, layoutMode: mode };
-        const res = await saveRecipeAction(graphToSave);
+        const currentId = searchParams.get('id') || undefined;
+        const res = await saveRecipeAction(graphToSave, currentId);
         if (res.id) {
             const url = new URL(window.location.href);
             url.searchParams.set('id', res.id);

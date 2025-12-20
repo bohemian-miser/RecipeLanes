@@ -22,7 +22,7 @@ export interface DataService {
       meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string }
   ): Promise<string>;
   
-  saveRecipe(graph: RecipeGraph): Promise<string>;
+  saveRecipe(graph: RecipeGraph, existingId?: string): Promise<string>;
   getRecipe(id: string): Promise<RecipeGraph | null>;
 
   recordRejection(iconUrl: string, ingredientName: string, ingredientId: string): Promise<void>;
@@ -38,7 +38,7 @@ export interface DataService {
 }
 
 // --- Firebase Implementation ---
-export class FirebaseDataService implements DataService {
+export class FirebaseDataService implements DataService { 
   
   async getPublicRecipes(limit: number = 50): Promise<any[]> {
       try {
@@ -77,7 +77,15 @@ export class FirebaseDataService implements DataService {
       }
   }
 
-  async saveRecipe(graph: RecipeGraph): Promise<string> {
+  async saveRecipe(graph: RecipeGraph, existingId?: string): Promise<string> {
+      if (existingId) {
+          await db.collection('recipes').doc(existingId).set({
+              graph,
+              updated_at: FieldValue.serverTimestamp()
+          }, { merge: true });
+          return existingId;
+      }
+
       const doc = await db.collection('recipes').add({
           graph,
           created_at: FieldValue.serverTimestamp()
@@ -140,7 +148,7 @@ export class FirebaseDataService implements DataService {
          // @ts-ignore
          return items.sort((a, b) => (b.popularity_score || 0) - (a.popularity_score || 0));
      } catch (e: any) {
-         if (e.code === 9) { // FAILED_PRECONDITION (Missing Index)
+         if (e.code === 9) { // FAILED_PRECONDITION (Missing Index) 
              console.warn('[getAllIcons] Missing Firestore Composite Index for collectionGroup:icons. Returning empty list.');
              console.warn('Please create an index on `icons` collection group: marked_for_deletion ASC');
              return [];
@@ -249,7 +257,7 @@ export class FirebaseDataService implements DataService {
     
     // 2. Storage
     if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
-        const matches = iconUrl.match(/\/o\/([^?]+)/);
+        const matches = iconUrl.match(new RegExp('/o/([^?]+)'));
         if (matches && matches[1]) {
             const filePath = decodeURIComponent(matches[1]);
             const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
@@ -274,7 +282,7 @@ export class FirebaseDataService implements DataService {
               batch.delete(iconDoc.ref);
               
               if (bucket && data.url) {
-                  const matches = data.url.match(/\/o\/([^?]+)/);
+                  const matches = data.url.match(new RegExp('/o/([^?]+)'));
                   if (matches && matches[1]) {
                       const filePath = decodeURIComponent(matches[1]);
                       deletes.push(bucket.file(filePath).delete().catch(() => {}));
@@ -326,7 +334,7 @@ export class FirebaseDataService implements DataService {
   private async updateStorageMetadata(iconUrl: string, updates: any) {
       if (!process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) return;
       try {
-          const matches = iconUrl.match(/\/o\/([^?]+)/);
+          const matches = iconUrl.match(new RegExp('/o/([^?]+)'));
           if (matches && matches[1]) {
               const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
               const file = bucket.file(decodeURIComponent(matches[1]));
@@ -355,8 +363,8 @@ export class MemoryDataService implements DataService {
           .slice(0, limit);
   }
 
-  async saveRecipe(graph: RecipeGraph): Promise<string> {
-      const id = randomUUID();
+  async saveRecipe(graph: RecipeGraph, existingId?: string): Promise<string> {
+      const id = existingId || randomUUID();
       this.recipes.set(id, graph);
       return id;
   }

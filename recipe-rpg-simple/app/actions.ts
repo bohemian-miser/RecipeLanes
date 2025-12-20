@@ -385,10 +385,10 @@ export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: stri
   }
 }
 
-export async function saveRecipeAction(graph: RecipeGraph) {
+export async function saveRecipeAction(graph: RecipeGraph, existingId?: string) {
   try {
     const dataService = getDataService();
-    const id = await dataService.saveRecipe(graph);
+    const id = await dataService.saveRecipe(graph, existingId);
     return { id };
   } catch (e: any) {
     return { error: e.message };

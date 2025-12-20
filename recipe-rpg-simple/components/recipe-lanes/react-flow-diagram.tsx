@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import ReactFlow, { 
     Background, 
     Controls, 
@@ -54,10 +54,12 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     const { fitView, getNodes } = useReactFlow();
     const searchParams = useSearchParams();
     const router = useRouter();
+    const flowWrapper = useRef<HTMLDivElement>(null);
 
     const runLayout = useCallback(async (preservePositions = false) => {
         let layout;
         
+        // Check if we should preserve positions (only if graph has them and we are not forcing recalc)
         const canPreserve = preservePositions && graph.nodes.some(n => n.x !== undefined);
 
         if (canPreserve) {
@@ -133,10 +135,9 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     }, [graph, mode, spacing, edgeStyle, textPos, runLayout]);
 
     const downloadImage = () => {
-        const viewport = document.querySelector('.react-flow__viewport') as HTMLElement;
-        if (!viewport) return;
+        if (!flowWrapper.current) return;
 
-        toPng(viewport, {
+        toPng(flowWrapper.current, {
             backgroundColor: '#ffffff',
             style: { width: 'auto', height: 'auto', transform: 'none' }
         }).then((dataUrl) => {
@@ -172,13 +173,26 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         runLayout(false); 
     };
 
+    const onNodeClick = (event: React.MouseEvent, node: Node) => {
+        if (event.shiftKey) {
+            setNodes((nds) => nds.map((n) => {
+                if (n.id === node.id) {
+                    const rot = (n.data.rotation || 0) + 90;
+                    return { ...n, data: { ...n.data, rotation: rot } };
+                }
+                return n;
+            }));
+        }
+    };
+
     return (
-        <div className="w-full h-full">
+        <div className="w-full h-full" ref={flowWrapper}>
             <ReactFlow
                 nodes={nodes}
                 edges={edges}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
+                onNodeClick={onNodeClick}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 fitView
@@ -216,6 +230,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                     <div className="font-bold text-zinc-400 uppercase tracking-widest text-[10px]">Legend</div>
                     <div className="flex items-center gap-2"><span className="text-xl">🥕</span> Ingredients</div>
                     <div className="flex items-center gap-2"><span className="text-xl">🍳</span> Actions</div>
+                    <div className="flex items-center gap-1 opacity-50 border-t border-zinc-100 pt-2"><span className="text-xs font-bold">Shift+Click</span> Rotate</div>
                 </Panel>
             </ReactFlow>
         </div>

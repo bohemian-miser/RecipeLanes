@@ -22,6 +22,7 @@ export interface RecipeNode {
   // Layout Persistence
   x?: number;
   y?: number;
+  rotation?: number;
   textPos?: 'bottom' | 'top' | 'left' | 'right';
 }
 

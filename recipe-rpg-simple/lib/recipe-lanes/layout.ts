@@ -56,13 +56,13 @@ const LANE_COLORS = {
 };
 
 export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'compact', spacing: number = 1, preservePositions: boolean = false): LayoutGraph => {
-  // If preserving positions (and they exist), bypass algo
-  if (preservePositions && graph.nodes.every(n => n.x !== undefined)) {
+  // If preserving positions (and at least one exists), bypass algo
+  if (preservePositions && graph.nodes.some(n => n.x !== undefined)) {
       const nodes: VisualNode[] = graph.nodes.map(n => ({
           id: n.id,
           type: n.type,
-          x: n.x!,
-          y: n.y!,
+          x: n.x ?? 0, // Default to 0 if missing
+          y: n.y ?? 0,
           width: 140, // Estimate
           height: 100,
           data: n

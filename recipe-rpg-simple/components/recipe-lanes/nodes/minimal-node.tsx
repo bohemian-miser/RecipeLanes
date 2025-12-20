@@ -1,13 +1,14 @@
 import React, { memo, useState } from 'react';
 import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, RotateCw } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { rerollIconAction } from '@/app/actions';
 
-const MinimalNode = ({ id, data }: NodeProps<RecipeNode>) => {
+const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode>) => {
   const isIngredient = data.type === 'ingredient';
   const [isRerolling, setIsRerolling] = useState(false);
   const { setNodes } = useReactFlow();
+  const rotation = data.rotation || 0;
   
   const textPos = data.textPos || 'bottom';
   const isVertical = textPos === 'top' || textPos === 'bottom';
@@ -29,6 +30,7 @@ const MinimalNode = ({ id, data }: NodeProps<RecipeNode>) => {
         const res = await rerollIconAction(id, ingredientName, data.iconUrl || '');
         if (res && res.iconUrl) {
             setNodes((nodes) => nodes.map(n => {
+                // Update all nodes that share the same visual description/text
                 const nName = n.data.visualDescription || n.data.text;
                 if (nName === ingredientName) {
                     return { ...n, data: { ...n.data, iconUrl: res.iconUrl } };
@@ -45,10 +47,21 @@ const MinimalNode = ({ id, data }: NodeProps<RecipeNode>) => {
   
   return (
     <div 
-        className={`flex ${flexClass} items-center justify-center relative group`}
-        style={{ width: isVertical ? 100 : 'auto', minWidth: isVertical ? 100 : 160 }}
+        className={`flex ${flexClass} items-center justify-center relative group transition-transform duration-300`}
+        style={{ 
+            width: isVertical ? 100 : 'auto', 
+            minWidth: isVertical ? 100 : 160,
+            transform: `rotate(${rotation}deg)` 
+        }}
         title={data.visualDescription || data.text}
     >
+      {/* Rotate Indicator (visible when selected) */}
+      {selected && (
+          <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-zinc-400 bg-white/80 rounded-full p-0.5 animate-pulse">
+              <RotateCw className="w-3 h-3" />
+          </div>
+      )}
+
       <Handle 
         type="target" 
         position={Position.Top} 

@@ -84,6 +84,7 @@ function RecipeLanesContent() {
     setStatus('parsing');
     setError(null);
     setGraph(null);
+    setRecipeTitle(''); // Reset title for new recipe
 
     try {
         const parseRes = await parseRecipeAction(recipeText);

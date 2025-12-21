@@ -8,7 +8,7 @@ import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil } from 'lucide-react';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading } = useAuth();
@@ -16,6 +16,7 @@ function RecipeLanesContent() {
   const router = useRouter();
   
   const [recipeTitle, setRecipeTitle] = useState('');
+  const [editingTitle, setEditingTitle] = useState(false);
   const [recipeText, setRecipeText] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [graph, setGraph] = useState<RecipeGraph | null>(null);
@@ -150,9 +151,32 @@ function RecipeLanesContent() {
         
         {/* Header */}
         <header className="flex items-center justify-between border-b border-zinc-800 pb-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 group">
                 <ChefHat className="w-8 h-8 text-yellow-500" />
-                <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Recipe Lanes</h1>
+                
+                {editingTitle ? (
+                    <input 
+                        className="text-2xl font-bold tracking-tight text-zinc-100 bg-transparent border-b border-zinc-700 outline-none w-full max-w-md font-sans"
+                        value={recipeTitle}
+                        onChange={(e) => setRecipeTitle(e.target.value)}
+                        onBlur={() => setEditingTitle(false)}
+                        onKeyDown={(e) => e.key === 'Enter' && setEditingTitle(false)}
+                        autoFocus
+                        placeholder="Recipe Title"
+                    />
+                ) : (
+                    <div 
+                        className="flex items-center gap-3 cursor-pointer select-none"
+                        onClick={() => setEditingTitle(true)}
+                        title="Click to edit title"
+                    >
+                        <h1 className="text-2xl font-bold tracking-tight text-zinc-100 truncate max-w-md">
+                            {recipeTitle || 'Recipe Lanes'}
+                        </h1>
+                        <Pencil className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100" />
+                    </div>
+                )}
+                
                 <Link href="/gallery" className="ml-4 text-xs font-mono text-zinc-500 hover:text-white transition-colors bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800 hover:border-zinc-600">
                     Gallery
                 </Link>
@@ -166,20 +190,6 @@ function RecipeLanesContent() {
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 shadow-xl">
              <div className="flex gap-4">
                 <div className="flex-1 space-y-2">
-                    {graph && (
-                        <>
-                            <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">
-                                Recipe Title
-                            </label>
-                            <input 
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 outline-none font-mono mb-2"
-                                placeholder="e.g. 'Rack of Lamb'"
-                                value={recipeTitle}
-                                onChange={(e) => setRecipeTitle(e.target.value)}
-                            />
-                        </>
-                    )}
-
                     <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">
                         Recipe Instructions
                     </label>

@@ -28,6 +28,7 @@ function RecipeLanesContent() {
   const [edgeStyle, setEdgeStyle] = useState<'straight' | 'step' | 'bezier'>('straight');
   const [textPos, setTextPos] = useState<'bottom' | 'top' | 'left' | 'right'>('bottom');
   const [isLive, setIsLive] = useState(false);
+  const [inputExpanded, setInputExpanded] = useState(false);
 
   useEffect(() => {
       const id = searchParams.get('id');
@@ -95,7 +96,6 @@ function RecipeLanesContent() {
         
         const rawGraph = parseRes.graph;
         
-        // Use LLM title if available and user didn't override
         if (!recipeTitle && rawGraph.title) {
             setRecipeTitle(rawGraph.title);
         } else {
@@ -146,96 +146,84 @@ function RecipeLanesContent() {
   if (authLoading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 font-mono">Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-yellow-500/30">
-      <div className="w-full max-w-[95%] mx-auto p-6 space-y-6">
-        
-        {/* Header */}
-        <header className="flex items-center justify-between border-b border-zinc-800 pb-4">
-            <div className="flex items-center gap-3 group">
-                <ChefHat className="w-8 h-8 text-yellow-500" />
+    <div className="h-screen flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden">
+        {/* Utility Bar */}
+        <header className="h-14 shrink-0 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-950 z-20">
+            <div className="flex items-center gap-4 overflow-hidden">
+                <div className="flex items-center gap-2 shrink-0">
+                    <ChefHat className="w-6 h-6 text-yellow-500" />
+                    <Link href="/gallery" className="text-xs font-mono text-zinc-400 hover:text-white transition-colors">
+                        Gallery
+                    </Link>
+                </div>
                 
-                {editingTitle ? (
-                    <input 
-                        className="text-2xl font-bold tracking-tight text-zinc-100 bg-transparent border-b border-zinc-700 outline-none w-full max-w-md font-sans"
-                        value={recipeTitle}
-                        onChange={(e) => setRecipeTitle(e.target.value)}
-                        onBlur={() => setEditingTitle(false)}
-                        onKeyDown={(e) => e.key === 'Enter' && setEditingTitle(false)}
-                        autoFocus
-                        placeholder="Recipe Title"
-                    />
-                ) : (
-                    <div 
-                        className="flex items-center gap-3 cursor-pointer select-none"
-                        onClick={() => setEditingTitle(true)}
-                        title="Click to edit title"
-                    >
-                        <h1 className="text-2xl font-bold tracking-tight text-zinc-100 truncate max-w-md">
-                            {recipeTitle || 'Recipe Lanes'}
-                        </h1>
-                        <Pencil className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100" />
-                    </div>
-                )}
-                
-                <Link href="/gallery" className="ml-4 text-xs font-mono text-zinc-500 hover:text-white transition-colors bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800 hover:border-zinc-600">
-                    Gallery
-                </Link>
+                {/* Title (Editable) */}
+                <div className="flex-1 min-w-0 flex items-center justify-center group mx-2">
+                    {editingTitle ? (
+                        <input 
+                            className="bg-transparent border-b border-zinc-700 outline-none w-full max-w-[200px] text-center text-sm font-bold text-zinc-100"
+                            value={recipeTitle}
+                            onChange={(e) => setRecipeTitle(e.target.value)}
+                            onBlur={() => setEditingTitle(false)}
+                            onKeyDown={(e) => e.key === 'Enter' && setEditingTitle(false)}
+                            autoFocus
+                        />
+                    ) : (
+                        <div 
+                            className="flex items-center gap-2 cursor-pointer truncate"
+                            onClick={() => setEditingTitle(true)}
+                        >
+                            <h1 className="text-sm font-bold text-zinc-100 truncate">
+                                {recipeTitle || 'Recipe Lanes'}
+                            </h1>
+                            <Pencil className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 opacity-0 group-hover:opacity-100" />
+                        </div>
+                    )}
+                </div>
             </div>
-            <div className="text-xs font-mono text-zinc-500">
-                {user?.email || 'Guest Mode'}
+            
+            <div className="text-[10px] font-mono text-zinc-600 truncate max-w-[80px] shrink-0">
+                {user?.email || 'Guest'}
             </div>
         </header>
 
-        {/* Input Section (Above Graph) */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 shadow-xl">
-             <div className="flex gap-4">
-                <div className="flex-1 space-y-2">
-                    <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">
-                        Recipe Instructions
-                    </label>
-                    <textarea 
-                        className={`w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 outline-none resize-none leading-relaxed font-mono ${graph ? 'h-24' : 'h-64'}`}
-                        placeholder="Paste your recipe here (e.g. 'Boil water, add pasta...')"
-                        value={recipeText}
-                        onChange={(e) => setRecipeText(e.target.value)}
-                        onKeyDown={(e) => {
-                            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                                e.preventDefault();
-                                if (recipeText && status !== 'parsing' && status !== 'forging') {
-                                    handleVisualize();
-                                }
-                            }
-                        }}
-                    />
-                </div>
-                
-                <div className="flex flex-col justify-end w-48 gap-2">
-                    <button
-                        onClick={handleVisualize}
-                        disabled={status === 'parsing' || status === 'forging' || !recipeText}
-                        className="flex items-center justify-center gap-2 px-4 py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full shadow-lg hover:shadow-yellow-500/20"
+        {/* Input Area (Collapsible) */}
+        <div className={`shrink-0 bg-zinc-900 border-b border-zinc-800 transition-all duration-300 ease-in-out z-10 ${inputExpanded ? 'max-h-96' : 'max-h-16'}`}>
+             <div className="p-2 flex gap-2">
+                <textarea 
+                    className={`flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300 focus:ring-1 focus:ring-yellow-500/50 outline-none resize-none transition-all duration-300 ${inputExpanded ? 'h-32' : 'h-10'}`}
+                    placeholder="Paste recipe here..."
+                    value={recipeText}
+                    onChange={(e) => setRecipeText(e.target.value)}
+                    onFocus={() => setInputExpanded(true)}
+                />
+                <button
+                    onClick={() => { handleVisualize(); setInputExpanded(false); }}
+                    disabled={status === 'parsing' || status === 'forging' || !recipeText}
+                    className="shrink-0 w-10 h-10 flex items-center justify-center bg-yellow-500 hover:bg-yellow-400 text-black rounded-lg transition-colors disabled:opacity-50"
+                >
+                    {status === 'parsing' ? <span className="animate-pulse">...</span> : <ArrowRight className="w-5 h-5" />}
+                </button>
+                {inputExpanded && (
+                    <button 
+                        onClick={() => setInputExpanded(false)}
+                        className="shrink-0 w-10 h-10 flex items-center justify-center bg-zinc-800 text-zinc-400 rounded-lg hover:bg-zinc-700"
                     >
-                        {status === 'parsing' ? (
-                            <>Parsing <span className="animate-pulse">...</span></>
-                        ) : status === 'forging' ? (
-                            <>Forging Icons <Wand2 className="w-4 h-4 animate-spin" /></>
-                        ) : (
-                            <>Visualise <ArrowRight className="w-5 h-5" /></>
-                        )}
+                        <Code className="w-4 h-4 rotate-90" />
                     </button>
-                </div>
+                )}
              </div>
              {error && (
-                <div className="mt-3 p-3 bg-red-900/20 border border-red-800 rounded-lg text-red-400 text-sm">
+                <div className="px-2 pb-2 text-[10px] text-red-400">
                     {error}
                 </div>
              )}
         </div>
 
-        {/* Visualizer Section */}
-        <div className="bg-zinc-100 rounded-xl border border-zinc-800 min-h-[800px] shadow-2xl overflow-hidden relative flex flex-col">
+        {/* Visualizer (Full Remaining Height) */}
+        <div className="flex-1 relative overflow-hidden bg-zinc-100">
             {/* Toolbar */}
-            <div className="w-full h-14 bg-white border-b border-zinc-200 flex items-center justify-between px-4 overflow-x-auto">
+            <div className="absolute top-0 left-0 right-0 h-12 bg-white/90 backdrop-blur border-b border-zinc-200 flex items-center justify-between px-4 overflow-x-auto z-10">
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setLayoutMode('swimlanes')}
@@ -264,16 +252,14 @@ function RecipeLanesContent() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    {/* Live Toggle */}
                     <button 
                          onClick={() => setIsLive(!isLive)}
-                         className={`p-1.5 rounded transition-colors ${isLive ? 'bg-green-100 text-green-600' : 'bg-zinc-50 text-zinc-400 hover:text-zinc-900'}`}
+                         className={`p-1.5 rounded transition-colors ${isLive ? 'bg-green-100 text-green-600' : 'text-zinc-400'}`}
                          title={isLive ? "Pause Physics" : "Start Physics"}
                     >
                         {isLive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                     </button>
 
-                    {/* Text Position */}
                     <div className="flex items-center gap-2 border-r border-zinc-200 pr-4">
                          <Type className="w-4 h-4 text-zinc-400" />
                          <select 
@@ -288,7 +274,6 @@ function RecipeLanesContent() {
                          </select>
                     </div>
 
-                    {/* Line Style */}
                     <div className="flex items-center gap-2 border-r border-zinc-200 pr-4">
                          <span className="text-xs font-mono text-zinc-400">Lines</span>
                          <select 
@@ -302,7 +287,6 @@ function RecipeLanesContent() {
                          </select>
                     </div>
 
-                    {/* Spacing Slider */}
                     <div className="flex items-center gap-2">
                         <span className="text-xs font-mono text-zinc-400">Spacing</span>
                         <input 
@@ -316,7 +300,6 @@ function RecipeLanesContent() {
                         />
                     </div>
 
-                    {/* Share Button */}
                     {graph && (
                         <button 
                             onClick={handleShare}
@@ -326,7 +309,6 @@ function RecipeLanesContent() {
                             <Share2 className="w-4 h-4" />
                         </button>
                     )}
-                    {/* JSON Toggle */}
                     {graph && (
                         <button 
                             onClick={() => setShowJson(!showJson)}
@@ -339,33 +321,24 @@ function RecipeLanesContent() {
                 </div>
             </div>
             
-            <div className="flex-1 overflow-hidden bg-white text-zinc-900 relative">
-                {showJson && graph ? (
-                    <pre className="p-4 text-xs font-mono bg-zinc-50 text-zinc-800 overflow-auto h-full z-20 relative">
-                        {JSON.stringify(graph, null, 2)}
-                    </pre>
-                ) : graph ? (
-                    <div className="absolute inset-0 bg-zinc-50/50">
-                        <ReactFlowDiagram graph={graph} mode={layoutMode} spacing={spacing} edgeStyle={edgeStyle} textPos={textPos} isLive={isLive} />
-                    </div>
+            <div className="absolute inset-0 pt-12"> 
+                {graph ? (
+                    <ReactFlowDiagram graph={graph} mode={layoutMode} spacing={spacing} edgeStyle={edgeStyle} textPos={textPos} isLive={isLive} />
                 ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4">
-                        <div className="w-20 h-20 border-2 border-zinc-200 border-dashed rounded-full flex items-center justify-center bg-zinc-50">
-                            <Wand2 className="w-8 h-8 opacity-20" />
-                        </div>
-                        <p className="text-sm font-medium text-zinc-400">Ready to Visualise</p>
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-400">
+                        <Wand2 className="w-8 h-8 opacity-20 mb-2" />
+                        <p className="text-sm">Ready to Visualise</p>
                     </div>
                 )}
             </div>
 
-            {/* Chat Adjustment Interface (Floating at bottom of graph) */}
             {graph && (
-                <div className="absolute bottom-6 left-6 right-6 flex justify-center z-10">
-                    <div className="w-full max-w-2xl bg-white border border-zinc-200 rounded-full shadow-xl flex items-center p-1.5 pl-5 gap-2 transition-all focus-within:ring-2 focus-within:ring-yellow-500/50 focus-within:border-yellow-500">
-                        <MessageSquare className="w-5 h-5 text-zinc-400" />
+                <div className="absolute bottom-4 left-4 right-4 flex justify-center z-20 pointer-events-none">
+                    <div className="w-full max-w-lg bg-white/95 backdrop-blur border border-zinc-200 rounded-full shadow-xl flex items-center p-1 pointer-events-auto">
+                        <MessageSquare className="w-5 h-5 text-zinc-400 ml-2" />
                         <input 
-                            className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10"
-                            placeholder="Adjust recipe (e.g. 'Add garlic to the sauce', 'Make it spicy')..."
+                            className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
+                            placeholder="Adjust recipe..."
                             value={chatInput}
                             onChange={(e) => setChatInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}
@@ -374,7 +347,7 @@ function RecipeLanesContent() {
                         <button
                             onClick={handleAdjust}
                             disabled={!chatInput.trim() || status === 'adjusting'}
-                            className="p-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-full transition-colors disabled:opacity-50"
+                            className="p-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-full transition-colors disabled:opacity-50 m-1"
                         >
                             {status === 'adjusting' ? (
                                 <Wand2 className="w-4 h-4 animate-spin" />
@@ -386,7 +359,6 @@ function RecipeLanesContent() {
                 </div>
             )}
         </div>
-      </div>
     </div>
   );
 }

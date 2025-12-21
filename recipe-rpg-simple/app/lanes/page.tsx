@@ -165,21 +165,25 @@ function RecipeLanesContent() {
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 shadow-xl">
              <div className="flex gap-4">
                 <div className="flex-1 space-y-2">
-                    <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">
-                        Recipe Title
-                    </label>
-                    <input 
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 outline-none font-mono mb-2"
-                        placeholder="e.g. 'Rack of Lamb'"
-                        value={recipeTitle}
-                        onChange={(e) => setRecipeTitle(e.target.value)}
-                    />
+                    {graph && (
+                        <>
+                            <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">
+                                Recipe Title
+                            </label>
+                            <input 
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 outline-none font-mono mb-2"
+                                placeholder="e.g. 'Rack of Lamb'"
+                                value={recipeTitle}
+                                onChange={(e) => setRecipeTitle(e.target.value)}
+                            />
+                        </>
+                    )}
 
                     <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">
                         Recipe Instructions
                     </label>
                     <textarea 
-                        className="w-full h-24 bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 outline-none resize-none leading-relaxed font-mono"
+                        className={`w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 outline-none resize-none leading-relaxed font-mono ${graph ? 'h-24' : 'h-64'}`}
                         placeholder="Paste your recipe here (e.g. 'Boil water, add pasta...')"
                         value={recipeText}
                         onChange={(e) => setRecipeText(e.target.value)}

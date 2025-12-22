@@ -43,13 +43,23 @@ interface ReactFlowDiagramProps {
 const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction }) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-    const { fitView, getNodes } = useReactFlow();
+    const { fitView, getNodes, getEdges } = useReactFlow();
     const searchParams = useSearchParams();
     const router = useRouter();
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
     const [copied, setCopied] = useState(false);
     
+    // Drag State for Branch Rotation
+    const dragRef = useRef<{
+        active: boolean;
+        pivot?: { x: number, y: number };
+        startAngle?: number;
+        startDist?: number;
+        ancestors?: string[];
+        initialPositions?: Record<string, { x: number, y: number }>;
+    }>({ active: false });
+
     const nodeTypes = useMemo(() => ({
         minimal: MinimalNode,
         card: CardNode,
@@ -107,15 +117,31 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [undo, redo]);
 
-    // Drag State for Branch Rotation
-    const dragRef = useRef<{
-        active: boolean;
-        pivot?: { x: number, y: number };
-        startAngle?: number;
-        startDist?: number;
-        ancestors?: string[];
-        initialPositions?: Record<string, { x: number, y: number }>;
-    }>({ active: false });
+    const handleDeleteNode = useCallback((nodeId: string) => {
+        takeSnapshot();
+        const currentEdges = getEdges();
+        const incoming = currentEdges.filter(ed => ed.target === nodeId);
+        const outgoing = currentEdges.filter(ed => ed.source === nodeId);
+        
+        const newEdgesList = currentEdges.filter(ed => ed.source !== nodeId && ed.target !== nodeId);
+        
+        incoming.forEach(inEdge => {
+            outgoing.forEach(outEdge => {
+                newEdgesList.push({
+                    id: `${inEdge.source}-${outEdge.target}`,
+                    source: inEdge.source,
+                    target: outEdge.target,
+                    type: 'floating',
+                    data: { variant: edgeStyle },
+                    style: { stroke: '#9ca3af', strokeWidth: 1.5 },
+                    markerEnd: { type: MarkerType.ArrowClosed, color: '#9ca3af', width: 20, height: 20 }
+                });
+            });
+        });
+        
+        setEdges(newEdgesList);
+        setNodes(nds => nds.filter(n => n.id !== nodeId));
+    }, [takeSnapshot, getEdges, setEdges, setNodes, edgeStyle]);
 
     // Initial Layout Calculation
     const runLayout = useCallback(async (preservePositions = false) => {
@@ -154,7 +180,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                  id: n.id,
                  type: nodeType,
                  position: { x: n.x, y: n.y },
-                 data: { ...n.data, textPos, depth: n.depth },
+                 data: { ...n.data, textPos, depth: n.depth, onDelete: () => handleDeleteNode(n.id) },
                  width: n.width,
                  height: n.height,
                  draggable: true,
@@ -186,7 +212,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             }, 50);
         }
 
-    }, [graph, mode, spacing, setNodes, setEdges, fitView]); 
+    }, [graph, mode, spacing, setNodes, setEdges, fitView, handleDeleteNode, edgeStyle]); 
 
     // Layout Effect
     useEffect(() => {
@@ -230,7 +256,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             .force("link", forceLink(d3Links).id((d: any) => d.id).distance(100 * spacing))
             .force("charge", forceManyBody().strength(-300))
             .force("collide", forceCollide().radius((d: any) => (d.width/2) + 20))
-            .force("y", forceY((d: any) => d.depth * 150 * spacing).strength(0.1))
+            .force("y", forceY((d: any) => d.depth * -150 * spacing).strength(0.1)) 
             .force("x", forceX().strength(0.01))
             .alphaDecay(0) 
             .velocityDecay(0.95) 
@@ -526,7 +552,6 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                         <Download className="w-4 h-4" />
                     </button>
                 </Panel>
-                
             </ReactFlow>
         </div>
     );

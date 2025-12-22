@@ -149,7 +149,7 @@ function RecipeLanesContent() {
   const hasIcons = graph?.nodes.some(n => !!n.iconUrl);
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden overscroll-none">
+    <div className="fixed inset-0 flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden overscroll-none">
         {/* Utility Bar */}
         <header className="h-14 shrink-0 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-950 z-20">
             <div className="flex items-center gap-4 overflow-hidden">
@@ -191,10 +191,10 @@ function RecipeLanesContent() {
         </header>
 
         {/* Input Area (Collapsible) */}
-        <div className={`shrink-0 bg-zinc-900 border-b border-zinc-800 transition-all duration-300 ease-in-out z-10 ${inputExpanded ? 'max-h-96' : 'max-h-16'}`}>
+        <div className={`shrink-0 bg-zinc-900 border-b border-zinc-800 transition-all duration-300 ease-in-out z-10 ${inputExpanded ? 'max-h-[80vh]' : 'max-h-16'}`}>
              <div className="p-2 flex gap-2">
                 <textarea 
-                    className={`flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300 focus:ring-1 focus:ring-yellow-500/50 outline-none resize-none transition-all duration-300 ${inputExpanded ? 'h-32' : 'h-10'}`}
+                    className={`flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300 focus:ring-1 focus:ring-yellow-500/50 outline-none resize-y transition-all duration-300 ${inputExpanded ? 'h-[50vh]' : 'h-10'}`}
                     placeholder="Paste recipe here..."
                     value={recipeText}
                     onChange={(e) => setRecipeText(e.target.value)}

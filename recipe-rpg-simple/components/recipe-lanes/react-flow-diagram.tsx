@@ -71,31 +71,50 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     }), []);
     
     // Undo/Redo History
-    const [past, setPast] = useState<Node[][]>([]);
-    const [future, setFuture] = useState<Node[][]>([]);
+    const [past, setPast] = useState<{ nodes: Node[], edges: Edge[] }[]>([]);
+    const [future, setFuture] = useState<{ nodes: Node[], edges: Edge[] }[]>([]);
 
     const takeSnapshot = useCallback(() => {
-        setPast(p => [...p, JSON.parse(JSON.stringify(getNodes()))]);
+        const n = getNodes();
+        const e = getEdges();
+        setPast(p => [...p, { 
+            nodes: JSON.parse(JSON.stringify(n)), 
+            edges: JSON.parse(JSON.stringify(e)) 
+        }]);
         setFuture([]);
-    }, [getNodes]);
+    }, [getNodes, getEdges]);
 
     const undo = useCallback(() => {
         if (past.length === 0) return;
         const newPast = [...past];
         const previous = newPast.pop();
         setPast(newPast);
-        setFuture(f => [JSON.parse(JSON.stringify(getNodes())), ...f]);
-        setNodes(previous!);
-    }, [past, getNodes, setNodes]);
+        setFuture(f => [{ 
+            nodes: JSON.parse(JSON.stringify(getNodes())), 
+            edges: JSON.parse(JSON.stringify(getEdges())) 
+        }, ...f]);
+        
+        if (previous) {
+            setNodes(previous.nodes);
+            setEdges(previous.edges);
+        }
+    }, [past, getNodes, getEdges, setNodes, setEdges]);
 
     const redo = useCallback(() => {
         if (future.length === 0) return;
         const newFuture = [...future];
         const next = newFuture.shift();
         setFuture(newFuture);
-        setPast(p => [...p, JSON.parse(JSON.stringify(getNodes()))]);
-        setNodes(next!);
-    }, [future, getNodes, setNodes]);
+        setPast(p => [...p, { 
+            nodes: JSON.parse(JSON.stringify(getNodes())), 
+            edges: JSON.parse(JSON.stringify(getEdges())) 
+        }]);
+        
+        if (next) {
+            setNodes(next.nodes);
+            setEdges(next.edges);
+        }
+    }, [future, getNodes, getEdges, setNodes, setEdges]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {

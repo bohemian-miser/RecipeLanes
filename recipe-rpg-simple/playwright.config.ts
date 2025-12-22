@@ -18,5 +18,8 @@ export default defineConfig({
     url: 'http://localhost:8001',
     reuseExistingServer: true,
     timeout: 30 * 1000,
+    env: {
+      MOCK_AI: 'true',
+    },
   },
 });

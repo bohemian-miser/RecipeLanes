@@ -39,7 +39,10 @@ export class MockAIService implements AIService {
             ]
         });
     }
-    return `Mock visual description for: ${prompt}...`;
+    // Generic fallback for E2E tests
+    return `graph TD
+    A[Mock Step 1] --> B[Mock Step 2]
+    B --> C[Mock Step 3]`;
   }
 
   async generateImage(prompt: string): Promise<string> {

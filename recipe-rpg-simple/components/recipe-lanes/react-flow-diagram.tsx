@@ -571,15 +571,6 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                         <Download className="w-4 h-4" />
                     </button>
                 </Panel>
-                
-                <Panel position="bottom-left" className="bg-white/90 backdrop-blur p-3 rounded-lg shadow-lg border border-zinc-200 text-xs text-zinc-700 flex flex-col gap-2">
-                    <div className="font-bold text-zinc-400 uppercase tracking-widest text-[10px]">Legend</div>
-                    <div className="flex items-center gap-2"><span className="text-xl">🥕</span> Ingredients</div>
-                    <div className="flex items-center gap-2"><span className="text-xl">🍳</span> Actions</div>
-                    <div className="flex items-center gap-1 opacity-50 border-t border-zinc-100 pt-2"><span className="text-xs font-bold">Shift+Click</span> Select Branch</div>
-                    <div className="flex items-center gap-1 opacity-50"><span className="text-xs font-bold">Shift+Drag</span> Rotate Branch</div>
-                    <div className="flex items-center gap-1 opacity-50"><span className="text-xs font-bold">Long Press</span> Select Branch</div>
-                </Panel>
             </ReactFlow>
         </div>
     );

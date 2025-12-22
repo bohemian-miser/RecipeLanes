@@ -28,6 +28,17 @@ export class RealAIService implements AIService {
 
 export class MockAIService implements AIService {
   async generateText(prompt: string): Promise<string> {
+    if (prompt.includes("Swimlane Graph")) {
+        return JSON.stringify({
+            title: "Mock Recipe",
+            lanes: [{ id: "l1", label: "Prep", type: "prep" }],
+            nodes: [
+                { id: "1", laneId: "l1", text: "Mock Ingredient 1", type: "ingredient", visualDescription: "Mock Ing 1" },
+                { id: "2", laneId: "l1", text: "Mock Ingredient 2", type: "ingredient", visualDescription: "Mock Ing 2" },
+                { id: "3", laneId: "l1", text: "Mock Action", type: "action", inputs: ["1", "2"], visualDescription: "Mock Act" }
+            ]
+        });
+    }
     return `Mock visual description for: ${prompt}...`;
   }
 
@@ -41,6 +52,9 @@ export class MockAIService implements AIService {
 let currentService: AIService = new RealAIService();
 
 export function getAIService(): AIService {
+  if (process.env.MOCK_AI === 'true') {
+      return new MockAIService();
+  }
   return currentService;
 }
 

@@ -1,18 +1,27 @@
 import Link from 'next/link';
 import { getPublicGalleryAction } from '@/app/actions';
-import { ChefHat, Calendar, GitGraph, ArrowLeft } from 'lucide-react';
+import { ChefHat, ArrowLeft, Search } from 'lucide-react';
+import { RecipeCard } from '@/components/ui/recipe-card';
+import { getDataService } from '@/lib/data-service';
 
 export const dynamic = 'force-dynamic';
 
-export default async function GalleryPage() {
-  const recipes = await getPublicGalleryAction();
+export default async function GalleryPage({ searchParams }: { searchParams: { q?: string } }) {
+  const query = searchParams.q;
+  let recipes = [];
+
+  if (query) {
+      recipes = await getDataService().searchPublicRecipes(query);
+  } else {
+      recipes = await getPublicGalleryAction();
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-yellow-500/30">
       <div className="w-full max-w-7xl mx-auto p-6 space-y-8">
         
         {/* Header */}
-        <header className="flex items-center justify-between border-b border-zinc-800 pb-6">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-zinc-800 pb-6">
             <div className="flex items-center gap-4">
                 <Link href="/lanes" className="p-2 rounded-full hover:bg-zinc-900 transition-colors text-zinc-400 hover:text-white">
                     <ArrowLeft className="w-6 h-6" />
@@ -25,60 +34,42 @@ export default async function GalleryPage() {
                     <p className="text-zinc-500 text-sm mt-1">Explore recipes visualized by the community</p>
                 </div>
             </div>
-            <Link 
-                href="/lanes" 
-                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg transition-colors shadow-lg hover:shadow-yellow-500/20"
-            >
-                Create New
-            </Link>
+
+            <div className="flex items-center gap-4 w-full md:w-auto">
+                {/* Search Form */}
+                <form className="relative flex-1 md:w-64 group">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-yellow-500 transition-colors" />
+                    <input 
+                        name="q"
+                        defaultValue={query}
+                        placeholder="Search recipes..." 
+                        className="w-full bg-zinc-900 border border-zinc-800 text-sm text-zinc-200 rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:border-yellow-500/50 focus:ring-1 focus:ring-yellow-500/50 transition-all placeholder:text-zinc-600"
+                    />
+                </form>
+
+                <Link 
+                    href="/lanes" 
+                    className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg transition-colors shadow-lg hover:shadow-yellow-500/20 whitespace-nowrap"
+                >
+                    Create New
+                </Link>
+            </div>
         </header>
 
         {/* Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {recipes.map((recipe: any) => (
-            <Link key={recipe.id} href={`/lanes?id=${recipe.id}`} className="block group">
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-yellow-500/50 hover:shadow-xl hover:shadow-yellow-500/5 transition-all duration-300 h-full flex flex-col">
-                {/* Preview Image if available */}
-                {recipe.previewIcon ? (
-                    <div className="h-40 bg-zinc-950/50 flex items-center justify-center p-6 border-b border-zinc-800/50 relative overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 to-transparent opacity-50" />
-                        <img 
-                            src={recipe.previewIcon} 
-                            alt="" 
-                            className="h-full w-full object-contain drop-shadow-xl group-hover:scale-110 transition-transform duration-500" 
-                            style={{ imageRendering: 'pixelated' }}
-                        />
-                    </div>
-                ) : (
-                    <div className="h-40 bg-zinc-950/50 flex items-center justify-center p-6 border-b border-zinc-800/50">
-                        <ChefHat className="w-12 h-12 text-zinc-800" />
-                    </div>
-                )}
-                
-                <div className="p-5 flex-1 flex flex-col">
-                    <h3 className="font-bold text-lg mb-3 text-zinc-200 group-hover:text-yellow-500 transition-colors line-clamp-2 leading-tight">
-                        {recipe.title}
-                    </h3>
-                    <div className="flex items-center gap-4 text-xs text-zinc-500 font-mono mt-auto pt-4 border-t border-zinc-800/50">
-                        <div className="flex items-center gap-1.5" title="Created At">
-                            <Calendar className="w-3 h-3" />
-                            {recipe.createdAt ? new Date(recipe.createdAt).toLocaleDateString() : 'Unknown'}
-                        </div>
-                        <div className="flex items-center gap-1.5 ml-auto" title="Steps">
-                            <GitGraph className="w-3 h-3" />
-                            {recipe.nodeCount}
-                        </div>
-                    </div>
+                <div key={recipe.id} className="h-full">
+                    <RecipeCard recipe={recipe} />
                 </div>
-                </div>
-            </Link>
             ))}
+            
             {recipes.length === 0 && (
                 <div className="col-span-full flex flex-col items-center justify-center py-32 text-zinc-500 space-y-4 border-2 border-dashed border-zinc-800 rounded-xl">
                     <ChefHat className="w-12 h-12 opacity-20" />
-                    <p>No public recipes found yet.</p>
+                    <p>{query ? `No recipes found for "${query}"` : 'No public recipes found yet.'}</p>
                     <Link href="/lanes" className="text-yellow-500 hover:underline">
-                        Be the first to create one!
+                        Create one now!
                     </Link>
                 </div>
             )}
@@ -87,3 +78,4 @@ export default async function GalleryPage() {
     </div>
   );
 }
+

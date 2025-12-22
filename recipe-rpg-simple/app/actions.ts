@@ -462,3 +462,39 @@ export async function getPublicGalleryAction() {
         return [];
     }
 }
+
+export async function toggleStarAction(recipeId: string): Promise<{ starred: boolean; error?: string }> {
+    try {
+        const session = await getAuthService().verifyAuth();
+        if (!session) return { starred: false, error: 'Login required' };
+        
+        const starred = await getDataService().toggleStar(recipeId, session.uid);
+        return { starred };
+    } catch (e: any) {
+        return { starred: false, error: e.message };
+    }
+}
+
+export async function voteRecipeAction(recipeId: string, vote: 'like' | 'dislike' | 'none'): Promise<{ error?: string }> {
+    try {
+        const session = await getAuthService().verifyAuth();
+        if (!session) return { error: 'Login required' };
+        
+        await getDataService().voteRecipe(recipeId, session.uid, vote);
+        return {};
+    } catch (e: any) {
+        return { error: e.message };
+    }
+}
+
+export async function copyRecipeAction(recipeId: string): Promise<{ newId?: string; error?: string }> {
+    try {
+        const session = await getAuthService().verifyAuth();
+        if (!session) return { error: 'Login required' };
+        
+        const newId = await getDataService().copyRecipe(recipeId, session.uid);
+        return { newId };
+    } catch (e: any) {
+        return { error: e.message };
+    }
+}

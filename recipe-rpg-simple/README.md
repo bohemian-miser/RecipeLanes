@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Recipe Lanes 🍳🛣️
 
-## Getting Started
+**Recipe Lanes** is a visual recipe generator that transforms text into flowchart-style diagrams using Generative AI. It helps cooks visualize the process, parallelize steps, and see what ingredients are needed when.
 
-First, run the development server:
+## Features ✨
+
+-   **AI Parsing:** Converts recipe text into a structured node-based graph.
+-   **Visual Flow:** Drag-and-drop interface to rearrange steps.
+-   **Smart Icons:** Automatically generates icons for ingredients and steps (cached & reusable).
+-   **Social Sharing:**
+    -   **Gallery:** Browse recipes created by the community.
+    -   **Search:** Find recipes by title or ingredient.
+    -   **Vote & Star:** Like your favorite recipes and save them for later.
+    -   **Fork/Copy:** Clone a recipe to customize it.
+-   **Mobile Friendly:** Optimized for use in the kitchen on phones and tablets.
+
+## Tech Stack 🛠️
+
+-   **Framework:** Next.js 15 (App Router)
+-   **UI:** Tailwind CSS, Lucide Icons
+-   **Graph:** React Flow
+-   **AI:** Google Genkit (Gemini 1.5 Flash)
+-   **Database:** Firebase Firestore
+-   **Storage:** Firebase Storage
+-   **Testing:** Playwright, Vitest
+
+## Getting Started 🚀
+
+1.  **Install Dependencies:**
+    ```bash
+    npm install
+    ```
+
+2.  **Environment Setup:**
+    Create a `.env` file with your Firebase and Genkit credentials.
+    ```env
+    GOOGLE_GENAI_API_KEY=...
+    NEXT_PUBLIC_FIREBASE_API_KEY=...
+    # ... other firebase config
+    ```
+
+3.  **Run Development Server:**
+    ```bash
+    npm run dev
+    ```
+    Open [http://localhost:3000](http://localhost:3000).
+
+## Testing 🧪
+
+We use a combination of Logic Tests (for complex graph algorithms) and E2E Tests (for UI flows).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Run all tests
+npm test
+
+# Run only logic tests
+npx tsx tests/undo-scrambled-logic.test.ts
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Deployment 🌍
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Deployed on Vercel/Firebase App Hosting.

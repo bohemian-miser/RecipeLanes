@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "npx tsx tests/lifecycle.test.ts && npx tsx tests/penrose.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx playwright test",
+    "test": "npx tsx tests/lifecycle.test.ts && npx tsx tests/penrose.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx playwright test",
     "mcp": "npx tsx scripts/mcp-server.ts",
     "verify": "npm run build && npm test",
     "prepare": "husky"

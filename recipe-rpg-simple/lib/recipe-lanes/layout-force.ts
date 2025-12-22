@@ -96,7 +96,7 @@ export const calculateRepulsiveCurvesLayout = (graph: RecipeGraph, spacing: numb
         .force("link", forceLink(links).id((d: any) => d.id).distance(DEFAULT_LINK_DISTANCE * spacing))
         .force("charge", forceManyBody().strength(-300 * spacing))
         .force("collide", forceCollide().radius(NODE_RADIUS * spacing).iterations(2))
-        .force("y", forceY((d: any) => d.depth * 150 * spacing).strength(0.3)) // Preserve Rank/Order
+        .force("y", forceY((d: any) => d.depth * -150 * spacing).strength(0.3)) // Negative depth to place Ingredients (leaves) at Top, Root (Serve) at Bottom
         .force("x", forceX().strength(0.05)) // Gentle centering
         .stop();
 

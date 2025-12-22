@@ -20,7 +20,6 @@ export interface IconData {
 export interface IngredientData {
   id: string;
   name: string;
-  embedding: number[];
   created_at: number;
 }
 

@@ -228,7 +228,7 @@ export class FirebaseDataService implements DataService {
     return doc ? { id: doc.id, data: doc.data() } : null;
   }
   async createIngredient(name: string) {
-    const doc = await db.collection('ingredients').add({ name, embedding: [], created_at: FieldValue.serverTimestamp() });
+    const doc = await db.collection('ingredients').add({ name, created_at: FieldValue.serverTimestamp() });
     return doc.id;
   }
   async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number) {
@@ -403,7 +403,7 @@ export class MemoryDataService implements DataService {
     }
 
     async createIngredient(name: string) {
-        return memoryStore.addIngredient({ name, embedding: [], created_at: Date.now() });
+        return memoryStore.addIngredient({ name, created_at: Date.now() });
     }
 
     async getIconsForIngredient(ingredientId: string) {

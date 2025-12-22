@@ -8,7 +8,7 @@ import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, Menu } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil } from 'lucide-react';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading } = useAuth();
@@ -149,7 +149,7 @@ function RecipeLanesContent() {
   const hasIcons = graph?.nodes.some(n => !!n.iconUrl);
 
   return (
-    <div className="h-screen flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden">
+    <div className="h-[100dvh] flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden overscroll-none">
         {/* Utility Bar */}
         <header className="h-14 shrink-0 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-950 z-20">
             <div className="flex items-center gap-4 overflow-hidden">
@@ -259,6 +259,7 @@ function RecipeLanesContent() {
                 </div>
 
                 <div className="flex items-center gap-4">
+                    {/* Live Toggle */}
                     <button 
                          onClick={() => setIsLive(!isLive)}
                          className={`p-1.5 rounded transition-colors ${isLive ? 'bg-green-100 text-green-600' : 'text-zinc-400'}`}
@@ -267,6 +268,7 @@ function RecipeLanesContent() {
                         {isLive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                     </button>
 
+                    {/* Text Position */}
                     <div className="flex items-center gap-2 border-r border-zinc-200 pr-4">
                          <Type className="w-4 h-4 text-zinc-400" />
                          <select 
@@ -281,6 +283,7 @@ function RecipeLanesContent() {
                          </select>
                     </div>
 
+                    {/* Line Style */}
                     <div className="flex items-center gap-2 border-r border-zinc-200 pr-4">
                          <span className="text-xs font-mono text-zinc-400">Lines</span>
                          <select 
@@ -294,6 +297,7 @@ function RecipeLanesContent() {
                          </select>
                     </div>
 
+                    {/* Spacing Slider */}
                     <div className="flex items-center gap-2">
                         <span className="text-xs font-mono text-zinc-400">Spacing</span>
                         <input 
@@ -307,6 +311,7 @@ function RecipeLanesContent() {
                         />
                     </div>
 
+                    {/* Share Button */}
                     {graph && (
                         <button 
                             onClick={handleShare}
@@ -316,6 +321,7 @@ function RecipeLanesContent() {
                             <Share2 className="w-4 h-4" />
                         </button>
                     )}
+                    {/* JSON Toggle */}
                     {graph && (
                         <button 
                             onClick={() => setShowJson(!showJson)}

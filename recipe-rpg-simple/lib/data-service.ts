@@ -50,11 +50,13 @@ export class FirebaseDataService implements DataService {
           return snapshot.docs.map(doc => {
               const data = doc.data();
               let title = 'Untitled Recipe';
-              if (data.graph?.originalText) {
+              
+              if (data.graph?.title) {
+                  title = data.graph.title;
+              } else if (data.graph?.originalText) {
                   title = data.graph.originalText.split('\n')[0].trim();
                   if (title.length > 50) title = title.substring(0, 50) + '...';
               } else if (data.graph?.nodes?.length > 0) {
-                  // Fallback: Use first action or ingredient
                   const first = data.graph.nodes[0];
                   title = first.text || first.visualDescription || 'Recipe';
               }
@@ -69,7 +71,6 @@ export class FirebaseDataService implements DataService {
           });
       } catch (e: any) {
           console.warn('getPublicRecipes failed (likely missing index):', e.message);
-          // Fallback without ordering if index missing
           try {
               const snapshot = await db.collection('recipes').limit(limit).get();
               return snapshot.docs.map(doc => ({ id: doc.id, title: 'Recipe (Unordered)' }));
@@ -98,7 +99,6 @@ export class FirebaseDataService implements DataService {
       if (!doc.exists) return null;
       return doc.data()?.graph as RecipeGraph;
   }
-// ...
   
   async getIngredientByName(name: string) {
     const snapshot = await db.collection('ingredients').get();
@@ -129,7 +129,6 @@ export class FirebaseDataService implements DataService {
   }
 
   async getAllIcons() {
-     // Fetch active icons (up to 1000) for the shared gallery
      try {
          const snapshot = await db.collectionGroup('icons')
             .where('marked_for_deletion', '==', false)
@@ -148,9 +147,8 @@ export class FirebaseDataService implements DataService {
          // @ts-ignore
          return items.sort((a, b) => (b.popularity_score || 0) - (a.popularity_score || 0));
      } catch (e: any) {
-         if (e.code === 9) { // FAILED_PRECONDITION (Missing Index) 
-             console.warn('[getAllIcons] Missing Firestore Composite Index for collectionGroup:icons. Returning empty list.');
-             console.warn('Please create an index on `icons` collection group: marked_for_deletion ASC');
+         if (e.code === 9) { 
+             console.warn('[getAllIcons] Missing Firestore Composite Index for collectionGroup:icons.');
              return [];
          }
          console.error('[getAllIcons] Failed:', e);
@@ -168,7 +166,6 @@ export class FirebaseDataService implements DataService {
     imageBuffer: ArrayBuffer, 
     meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string }
   ) {
-      // 1. Upload to Storage
       const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app';
       const bucket = storage.bucket(bucketName);
       const fileName = `icons/${ingredientName.replace(/\s+/g, '-')}-${Date.now()}.png`;
@@ -194,7 +191,6 @@ export class FirebaseDataService implements DataService {
       
       const finalUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
 
-      // 2. Write to Firestore
       await db.collection('ingredients').doc(ingredientId).collection('icons').add({
           url: finalUrl,
           impressions: meta.impressions,
@@ -214,7 +210,6 @@ export class FirebaseDataService implements DataService {
   }
 
   async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
-    // We already have the ID, so we can query directly or search
     const iconsRef = db.collection('ingredients').doc(ingredientId).collection('icons');
     const snapshot = await iconsRef.where('url', '==', iconUrl).get();
     
@@ -238,7 +233,6 @@ export class FirebaseDataService implements DataService {
   }
 
   async deleteIcon(iconUrl: string, ingredientName?: string) {
-    // 1. Firestore: Targeted Delete
     if (ingredientName) {
         const ingSnapshot = await db.collection('ingredients').get();
         const ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === ingredientName.toLowerCase());
@@ -255,13 +249,12 @@ export class FirebaseDataService implements DataService {
         }
     }
     
-    // 2. Storage
     if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
         const matches = iconUrl.match(new RegExp('/o/([^?]+)'));
         if (matches && matches[1]) {
             const filePath = decodeURIComponent(matches[1]);
             const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
-            await bucket.file(filePath).delete().catch(() => {}); // Ignore missing
+            await bucket.file(filePath).delete().catch(() => {}); 
         }
     }
   }
@@ -340,7 +333,6 @@ export class FirebaseDataService implements DataService {
               const file = bucket.file(decodeURIComponent(matches[1]));
               const [existing] = await file.getMetadata();
               const metadata = { ...(existing.metadata || {}), ...updates };
-              // Convert all values to strings
               for (const k in metadata) metadata[k] = String(metadata[k]);
               await file.setMetadata({ metadata });
           }
@@ -356,7 +348,7 @@ export class MemoryDataService implements DataService {
       return Array.from(this.recipes.entries())
           .map(([id, graph]) => ({
               id,
-              title: graph.originalText?.split('\n')[0].substring(0, 50) || 'Untitled',
+              title: graph.title || graph.originalText?.split('\n')[0].substring(0, 50) || 'Untitled',
               createdAt: new Date().toISOString(),
               nodeCount: graph.nodes.length
           }))

@@ -1,8 +1,9 @@
 import { getEdgeParams } from '../lib/recipe-lanes/graph-utils';
 
 // Mock Node factory
-const createNode = (id: string, x: number, y: number, textPos = 'bottom'): any => ({
+const createNode = (id: string, x: number, y: number, textPos = 'bottom', type = 'minimal'): any => ({
     id,
+    type,
     position: { x, y },
     width: 100,
     height: 100,
@@ -25,15 +26,14 @@ function testVertical() {
 
     const result = getEdgeParams(n1, n2, h1, h2);
     
-    // Radius = 36
-    // Vector (0, 1)
-    // sy = 50 + 36 = 86
-    // ty = 250 - 36 = 214
+    // MinimalNode centers icon at y+32. Radius 36.
+    // sy = 32 + 36 = 68
+    // ty = (200 + 32) - 36 = 196
     
     assertClose(result.sx, 50, 0.1, 'SX');
-    assertClose(result.sy, 86, 0.1, 'SY');
+    assertClose(result.sy, 68, 0.1, 'SY');
     assertClose(result.tx, 50, 0.1, 'TX');
-    assertClose(result.ty, 214, 0.1, 'TY');
+    assertClose(result.ty, 196, 0.1, 'TY');
     
     console.log("Vertical PASS");
 }
@@ -51,10 +51,10 @@ function testHorizontal() {
     // Radius = 36
     // Vector (1, 0)
     // sx = 50 + 36 = 86
-    // tx = 250 - 36 = 214
+    // sy = 32 (MinimalNode center Y)
     
     assertClose(result.sx, 86, 0.1, 'SX');
-    assertClose(result.sy, 50, 0.1, 'SY');
+    assertClose(result.sy, 32, 0.1, 'SY');
     
     console.log("Horizontal PASS");
 }

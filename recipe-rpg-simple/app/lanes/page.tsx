@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
@@ -29,6 +29,14 @@ function RecipeLanesContent() {
   const [textPos, setTextPos] = useState<'bottom' | 'top' | 'left' | 'right'>('bottom');
   const [isLive, setIsLive] = useState(false);
   const [inputExpanded, setInputExpanded] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+      if (!inputExpanded && textareaRef.current) {
+          // Clear inline styles applied by manual resizing
+          textareaRef.current.style.height = '';
+      }
+  }, [inputExpanded]);
 
   useEffect(() => {
       const id = searchParams.get('id');
@@ -193,6 +201,7 @@ function RecipeLanesContent() {
         <div className={`shrink-0 bg-zinc-900 border-b border-zinc-800 transition-all duration-300 ease-in-out z-10 ${inputExpanded ? 'max-h-[80vh]' : 'max-h-16'}`}>
              <div className="p-2 flex gap-2">
                 <textarea 
+                    ref={textareaRef}
                     className={`flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300 focus:ring-1 focus:ring-yellow-500/50 outline-none resize-y transition-all duration-300 ${inputExpanded ? 'h-[50vh]' : 'h-10'}`}
                     placeholder="Paste recipe here..."
                     value={recipeText}

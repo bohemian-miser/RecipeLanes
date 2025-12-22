@@ -96,7 +96,6 @@ function RecipeLanesContent() {
         
         const rawGraph = parseRes.graph;
         
-        // Use LLM title if available and user didn't override
         if (!recipeTitle && rawGraph.title) {
             setRecipeTitle(rawGraph.title);
         } else {

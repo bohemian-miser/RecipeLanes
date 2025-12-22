@@ -231,10 +231,35 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
 
     }, [graph, mode, spacing, setNodes, setEdges, fitView, handleDeleteNode, edgeStyle]); 
 
-    // Layout Effect
+    // Layout Effect with Smart Update (Avoid re-layout on icon load)
     useEffect(() => {
-        runLayout(true); 
-    }, [graph, mode, spacing, runLayout]);
+        const rfNodes = getNodes();
+        const currentIds = rfNodes.map(n => n.id).sort().join(',');
+        const newIds = graph.nodes.map(n => n.id).sort().join(',');
+
+        // If structure is same (IDs match), just update data (e.g. icons) to preserve layout
+        if (currentIds === newIds && rfNodes.length > 0) {
+            setNodes(nds => nds.map(n => {
+                const newNode = graph.nodes.find(gn => gn.id === n.id);
+                if (newNode) {
+                    // Merge new data (iconUrl) but preserve local state (textPos, rotation is handled by dragRef but maybe safe)
+                    return {
+                        ...n,
+                        data: {
+                            ...n.data,
+                            iconUrl: newNode.iconUrl,
+                            // Preserve local overrides if needed, though they are in data too? 
+                            // textPos is passed via prop effect, so it overrides anyway.
+                            // We just want to ensure iconUrl updates.
+                        }
+                    };
+                }
+                return n;
+            }));
+        } else {
+            runLayout(true); 
+        }
+    }, [graph, mode, spacing, runLayout, getNodes, setNodes]);
 
     // Text Position Update Effect
     useEffect(() => {

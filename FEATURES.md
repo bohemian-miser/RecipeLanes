@@ -30,6 +30,8 @@
 *   **Visuals:**
     *   [DONE] "Minimal" node style (No background, large icon, text halo).
     *   **Better Arrows:** Improve edge styling and markers.
+    *   Have a loading bar when forging icons.
+    *   add icons as they are generated/found. All the cached ones should show pretty quickly.
 
 ## 5. Interaction & Export
 *   **Interactive Editing:**
@@ -40,3 +42,11 @@
 *   **Export Options:**
     *   [DONE] Download as SVG.
     *   [DONE] Download as PNG (High Res).
+
+
+
+
+# Icon Maker 
+
+* shrink the groups and only have groups when there's multiple.
+  * Tile them better to show a lot on screen.

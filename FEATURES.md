@@ -15,7 +15,9 @@
 * Logged in users can copy a recipe they are looking at. (remember to prompt them in the ui with a banner when they start making changes)
 * Enable Searching the public database (Gallery) for "Spaghetti", "Cake", etc.
 
-
+# UI
+* arrows are still broken. They should point to/from the centre of an icon and stop short at the radius from the centre to a corner of the icon.
+* Undo is still not working. Make a test that tests it end to end in the ui. Prevent pushing any furhter changes that would break it.
 
 ## 3. Input Methods
 *   **Raw Text:** (Implemented) Paste instructions.
@@ -47,6 +49,7 @@
 *   **Export Options:**
     *   [DONE] Download as SVG.
     *   [DONE] Download as PNG (High Res).
+        *   [BROKEN] needs fixing.
 
 
 

@@ -333,7 +333,7 @@ function RecipeLanesContent() {
                 </div>
             </div>
             
-            <div className="absolute inset-0 pt-12 pb-32 md:pb-0"> 
+            <div className="absolute inset-0 pt-12 md:bottom-0 bottom-16"> 
                 {graph ? (
                     <ReactFlowDiagram graph={graph} mode={layoutMode} spacing={spacing} edgeStyle={edgeStyle} textPos={textPos} isLive={isLive} onInteraction={() => setInputExpanded(false)} />
                 ) : (

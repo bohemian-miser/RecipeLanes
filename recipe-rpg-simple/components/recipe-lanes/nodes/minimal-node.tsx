@@ -7,10 +7,10 @@ import { rerollIconAction } from '@/app/actions';
 // Track rejected URLs for the session to prevent them from reappearing immediately
 const sessionRejectedUrls = new Set<string>();
 
-const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode>) => {
+const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?: () => void }>) => {
   const isIngredient = data.type === 'ingredient';
   const [isRerolling, setIsRerolling] = useState(false);
-  const { setNodes, setEdges, getEdges } = useReactFlow();
+  const { setNodes } = useReactFlow();
   const rotation = data.rotation || 0;
   
   const textPos = data.textPos || 'bottom';
@@ -25,29 +25,9 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode>) => {
 
   const handleDelete = (e: React.MouseEvent) => {
       e.stopPropagation();
-      const edges = getEdges();
-      const incoming = edges.filter(ed => ed.target === id);
-      const outgoing = edges.filter(ed => ed.source === id);
-      
-      const newEdges = edges.filter(ed => ed.source !== id && ed.target !== id);
-      
-      // Connect parents to children
-      // Parents (incoming source) -> Children (outgoing target)
-      incoming.forEach(inEdge => {
-          outgoing.forEach(outEdge => {
-              newEdges.push({
-                  id: `${inEdge.source}-${outEdge.target}`,
-                  source: inEdge.source,
-                  target: outEdge.target,
-                  type: 'floating',
-                  style: { stroke: '#9ca3af', strokeWidth: 1.5 },
-                  data: { variant: 'straight' } // Inherit style? defaulting to straight for now
-              });
-          });
-      });
-      
-      setEdges(newEdges);
-      setNodes(nodes => nodes.filter(n => n.id !== id));
+      if (data.onDelete) {
+          data.onDelete();
+      }
   };
 
   const handleReroll = async (e: React.MouseEvent) => {

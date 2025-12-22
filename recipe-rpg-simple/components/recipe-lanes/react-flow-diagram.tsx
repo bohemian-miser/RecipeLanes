@@ -497,6 +497,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 minZoom={0.1}
                 maxZoom={4}
                 defaultEdgeOptions={{ type: 'floating' }}
+                onlyRenderVisibleElements={false}
             >
                 <Background color="#f4f4f5" gap={20} />
                 <Controls showInteractive={false} />

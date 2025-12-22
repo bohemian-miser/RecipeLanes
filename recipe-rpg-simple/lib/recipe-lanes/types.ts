@@ -26,12 +26,19 @@ export interface RecipeNode {
   textPos?: 'bottom' | 'top' | 'left' | 'right';
 }
 
+export interface NodeLayout {
+  id: string;
+  x: number;
+  y: number;
+}
+
 export interface RecipeGraph {
   title?: string;
   originalText?: string;
   layoutMode?: string;
   lanes: Lane[];
   nodes: RecipeNode[];
+  layouts?: Record<string, NodeLayout[]>;
 }
 
 // --- Output Layout (For Rendering) ---

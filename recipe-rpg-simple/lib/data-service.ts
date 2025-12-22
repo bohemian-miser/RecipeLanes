@@ -406,7 +406,20 @@ export class MemoryDataService implements DataService {
     async deleteIcon(iconUrl: string, ingredientName?: string): Promise<void> {}
     async deleteIngredientCategory(ingredientName: string): Promise<void> {}
     async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number): Promise<void> {}
-    async listDebugFiles(): Promise<any[]> { return []; }
+    async listDebugFiles(): Promise<any[]> {
+        const icons = await this.getAllIcons();
+        return icons.map((icon: any) => ({
+          name: `icons/${icon.ingredient_name || icon.ingredient}-${icon.id}.png`,
+          updated: new Date(icon.created_at).toISOString(),
+          contentType: 'image/png',
+          size: 0,
+          popularityScore: String(icon.popularity_score),
+          impressions: String(icon.impressions || 0),
+          rejections: String(icon.rejections || 0),
+          mediaLink: icon.url,
+          publicUrl: icon.url
+      }));
+    }
 }
 
 let currentDataService: DataService | null = null;

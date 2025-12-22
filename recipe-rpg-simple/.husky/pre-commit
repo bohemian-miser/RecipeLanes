@@ -1,1 +1,3 @@
-npm test
+#!/bin/sh
+echo "Running presubmit checks (Build & Test)..."
+cd recipe-rpg-simple && npm run verify

@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   use: {
-    baseURL: 'http://localhost:8001',
+    baseURL: 'http://localhost:8003',
     trace: 'on-first-retry',
   },
   projects: [
@@ -15,8 +15,8 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run start',
-    url: 'http://localhost:8001',
-    reuseExistingServer: true,
-    timeout: 30 * 1000,
+    url: 'http://localhost:8003',
+    reuseExistingServer: false,
+    timeout: 120 * 1000,
   },
 });

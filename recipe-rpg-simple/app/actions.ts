@@ -337,16 +337,9 @@ export async function parseRecipeAction(recipeText: string): Promise<{ graph?: R
         
         const prompt = generateRecipePrompt(recipeText);
         
-        // Use Genkit to generate the JSON
-        const response = await ai.generate({
-            model: textModel,
-            prompt: prompt,
-            config: {
-                temperature: 0.2, // Low temp for structured output
-            }
-        });
+        // Use AIService (Mock aware)
+        const text = await getAIService().generateText(prompt);
 
-        const text = response.text;
         const graph = parseRecipeGraph(text);
         graph.originalText = recipeText;
         return { graph };
@@ -360,13 +353,8 @@ export async function parseRecipeAction(recipeText: string): Promise<{ graph?: R
 export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: string) {
   try {
     const fullPrompt = generateAdjustmentPrompt(currentGraph, prompt);
-    const response = await ai.generate({
-        model: textModel,
-        prompt: fullPrompt,
-        config: { temperature: 0.2 }
-    });
+    const text = await getAIService().generateText(fullPrompt);
 
-    const text = response.text;
     const newGraph = parseRecipeGraph(text);
 
     // Restore icons if ID matches and AI forgot them

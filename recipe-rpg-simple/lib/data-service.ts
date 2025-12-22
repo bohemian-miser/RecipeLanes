@@ -395,17 +395,66 @@ export class MemoryDataService implements DataService {
         if (!graph) return null;
         return { graph, ownerId: undefined, visibility: 'unlisted', stats: { likes: 0, dislikes: 0 } }; 
     } 
-    
-    // ... Stubs for other methods to satisfy interface ...
-    async getIngredientByName(name: string): Promise<{ id: string; data: any; } | null> { return null; }
-    async createIngredient(name: string): Promise<string> { return 'mem-ing-id'; }
-    async getIconsForIngredient(ingredientId: string): Promise<any[]> { return []; }
-    async getAllIcons(): Promise<any[]> { return []; }
-    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, imagePrompt: string, fullImagePrompt: string, publicUrl: string, imageBuffer: ArrayBuffer, meta: any): Promise<string> { return 'mem-url'; }
-    async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string): Promise<void> {}
-    async deleteIcon(iconUrl: string, ingredientName?: string): Promise<void> {}
-    async deleteIngredientCategory(ingredientName: string): Promise<void> {}
-    async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number): Promise<void> {}
+
+    async getIngredientByName(name: string) {
+        const ingredients = memoryStore.getIngredients();
+        const match = ingredients.find(i => i.name.toLowerCase() === name.toLowerCase());
+        return match ? { id: match.id, data: match } : null;
+    }
+
+    async createIngredient(name: string) {
+        return memoryStore.addIngredient({ name, embedding: [], created_at: Date.now() });
+    }
+
+    async getIconsForIngredient(ingredientId: string) {
+        return memoryStore.getIconsForIngredient(ingredientId);
+    }
+
+    async getAllIcons() {
+        return memoryStore.getAllIcons().sort((a, b) => b.popularity_score - a.popularity_score);
+    }
+
+    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, imagePrompt: string, fullImagePrompt: string, publicUrl: string, imageBuffer: ArrayBuffer, meta: any): Promise<string> {
+        memoryStore.addIcon({
+            url: publicUrl,
+            ingredient: ingredientName,
+            ingredientId: ingredientId,
+            popularity_score: meta.lcb,
+            impressions: meta.impressions,
+            rejections: meta.rejections,
+            created_at: Date.now(),
+            marked_for_deletion: false,
+            prompt: visualDescription,
+            imagePrompt: imagePrompt,
+            fullImagePrompt: fullImagePrompt,
+            textModel: meta.textModel,
+            imageModel: meta.imageModel
+        });
+        return publicUrl;
+    }
+
+    async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
+        const icons = memoryStore.getAllIcons().filter(i => i.url === iconUrl);
+        for (const icon of icons) {
+            const n = (icon.impressions || 0);
+            const r = (icon.rejections || 0) + 1;
+            const newLcb = 0; // Simplified
+            memoryStore.updateIcon(icon.id, { rejections: r, popularity_score: newLcb });
+        }
+    }
+
+    async deleteIcon(iconUrl: string, ingredientName?: string) {
+        memoryStore.deleteIcon(iconUrl);
+    }
+
+    async deleteIngredientCategory(ingredientName: string) {
+        memoryStore.deleteIngredient(ingredientName);
+    }
+
+    async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number) {
+        memoryStore.updateIcon(iconId, { impressions: newImpressions, popularity_score: newScore });
+    }
+
     async listDebugFiles(): Promise<any[]> {
         const icons = await this.getAllIcons();
         return icons.map((icon: any) => ({

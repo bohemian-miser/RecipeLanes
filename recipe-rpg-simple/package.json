@@ -5,9 +5,10 @@
   "scripts": {
     "dev": "next dev -p 8001",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 8001",
     "lint": "eslint",
-    "test": "npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx playwright test",
+    "pretest": "fuser -k 8001/tcp; fuser -k 3000/tcp || true",
+    "test": "npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx tsx tests/undo-scrambled-logic.test.ts && npx playwright test",
     "mcp": "npx tsx scripts/mcp-server.ts",
     "verify": "npm run build && npm test",
     "prepare": "cd .. && git config core.hooksPath recipe-rpg-simple/.husky"

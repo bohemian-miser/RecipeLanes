@@ -37,9 +37,10 @@ interface ReactFlowDiagramProps {
   edgeStyle?: 'straight' | 'step' | 'bezier';
   textPos?: 'bottom' | 'top' | 'left' | 'right';
   isLive?: boolean;
+  onInteraction?: () => void;
 }
 
-const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false }) => {
+const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction }) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const { fitView, getNodes } = useReactFlow();
@@ -133,7 +134,6 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
 
         const newNodes: Node[] = [];
         
-        // Add Lanes
         layout.lanes.forEach(lane => {
              newNodes.push({
                  id: lane.id,
@@ -352,6 +352,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     };
 
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
+        onInteraction?.();
         if (event.shiftKey) {
             const hasOtherSelection = nodes.some(n => n.selected && n.id !== node.id);
             if (hasOtherSelection) {
@@ -364,12 +365,13 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     };
 
     const onNodeContextMenu = (event: React.MouseEvent, node: Node) => {
+        onInteraction?.();
         event.preventDefault();
-        // Long Press / Right Click -> Select Branch
         selectBranch(node.id);
     };
 
     const onNodeDragStart = (event: React.MouseEvent, node: Node) => {
+        onInteraction?.();
         takeSnapshot(); 
         if (event.shiftKey) {
             const allNodes = getNodes();
@@ -462,6 +464,8 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 onNodeDragStart={onNodeDragStart}
                 onNodeDrag={onNodeDrag}
                 onNodeDragStop={onNodeDragStop}
+                onPaneClick={() => onInteraction?.()}
+                onMoveStart={() => onInteraction?.()}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 fitView

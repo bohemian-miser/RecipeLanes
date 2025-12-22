@@ -397,8 +397,8 @@ export async function saveRecipeAction(graph: RecipeGraph, existingId?: string) 
 export async function getRecipeAction(id: string) {
   try {
     const dataService = getDataService();
-    const graph = await dataService.getRecipe(id);
-    return { graph };
+    const recipeData = await dataService.getRecipe(id);
+    return { graph: recipeData?.graph };
   } catch (e: any) {
     return { error: e.message };
   }

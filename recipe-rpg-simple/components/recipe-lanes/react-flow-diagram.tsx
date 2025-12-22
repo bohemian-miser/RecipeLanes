@@ -453,7 +453,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     const hasSelection = nodes.some(n => n.selected);
 
     return (
-        <div className="w-full h-full" ref={flowWrapper}>
+        <div className="w-full h-full touch-none" ref={flowWrapper}>
             <ReactFlow
                 nodes={nodes}
                 edges={edges}

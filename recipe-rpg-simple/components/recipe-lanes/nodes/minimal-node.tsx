@@ -1,6 +1,6 @@
 import React, { memo, useState } from 'react';
 import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
-import { RefreshCw, RotateCw } from 'lucide-react';
+import { RefreshCw, RotateCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { rerollIconAction } from '@/app/actions';
 
@@ -10,7 +10,7 @@ const sessionRejectedUrls = new Set<string>();
 const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode>) => {
   const isIngredient = data.type === 'ingredient';
   const [isRerolling, setIsRerolling] = useState(false);
-  const { setNodes } = useReactFlow();
+  const { setNodes, setEdges, getEdges } = useReactFlow();
   const rotation = data.rotation || 0;
   
   const textPos = data.textPos || 'bottom';
@@ -22,6 +22,33 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode>) => {
       right: 'flex-row',
       left: 'flex-row-reverse'
   }[textPos];
+
+  const handleDelete = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const edges = getEdges();
+      const incoming = edges.filter(ed => ed.target === id);
+      const outgoing = edges.filter(ed => ed.source === id);
+      
+      const newEdges = edges.filter(ed => ed.source !== id && ed.target !== id);
+      
+      // Connect parents to children
+      // Parents (incoming source) -> Children (outgoing target)
+      incoming.forEach(inEdge => {
+          outgoing.forEach(outEdge => {
+              newEdges.push({
+                  id: `${inEdge.source}-${outEdge.target}`,
+                  source: inEdge.source,
+                  target: outEdge.target,
+                  type: 'floating',
+                  style: { stroke: '#9ca3af', strokeWidth: 1.5 },
+                  data: { variant: 'straight' } // Inherit style? defaulting to straight for now
+              });
+          });
+      });
+      
+      setEdges(newEdges);
+      setNodes(nodes => nodes.filter(n => n.id !== id));
+  };
 
   const handleReroll = async (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -155,18 +182,22 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode>) => {
   
               
   
+              {/* Reroll Button */}
               <button 
-  
                   onClick={handleReroll}
-  
-                  className={`absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-blue-500 transition-all z-50 ${isRerolling ? 'opacity-100 block' : 'opacity-0 group-hover:opacity-100'}`}
-  
+                  className={`absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-blue-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isRerolling ? '!opacity-100 block' : ''}`}
                   title="Reroll Icon"
-  
               >
-  
                   <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin text-blue-500' : ''}`} />
-  
+              </button>
+
+              {/* Delete Button */}
+              <button 
+                  onClick={handleDelete}
+                  className={`absolute -top-2 -left-2 bg-white rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-red-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}
+                  title="Delete Step (Connect Parents to Children)"
+              >
+                  <X className="w-3 h-3" />
               </button>
   
           </div>

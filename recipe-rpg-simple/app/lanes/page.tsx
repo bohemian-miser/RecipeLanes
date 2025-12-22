@@ -8,7 +8,7 @@ import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, Menu } from 'lucide-react';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading } = useAuth();
@@ -96,6 +96,7 @@ function RecipeLanesContent() {
         
         const rawGraph = parseRes.graph;
         
+        // Use LLM title if available and user didn't override
         if (!recipeTitle && rawGraph.title) {
             setRecipeTitle(rawGraph.title);
         } else {
@@ -144,6 +145,8 @@ function RecipeLanesContent() {
   };
 
   if (authLoading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 font-mono">Loading...</div>;
+  
+  const hasIcons = graph?.nodes.some(n => !!n.iconUrl);
 
   return (
     <div className="h-screen flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden">
@@ -223,31 +226,35 @@ function RecipeLanesContent() {
         {/* Visualizer (Full Remaining Height) */}
         <div className="flex-1 relative overflow-hidden bg-zinc-100">
             {/* Toolbar */}
-            <div className="absolute top-0 left-0 right-0 h-12 bg-white/90 backdrop-blur border-b border-zinc-200 flex items-center justify-between px-4 overflow-x-auto z-10">
+            <div className="absolute top-0 left-0 right-0 h-12 bg-white/90 backdrop-blur border-b border-zinc-200 flex items-center justify-between px-4 overflow-x-auto z-10 no-scrollbar">
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setLayoutMode('swimlanes')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'swimlanes' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                        className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'swimlanes' ? 'bg-zinc-100' : ''}`}
+                        title="Lanes"
                     >
-                        <List className="w-4 h-4" /> Lanes
+                        <List className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setLayoutMode('dagre')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'dagre' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                        className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'dagre' ? 'bg-zinc-100' : ''}`}
+                        title="Smart"
                     >
-                        <Network className="w-4 h-4" /> Smart
+                        <Network className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setLayoutMode('dagre-lr')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'dagre-lr' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                        className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'dagre-lr' ? 'bg-zinc-100' : ''}`}
+                        title="Smart LR"
                     >
-                        <RotateCw className="w-4 h-4" /> Smart (LR)
+                        <RotateCw className="w-4 h-4" />
                     </button>
                      <button
                         onClick={() => { setLayoutMode('repulsive'); setEdgeStyle('bezier'); }}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${layoutMode === 'repulsive' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                        className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'repulsive' ? 'bg-zinc-100' : ''}`}
+                        title="Repulsive"
                     >
-                        <Orbit className="w-4 h-4" /> Repulsive
+                        <Orbit className="w-4 h-4" />
                     </button>
                 </div>
 
@@ -321,9 +328,9 @@ function RecipeLanesContent() {
                 </div>
             </div>
             
-            <div className="absolute inset-0 pt-12"> 
+            <div className="absolute inset-0 pt-12 pb-32 md:pb-0"> 
                 {graph ? (
-                    <ReactFlowDiagram graph={graph} mode={layoutMode} spacing={spacing} edgeStyle={edgeStyle} textPos={textPos} isLive={isLive} />
+                    <ReactFlowDiagram graph={graph} mode={layoutMode} spacing={spacing} edgeStyle={edgeStyle} textPos={textPos} isLive={isLive} onInteraction={() => setInputExpanded(false)} />
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400">
                         <Wand2 className="w-8 h-8 opacity-20 mb-2" />
@@ -332,29 +339,69 @@ function RecipeLanesContent() {
                 )}
             </div>
 
+            {/* Bottom Area: Legend (Left) & Chat (Right) */}
             {graph && (
-                <div className="absolute bottom-4 left-4 right-4 flex justify-center z-20 pointer-events-none">
-                    <div className="w-full max-w-lg bg-white/95 backdrop-blur border border-zinc-200 rounded-full shadow-xl flex items-center p-1 pointer-events-auto">
-                        <MessageSquare className="w-5 h-5 text-zinc-400 ml-2" />
-                        <input 
-                            className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
-                            placeholder="Adjust recipe..."
-                            value={chatInput}
-                            onChange={(e) => setChatInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}
-                            disabled={status === 'adjusting'}
-                        />
-                        <button
-                            onClick={handleAdjust}
-                            disabled={!chatInput.trim() || status === 'adjusting'}
-                            className="p-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-full transition-colors disabled:opacity-50 m-1"
-                        >
-                            {status === 'adjusting' ? (
-                                <Wand2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <Send className="w-4 h-4" />
-                            )}
-                        </button>
+                <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none md:pointer-events-auto">
+                    {/* Desktop Layout (Floating) */}
+                    <div className="hidden md:block absolute bottom-4 left-4 p-3 bg-white/90 backdrop-blur rounded-lg shadow-lg border border-zinc-200 text-xs text-zinc-700 pointer-events-auto">
+                        <div className="font-bold text-zinc-400 uppercase tracking-widest text-[10px]">Legend</div>
+                        {!hasIcons && (
+                            <>
+                                <div className="flex items-center gap-2"><span className="text-xl">🥕</span> Ingredients</div>
+                                <div className="flex items-center gap-2"><span className="text-xl">🍳</span> Actions</div>
+                            </>
+                        )}
+                        <div className="flex items-center gap-1 opacity-50 border-t border-zinc-100 pt-2"><span className="text-xs font-bold">Shift+Click</span> Select Branch</div>
+                        <div className="flex items-center gap-1 opacity-50"><span className="text-xs font-bold">Shift+Drag</span> Rotate Branch</div>
+                    </div>
+
+                    <div className="hidden md:flex absolute bottom-4 left-1/2 -translate-x-1/2 justify-center pointer-events-auto w-full max-w-lg">
+                        <div className="w-full bg-white/95 backdrop-blur border border-zinc-200 rounded-full shadow-xl flex items-center p-1">
+                            <MessageSquare className="w-5 h-5 text-zinc-400 ml-2" />
+                            <input 
+                                className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
+                                placeholder="Adjust recipe..."
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}
+                                disabled={status === 'adjusting'}
+                            />
+                            <button
+                                onClick={handleAdjust}
+                                disabled={!chatInput.trim() || status === 'adjusting'}
+                                className="p-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-full transition-colors disabled:opacity-50 m-1"
+                            >
+                                {status === 'adjusting' ? <Wand2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Mobile Layout (Split Bottom Bar) */}
+                    <div className="md:hidden flex h-16 bg-white/95 backdrop-blur border-t border-zinc-200 pointer-events-auto">
+                        {/* Legend (Left Half) */}
+                        <div className="w-1/2 p-2 text-[10px] text-zinc-600 border-r border-zinc-100 flex flex-col justify-center gap-1">
+                            {!hasIcons && <div className="truncate">🥕 Ingredients  🍳 Actions</div>}
+                            <div className="font-bold text-zinc-800">Tap & Hold: Select Branch</div>
+                        </div>
+                        
+                        {/* Chat (Right Half) */}
+                        <div className="w-1/2 p-2 flex items-center gap-1">
+                            <input 
+                                className="flex-1 bg-zinc-100 border border-zinc-200 rounded-md px-2 text-xs h-full text-zinc-800 outline-none"
+                                placeholder="Adjust..."
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}
+                                disabled={status === 'adjusting'}
+                            />
+                            <button
+                                onClick={handleAdjust}
+                                disabled={!chatInput.trim() || status === 'adjusting'}
+                                className="h-full w-10 flex items-center justify-center bg-zinc-900 text-white rounded-md shrink-0"
+                            >
+                                {status === 'adjusting' ? <Wand2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

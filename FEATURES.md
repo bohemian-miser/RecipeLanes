@@ -8,9 +8,14 @@
 *   [DONE] **Sharing:** Shareable UUID links.
 
 ## 2. Public & Social
-*   **Public Gallery:** Make recipes public / sharable via link.
-*   **Search:** Search the public database for "Spaghetti", "Cake", etc.
-*   **Forking:** "Remix" a public recipe.
+* Re-enable auth.
+* Every recipe made by a logged in user is saved to their account, and they can choose to share it by url while being unlisted, or make it public (can then be found by searching the gallery). When viewing a recipe, don't show or associate the recipe with the account that created it. If you make edits, show a lil "Log in to save edits" and if they click that then they log in and their edits are saved.
+* Save all the edits made to each of the layouts independently (people can reset at any time to the original for that layout)
+* All Recipies can be starred (Show a starred secion in gallery, these point to the orignal recipe), coppied, given a thumbs up / thumbs down (Store the id of recipies liked / disliked in each account and have a count saved of each stored with the recipe and prevent an account from liking/disliking recipies they have already liked/disliked).
+* Logged in users can copy a recipe they are looking at. (remember to prompt them in the ui with a banner when they start making changes)
+* Enable Searching the public database (Gallery) for "Spaghetti", "Cake", etc.
+
+
 
 ## 3. Input Methods
 *   **Raw Text:** (Implemented) Paste instructions.
@@ -50,3 +55,13 @@
 
 * shrink the groups and only have groups when there's multiple.
   * Tile them better to show a lot on screen.
+
+
+
+# Steps to check
+* Are all tests passing locally, and in github?
+  * Check using gh
+* Is the build okay in firebase?
+  * Check using firebase cli
+* Is all the mocking correct?
+* Is there anything more you could test for in this current change to prevent/detect it breaking in the future?

@@ -9,7 +9,6 @@ import { generateRecipePrompt, parseRecipeGraph } from '@/lib/recipe-lanes/parse
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import { generateIconFlow } from '@/lib/flows';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
-import { calculatePenroseLayout } from '@/lib/recipe-lanes/layout-penrose';
 
 // Constants for Generation Gating
 const SESSION_REJECT_LIMIT = 4;
@@ -463,16 +462,6 @@ export async function rerollIconAction(nodeId: string, ingredientName: string, c
     } catch (e: any) {
         console.error('rerollIconAction failed:', e);
         return { error: e.message };
-    }
-}
-
-export async function calculatePenroseLayoutAction(graph: RecipeGraph, spacing: number) {
-    try {
-        const layout = await calculatePenroseLayout(graph, spacing);
-        return { layout };
-    } catch (e: any) {
-        console.error('Penrose Layout Action Failed:', e);
-        return { error: e.message || 'Penrose calculation failed' };
     }
 }
 

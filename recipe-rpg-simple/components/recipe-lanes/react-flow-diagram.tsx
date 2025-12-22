@@ -19,7 +19,6 @@ import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX
 
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
-import { calculatePenroseLayout } from '../../lib/recipe-lanes/layout-penrose';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import MinimalNode from './nodes/minimal-node';
 import CardNode from './nodes/card-node';
@@ -72,48 +71,31 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     }), []);
     
     // Undo/Redo History
-    const [past, setPast] = useState<{ nodes: Node[], edges: Edge[] }[]>([]);
-    const [future, setFuture] = useState<{ nodes: Node[], edges: Edge[] }[]>([]);
+    const [past, setPast] = useState<Node[][]>([]);
+    const [future, setFuture] = useState<Node[][]>([]);
 
     const takeSnapshot = useCallback(() => {
-        setPast(p => [...p, { 
-            nodes: JSON.parse(JSON.stringify(getNodes())), 
-            edges: JSON.parse(JSON.stringify(getEdges())) 
-        }]);
+        setPast(p => [...p, JSON.parse(JSON.stringify(getNodes()))]);
         setFuture([]);
-    }, [getNodes, getEdges]);
+    }, [getNodes]);
 
     const undo = useCallback(() => {
         if (past.length === 0) return;
         const newPast = [...past];
         const previous = newPast.pop();
         setPast(newPast);
-        setFuture(f => [{ 
-            nodes: JSON.parse(JSON.stringify(getNodes())), 
-            edges: JSON.parse(JSON.stringify(getEdges())) 
-        }, ...f]);
-        
-        if (previous) {
-            setNodes(previous.nodes);
-            setEdges(previous.edges);
-        }
-    }, [past, getNodes, getEdges, setNodes, setEdges]);
+        setFuture(f => [JSON.parse(JSON.stringify(getNodes())), ...f]);
+        setNodes(previous!);
+    }, [past, getNodes, setNodes]);
 
     const redo = useCallback(() => {
         if (future.length === 0) return;
         const newFuture = [...future];
         const next = newFuture.shift();
         setFuture(newFuture);
-        setPast(p => [...p, { 
-            nodes: JSON.parse(JSON.stringify(getNodes())), 
-            edges: JSON.parse(JSON.stringify(getEdges())) 
-        }]);
-        
-        if (next) {
-            setNodes(next.nodes);
-            setEdges(next.edges);
-        }
-    }, [future, getNodes, getEdges, setNodes, setEdges]);
+        setPast(p => [...p, JSON.parse(JSON.stringify(getNodes()))]);
+        setNodes(next!);
+    }, [future, getNodes, setNodes]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -231,35 +213,10 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
 
     }, [graph, mode, spacing, setNodes, setEdges, fitView, handleDeleteNode, edgeStyle]); 
 
-    // Layout Effect with Smart Update (Avoid re-layout on icon load)
+    // Layout Effect
     useEffect(() => {
-        const rfNodes = getNodes();
-        const currentIds = rfNodes.map(n => n.id).sort().join(',');
-        const newIds = graph.nodes.map(n => n.id).sort().join(',');
-
-        // If structure is same (IDs match), just update data (e.g. icons) to preserve layout
-        if (currentIds === newIds && rfNodes.length > 0) {
-            setNodes(nds => nds.map(n => {
-                const newNode = graph.nodes.find(gn => gn.id === n.id);
-                if (newNode) {
-                    // Merge new data (iconUrl) but preserve local state (textPos, rotation is handled by dragRef but maybe safe)
-                    return {
-                        ...n,
-                        data: {
-                            ...n.data,
-                            iconUrl: newNode.iconUrl,
-                            // Preserve local overrides if needed, though they are in data too? 
-                            // textPos is passed via prop effect, so it overrides anyway.
-                            // We just want to ensure iconUrl updates.
-                        }
-                    };
-                }
-                return n;
-            }));
-        } else {
-            runLayout(true); 
-        }
-    }, [graph, mode, spacing, runLayout, getNodes, setNodes]);
+        runLayout(true); 
+    }, [graph, mode, spacing, runLayout]);
 
     // Text Position Update Effect
     useEffect(() => {
@@ -593,6 +550,15 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                     >
                         <Download className="w-4 h-4" />
                     </button>
+                </Panel>
+                
+                <Panel position="bottom-left" className="bg-white/90 backdrop-blur p-3 rounded-lg shadow-lg border border-zinc-200 text-xs text-zinc-700 flex flex-col gap-2">
+                    <div className="font-bold text-zinc-400 uppercase tracking-widest text-[10px]">Legend</div>
+                    <div className="flex items-center gap-2"><span className="text-xl">🥕</span> Ingredients</div>
+                    <div className="flex items-center gap-2"><span className="text-xl">🍳</span> Actions</div>
+                    <div className="flex items-center gap-1 opacity-50 border-t border-zinc-100 pt-2"><span className="text-xs font-bold">Shift+Click</span> Select Branch</div>
+                    <div className="flex items-center gap-1 opacity-50"><span className="text-xs font-bold">Shift+Drag</span> Rotate Branch</div>
+                    <div className="flex items-center gap-1 opacity-50"><span className="text-xs font-bold">Long Press</span> Select Branch</div>
                 </Panel>
             </ReactFlow>
         </div>

@@ -5,6 +5,7 @@ import { RecipeCard } from '@/components/ui/recipe-card';
 import { getDataService } from '@/lib/data-service';
 import { getAuthService } from '@/lib/auth-service';
 import { Login } from '@/components/login';
+import { LoginButton } from '@/components/login-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,17 +15,26 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
   const session = await getAuthService().verifyAuth();
   
   let recipes = [];
+  let errorMsg = null;
 
-  if (filter === 'mine') {
-      if (!session) return <Login />;
-      recipes = await getDataService().getUserRecipes(session.uid);
-  } else if (filter === 'starred') {
-      if (!session) return <Login />;
-      recipes = await getDataService().getStarredRecipes(session.uid);
-  } else if (query) {
-      recipes = await getDataService().searchPublicRecipes(query);
-  } else {
-      recipes = await getPublicGalleryAction();
+  try {
+      if (filter === 'mine') {
+          if (!session) return <Login />;
+          recipes = await getDataService().getUserRecipes(session.uid);
+      } else if (filter === 'starred') {
+          if (!session) return <Login />;
+          recipes = await getDataService().getStarredRecipes(session.uid);
+      } else if (query) {
+          recipes = await getDataService().searchPublicRecipes(query);
+      } else {
+          recipes = await getPublicGalleryAction();
+      }
+  } catch (e: any) {
+      console.error('Gallery Fetch Error:', e);
+      errorMsg = e.message;
+      if (e.message?.includes('index')) {
+          errorMsg = "Database index building... please wait a few minutes.";
+      }
   }
 
   return (
@@ -75,7 +85,7 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
                          </Link>
                     </div>
                 ) : (
-                    <Link href="/lanes" className="text-sm text-zinc-400 hover:text-white underline">Login for more</Link>
+                    <LoginButton text="Login for more" className="text-sm text-zinc-400 underline" />
                 )}
             </div>
         </header>
@@ -91,7 +101,7 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
             {recipes.length === 0 && (
                 <div className="col-span-full flex flex-col items-center justify-center py-32 text-zinc-500 space-y-4 border-2 border-dashed border-zinc-800 rounded-xl">
                     <ChefHat className="w-12 h-12 opacity-20" />
-                    <p>{query ? `No recipes found for "${query}"` : 'No public recipes found yet.'}</p>
+                    <p>{errorMsg ? `Error: ${errorMsg}` : query ? `No recipes found for "${query}"` : 'No recipes found.'}</p>
                     <Link href="/lanes" className="text-yellow-500 hover:underline">
                         Create one now!
                     </Link>

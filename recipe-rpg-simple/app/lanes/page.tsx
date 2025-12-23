@@ -11,7 +11,7 @@ import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil } from 'lucide-react';
 
 function RecipeLanesContent() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, signIn } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
   
@@ -203,7 +203,7 @@ function RecipeLanesContent() {
                         </Link>
                     </>
                 ) : (
-                    <button onClick={() => router.push('/gallery')} className="hover:text-yellow-500 whitespace-nowrap">
+                    <button onClick={signIn} className="hover:text-yellow-500 whitespace-nowrap">
                         Guest (Login)
                     </button>
                 )}
@@ -213,7 +213,7 @@ function RecipeLanesContent() {
         {/* Guest Banner */}
         {!user && graph && (
             <div className="bg-yellow-500/10 border-b border-yellow-500/20 text-yellow-500 text-[10px] py-1 px-4 text-center font-mono">
-                Recipe not saved to account. <Link href="/gallery" className="underline font-bold">Log in</Link> to save edits permanently.
+                Recipe not saved to account. <button onClick={signIn} className="underline font-bold hover:text-yellow-400">Log in</button> to save edits permanently.
             </div>
         )}
 

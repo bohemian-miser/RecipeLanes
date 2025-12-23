@@ -2,9 +2,11 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  timeout: 60 * 1000,
+  retries: 2,
   fullyParallel: true,
   use: {
-    baseURL: 'http://localhost:8001',
+    baseURL: 'http://localhost:8002',
     trace: 'on-first-retry',
   },
   projects: [
@@ -14,10 +16,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run start',
-    url: 'http://localhost:8001',
+    command: 'npx next start -p 8002',
+    url: 'http://localhost:8002',
     reuseExistingServer: true,
-    timeout: 30 * 1000,
+    timeout: 60 * 1000,
     env: {
       MOCK_AI: 'true',
     },

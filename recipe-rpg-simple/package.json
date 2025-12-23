@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p 8001",
     "lint": "eslint",
-    "test": "npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx tsx tests/undo-scrambled-logic.test.ts && npx tsx tests/social-features.test.ts && npx playwright test",
+    "test": "npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx tsx tests/undo-scrambled-logic.test.ts && npx tsx tests/social-features.test.ts && npx tsx tests/gallery-view.test.ts && npx playwright test",
     "mcp": "npx tsx scripts/mcp-server.ts",
     "emulators": "./scripts/start-emulators.sh",
     "dev:emulators": "NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 STORAGE_EMULATOR_HOST=127.0.0.1:9199 next dev -p 8001",

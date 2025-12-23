@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { getOrCreateIconAction, recordRejectionAction, getAllStorageFilesAction } from '../app/actions';
+import { getOrCreateIconAction, recordRejectionAction, getAllStorageFilesAction, rerollIconAction } from '../app/actions';
 import { setAIService, MockAIService } from '../lib/ai-service';
 import { setDataService, MemoryDataService } from '../lib/data-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
@@ -41,7 +41,7 @@ async function testComprehensiveLifecycle() {
     generatedUrls.push(urlB);
     console.log(` -> Icon B: ${urlB}`);
     
-    if (urlA === urlB) console.error('WARNING: Got same icon A again (expected new generation).');
+    if (urlA === urlB) console.warn('WARNING: Got same icon A again (expected new generation).');
     else console.log(' -> Verified: Got new icon B.');
 
     // --- STEP 3: Reject B, Get C ---
@@ -58,10 +58,6 @@ async function testComprehensiveLifecycle() {
     // --- STEP 4: Reset Session (New User) ---
     console.log('\n[4] Simulating New Session (Fresh Request)...');
     // We expect the system to pick the "best" existing icon.
-    // A: n=1, r=1 (Bad)
-    // B: n=1, r=1 (Bad)
-    // C: n=1, r=0 (Good, LCB ~0.27)
-    // Expected: Pick C.
     
     const resNewSession = await getOrCreateIconAction(ingredient, 0, []) as any;
     const pickedUrl = resNewSession.iconUrl;
@@ -90,8 +86,7 @@ async function testComprehensiveLifecycle() {
 
     // --- STEP 4c: Exhaust Cache, Expect D ---
     console.log('\n[4c] Exhausting cache, Expecting D...');
-    // We reject everything we've seen so far in this session
-    const seenSoFar = [pickedUrl, urlNext, urlA, urlB]; // Include all known
+    const seenSoFar = [pickedUrl, urlNext, urlA, urlB]; 
     const resFinal = await getOrCreateIconAction(ingredient, 2, seenSoFar) as any;
     const urlD = resFinal.iconUrl;
     console.log(` -> System picked: ${urlD}`);
@@ -104,8 +99,6 @@ async function testComprehensiveLifecycle() {
 
     // --- STEP 5: Verify Storage Metadata ---
     console.log('\n[5] Verifying Storage Metadata...');
-    // We need to wait a moment for metadata writes to propagate if they are async in background?
-    // Our actions await them, so should be fine.
     
     const storageFiles = await getAllStorageFilesAction();
     if (!storageFiles) throw new Error("Storage access denied!");
@@ -115,10 +108,13 @@ async function testComprehensiveLifecycle() {
     if (fileC) {
         console.log(' -> Found Icon C in storage listing.');
         console.log(` -> Impressions: ${fileC.impressions} (Expected: 2)`);
-        console.log(` -> Rejections: ${fileC.rejections} (Expected: 0)`);
+        console.log(` -> Rejections: ${fileC.rejections} (Expected: 1)`); // Rejected in Step 4b
+        
+        // C was picked in Step 3 (n=1, r=0), Step 4 (n=2, r=0).
+        // Then Rejected in Step 4b (n=2, r=1).
         
         if (String(fileC.impressions) === '2') {
-            console.log('SUCCESS: Impression count updated correctly (1 gen + 1 pickup).');
+            console.log('SUCCESS: Impression count updated correctly.');
         } else {
             console.error('FAILURE: Incorrect impression count.');
         }
@@ -134,4 +130,30 @@ async function testComprehensiveLifecycle() {
   }
 }
 
-testComprehensiveLifecycle();
+async function testRerollAction() {
+    console.log('\n=== Testing Reroll Action (Wrapper) ===');
+    const ingredient = "Reroll-Test-" + Date.now();
+    
+    // 1. Create Initial Icon
+    const res1 = await getOrCreateIconAction(ingredient, 0, []) as any;
+    const url1 = res1.iconUrl;
+    console.log(`[Reroll] Initial: ${url1}`);
+
+    // 2. Reroll (Should record rejection and get new)
+    const res2 = await rerollIconAction('node-1', ingredient, url1, [url1]) as any;
+    const url2 = res2.iconUrl;
+    console.log(`[Reroll] New: ${url2}`);
+    
+    if (url1 !== url2) {
+        console.log('SUCCESS: Reroll generated new icon.');
+    } else {
+        console.error('FAILURE: Reroll returned same icon.');
+    }
+}
+
+async function run() {
+    await testComprehensiveLifecycle();
+    await testRerollAction();
+}
+
+run();

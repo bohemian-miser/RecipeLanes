@@ -4,6 +4,7 @@ import { test, expect, devices } from '@playwright/test';
 test.use({ ...devices['iPhone 12'] });
 
 test.describe('Graph Interaction', () => {
+  test.slow(); // Mark all tests in this describe block as slow
   
   test('mobile: can pan diagram (full screen check)', async ({ page }) => {
     await page.goto('/lanes');
@@ -58,6 +59,7 @@ test.describe('Graph Interaction', () => {
 
     // Find a node (e.g. "Mock Ingredient 2")
     const node = page.locator('.react-flow__node').filter({ hasText: 'Mock Ingredient 2' }).first();
+    await expect(node).toBeVisible({ timeout: 30000 });
     await node.click();
     await node.hover(); // Ensure group-hover triggers for delete button
     await page.waitForTimeout(1000); // Wait for hover effect

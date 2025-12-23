@@ -8,9 +8,9 @@ import { Login } from '@/components/login';
 
 export const dynamic = 'force-dynamic';
 
-export default async function GalleryPage({ searchParams }: { searchParams: { q?: string; filter?: string } }) {
-  const query = searchParams.q;
-  const filter = searchParams.filter || 'public';
+export default async function GalleryPage({ searchParams }: { searchParams: Promise<{ q?: string; filter?: string }> }) {
+  const { q: query, filter: rawFilter } = await searchParams;
+  const filter = rawFilter || 'public';
   const session = await getAuthService().verifyAuth();
   
   let recipes = [];

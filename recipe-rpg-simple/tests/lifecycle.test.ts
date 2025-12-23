@@ -73,6 +73,35 @@ async function testComprehensiveLifecycle() {
         console.error(`FAILURE: System picked ${pickedUrl} instead of C.`);
     }
 
+    // --- STEP 4b: Cycle through remaining candidates (A, B) ---
+    console.log('\n[4b] Rejecting C, Expecting A or B...');
+    await recordRejectionAction(pickedUrl, ingredient);
+    
+    const resNext = await getOrCreateIconAction(ingredient, 1, [pickedUrl]) as any;
+    const urlNext = resNext.iconUrl;
+    console.log(` -> System picked: ${urlNext}`);
+    
+    const knownUrls = [urlA, urlB];
+    if (knownUrls.includes(urlNext)) {
+        console.log('SUCCESS: System cycled to a previous candidate (A or B).');
+    } else {
+        console.warn(`WARNING: System generated new ${urlNext} instead of using A/B cache.`);
+    }
+
+    // --- STEP 4c: Exhaust Cache, Expect D ---
+    console.log('\n[4c] Exhausting cache, Expecting D...');
+    // We reject everything we've seen so far in this session
+    const seenSoFar = [pickedUrl, urlNext, urlA, urlB]; // Include all known
+    const resFinal = await getOrCreateIconAction(ingredient, 2, seenSoFar) as any;
+    const urlD = resFinal.iconUrl;
+    console.log(` -> System picked: ${urlD}`);
+    
+    if (!seenSoFar.includes(urlD)) {
+         console.log('SUCCESS: System generated new Icon D after cache exhaustion.');
+    } else {
+         console.error('FAILURE: System did not generate new icon.');
+    }
+
     // --- STEP 5: Verify Storage Metadata ---
     console.log('\n[5] Verifying Storage Metadata...');
     // We need to wait a moment for metadata writes to propagate if they are async in background?

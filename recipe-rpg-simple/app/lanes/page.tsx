@@ -192,14 +192,19 @@ function RecipeLanesContent() {
                 </div>
             </div>
             
-            <div className="text-[10px] font-mono text-zinc-600 truncate max-w-[120px] shrink-0 flex items-center gap-2">
+            <div className="text-[10px] font-mono text-zinc-600 shrink-0 flex items-center gap-3">
                 {user ? (
-                    <Link href="/gallery?filter=mine" className="hover:text-yellow-500 transition-colors">
-                        My Recipes
-                    </Link>
+                    <>
+                        <span className="truncate max-w-[150px] hidden sm:block" title={user.email || ''}>
+                            {user.displayName || user.email}
+                        </span>
+                        <Link href="/gallery?filter=mine" className="hover:text-yellow-500 transition-colors whitespace-nowrap">
+                            My Recipes
+                        </Link>
+                    </>
                 ) : (
-                    <button onClick={() => router.push('/gallery')} className="hover:text-yellow-500">
-                        Guest
+                    <button onClick={() => router.push('/gallery')} className="hover:text-yellow-500 whitespace-nowrap">
+                        Guest (Login)
                     </button>
                 )}
             </div>

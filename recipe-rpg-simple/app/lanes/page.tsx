@@ -192,10 +192,25 @@ function RecipeLanesContent() {
                 </div>
             </div>
             
-            <div className="text-[10px] font-mono text-zinc-600 truncate max-w-[80px] shrink-0">
-                {user?.email || 'Guest'}
+            <div className="text-[10px] font-mono text-zinc-600 truncate max-w-[120px] shrink-0 flex items-center gap-2">
+                {user ? (
+                    <Link href="/gallery?filter=mine" className="hover:text-yellow-500 transition-colors">
+                        My Recipes
+                    </Link>
+                ) : (
+                    <button onClick={() => router.push('/gallery')} className="hover:text-yellow-500">
+                        Guest
+                    </button>
+                )}
             </div>
         </header>
+        
+        {/* Guest Banner */}
+        {!user && graph && (
+            <div className="bg-yellow-500/10 border-b border-yellow-500/20 text-yellow-500 text-[10px] py-1 px-4 text-center font-mono">
+                Recipe not saved to account. <Link href="/gallery" className="underline font-bold">Log in</Link> to save edits permanently.
+            </div>
+        )}
 
         {/* Input Area (Collapsible) */}
         <div className={`shrink-0 bg-zinc-900 border-b border-zinc-800 transition-all duration-300 ease-in-out z-10 ${inputExpanded ? 'max-h-[80vh]' : 'max-h-16'}`}>

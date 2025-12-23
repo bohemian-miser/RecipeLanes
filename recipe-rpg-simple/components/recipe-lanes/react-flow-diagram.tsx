@@ -48,6 +48,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
     const [copied, setCopied] = useState(false);
+    const [isPublic, setIsPublic] = useState(false);
     
     // Drag State for Branch Rotation
     const dragRef = useRef<{
@@ -165,15 +166,36 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     const runLayout = useCallback(async (preservePositions = false) => {
         let layout;
         
-        const canPreserve = preservePositions && graph.nodes.some(n => n.x !== undefined);
+        // Determine effective graph and preservation status based on mode
+        let effectiveGraph = graph;
+        let shouldUseSavedLayout = false;
+
+        if (preservePositions) {
+            // 1. Check for Independent Layout in layouts map
+            if (graph.layouts && graph.layouts[mode]) {
+                const layoutNodes = graph.layouts[mode];
+                const nodesWithLayout = graph.nodes.map(n => {
+                    const pos = layoutNodes.find(l => l.id === n.id);
+                    return pos ? { ...n, x: pos.x, y: pos.y } : n;
+                });
+                effectiveGraph = { ...graph, nodes: nodesWithLayout };
+                shouldUseSavedLayout = true;
+            } 
+            // 2. Fallback: If mode matches the saved 'layoutMode', use main nodes positions
+            else if (graph.layoutMode === mode && graph.nodes.some(n => n.x !== undefined)) {
+                 shouldUseSavedLayout = true;
+            }
+        }
+
+        const canPreserve = shouldUseSavedLayout;
 
         if (canPreserve) {
             const safeMode = (['swimlanes', 'dagre', 'dagre-lr'].includes(mode as string)) ? (mode as LayoutMode) : 'dagre';
-            layout = calculateLayout(graph, safeMode, spacing, true);
+            layout = calculateLayout(effectiveGraph, safeMode, spacing, true);
         } else if (mode === 'repulsive') {
-            layout = calculateRepulsiveCurvesLayout(graph, spacing);
+            layout = calculateRepulsiveCurvesLayout(effectiveGraph, spacing);
         } else {
-            layout = calculateLayout(graph, mode as LayoutMode, spacing);
+            layout = calculateLayout(effectiveGraph, mode as LayoutMode, spacing);
         }
 
         const newNodes: Node[] = [];
@@ -330,14 +352,21 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
 
     const handleShare = async () => {
         const currentNodes = getNodes();
+        
+        // Update layouts map
+        const layouts = graph.layouts || {};
+        layouts[mode as string] = currentNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
+
+        // Update main nodes for backward compatibility / default view
         const nodesWithPos = graph.nodes.map(n => {
            const rfn = currentNodes.find(rn => rn.id === n.id);
            return rfn ? { ...n, x: rfn.position.x, y: rfn.position.y } : n;
         });
         
-        const graphToSave = { ...graph, nodes: nodesWithPos, layoutMode: mode };
+        const graphToSave = { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
+        
         const currentId = searchParams.get('id') || undefined;
-        const res = await saveRecipeAction(graphToSave, currentId);
+        const res = await saveRecipeAction(graphToSave, currentId, isPublic ? 'public' : 'unlisted');
         if (res.id) {
             const url = new URL(window.location.href);
             url.searchParams.set('id', res.id);
@@ -556,6 +585,17 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                     >
                         <RotateCcw className="w-4 h-4" />
                     </button>
+                    
+                    <div className="flex items-center gap-1 bg-white p-2 rounded shadow-md border border-zinc-200" title="Make Public?">
+                        <input 
+                            type="checkbox" 
+                            checked={isPublic} 
+                            onChange={(e) => setIsPublic(e.target.checked)}
+                            className="w-3 h-3 cursor-pointer"
+                        />
+                        <span className="text-[10px] text-zinc-600 font-mono">Public</span>
+                    </div>
+
                      <button 
                         onClick={handleShare} 
                         className={`p-2 rounded shadow-md border border-zinc-200 transition-colors ${copied ? 'bg-green-50 text-green-600 border-green-200' : 'bg-white text-zinc-600 hover:bg-zinc-50'}`}

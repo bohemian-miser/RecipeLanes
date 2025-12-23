@@ -374,27 +374,158 @@ export class FirebaseDataService implements DataService {
 }
 
 export class MemoryDataService implements DataService {
-    private recipes = new Map<string, RecipeGraph>();
-
-    async getPublicRecipes(limit: number): Promise<any[]> { return []; }
-    async searchPublicRecipes(query: string): Promise<any[]> { return []; }
-    async getUserRecipes(userId: string): Promise<any[]> { return []; }
-    async getStarredRecipes(userId: string): Promise<any[]> { return []; }
-    async voteRecipe(recipeId: string, userId: string, vote: string): Promise<void> {}
-    async toggleStar(recipeId: string, userId: string): Promise<boolean> { return false; }
-    async copyRecipe(recipeId: string, userId: string): Promise<string> { return 'new-id'; }
+    private recipes = new Map<string, {
+        graph: RecipeGraph;
+        ownerId?: string;
+        visibility: string;
+        stats: { likes: number; dislikes: number };
+        created_at: number;
+    }>();
     
-    async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: string): Promise<string> {
+    private userVotes = new Map<string, { liked: Set<string>; disliked: Set<string> }>();
+    private userStars = new Map<string, Set<string>>();
+
+    async getPublicRecipes(limit: number): Promise<any[]> {
+        return Array.from(this.recipes.entries())
+            .filter(([_, r]) => r.visibility === 'public')
+            .sort((a, b) => b[1].created_at - a[1].created_at)
+            .map(([id, r]) => this.mapMemoryRecipe(id, r))
+            .slice(0, limit);
+    }
+
+    async searchPublicRecipes(query: string): Promise<any[]> {
+        const term = query.toLowerCase();
+        return Array.from(this.recipes.entries())
+            .filter(([_, r]) => r.visibility === 'public' && r.graph.title?.toLowerCase().includes(term))
+            .map(([id, r]) => this.mapMemoryRecipe(id, r));
+    }
+
+    async getUserRecipes(userId: string): Promise<any[]> {
+        return Array.from(this.recipes.entries())
+            .filter(([_, r]) => r.ownerId === userId)
+            .sort((a, b) => b[1].created_at - a[1].created_at)
+            .map(([id, r]) => this.mapMemoryRecipe(id, r));
+    }
+
+    async getStarredRecipes(userId: string): Promise<any[]> {
+        const starredIds = this.userStars.get(userId) || new Set();
+        return Array.from(starredIds)
+            .map(id => {
+                const r = this.recipes.get(id);
+                return r ? this.mapMemoryRecipe(id, r) : null;
+            })
+            .filter(Boolean);
+    }
+
+    async voteRecipe(recipeId: string, userId: string, vote: 'like' | 'dislike' | 'none'): Promise<void> {
+        if (!this.recipes.has(recipeId)) return;
+        
+        let userVote = this.userVotes.get(userId);
+        if (!userVote) {
+            userVote = { liked: new Set(), disliked: new Set() };
+            this.userVotes.set(userId, userVote);
+        }
+
+        const recipe = this.recipes.get(recipeId)!;
+        
+        // Remove existing vote
+        if (userVote.liked.has(recipeId)) {
+            userVote.liked.delete(recipeId);
+            recipe.stats.likes--;
+        }
+        if (userVote.disliked.has(recipeId)) {
+            userVote.disliked.delete(recipeId);
+            recipe.stats.dislikes--;
+        }
+
+        // Add new vote
+        if (vote === 'like') {
+            userVote.liked.add(recipeId);
+            recipe.stats.likes++;
+        } else if (vote === 'dislike') {
+            userVote.disliked.add(recipeId);
+            recipe.stats.dislikes++;
+        }
+    }
+
+    async toggleStar(recipeId: string, userId: string): Promise<boolean> {
+        if (!this.recipes.has(recipeId)) return false;
+        
+        let stars = this.userStars.get(userId);
+        if (!stars) {
+            stars = new Set();
+            this.userStars.set(userId, stars);
+        }
+
+        if (stars.has(recipeId)) {
+            stars.delete(recipeId);
+            return false;
+        } else {
+            stars.add(recipeId);
+            return true;
+        }
+    }
+
+    async copyRecipe(recipeId: string, userId: string): Promise<string> {
+        const original = this.recipes.get(recipeId);
+        if (!original) throw new Error("Recipe not found");
+        
+        const newGraph = JSON.parse(JSON.stringify(original.graph));
+        if (newGraph.title) newGraph.title = `${newGraph.title} (Copy)`;
+        
+        return this.saveRecipe(newGraph, undefined, userId, 'unlisted');
+    }
+    
+    async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted'): Promise<string> {
         const id = existingId || randomUUID();
-        this.recipes.set(id, graph);
+        const existing = this.recipes.get(id);
+        
+        const stats = existing?.stats || { likes: 0, dislikes: 0 };
+        const created_at = existing?.created_at || Date.now();
+        const ownerId = existing?.ownerId || userId; // Keep original owner if update
+        
+        // Layout Merging Logic?
+        // If we want independent layouts, we must merge them into the graph before saving if we only pass partials.
+        // But here we assume `graph` contains all necessary data. 
+        // The frontend is responsible for maintaining the `layouts` map in the graph object.
+        
+        this.recipes.set(id, {
+            graph,
+            ownerId,
+            visibility,
+            stats,
+            created_at
+        });
         return id;
     }
     
     async getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, visibility?: string, stats?: any } | null> { 
-        const graph = this.recipes.get(id);
-        if (!graph) return null;
-        return { graph, ownerId: undefined, visibility: 'unlisted', stats: { likes: 0, dislikes: 0 } }; 
+        const r = this.recipes.get(id);
+        if (!r) return null;
+        return { 
+            graph: r.graph, 
+            ownerId: r.ownerId, 
+            visibility: r.visibility, 
+            stats: r.stats 
+        }; 
     } 
+
+    private mapMemoryRecipe(id: string, r: any) {
+        let title = r.graph.title || 'Untitled Recipe';
+        if (!title && r.graph.nodes.length > 0) title = r.graph.nodes[0].text;
+
+        return {
+            id,
+            title,
+            createdAt: new Date(r.created_at).toISOString(),
+            nodeCount: r.graph.nodes.length,
+            previewIcon: r.graph.nodes.find((n: any) => n.iconUrl)?.iconUrl,
+            ownerId: r.ownerId,
+            visibility: r.visibility,
+            likes: r.stats.likes,
+            dislikes: r.stats.dislikes
+        };
+    }
 
     async getIngredientByName(name: string) {
         const ingredients = memoryStore.getIngredients();

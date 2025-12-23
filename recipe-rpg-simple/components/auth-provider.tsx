@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User, signInWithPopup, signOut } from 'firebase/auth';
 import { auth, googleProvider, isInitialized } from '@/lib/firebase-client';
+import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
   user: User | null;
@@ -24,6 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (!isInitialized) {
@@ -40,15 +42,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   method: 'POST', 
                   body: JSON.stringify({ idToken: token }) 
               });
+              router.refresh();
           } catch (e) {
               console.error('Failed to sync session:', e);
-              // Don't block UI on session sync fail, but maybe log it?
           }
+      } else {
+          // ensure cookie is cleared if firebase thinks we are logged out
+          await fetch('/api/auth/logout', { method: 'POST' });
+          router.refresh();
       }
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [router]);
 
   const signIn = async () => {
     setError(null);
@@ -71,8 +77,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     if (!isInitialized) return;
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
       await signOut(auth);
+      // onAuthStateChanged will handle the rest (cookie clear + refresh)
     } catch (err: any) {
       console.error('Logout failed:', err);
       setError(err.message || 'Logout failed');

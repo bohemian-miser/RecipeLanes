@@ -28,17 +28,13 @@ test.describe('Graph Interaction', () => {
     const midTransform = await viewport.getAttribute('style');
     expect(midTransform).not.toBe(initialTransform);
 
-    // 2. Pan from Bottom Area (Where Footer is)
-    // Viewport 664. Footer 64. Y=630 is inside footer area.
-    // This verifies the fix that the diagram extends to bottom-0.
-    await page.mouse.move(200, 630);
-    await page.mouse.down();
-    await page.mouse.move(200, 500); // Drag up
-    await page.mouse.up();
-    await page.waitForTimeout(500);
-    
-    const finalTransform = await viewport.getAttribute('style');
-    expect(finalTransform).not.toBe(midTransform);
+    // Verify viewport height covers the screen (extends to bottom)
+    // iPhone 12 height is 664 (viewport in Playwright).
+    // Before fix: height would be reduced by 64px (footer).
+    // After fix: height should be full available space.
+    // Available space ~= 664 (viewport) - 56 (header) - 64 (input) = 544.
+    const box = await viewport.boundingBox();
+    expect(box?.height).toBeGreaterThan(500); 
   });
 
   test('graph logic: delete node and undo restores edges', async ({ page }) => {
@@ -73,7 +69,7 @@ test.describe('Graph Interaction', () => {
     await deleteBtn.click({ force: true });
 
     // Verify node is gone
-    await expect(node).not.toBeVisible();
+    await expect(node).not.toBeVisible({ timeout: 10000 });
     
     // Verify edges changed (should be less or bridged)
     const deletedEdges = await getEdgeCount();

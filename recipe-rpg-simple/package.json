@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start -p 8001",
     "lint": "eslint",
-    "pretest": "fuser -k 8001/tcp; fuser -k 3000/tcp || true",
     "test": "npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx tsx tests/undo-scrambled-logic.test.ts && npx tsx tests/social-features.test.ts && npx playwright test",
     "mcp": "npx tsx scripts/mcp-server.ts",
     "emulators": "./scripts/start-emulators.sh",

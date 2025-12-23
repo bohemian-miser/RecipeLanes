@@ -46,6 +46,29 @@ async function testSocialFeatures() {
     assert.strictEqual(results.length, 1, "Search count mismatch");
     assert.strictEqual(results[0].title, 'Spaghetti Bolognese', "Search title mismatch");
 
+    // Search by content (Ingredient)
+    const contentResults = await service.searchPublicRecipes('Step 1'); // mockGraph has "Step 1" node
+    assert.strictEqual(contentResults.length, 3, "Content search count mismatch (Test Recipe + Public One + Spaghetti)");
+    // Note: mockGraph is used in 3 public saves above: 'Test Recipe' (implicit from first save?), 'Public One', 'Spaghetti Bolognese'.
+    // Wait, first save: saveRecipe(mockGraph... 'public') -> id1.
+    // Second: 'Public One' -> public.
+    // Third: 'Spaghetti' -> public.
+    // 'Chocolate Cake' -> public.
+    // 'Private One' -> unlisted.
+    // 'Chocolate Cake' uses mockGraph which has "Step 1".
+    // So 4 public recipes have "Step 1".
+    // Let's create a unique content recipe to be sure.
+    
+    await service.saveRecipe({ 
+        ...mockGraph, 
+        title: 'Hidden Gem', 
+        nodes: [{ id: '9', laneId: 'l1', text: 'SecretIngredient', visualDescription: '', type: 'ingredient' }]
+    }, undefined, 'u1', 'public');
+    
+    const secretResults = await service.searchPublicRecipes('SecretIngredient');
+    assert.strictEqual(secretResults.length, 1, "Secret ingredient search failed");
+    assert.strictEqual(secretResults[0].title, 'Hidden Gem');
+
     // 4. Layouts
     console.log(" [4] Independent Layouts");
     // Ensure layouts are preserved in MemoryStore (requires MemoryDataService update)

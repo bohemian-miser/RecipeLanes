@@ -66,8 +66,17 @@ export class FirebaseDataService implements DataService {
           .limit(100)
           .get();
       
-      const all = this.mapRecipes(snapshot);
-      return all.filter(r => r.title.toLowerCase().includes(term));
+      return snapshot.docs
+        .filter(doc => {
+            const data = doc.data();
+            const title = (data.title || data.graph?.title || '').toLowerCase();
+            const content = (data.graph?.originalText || '').toLowerCase();
+            const nodes = data.graph?.nodes || [];
+            const nodeText = nodes.some((n: any) => n.text?.toLowerCase().includes(term) || n.visualDescription?.toLowerCase().includes(term));
+            
+            return title.includes(term) || content.includes(term) || nodeText;
+        })
+        .map(doc => this.mapRecipeDoc(doc));
   }
 
   async getUserRecipes(userId: string): Promise<any[]> {
@@ -396,7 +405,14 @@ export class MemoryDataService implements DataService {
     async searchPublicRecipes(query: string): Promise<any[]> {
         const term = query.toLowerCase();
         return Array.from(this.recipes.entries())
-            .filter(([_, r]) => r.visibility === 'public' && r.graph.title?.toLowerCase().includes(term))
+            .filter(([_, r]) => {
+                if (r.visibility !== 'public') return false;
+                const title = (r.graph.title || '').toLowerCase();
+                const content = (r.graph.originalText || '').toLowerCase();
+                const nodes = r.graph.nodes || [];
+                const nodeText = nodes.some(n => n.text?.toLowerCase().includes(term) || n.visualDescription?.toLowerCase().includes(term));
+                return title.includes(term) || content.includes(term) || nodeText;
+            })
             .map(([id, r]) => this.mapMemoryRecipe(id, r));
     }
 

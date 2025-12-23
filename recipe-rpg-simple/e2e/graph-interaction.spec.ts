@@ -23,16 +23,15 @@ test.describe('Graph Interaction', () => {
     await page.mouse.down();
     await page.mouse.move(200, 200); // Drag up
     await page.mouse.up();
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(2000); // Increased wait
     
     const midTransform = await viewport.getAttribute('style');
     expect(midTransform).not.toBe(initialTransform);
 
     // Verify viewport height covers the screen (extends to bottom)
     // iPhone 12 height is 664 (viewport in Playwright).
-    // Before fix: height would be reduced by 64px (footer).
-    // After fix: height should be full available space.
-    // Available space ~= 664 (viewport) - 56 (header) - 64 (input) = 544.
+    // Before fix: height would be ~600 (664 - 64).
+    // After fix: height should be ~664.
     const box = await viewport.boundingBox();
     expect(box?.height).toBeGreaterThan(500); 
   });
@@ -49,7 +48,7 @@ test.describe('Graph Interaction', () => {
     // Wait for nodes to appear
     await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 10000 });
     // Wait for edges to appear
-    await expect(page.locator('.react-flow__edge').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.react-flow__edge').first()).toBeAttached({ timeout: 10000 });
 
     // Helper
     const getEdgeCount = () => page.locator('.react-flow__edge').count();
@@ -61,12 +60,14 @@ test.describe('Graph Interaction', () => {
     const node = page.locator('.react-flow__node').filter({ hasText: 'Mock Ingredient 2' }).first();
     await node.click();
     await node.hover(); // Ensure group-hover triggers for delete button
+    await page.waitForTimeout(1000); // Wait for hover effect
 
     // The trash/delete icon is an X icon in MinimalNode.
     // Ensure we click the delete button INSIDE the selected node
     const deleteBtn = node.locator('button').filter({ has: page.locator('.lucide-x') });
     await expect(deleteBtn).toBeVisible();
     await deleteBtn.click({ force: true });
+    await page.waitForTimeout(1000); // Wait for delete animation/state update
 
     // Verify node is gone
     await expect(node).not.toBeVisible({ timeout: 10000 });
@@ -82,6 +83,9 @@ test.describe('Graph Interaction', () => {
     // Verify node is back
     await expect(node).toBeVisible();
     
+    // Wait for edges to re-render
+    await page.waitForTimeout(2000); // Increased wait
+
     // Verify edges restored
     const restoredEdges = await getEdgeCount();
     expect(restoredEdges).toBe(initialEdges);

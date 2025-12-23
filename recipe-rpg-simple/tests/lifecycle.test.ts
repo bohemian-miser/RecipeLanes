@@ -41,7 +41,7 @@ async function testComprehensiveLifecycle() {
     generatedUrls.push(urlB);
     console.log(` -> Icon B: ${urlB}`);
     
-    if (urlA === urlB) console.warn('WARNING: Got same icon A again (expected new generation).');
+    if (urlA === urlB) console.error('WARNING: Got same icon A again (expected new generation).');
     else console.log(' -> Verified: Got new icon B.');
 
     // --- STEP 3: Reject B, Get C ---

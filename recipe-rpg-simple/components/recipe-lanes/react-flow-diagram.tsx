@@ -614,6 +614,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                 fitView
                 minZoom={0.1}
                 maxZoom={4}
+                nodeDragThreshold={5} // Prevent accidental drags
                 defaultEdgeOptions={{ type: 'floating' }}
                 onlyRenderVisibleElements={false}
             >

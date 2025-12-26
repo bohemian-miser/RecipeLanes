@@ -113,6 +113,14 @@ export class FirebaseDataService implements DataService {
       if (graph.title) data.title = graph.title;
 
       if (existingId) {
+          // Enforce ownership check
+          const existingDoc = await db.collection('recipes').doc(existingId).get();
+          if (existingDoc.exists) {
+              const existingData = existingDoc.data();
+              if (existingData?.ownerId && existingData.ownerId !== userId) {
+                  throw new Error("You are not the owner of this recipe.");
+              }
+          }
           await db.collection('recipes').doc(existingId).set(data, { merge: true });
           return existingId;
       }
@@ -125,18 +133,20 @@ export class FirebaseDataService implements DataService {
       return doc.id;
   }
 
-  async getRecipe(id: string) {
-      const doc = await db.collection('recipes').doc(id).get();
-      if (!doc.exists) return null;
-      const data = doc.data()!;
-      return { 
-          graph: data.graph as RecipeGraph, 
-          ownerId: data.ownerId, 
-          visibility: data.visibility,
-          stats: { likes: data.likes || 0, dislikes: data.dislikes || 0 }
-      };
-  }
-
+    async getRecipe(id: string) {
+        const doc = await db.collection('recipes').doc(id).get();
+        if (!doc.exists) return null;
+        const data = doc.data()!;
+        const graph = data.graph as RecipeGraph;
+        if (data.visibility) graph.visibility = data.visibility as any; // Merge visibility
+  
+        return { 
+            graph, 
+            ownerId: data.ownerId, 
+            visibility: data.visibility, 
+            stats: { likes: data.likes || 0, dislikes: data.dislikes || 0 }
+        };
+    }
   async voteRecipe(recipeId: string, userId: string, vote: 'like' | 'dislike' | 'none') {
       const userRef = db.collection('users').doc(userId);
       const recipeRef = db.collection('recipes').doc(recipeId);
@@ -496,14 +506,13 @@ export class MemoryDataService implements DataService {
         const id = existingId || randomUUID();
         const existing = this.recipes.get(id);
         
+        if (existing && existing.ownerId && existing.ownerId !== userId) {
+            throw new Error("You are not the owner of this recipe.");
+        }
+
         const stats = existing?.stats || { likes: 0, dislikes: 0 };
         const created_at = existing?.created_at || Date.now();
         const ownerId = existing?.ownerId || userId; // Keep original owner if update
-        
-        // Layout Merging Logic?
-        // If we want independent layouts, we must merge them into the graph before saving if we only pass partials.
-        // But here we assume `graph` contains all necessary data. 
-        // The frontend is responsible for maintaining the `layouts` map in the graph object.
         
         this.recipes.set(id, {
             graph,
@@ -518,8 +527,11 @@ export class MemoryDataService implements DataService {
     async getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, visibility?: string, stats?: any } | null> { 
         const r = this.recipes.get(id);
         if (!r) return null;
+        const graph = r.graph;
+        if (r.visibility) graph.visibility = r.visibility as any;
+
         return { 
-            graph: r.graph, 
+            graph, 
             ownerId: r.ownerId, 
             visibility: r.visibility, 
             stats: r.stats 

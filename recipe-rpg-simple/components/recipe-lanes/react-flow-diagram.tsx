@@ -26,7 +26,7 @@ import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
 import FloatingEdge from './edges/floating-edge';
 import { toPng } from 'html-to-image';
-import { Download, Share2, RotateCcw, RefreshCw, Undo, Redo, Check } from 'lucide-react';
+import { Download, Share2, RotateCcw, RefreshCw, Undo, Redo, Check, Save } from 'lucide-react';
 import { saveRecipeAction } from '@/app/actions';
 
 interface ReactFlowDiagramProps {
@@ -37,9 +37,10 @@ interface ReactFlowDiagramProps {
   textPos?: 'bottom' | 'top' | 'left' | 'right';
   isLive?: boolean;
   onInteraction?: () => void;
+  onSave?: (newGraph: RecipeGraph) => void;
 }
 
-const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction }) => {
+const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onSave }) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const { fitView, getNodes, getEdges } = useReactFlow();
@@ -48,7 +49,31 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
     const [copied, setCopied] = useState(false);
-    const [isPublic, setIsPublic] = useState(false);
+    
+    // Initialize from graph.visibility (injected by service)
+    const initialVisibility = graph.visibility === 'public';
+    const [isPublic, setIsPublic] = useState(initialVisibility);
+    const visibilityRef = useRef(initialVisibility);
+    
+    const [isDirty, setIsDirty] = useState(false);
+
+    // Update state if graph prop changes (e.g. fresh load)
+    useEffect(() => {
+        const pub = graph.visibility === 'public';
+        setIsPublic(pub);
+        visibilityRef.current = pub;
+    }, [graph.visibility]);
+
+    // Wrap change handlers to track dirty state
+    const onNodesChangeWrapped = useCallback((changes: any) => {
+        onNodesChange(changes);
+        if (changes.some((c: any) => c.type !== 'select')) setIsDirty(true);
+    }, [onNodesChange]);
+
+    const onEdgesChangeWrapped = useCallback((changes: any) => {
+        onEdgesChange(changes);
+        if (changes.some((c: any) => c.type !== 'select')) setIsDirty(true);
+    }, [onEdgesChange]);
     
     // Drag State for Branch Rotation
     const dragRef = useRef<{
@@ -366,23 +391,43 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         }
     };
 
-    const handleShare = async () => {
+    const performSave = async () => {
         const currentNodes = getNodes();
-        
-        // Update layouts map
         const layouts = graph.layouts || {};
         layouts[mode as string] = currentNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
-
-        // Update main nodes for backward compatibility / default view
         const nodesWithPos = graph.nodes.map(n => {
            const rfn = currentNodes.find(rn => rn.id === n.id);
            return rfn ? { ...n, x: rfn.position.x, y: rfn.position.y } : n;
         });
-        
         const graphToSave = { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
         
         const currentId = searchParams.get('id') || undefined;
-        const res = await saveRecipeAction(graphToSave, currentId, isPublic ? 'public' : 'unlisted');
+        // Use ref for latest value (important for toggleVisibility which is async)
+        const visibility = visibilityRef.current ? 'public' : 'unlisted';
+        
+        // Ensure visibility is part of the graph object passed back
+        graphToSave.visibility = visibility;
+
+        const result = await saveRecipeAction(graphToSave, currentId, visibility);
+        
+        if (onSave) onSave(graphToSave);
+        return result;
+    };
+
+    const handleSave = async () => {
+        const res = await performSave();
+        if (res.id) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('id', res.id);
+            router.push(url.pathname + url.search);
+            setIsDirty(false);
+        } else {
+            console.error('Failed to save.');
+        }
+    };
+
+    const handleShare = async () => {
+        const res = await performSave();
         if (res.id) {
             const url = new URL(window.location.href);
             url.searchParams.set('id', res.id);
@@ -390,12 +435,21 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             navigator.clipboard.writeText(url.toString());
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
-        } else {
-            console.error('Failed to save layout.');
+            setIsDirty(false);
         }
     };
 
+    const toggleVisibility = async () => {
+        const newPublic = !isPublic;
+        setIsPublic(newPublic);
+        visibilityRef.current = newPublic;
+        setIsDirty(true);
+        // Save immediately
+        await handleSave();
+    };
+
     const handleReset = () => {
+        setIsDirty(true);
         takeSnapshot();
         runLayout(false); 
     };
@@ -546,8 +600,8 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             <ReactFlow
                 nodes={nodes}
                 edges={edges}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
+                onNodesChange={onNodesChangeWrapped}
+                onEdgesChange={onEdgesChangeWrapped}
                 onNodeClick={onNodeClick}
                 onNodeContextMenu={onNodeContextMenu}
                 onNodeDragStart={onNodeDragStart}

@@ -26,7 +26,35 @@ function RecipeLanesContent() {
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
+  const [jsonText, setJsonText] = useState(''); // Added state
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
+
+  // Sync graph to jsonText when graph updates
+  useEffect(() => {
+      if (graph) {
+          setJsonText(JSON.stringify(graph, null, 2));
+      }
+  }, [graph]);
+
+  const handleJsonSave = async () => {
+      try {
+          const newGraph = JSON.parse(jsonText);
+          setGraph(newGraph);
+          if (user) {
+              const res = await saveRecipeAction(newGraph, searchParams.get('id') || undefined);
+              if (res.id) {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('id', res.id);
+                  router.push(url.pathname + url.search);
+                  setOwnerId(user.uid);
+                  setNotification("JSON saved.");
+                  setTimeout(() => setNotification(null), 3000);
+              }
+          }
+      } catch (e) {
+          alert("Invalid JSON");
+      }
+  };
   const [spacing, setSpacing] = useState(1);
   const [edgeStyle, setEdgeStyle] = useState<'straight' | 'step' | 'bezier'>('straight');
   const [textPos, setTextPos] = useState<'bottom' | 'top' | 'left' | 'right'>('bottom');
@@ -410,7 +438,16 @@ function RecipeLanesContent() {
             
             <div className="absolute inset-0 pt-12 bottom-0"> 
                 {graph ? (
-                    <ReactFlowDiagram graph={graph} mode={layoutMode} spacing={spacing} edgeStyle={edgeStyle} textPos={textPos} isLive={isLive} onInteraction={() => setInputExpanded(false)} />
+                    <ReactFlowDiagram 
+                        graph={graph} 
+                        mode={layoutMode} 
+                        spacing={spacing} 
+                        edgeStyle={edgeStyle} 
+                        textPos={textPos} 
+                        isLive={isLive} 
+                        onInteraction={() => setInputExpanded(false)}
+                        onSave={(newGraph) => setGraph(newGraph)} 
+                    />
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400">
                         <Wand2 className="w-8 h-8 opacity-20 mb-2" />
@@ -419,12 +456,25 @@ function RecipeLanesContent() {
                 )}
             </div>
 
-            {/* JSON View Overlay */}
+            {/* JSON View Overlay (Editable) */}
             {showJson && graph && (
-                <div className="absolute top-14 right-4 z-50 bg-white/95 backdrop-blur p-4 rounded-lg shadow-xl border border-zinc-200 max-w-sm max-h-[80vh] overflow-auto">
-                    <pre className="text-[10px] font-mono text-zinc-700 whitespace-pre-wrap">
-                        {JSON.stringify(graph, null, 2)}
-                    </pre>
+                <div className="absolute top-0 right-0 bottom-0 z-50 bg-white/95 backdrop-blur border-l border-zinc-200 w-full md:w-[40%] flex flex-col shadow-2xl p-4 animate-in slide-in-from-right duration-300">
+                    <div className="flex justify-between items-center mb-4 border-b border-zinc-200 pb-2">
+                        <h3 className="text-sm font-bold text-zinc-600 uppercase tracking-wider flex items-center gap-2">
+                            <Code className="w-4 h-4" /> JSON Editor
+                        </h3>
+                        <div className="flex gap-2">
+                            <button onClick={() => setShowJson(false)} className="text-xs text-zinc-500 hover:text-zinc-800 px-2 py-1">Close</button>
+                            <button onClick={handleJsonSave} className="text-xs bg-zinc-900 text-white px-3 py-1.5 rounded hover:bg-zinc-700 font-bold transition-colors">Apply & Save</button>
+                        </div>
+                    </div>
+                    <textarea 
+                        className="flex-1 bg-zinc-50 border border-zinc-200 rounded p-4 text-xs font-sans text-zinc-700 resize-none focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200 leading-relaxed font-mono"
+                        value={jsonText}
+                        onChange={(e) => setJsonText(e.target.value)}
+                        spellCheck={false}
+                        placeholder="Graph JSON..."
+                    />
                 </div>
             )}
 

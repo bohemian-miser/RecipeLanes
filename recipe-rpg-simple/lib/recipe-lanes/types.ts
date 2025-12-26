@@ -36,6 +36,7 @@ export interface RecipeGraph {
   title?: string;
   originalText?: string;
   layoutMode?: string;
+  visibility?: 'public' | 'unlisted' | 'private';
   lanes: Lane[];
   nodes: RecipeNode[];
   layouts?: Record<string, NodeLayout[]>;

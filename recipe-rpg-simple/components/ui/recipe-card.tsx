@@ -15,7 +15,7 @@ interface RecipeCardProps {
     nodeCount: number;
     likes: number;
     dislikes: number;
-    // We assume server passes initial user state if possible, but simplified for now
+    ownerId?: string; // Added ownerId
   };
   userId?: string; // Optional: Current user ID for optimistic updates
 }
@@ -95,9 +95,17 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
         )}
         
         <div className="p-5 flex-1 flex flex-col">
-            <h3 className="font-bold text-lg mb-3 text-zinc-200 group-hover:text-yellow-500 transition-colors line-clamp-2 leading-tight">
-                {recipe.title}
-            </h3>
+            <div className="flex justify-between items-start mb-3">
+                <h3 className="font-bold text-lg text-zinc-200 group-hover:text-yellow-500 transition-colors line-clamp-2 leading-tight">
+                    {recipe.title}
+                </h3>
+            </div>
+            
+            {recipe.ownerId && (
+                <div className="text-[10px] text-zinc-600 font-mono mb-2">
+                    by {recipe.ownerId}
+                </div>
+            )}
             
             <div className="flex items-center gap-4 text-xs text-zinc-500 font-mono mt-auto pt-4 border-t border-zinc-800/50">
                 <div className="flex items-center gap-1.5" title="Created At">

@@ -22,7 +22,7 @@ function RecipeLanesContent() {
   const [chatInput, setChatInput] = useState('');
   const [graph, setGraph] = useState<RecipeGraph | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
-  const [notification, setNotification] = useState<string | null>(null);
+  const [notification, setNotification] = useState<string | null>(null); // Added state
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
@@ -120,13 +120,14 @@ function RecipeLanesContent() {
       }
   };
 
-  const handleVisualize = async () => {
+    const handleVisualize = async () => {
     if (!recipeText.trim()) return;
     
     setStatus('parsing');
     setError(null);
     setGraph(null);
     setRecipeTitle(''); // Reset title for new recipe
+    setOwnerId(null); // Reset owner
 
     try {
         const parseRes = await parseRecipeAction(recipeText);
@@ -144,6 +145,17 @@ function RecipeLanesContent() {
         
         setGraph(rawGraph);
         setStatus('forging');
+
+        // Auto-save if user is logged in
+        if (user) {
+             const saveRes = await saveRecipeAction(rawGraph, undefined);
+             if (saveRes.id) {
+                 const url = new URL(window.location.href);
+                 url.searchParams.set('id', saveRes.id);
+                 router.push(url.pathname + url.search);
+                 setOwnerId(user.uid);
+             }
+        }
 
         const iconRes = await generateGraphIconsAction(rawGraph);
         if (iconRes.error) {
@@ -200,7 +212,7 @@ function RecipeLanesContent() {
                 </div>
                 
                 {/* Title (Editable) */}
-                <div className="flex-1 min-w-0 flex items-center justify-center group mx-2">
+                <div className="flex-1 min-w-0 flex items-center justify-center group mx-2 flex-col">
                     {editingTitle ? (
                         <input 
                             className="bg-transparent border-b border-zinc-700 outline-none w-full max-w-[200px] text-center text-sm font-bold text-zinc-100"
@@ -220,6 +232,11 @@ function RecipeLanesContent() {
                             </h1>
                             <Pencil className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 opacity-0 group-hover:opacity-100" />
                         </div>
+                    )}
+                    {ownerId && (
+                        <span className="text-[9px] text-zinc-600 font-mono -mt-1">
+                            by {ownerId}
+                        </span>
                     )}
                 </div>
             </div>
@@ -378,16 +395,6 @@ function RecipeLanesContent() {
                         />
                     </div>
 
-                    {/* Share Button */}
-                    {graph && (
-                        <button 
-                            onClick={handleShare}
-                            className="p-1.5 rounded hover:bg-zinc-100 transition-colors text-zinc-500 hover:text-zinc-900"
-                            title="Share Recipe"
-                        >
-                            <Share2 className="w-4 h-4" />
-                        </button>
-                    )}
                     {/* JSON Toggle */}
                     {graph && (
                         <button 
@@ -411,6 +418,15 @@ function RecipeLanesContent() {
                     </div>
                 )}
             </div>
+
+            {/* JSON View Overlay */}
+            {showJson && graph && (
+                <div className="absolute top-14 right-4 z-50 bg-white/95 backdrop-blur p-4 rounded-lg shadow-xl border border-zinc-200 max-w-sm max-h-[80vh] overflow-auto">
+                    <pre className="text-[10px] font-mono text-zinc-700 whitespace-pre-wrap">
+                        {JSON.stringify(graph, null, 2)}
+                    </pre>
+                </div>
+            )}
 
             {/* Bottom Area: Legend (Left) & Chat (Right) */}
             {graph && (

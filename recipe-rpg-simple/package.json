@@ -10,6 +10,8 @@
     "pretest": "fuser -k 8001/tcp; fuser -k 3000/tcp || true",
     "test": "npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx tsx tests/undo-scrambled-logic.test.ts && npx playwright test",
     "mcp": "npx tsx scripts/mcp-server.ts",
+    "emulators": "./scripts/start-emulators.sh",
+    "dev:emulators": "NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 STORAGE_EMULATOR_HOST=127.0.0.1:9199 next dev -p 8001",
     "verify": "npm run build && npm test",
     "prepare": "cd .. && git config core.hooksPath recipe-rpg-simple/.husky"
   },
@@ -50,6 +52,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.0.8",
+    "firebase-tools": "^15.1.0",
     "husky": "^9.1.7",
     "jsdom": "^27.3.0",
     "node-fetch": "^3.3.2",

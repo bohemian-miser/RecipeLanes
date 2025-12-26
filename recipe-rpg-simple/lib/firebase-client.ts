@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, Auth, User } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, Auth, User, connectAuthEmulator } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -19,6 +19,11 @@ if (firebaseConfig.apiKey) {
   // Initialize Firebase (Client)
   app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
   auth = getAuth(app);
+  
+  if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
+      connectAuthEmulator(auth, 'http://127.0.0.1:9099');
+  }
+
   googleProvider = new GoogleAuthProvider();
   isInitialized = true;
 } else {

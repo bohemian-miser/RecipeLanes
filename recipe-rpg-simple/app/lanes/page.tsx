@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
+import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
@@ -20,6 +21,8 @@ function RecipeLanesContent() {
   const [recipeText, setRecipeText] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [graph, setGraph] = useState<RecipeGraph | null>(null);
+  const [ownerId, setOwnerId] = useState<string | null>(null); // Added state
+  const [notification, setNotification] = useState<string | null>(null); // Added state
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
@@ -62,6 +65,35 @@ function RecipeLanesContent() {
           });
       }
   }, [searchParams]);
+
+  const handleTitleChange = async (newTitle: string) => {
+      setEditingTitle(false);
+      if (newTitle === recipeTitle) return; 
+      setRecipeTitle(newTitle);
+      
+      if (graph) {
+          const newGraph = { ...graph, title: newTitle };
+          setGraph(newGraph);
+          
+          const isOwner = user && user.uid === ownerId;
+          const currentId = searchParams.get('id');
+
+          if (isOwner && currentId) {
+               await saveRecipeAction(newGraph, currentId);
+          } else if (user) {
+               setNotification("Saving a copy to your profile...");
+               const res = await saveRecipeAction(newGraph, undefined);
+               if (res.id) {
+                   const url = new URL(window.location.href);
+                   url.searchParams.set('id', res.id);
+                   router.push(url.pathname + url.search);
+                   setOwnerId(user.uid);
+                   setNotification("Saved copy to your profile.");
+                   setTimeout(() => setNotification(null), 5000);
+               }
+          }
+      }
+  };
 
   const handleShare = async () => {
       if (!graph) return;
@@ -174,8 +206,8 @@ function RecipeLanesContent() {
                             className="bg-transparent border-b border-zinc-700 outline-none w-full max-w-[200px] text-center text-sm font-bold text-zinc-100"
                             value={recipeTitle}
                             onChange={(e) => setRecipeTitle(e.target.value)}
-                            onBlur={() => setEditingTitle(false)}
-                            onKeyDown={(e) => e.key === 'Enter' && setEditingTitle(false)}
+                            onBlur={(e) => handleTitleChange(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleTitleChange(e.currentTarget.value)}
                             autoFocus
                         />
                     ) : (
@@ -201,6 +233,7 @@ function RecipeLanesContent() {
                         <Link href="/gallery?filter=mine" className="hover:text-yellow-500 transition-colors whitespace-nowrap">
                             My Recipes
                         </Link>
+                        <LogoutButton className="hover:text-red-400" />
                     </>
                 ) : (
                     <button onClick={signIn} className="hover:text-yellow-500 whitespace-nowrap">
@@ -227,6 +260,12 @@ function RecipeLanesContent() {
                     value={recipeText}
                     onChange={(e) => setRecipeText(e.target.value)}
                     onFocus={() => setInputExpanded(true)}
+                    onKeyDown={(e) => {
+                        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                            handleVisualize();
+                            setInputExpanded(false);
+                        }
+                    }}
                 />
                 <button
                     onClick={() => { handleVisualize(); setInputExpanded(false); }}

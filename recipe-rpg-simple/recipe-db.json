@@ -1,0 +1,48 @@
+{
+  "recipes": [
+    [
+      "seed-recipe-1",
+      {
+        "graph": {
+          "title": "Mock: Quick Toast",
+          "lanes": [
+            {
+              "id": "l1",
+              "label": "Toaster",
+              "type": "cook"
+            }
+          ],
+          "nodes": [
+            {
+              "id": "1",
+              "laneId": "l1",
+              "text": "1 Slice Bread",
+              "type": "ingredient",
+              "visualDescription": "Bread"
+            },
+            {
+              "id": "2",
+              "laneId": "l1",
+              "text": "Toast Bread",
+              "type": "action",
+              "inputs": [
+                "1"
+              ],
+              "visualDescription": "Toast"
+            }
+          ],
+          "originalText": "Put bread in toaster."
+        },
+        "ownerId": "local-dev-user",
+        "visibility": "public",
+        "stats": {
+          "likes": 5,
+          "dislikes": 0
+        },
+        "created_at": 1766726037455
+      }
+    ]
+  ],
+  "userVotes": [],
+  "userStars": []
+}

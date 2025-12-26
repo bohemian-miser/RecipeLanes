@@ -6,6 +6,7 @@ import { getDataService } from '@/lib/data-service';
 import { getAuthService } from '@/lib/auth-service';
 import { Login } from '@/components/login';
 import { LoginButton } from '@/components/login-button';
+import { LogoutButton } from '@/components/logout-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,6 +84,7 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
                          <Link href="/gallery?filter=starred" className={`p-2 rounded-md transition-colors ${filter === 'starred' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`} title="Starred">
                              <Star className="w-4 h-4" />
                          </Link>
+                         <LogoutButton />
                     </div>
                 ) : (
                     <LoginButton text="Login for more" className="text-sm text-zinc-400 underline" />

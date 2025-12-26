@@ -7,6 +7,7 @@ import { DebugGallery } from '@/components/debug-gallery';
 import { SharedGallery } from '@/components/shared-gallery';
 import { RerollMonitor } from '@/components/reroll-monitor';
 import { Login } from '@/components/login';
+import { LogoutButton } from '@/components/logout-button';
 import { useAuth } from '@/components/auth-provider';
 import { getOrCreateIconAction, recordRejectionAction, getAllIconsAction } from './actions';
 import { LogOut } from 'lucide-react';
@@ -52,7 +53,8 @@ export default function Home() {
     
     // Optimistic UI: Add pending card
     const newIngredient = toTitleCase(rawIngredient);
-    const tempId = `temp-${uniqueId}-${Date.now()}-${Math.random()}`;
+    // Use randomUUID if available, else fallback (client-side only logic)
+    const tempId = typeof crypto !== 'undefined' && crypto.randomUUID ? `temp-${crypto.randomUUID()}` : `temp-${Date.now()}`;
     const pendingIcon: Icon = {
         id: tempId,
         ingredient: newIngredient,
@@ -77,7 +79,7 @@ export default function Home() {
       const { iconUrl, popularityScore, debugInfo, imagePrompt } = result as any; 
       
       const newIcon: Icon = {
-        id: `${uniqueId}-${Date.now()}-${Math.random()}`, 
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`, 
         ingredient: newIngredient,
         iconUrl: iconUrl,
         popularityScore: popularityScore,
@@ -177,13 +179,7 @@ export default function Home() {
                   {user?.email || 'Guest Admin'}
                 </span>
                 {user && (
-                <button 
-                  onClick={() => logout()}
-                  className="p-2 text-zinc-500 hover:text-red-400 transition-colors"
-                  title="Sign Out"
-                >
-                  <LogOut className="w-5 h-5" />
-                </button>
+                <LogoutButton className="w-5 h-5 text-zinc-500 hover:text-red-400" />
                 )}
               </div>
             )}

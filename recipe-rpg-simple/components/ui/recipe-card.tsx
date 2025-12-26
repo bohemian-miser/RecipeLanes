@@ -102,7 +102,9 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
             <div className="flex items-center gap-4 text-xs text-zinc-500 font-mono mt-auto pt-4 border-t border-zinc-800/50">
                 <div className="flex items-center gap-1.5" title="Created At">
                     <Calendar className="w-3 h-3" />
-                    {recipe.createdAt ? new Date(recipe.createdAt).toLocaleDateString() : 'Unknown'}
+                    <span suppressHydrationWarning>
+                        {recipe.createdAt ? new Date(recipe.createdAt).toLocaleDateString() : 'Unknown'}
+                    </span>
                 </div>
                 <div className="flex items-center gap-1.5" title="Steps">
                     <GitGraph className="w-3 h-3" />

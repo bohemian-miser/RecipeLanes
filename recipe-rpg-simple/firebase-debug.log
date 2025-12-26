@@ -1,0 +1,148 @@
+[debug] [2025-12-26T05:37:01.156Z] ----------------------------------------------------------------------
+[debug] [2025-12-26T05:37:01.158Z] Command:       /usr/bin/node /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/node_modules/.bin/firebase emulators:start
+[debug] [2025-12-26T05:37:01.159Z] CLI Version:   15.1.0
+[debug] [2025-12-26T05:37:01.159Z] Platform:      linux
+[debug] [2025-12-26T05:37:01.159Z] Node Version:  v20.19.2
+[debug] [2025-12-26T05:37:01.159Z] Time:          Fri Dec 26 2025 05:37:01 GMT+0000 (Coordinated Universal Time)
+[debug] [2025-12-26T05:37:01.159Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-12-26T05:37:02.171Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-12-26T05:37:02.172Z] > authorizing via signed-in user (rop@google.com)
+[debug] [2025-12-26T05:37:02.213Z] openjdk version "25.0.1" 2025-11-11
+OpenJDK Runtime Environment (build 25.0.1+-google-release-sts-830991054)
+
+[debug] [2025-12-26T05:37:02.214Z] OpenJDK 64-Bit Server VM (build 25.0.1+-google-release-sts-830991054, mixed mode, sharing)
+
+[debug] [2025-12-26T05:37:02.219Z] Parsed Java major version: 25
+[info] i  emulators: Starting emulators: auth, firestore, hosting, storage {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: auth, firestore, hosting, storage"}}
+[debug] [2025-12-26T05:37:02.232Z] [logging] Logging Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-26T05:37:02.232Z] [auth] Authentication Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-26T05:37:02.232Z] [firestore] Firestore Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-26T05:37:02.232Z] [firestore.websocket] websocket server for firestore only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-26T05:37:02.232Z] [hosting] Hosting Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-26T05:37:02.232Z] [storage] Storage Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-26T05:37:02.233Z] assigned listening specs for emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4000},{"address":"::1","family":"IPv6","port":4000}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"auth":[{"address":"127.0.0.1","family":"IPv4","port":9099}],"firestore":[{"address":"127.0.0.1","family":"IPv4","port":8080}],"firestore.websocket":[{"address":"127.0.0.1","family":"IPv4","port":9150}],"hosting":[{"address":"127.0.0.1","family":"IPv4","port":5000}],"storage":[{"address":"127.0.0.1","family":"IPv4","port":9199}]},"metadata":{"message":"assigned listening specs for emulators"}}
+[debug] [2025-12-26T05:37:02.237Z] Emulator locator file path: /tmp/hub-ropgcp.json
+[debug] [2025-12-26T05:37:02.237Z] [hub] writing locator at /tmp/hub-ropgcp.json
+[debug] [2025-12-26T05:37:02.245Z] Checked if tokens are valid: true, expires at: 1766730192428
+[debug] [2025-12-26T05:37:02.245Z] Checked if tokens are valid: true, expires at: 1766730192428
+[debug] [2025-12-26T05:37:02.246Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/ropgcp [none]
+[debug] [2025-12-26T05:37:02.859Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/ropgcp 200
+[debug] [2025-12-26T05:37:02.859Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/ropgcp {"projectId":"ropgcp","projectNumber":"805380848748","displayName":"RopGCP","name":"projects/ropgcp","resources":{"hostingSite":"ropgcp","locationId":"australia-southeast1"},"state":"ACTIVE","etag":"1_9411b1ed-4da6-449e-a22f-d8f5a8100ca0"}
+[debug] [2025-12-26T05:37:06.223Z] defaultcredentials: writing to file /usr/local/google/home/rop/.config/firebase/rop_google_com_application_default_credentials.json
+[debug] [2025-12-26T05:37:06.225Z] Checked if tokens are valid: true, expires at: 1766730192428
+[debug] [2025-12-26T05:37:06.225Z] Checked if tokens are valid: true, expires at: 1766730192428
+[debug] [2025-12-26T05:37:06.225Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/ropgcp/sites pageToken=&pageSize=10
+[debug] [2025-12-26T05:37:07.631Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/ropgcp/sites 200
+[debug] [2025-12-26T05:37:07.631Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/ropgcp/sites {"sites":[{"name":"projects/ropgcp/sites/ropgcp","defaultUrl":"https://ropgcp.web.app","appId":"1:805380848748:web:9ab7563a0500efd07aec49","type":"DEFAULT_SITE"}]}
+[debug] [2025-12-26T05:37:07.632Z] Checked if tokens are valid: true, expires at: 1766730192428
+[debug] [2025-12-26T05:37:07.632Z] Checked if tokens are valid: true, expires at: 1766730192428
+[debug] [2025-12-26T05:37:07.632Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:805380848748:web:9ab7563a0500efd07aec49/config [none]
+[debug] [2025-12-26T05:37:09.454Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:805380848748:web:9ab7563a0500efd07aec49/config 200
+[debug] [2025-12-26T05:37:09.454Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:805380848748:web:9ab7563a0500efd07aec49/config {"projectId":"ropgcp","appId":"1:805380848748:web:9ab7563a0500efd07aec49","storageBucket":"ropgcp.firebasestorage.app","locationId":"australia-southeast1","apiKey":"AIzaSyAvj2Gdtkpn5FJFu3SVDSu-T5FcvOliU14","authDomain":"ropgcp.firebaseapp.com","messagingSenderId":"805380848748","projectNumber":"805380848748","version":"2"}
+[info] 
+   Thank you for trying our early preview of Next.js support on Firebase Hosting.
+   During the preview, support is best-effort and breaking changes can be expected. Proceed with caution.
+   The integration is known to work with Next.js version 12 - 15.0. You may encounter errors.
+
+   Documentation: https://firebase.google.com/docs/hosting/frameworks/nextjs
+   File a bug: https://github.com/firebase/firebase-tools/issues/new?template=bug_report.md
+   Submit a feature request: https://github.com/firebase/firebase-tools/issues/new?template=feature_request.md
+
+   We'd love to learn from you. Express your interest in helping us shape the future of Firebase Hosting: https://goo.gle/41enW5X
+
+[debug] [2025-12-26T05:37:40.516Z] [web frameworks] effective firebase.json:  {
+  "hosting": [
+    {
+      "source": ".",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "frameworksBackend": {
+        "region": "us-central1"
+      },
+      "site": "ropgcp",
+      "rewrites": [
+        {
+          "source": "**",
+          "function": {
+            "functionId": "ssrropgcp",
+            "region": "us-central1",
+            "pinTag": true
+          }
+        }
+      ],
+      "redirects": [],
+      "headers": [
+        {
+          "source": "**/*.[jt]s",
+          "headers": [
+            {
+              "key": "Set-Cookie",
+              "value": "__FIREBASE_DEFAULTS__=eyJlbXVsYXRvckhvc3RzIjp7ImF1dGgiOiIxMjcuMC4wLjE6OTA5OSIsImZpcmVzdG9yZSI6IjEyNy4wLjAuMTo4MDgwIiwic3RvcmFnZSI6IjEyNy4wLjAuMTo5MTk5In0sImNvbmZpZyI6eyJwcm9qZWN0SWQiOiJyb3BnY3AiLCJhcHBJZCI6IjE6ODA1MzgwODQ4NzQ4OndlYjo5YWI3NTYzYTA1MDBlZmQwN2FlYzQ5Iiwic3RvcmFnZUJ1Y2tldCI6InJvcGdjcC5maXJlYmFzZXN0b3JhZ2UuYXBwIiwibG9jYXRpb25JZCI6ImF1c3RyYWxpYS1zb3V0aGVhc3QxIiwiYXBpS2V5IjoiQUl6YVN5QXZqMkdkdGtwbjVGSkZ1M1NWRFN1LVQ1RmN2T2xpVTE0IiwiYXV0aERvbWFpbiI6InJvcGdjcC5maXJlYmFzZWFwcC5jb20iLCJtZXNzYWdpbmdTZW5kZXJJZCI6IjgwNTM4MDg0ODc0OCIsInByb2plY3ROdW1iZXIiOiI4MDUzODA4NDg3NDgiLCJ2ZXJzaW9uIjoiMiJ9LCJfYXV0aFRva2VuU3luY1VSTCI6Ii9fX3Nlc3Npb24ifQ; SameSite=Strict; Expires=2027-11-20T16:17:40.516Z; Path=/;"
+            }
+          ]
+        }
+      ],
+      "cleanUrls": true,
+      "public": ".firebase/ropgcp/hosting",
+      "webFramework": "next_ssr"
+    }
+  ],
+  "functions": [
+    {
+      "source": ".firebase/ropgcp/functions",
+      "codebase": "firebase-frameworks-ropgcp"
+    }
+  ]
+}
+[debug] [2025-12-26T05:37:40.520Z] [functions] Functions Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-26T05:37:40.520Z] [eventarc] Eventarc Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-26T05:37:40.520Z] [tasks] Cloud Tasks Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-26T05:37:40.520Z] late-assigned ports for functions and eventarc emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4000},{"address":"::1","family":"IPv6","port":4000}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"auth":[{"address":"127.0.0.1","family":"IPv4","port":9099}],"firestore":[{"address":"127.0.0.1","family":"IPv4","port":8080}],"firestore.websocket":[{"address":"127.0.0.1","family":"IPv4","port":9150}],"hosting":[{"address":"127.0.0.1","family":"IPv4","port":5000}],"storage":[{"address":"127.0.0.1","family":"IPv4","port":9199}],"functions":[{"address":"127.0.0.1","family":"IPv4","port":5001}],"eventarc":[{"address":"127.0.0.1","family":"IPv4","port":9299}],"tasks":[{"address":"127.0.0.1","family":"IPv4","port":9499}]},"metadata":{"message":"late-assigned ports for functions and eventarc emulators"}}
+[warn] ⚠  functions: The following emulators are not running, calls to these services from the Functions emulator will affect production: apphosting, database, pubsub, dataconnect {"metadata":{"emulator":{"name":"functions"},"message":"The following emulators are not running, calls to these services from the Functions emulator will affect production: \u001b[1mapphosting, database, pubsub, dataconnect\u001b[22m"}}
+[warn] ⚠  functions: Application Default Credentials detected. Non-emulated services will access production using these credentials. Be careful! {"metadata":{"emulator":{"name":"functions"},"message":"Application Default Credentials detected. Non-emulated services will access production using these credentials. Be careful!"}}
+[debug] [2025-12-26T05:37:40.527Z] Checked if tokens are valid: true, expires at: 1766730192428
+[debug] [2025-12-26T05:37:40.527Z] Checked if tokens are valid: true, expires at: 1766730192428
+[debug] [2025-12-26T05:37:40.528Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/ropgcp/adminSdkConfig [none]
+[debug] [2025-12-26T05:37:41.521Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/ropgcp/adminSdkConfig 200
+[debug] [2025-12-26T05:37:41.522Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/ropgcp/adminSdkConfig {"projectId":"ropgcp","storageBucket":"ropgcp.firebasestorage.app","locationId":"australia-southeast1"}
+[warn] ⚠  firestore: Cloud Firestore Emulator does not support multiple databases yet. {"metadata":{"emulator":{"name":"firestore"},"message":"Cloud Firestore Emulator does not support multiple databases yet."}}
+[warn] ⚠  firestore: Did not find a Cloud Firestore rules file specified in a firebase.json config file. {"metadata":{"emulator":{"name":"firestore"},"message":"Did not find a Cloud Firestore rules file specified in a firebase.json config file."}}
+[warn] ⚠  firestore: The emulator will default to allowing all reads and writes. Learn more about this option: https://firebase.google.com/docs/emulator-suite/install_and_configure#security_rules_configuration. {"metadata":{"emulator":{"name":"firestore"},"message":"The emulator will default to allowing all reads and writes. Learn more about this option: https://firebase.google.com/docs/emulator-suite/install_and_configure#security_rules_configuration."}}
+[debug] [2025-12-26T05:37:41.538Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: auto_download"}}
+[debug] [2025-12-26T05:37:41.539Z] Ignoring unsupported arg: single_project_mode_error {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: single_project_mode_error"}}
+[debug] [2025-12-26T05:37:41.539Z] Starting Firestore Emulator with command {"binary":"java","args":["-Dgoogle.cloud_firestore.debug_log_level=FINE","-Duser.language=en","-jar","/usr/local/google/home/rop/.cache/firebase/emulators/cloud-firestore-emulator-v1.20.2.jar","--host","127.0.0.1","--port",8080,"--websocket_port",9150,"--project_id","ropgcp","--single_project_mode",true,"--functions_emulator","127.0.0.1:5001"],"optionalArgs":["port","webchannel_port","host","rules","websocket_port","functions_emulator","seed_from_export","project_id","single_project_mode"],"joinArgs":false,"shell":false,"port":8080} {"metadata":{"emulator":{"name":"firestore"},"message":"Starting Firestore Emulator with command {\"binary\":\"java\",\"args\":[\"-Dgoogle.cloud_firestore.debug_log_level=FINE\",\"-Duser.language=en\",\"-jar\",\"/usr/local/google/home/rop/.cache/firebase/emulators/cloud-firestore-emulator-v1.20.2.jar\",\"--host\",\"127.0.0.1\",\"--port\",8080,\"--websocket_port\",9150,\"--project_id\",\"ropgcp\",\"--single_project_mode\",true,\"--functions_emulator\",\"127.0.0.1:5001\"],\"optionalArgs\":[\"port\",\"webchannel_port\",\"host\",\"rules\",\"websocket_port\",\"functions_emulator\",\"seed_from_export\",\"project_id\",\"single_project_mode\"],\"joinArgs\":false,\"shell\":false,\"port\":8080}"}}
+[info] i  firestore: Firestore Emulator logging to firestore-debug.log {"metadata":{"emulator":{"name":"firestore"},"message":"Firestore Emulator logging to \u001b[1mfirestore-debug.log\u001b[22m"}}
+[debug] [2025-12-26T05:37:42.999Z] Dec 26, 2025 5:37:42 AM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start
+INFO: Started WebSocket server on ws://127.0.0.1:9150
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Dec 26, 2025 5:37:42 AM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start\nINFO: Started WebSocket server on ws://127.0.0.1:9150\n"}}
+[debug] [2025-12-26T05:37:43.065Z] API endpoint: http://127.0.0.1:8080 {"metadata":{"emulator":{"name":"firestore"},"message":"API endpoint: http://127.0.0.1:8080"}}
+[debug] [2025-12-26T05:37:43.066Z] 
+If you are using a library that supports the FIRESTORE_EMULATOR_HOST environment variable, run:
+
+   export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+
+If you are running a Firestore in Datastore Mode project, run:
+
+   export DATASTORE_EMULATOR_HOST=127.0.0.1:8080
+
+Note: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.
+Dev App Server is now running.
+
+ {"metadata":{"emulator":{"name":"firestore"},"message":"\nIf you are using a library that supports the FIRESTORE_EMULATOR_HOST environment variable, run:\n\n   export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080\n\nIf you are running a Firestore in Datastore Mode project, run:\n\n   export DATASTORE_EMULATOR_HOST=127.0.0.1:8080\n\nNote: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.\nDev App Server is now running.\n\n"}}
+[info] ✔  firestore: Firestore Emulator UI websocket is running on 9150. {"metadata":{"emulator":{"name":"firestore"},"message":"Firestore Emulator UI websocket is running on 9150."}}
+[debug] [2025-12-26T05:37:48.982Z] Dec 26, 2025 5:37:48 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+INFO: Detected HTTP/2 connection.
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Dec 26, 2025 5:37:48 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\nINFO: Detected HTTP/2 connection.\n"}}
+[debug] [2025-12-26T05:37:48.987Z] Ignoring unsupported arg: port {"metadata":{"emulator":{"name":"storage"},"message":"Ignoring unsupported arg: port"}}
+[info] Error occurred during initialization of VM
+java.lang.Error: A command line option has attempted to allow or enable the Security Manager. Enabling a Security Manager is not supported.
+	at java.lang.System.initPhase3(java.base@25.0.1/System.java:1976) {"metadata":{"emulator":{"name":"storage"},"message":"Error occurred during initialization of VM\njava.lang.Error: A command line option has attempted to allow or enable the Security Manager. Enabling a Security Manager is not supported.\n\tat java.lang.System.initPhase3(java.base@25.0.1/System.java:1976)"}}
+[warn] ⚠  Received a signed JWT. Auth Emulator does not validate JWTs and IS NOT SECURE {"metadata":{"emulator":{"name":"auth"},"message":"Received a signed JWT. Auth Emulator does not validate JWTs and IS NOT SECURE"}}
+[debug] [2025-12-26T05:38:20.383Z] >>> [apiv2][query] POST http://127.0.0.1:5001/functions/projects/ropgcp/trigger_multicast [none]
+[debug] [2025-12-26T05:38:20.383Z] >>> [apiv2][body] POST http://127.0.0.1:5001/functions/projects/ropgcp/trigger_multicast {"eventId":"86b17dad-0775-4bec-bc27-19b4ecb83f99","eventType":"providers/firebase.auth/eventTypes/user.create","resource":{"name":"projects/ropgcp","service":"firebaseauth.googleapis.com"},"params":{},"timestamp":"2025-12-26T05:38:20.382Z","data":{"uid":"kIj5F2G9XZouQost6GTRyQ243f15","email":"orange.panda.761@example.com","emailVerified":true,"displayName":"Orange Panda","metadata":{"creationTime":"2025-12-26T05:38:20.381Z","lastSignInTime":"2025-12-26T05:38:20.381Z"},"customClaims":{},"providerData":[{"rawId":"5322012447704883066696489589190978890686","providerId":"google.com","displayName":"Orange Panda","email":"orange.panda.761@example.com","federatedId":"5322012447704883066696489589190978890686","screenName":"panda_orange"}]}}
+[debug] [2025-12-26T05:38:20.397Z] <<< [apiv2][status] POST http://127.0.0.1:5001/functions/projects/ropgcp/trigger_multicast 200
+[debug] [2025-12-26T05:38:20.397Z] <<< [apiv2][body] POST http://127.0.0.1:5001/functions/projects/ropgcp/trigger_multicast {"status":"multicast_acknowledged"}

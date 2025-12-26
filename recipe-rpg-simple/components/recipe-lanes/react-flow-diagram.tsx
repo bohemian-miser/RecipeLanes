@@ -85,57 +85,6 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         setFuture([]);
     }, [getNodes, getEdges]);
 
-    const undo = useCallback(() => {
-        if (past.length === 0) return;
-        const newPast = [...past];
-        const previous = newPast.pop();
-        setPast(newPast);
-        setFuture(f => [{ 
-            nodes: JSON.parse(JSON.stringify(getNodes())), 
-            edges: JSON.parse(JSON.stringify(getEdges())) 
-        }, ...f]);
-        
-        if (previous) {
-            setNodes(previous.nodes);
-            setEdges(previous.edges);
-        }
-    }, [past, getNodes, getEdges, setNodes, setEdges]);
-
-    const redo = useCallback(() => {
-        if (future.length === 0) return;
-        const newFuture = [...future];
-        const next = newFuture.shift();
-        setFuture(newFuture);
-        setPast(p => [...p, { 
-            nodes: JSON.parse(JSON.stringify(getNodes())), 
-            edges: JSON.parse(JSON.stringify(getEdges())) 
-        }]);
-        
-        if (next) {
-            setNodes(next.nodes);
-            setEdges(next.edges);
-        }
-    }, [future, getNodes, getEdges, setNodes, setEdges]);
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
-                e.preventDefault();
-                if (e.shiftKey) {
-                    redo();
-                } else {
-                    undo();
-                }
-            }
-            if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
-                 e.preventDefault();
-                 redo();
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo]);
-
     const handleDeleteNode = useCallback((nodeId: string) => {
         takeSnapshot();
         const currentEdges = getEdges();
@@ -161,6 +110,73 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         setEdges(newEdgesList);
         setNodes(nds => nds.filter(n => n.id !== nodeId));
     }, [takeSnapshot, getEdges, setEdges, setNodes, edgeStyle]);
+
+    const undo = useCallback(() => {
+        if (past.length === 0) return;
+        const newPast = [...past];
+        const previous = newPast.pop();
+        setPast(newPast);
+        setFuture(f => [{ 
+            nodes: JSON.parse(JSON.stringify(getNodes())), 
+            edges: JSON.parse(JSON.stringify(getEdges())) 
+        }, ...f]);
+        
+        if (previous) {
+            // Re-attach handlers that are lost during JSON serialization
+            const restoredNodes = previous.nodes.map(n => ({
+                ...n,
+                data: {
+                    ...n.data,
+                    onDelete: () => handleDeleteNode(n.id)
+                }
+            }));
+            setNodes(restoredNodes);
+            setEdges(previous.edges);
+        }
+    }, [past, getNodes, getEdges, setNodes, setEdges, handleDeleteNode]);
+
+    const redo = useCallback(() => {
+        if (future.length === 0) return;
+        const newFuture = [...future];
+        const next = newFuture.shift();
+        setFuture(newFuture);
+        setPast(p => [...p, { 
+            nodes: JSON.parse(JSON.stringify(getNodes())), 
+            edges: JSON.parse(JSON.stringify(getEdges())) 
+        }]);
+        
+        if (next) {
+            // Re-attach handlers
+            const restoredNodes = next.nodes.map(n => ({
+                ...n,
+                data: {
+                    ...n.data,
+                    onDelete: () => handleDeleteNode(n.id)
+                }
+            }));
+            setNodes(restoredNodes);
+            setEdges(next.edges);
+        }
+    }, [future, getNodes, getEdges, setNodes, setEdges, handleDeleteNode]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    redo();
+                } else {
+                    undo();
+                }
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+                 e.preventDefault();
+                 redo();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [undo, redo]);
 
     // Initial Layout Calculation
     const runLayout = useCallback(async (preservePositions = false) => {

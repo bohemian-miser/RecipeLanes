@@ -165,7 +165,7 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
               {/* Reroll Button */}
               <button 
                   onClick={handleReroll}
-                  className={`absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-blue-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isRerolling ? '!opacity-100 block' : ''}`}
+                  className={`nodrag absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-blue-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isRerolling ? '!opacity-100 block' : ''}`}
                   title="Reroll Icon"
               >
                   <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin text-blue-500' : ''}`} />
@@ -174,7 +174,7 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
               {/* Delete Button */}
               <button 
                   onClick={handleDelete}
-                  className={`absolute -top-2 -left-2 bg-white rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-red-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}
+                  className={`nodrag absolute -top-2 -left-2 bg-white rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-red-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}
                   title="Delete Step (Connect Parents to Children)"
               >
                   <X className="w-3 h-3" />

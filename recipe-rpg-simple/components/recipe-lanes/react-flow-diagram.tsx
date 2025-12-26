@@ -657,7 +657,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                     </button>
                     
                     <button 
-                        onClick={() => setIsPublic(!isPublic)}
+                        onClick={toggleVisibility}
                         className={`text-[10px] px-2 py-1.5 rounded shadow-md border transition-colors font-mono ${isPublic ? 'bg-yellow-500/10 border-yellow-500 text-yellow-500' : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'}`}
                         title="Toggle Visibility"
                     >
@@ -665,9 +665,18 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                     </button>
 
                      <button 
+                        onClick={handleSave} 
+                        disabled={!isDirty}
+                        className={`p-2 rounded shadow-md border border-zinc-200 transition-colors ${isDirty ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
+                        title={isDirty ? "Save Changes" : "No Changes"}
+                    >
+                        {copied && !isDirty ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                    </button>
+
+                     <button 
                         onClick={handleShare} 
                         className={`p-2 rounded shadow-md border border-zinc-200 transition-colors ${copied ? 'bg-green-50 text-green-600 border-green-200' : 'bg-white text-zinc-600 hover:bg-zinc-50'}`}
-                        title={copied ? "Copied!" : "Save & Share Layout"}
+                        title={copied ? "Copied!" : "Save & Copy Link"}
                     >
                         {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
                     </button>

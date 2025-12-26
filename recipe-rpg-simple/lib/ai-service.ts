@@ -28,21 +28,35 @@ export class RealAIService implements AIService {
 
 export class MockAIService implements AIService {
   async generateText(prompt: string): Promise<string> {
-    if (prompt.includes("Swimlane Graph") || prompt.includes("Test Scrambled Eggs")) {
-        return JSON.stringify({
-            title: "Mock Recipe",
-            lanes: [{ id: "l1", label: "Prep", type: "prep" }],
-            nodes: [
+    const lower = prompt.toLowerCase();
+    
+    if (lower.includes("swimlane graph") || lower.includes("test scrambled eggs") || lower.includes("test eggs")) {
+        const extraIngredient = lower.includes("test eggs with ") ? lower.split("test eggs with ")[1].trim() : null;
+        
+        const nodes = [
                 { id: "1", laneId: "l1", text: "Mock Ingredient 1", type: "ingredient", visualDescription: "Mock Ing 1" },
                 { id: "2", laneId: "l1", text: "Mock Ingredient 2", type: "ingredient", visualDescription: "Mock Ing 2" },
                 { id: "3", laneId: "l1", text: "Mock Action", type: "action", inputs: ["1", "2"], visualDescription: "Mock Act" }
-            ]
+        ];
+
+        if (extraIngredient) {
+            nodes.push({ id: "4", laneId: "l1", text: extraIngredient, type: "ingredient", visualDescription: extraIngredient });
+            // @ts-ignore
+            nodes[2].inputs.push("4");
+        }
+
+        return JSON.stringify({
+            title: "Mock Recipe",
+            lanes: [{ id: "l1", label: "Prep", type: "prep" }],
+            nodes
         });
     }
     // Generic fallback for E2E tests
-    return `graph TD
-    A[Mock Step 1] --> B[Mock Step 2]
-    B --> C[Mock Step 3]`;
+    return JSON.stringify({
+            title: "Mock Recipe",
+            lanes: [{ id: "l1", label: "Prep", type: "prep" }],
+            nodes: [{ id: "1", laneId: "l1", text: "Mock Ingredient 1", type: "ingredient", visualDescription: "Mock Ing 1" }]
+        });
   }
 
   async generateImage(prompt: string): Promise<string> {

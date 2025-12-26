@@ -111,6 +111,7 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     }, [getNodes, getEdges]);
 
     const handleDeleteNode = useCallback((nodeId: string) => {
+        console.log(`[DiagramInner] handleDeleteNode called for ${nodeId}`);
         takeSnapshot();
         const currentEdges = getEdges();
         const incoming = currentEdges.filter(ed => ed.target === nodeId);

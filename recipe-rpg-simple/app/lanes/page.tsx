@@ -21,8 +21,8 @@ function RecipeLanesContent() {
   const [recipeText, setRecipeText] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [graph, setGraph] = useState<RecipeGraph | null>(null);
-  const [ownerId, setOwnerId] = useState<string | null>(null); // Added state
-  const [notification, setNotification] = useState<string | null>(null); // Added state
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);

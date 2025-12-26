@@ -101,7 +101,7 @@ export async function getAllIconsAction() {
 
 export async function getAllStorageFilesAction() {
     const session = await getAuthService().verifyAuth();
-    if (!session?.isAdmin) return null;
+    // if (!session?.isAdmin) return null; // Removed Admin check
     return getDataService().listDebugFiles();
 }
 
@@ -312,6 +312,26 @@ export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: st
     } catch (e: any) {
         console.error('deleteIconByUrlAction failed:', e);
         return { success: false, error: e.message };
+    }
+}
+
+export async function updateIconMetadataAction(iconUrl: string, ingredientName: string, updates: { ingredientName?: string, visualDescription?: string }) {
+    const session = await getAuthService().verifyAuth();
+    if (!session?.isAdmin) return { error: 'Admin required' };
+
+    try {
+        const service = getDataService();
+        if ('updateIconMetadata' in service) {
+             // @ts-ignore
+             await service.updateIconMetadata(iconUrl, updates);
+        } else {
+            return { error: 'Service does not support metadata updates' };
+        }
+        
+        return { success: true };
+    } catch (e: any) {
+        console.error('updateIconMetadataAction failed:', e);
+        return { error: e.message };
     }
 }
 

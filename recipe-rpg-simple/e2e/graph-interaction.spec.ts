@@ -68,9 +68,12 @@ test.describe('Graph Interaction', () => {
     // Ensure we click the delete button INSIDE the selected node
     const deleteBtn = node.locator('button').filter({ has: page.locator('.lucide-x') });
     await expect(deleteBtn).toBeVisible();
-    // await deleteBtn.click({ force: true });
-    await deleteBtn.dispatchEvent('click');
-    await page.waitForTimeout(1000); // Wait for delete animation/state update
+    
+    // Use force click to bypass any potential overlay/pointer-event issues (like handles)
+    await deleteBtn.click({ force: true });
+    
+    // Wait for delete animation/state update
+    await page.waitForTimeout(1000); 
 
     // Verify node is gone
     await expect(node).not.toBeVisible({ timeout: 10000 });

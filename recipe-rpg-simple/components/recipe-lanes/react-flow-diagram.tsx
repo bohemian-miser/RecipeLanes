@@ -602,15 +602,13 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                         <RotateCcw className="w-4 h-4" />
                     </button>
                     
-                    <div className="flex items-center gap-1 bg-white p-2 rounded shadow-md border border-zinc-200" title="Make Public?">
-                        <input 
-                            type="checkbox" 
-                            checked={isPublic} 
-                            onChange={(e) => setIsPublic(e.target.checked)}
-                            className="w-3 h-3 cursor-pointer"
-                        />
-                        <span className="text-[10px] text-zinc-600 font-mono">Public</span>
-                    </div>
+                    <button 
+                        onClick={() => setIsPublic(!isPublic)}
+                        className={`text-[10px] px-2 py-1.5 rounded shadow-md border transition-colors font-mono ${isPublic ? 'bg-yellow-500/10 border-yellow-500 text-yellow-500' : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'}`}
+                        title="Toggle Visibility"
+                    >
+                        {isPublic ? 'Public' : 'Unlisted'}
+                    </button>
 
                      <button 
                         onClick={handleShare} 

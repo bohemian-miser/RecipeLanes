@@ -87,6 +87,11 @@ function RecipeLanesContent() {
       }
   }, [recipeText]);
 
+  const showNotification = (msg: string) => {
+      setNotification(msg);
+      setTimeout(() => setNotification(null), 3000);
+  };
+
   const handleJsonSave = async () => {
       try {
           const newGraph = JSON.parse(jsonText);
@@ -98,12 +103,11 @@ function RecipeLanesContent() {
                   url.searchParams.set('id', res.id);
                   router.push(url.pathname + url.search);
                   setOwnerId(user.uid);
-                  setNotification("JSON saved.");
-                  setTimeout(() => setNotification(null), 3000);
+                  showNotification("JSON saved.");
               }
           }
       } catch (e) {
-          alert("Invalid JSON");
+          showNotification("Invalid JSON");
       }
   };
   const [spacing, setSpacing] = useState(1);
@@ -170,6 +174,7 @@ function RecipeLanesContent() {
           setShowOverrideWarning(false);
           setStatus('complete');
           setRecipeTitle(newGraph.title!);
+          showNotification("New version created.");
       }
   };
 
@@ -188,15 +193,14 @@ function RecipeLanesContent() {
           if (isOwner && currentId) {
                await saveRecipeAction(newGraph, currentId);
           } else if (user) {
-               setNotification("Saving a copy to your profile...");
+               showNotification("Saving a copy to your profile...");
                const res = await saveRecipeAction(newGraph, undefined);
                if (res.id) {
                    const url = new URL(window.location.href);
                    url.searchParams.set('id', res.id);
                    router.push(url.pathname + url.search);
                    setOwnerId(user.uid);
-                   setNotification("Saved copy to your profile.");
-                   setTimeout(() => setNotification(null), 5000);
+                   showNotification("Saved copy to your profile.");
                }
           }
       }
@@ -207,13 +211,23 @@ function RecipeLanesContent() {
       const currentId = searchParams.get('id');
       if (currentId) {
           navigator.clipboard.writeText(window.location.href);
-          alert('Link copied to clipboard!');
+          showNotification('Link copied to clipboard!');
           return;
       }
-      // ... existing save logic ...
-      const res = await saveRecipeAction(graph);
+
+      setStatus('loading');
+      const graphToSave = { ...graph, title: recipeTitle }; // Ensure title is current
+      const res = await saveRecipeAction(graphToSave);
       if (res.id) {
-           // ...
+          const url = new URL(window.location.href);
+          url.searchParams.set('id', res.id);
+          router.push(url.pathname + url.search);
+          navigator.clipboard.writeText(url.toString());
+          setStatus('complete');
+          showNotification('Recipe saved! Link copied to clipboard.');
+      } else {
+          setError('Failed to save recipe');
+          setStatus('complete');
       }
   };
 
@@ -390,6 +404,13 @@ function RecipeLanesContent() {
             </div>
         </header>
         
+        {/* Notification Banner */}
+        {notification && (
+            <div className="bg-green-500/10 border-b border-green-500/20 text-green-500 text-[10px] py-1 px-4 text-center font-mono animate-in slide-in-from-top-2">
+                {notification}
+            </div>
+        )}
+
         {/* Warning Banner */}
         {showOverrideWarning && (
             <div className="bg-orange-500/10 border-b border-orange-500/20 text-orange-500 text-[10px] py-1 px-4 text-center font-mono cursor-pointer hover:bg-orange-500/20 transition-colors" onClick={handleFork}>
@@ -579,6 +600,7 @@ function RecipeLanesContent() {
                         onInteraction={() => setInputExpanded(false)}
                         onSave={(newGraph) => setGraph(newGraph)}
                         isLoggedIn={!!user}
+                        onNotify={showNotification}
                     />
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400">

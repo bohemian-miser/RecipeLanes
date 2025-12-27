@@ -609,6 +609,14 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
 
     const onNodeDragStop = () => {
         dragRef.current = { active: false };
+        if (isOwner) {
+            handleSave();
+        } else if (onNotify && isDirty) {
+             // Optional: warn user they need to fork? 
+             // But existing copy logic handles it on load.
+             // If they modify structure, they should use "Save a Copy" or similar.
+             // For now, just save if owner.
+        }
     };
 
     return (

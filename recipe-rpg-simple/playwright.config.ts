@@ -16,12 +16,13 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npx next start -p 8002',
+    command: 'npx next dev -p 8002',
     url: 'http://localhost:8002',
     reuseExistingServer: true,
     timeout: 60 * 1000,
     env: {
       MOCK_AI: 'true',
+      FORCE_MEMORY_DB: 'true',
     },
   },
 });

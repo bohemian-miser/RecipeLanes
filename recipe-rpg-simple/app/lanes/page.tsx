@@ -35,17 +35,11 @@ function RecipeLanesContent() {
   // Restore Last Recipe
   useEffect(() => {
       const isNew = searchParams.get('new');
-      const currentId = searchParams.get('id');
 
       if (isNew) {
           localStorage.removeItem('last_recipe_id');
-          // Clear the ?new=true param cleanly
-          window.history.replaceState({}, '', '/lanes');
-      } else if (!currentId) {
-          const lastId = localStorage.getItem('last_recipe_id');
-          if (lastId) {
-              router.replace(`/lanes?id=${lastId}`);
-          }
+          // Clear the ?new=true param cleanly using router to stay in sync
+          router.replace('/lanes');
       }
   }, [searchParams, router]);
 
@@ -255,13 +249,19 @@ function RecipeLanesContent() {
         setStatus('forging');
 
         // Auto-save immediately
+        console.log('Auto-saving...');
         const currentId = searchParams.get('id') || undefined;
         const saveRes = await saveRecipeAction(rawGraph, currentId);
+        console.log('Save result:', saveRes);
         if (saveRes.id) {
              const url = new URL(window.location.href);
+             url.searchParams.delete('new');
              url.searchParams.set('id', saveRes.id);
-             router.replace(url.pathname + url.search); 
+             console.log('Navigating to:', url.toString());
+             router.push(url.pathname + url.search); 
              if (user) setOwnerId(user.uid);
+        } else {
+            console.error('Auto-save failed:', saveRes);
         }
 
         const iconRes = await generateGraphIconsAction(rawGraph);

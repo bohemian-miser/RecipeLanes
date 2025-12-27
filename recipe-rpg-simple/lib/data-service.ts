@@ -1,4 +1,4 @@
-import { db, storage } from './firebase-admin';
+import { db, storage, isFirebaseEnabled } from './firebase-admin';
 import { memoryStore, IconData, IngredientData } from './store';
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
@@ -633,7 +633,14 @@ export class MemoryDataService implements DataService {
 let currentDataService: DataService | null = null;
 export function getDataService(): DataService {
   if (currentDataService) return currentDataService;
-  currentDataService = new FirebaseDataService();
+  
+  if (process.env.FORCE_MEMORY_DB === 'true' || !isFirebaseEnabled) {
+      if (process.env.FORCE_MEMORY_DB === 'true') console.warn("Forcing MemoryDataService");
+      else console.warn("Firebase not enabled, using MemoryDataService");
+      currentDataService = new MemoryDataService();
+  } else {
+      currentDataService = new FirebaseDataService();
+  }
   return currentDataService;
 }
 export function setDataService(service: DataService) { currentDataService = service; }

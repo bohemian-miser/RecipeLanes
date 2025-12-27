@@ -1,7 +1,7 @@
 import { test, expect, devices } from '@playwright/test';
 
 // Use iPhone 12 for mobile simulation
-test.use({ ...devices['iPhone 12'] });
+test.use({ ...devices['iPad Mini'] });
 
 test.describe('Graph Interaction', () => {
   test.slow(); // Mark all tests in this describe block as slow

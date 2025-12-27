@@ -59,7 +59,7 @@ test('Alice Copy Workflow', async ({ page, context }) => {
   await expect(banner).toBeVisible();
   
   // Check buttons
-  await expect(page.getByRole('button', { name: 'Open it' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open it' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Override it' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Make another copy' })).toBeVisible();
 });

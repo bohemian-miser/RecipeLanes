@@ -543,49 +543,95 @@ function RecipeLanesContent() {
             </div>
         </header>
         
-        {/* Existing Copies Banner */}
-        {existingCopies.length > 0 && (
-            <div className="bg-blue-500/10 border-b border-blue-500/20 text-blue-400 text-[10px] py-2 px-4 text-center font-mono flex flex-col gap-1 items-center animate-in slide-in-from-top-2">
-                <span>You have {existingCopies.length} existing {existingCopies.length === 1 ? 'copy' : 'copies'} of this recipe.</span>
-                <div className="flex gap-4">
-                    <button onClick={() => router.push(`/lanes?id=${existingCopies[0].id}`)} className="underline font-bold hover:text-blue-300">
-                        Open {existingCopies.length === 1 ? 'it' : 'latest'}
-                    </button>
-                    <button onClick={() => handleOverrideCopy(existingCopies[0].id)} className="underline font-bold hover:text-blue-300" title="Overwrite your existing copy with this version">
-                        Override it
-                    </button>
-                    <button onClick={handleFork} className="underline font-bold hover:text-blue-300">
-                        Make another copy
-                    </button>
-                    {existingCopies.length > 1 && (
-                        <Link href={`/gallery?filter=mine&search=${encodeURIComponent(recipeTitle)}`} className="underline font-bold hover:text-blue-300">
-                            See all
-                        </Link>
-                    )}
-                </div>
-            </div>
-        )}
-
-        {/* Notification Banner */}
-        {notification && (
-            <div className="bg-green-500/10 border-b border-green-500/20 text-green-500 text-[10px] py-1 px-4 text-center font-mono animate-in slide-in-from-top-2">
-                {notification}
-            </div>
-        )}
-
-        {/* Warning Banner */}
-        {showOverrideWarning && (
-            <div className="bg-orange-500/10 border-b border-orange-500/20 text-orange-500 text-[10px] py-1 px-4 text-center font-mono cursor-pointer hover:bg-orange-500/20 transition-colors" onClick={handleFork}>
-                This will override the current recipe, click <span className="underline font-bold hover:text-orange-400">here to make a new version</span>
-            </div>
-        )}
+                <div className="absolute top-16 left-0 right-0 z-50 flex flex-col items-center pointer-events-none gap-2">
         
-        {/* Guest Banner */}
-        {!user && graph && (
-            <div className="bg-yellow-500/10 border-b border-yellow-500/20 text-yellow-500 text-[10px] py-1 px-4 text-center font-mono">
-                Recipe not saved to account. <button onClick={signIn} className="underline font-bold hover:text-yellow-400">Log in</button> to save edits permanently.
-            </div>
-        )}
+                    {/* Existing Copies Banner */}
+        
+                    {existingCopies.length > 0 && (
+        
+                        <div className="bg-blue-500/95 backdrop-blur-sm text-blue-100 text-[10px] py-2 px-4 text-center font-mono flex items-center justify-center gap-4 animate-in slide-in-from-top-2 pointer-events-auto shadow-lg rounded-lg w-fit border border-blue-400/30">
+        
+                            <span>You have {existingCopies.length} existing {existingCopies.length === 1 ? 'copy' : 'copies'} of this recipe.</span>
+        
+                            <div className="flex gap-4">
+        
+                                <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">
+        
+                                    Open {existingCopies.length === 1 ? 'it' : 'latest'}
+        
+                                </Link>
+        
+                                <button onClick={() => handleOverrideCopy(existingCopies[0].id)} className="underline font-bold hover:text-white" title="Overwrite your existing copy with this version">
+        
+                                    Override it
+        
+                                </button>
+        
+                                <button onClick={handleFork} className="underline font-bold hover:text-white">
+        
+                                    Make another copy
+        
+                                </button>
+        
+                                {existingCopies.length > 1 && (
+        
+                                    <Link href={`/gallery?filter=mine&search=${encodeURIComponent(recipeTitle)}`} className="underline font-bold hover:text-white">
+        
+                                        See all
+        
+                                    </Link>
+        
+                                )}
+        
+                            </div>
+        
+                        </div>
+        
+                    )}
+        
+        
+        
+                    {/* Notification Banner */}
+        
+                    {notification && (
+        
+                        <div className="bg-green-500/90 backdrop-blur-sm text-white text-[10px] py-1.5 px-4 text-center font-mono animate-in slide-in-from-top-2 pointer-events-auto shadow-lg rounded-full w-fit border border-green-400/30">
+        
+                            {notification}
+        
+                        </div>
+        
+                    )}
+        
+        
+        
+                    {/* Warning Banner */}
+        
+                    {showOverrideWarning && (
+        
+                        <div className="bg-orange-500/90 backdrop-blur-sm text-white text-[10px] py-1.5 px-4 text-center font-mono cursor-pointer hover:bg-orange-600/90 transition-colors pointer-events-auto shadow-lg rounded-full w-fit border border-orange-400/30" onClick={handleFork}>
+        
+                            This will override the current recipe, click <span className="underline font-bold hover:text-white">here to make a new version</span>
+        
+                        </div>
+        
+                    )}
+        
+                    
+        
+                    {/* Guest Banner */}
+        
+                    {!user && graph && (
+        
+                        <div className="bg-yellow-500/90 backdrop-blur-sm text-black text-[10px] py-1.5 px-4 text-center font-mono pointer-events-auto shadow-lg rounded-full w-fit border border-yellow-400/30">
+        
+                            Recipe not saved to account. <button onClick={signIn} className="underline font-bold hover:text-zinc-800">Log in</button> to save edits permanently.
+        
+                        </div>
+        
+                    )}
+        
+                </div>
 
         {/* Input Area (Collapsible) */}
         <div className={`shrink-0 bg-zinc-900 border-b border-zinc-800 transition-all duration-300 ease-in-out z-10 ${inputExpanded ? 'max-h-[80vh]' : 'max-h-16'}`}>

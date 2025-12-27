@@ -29,8 +29,8 @@ export class RealAIService implements AIService {
 export class MockAIService implements AIService {
   async generateText(prompt: string): Promise<string> {
     const lower = prompt.toLowerCase();
-    
-    if (lower.includes("swimlane graph") || lower.includes("test scrambled eggs") || lower.includes("test eggs")) {
+    console.log("[MockAIService] generateText received prompt:", prompt);
+    if (lower.includes("test eggs")) {
         const extraIngredient = lower.includes("test eggs with ") ? lower.split("test eggs with ")[1].trim() : null;
         
         const nodes = [
@@ -49,6 +49,33 @@ export class MockAIService implements AIService {
             title: "Mock Recipe",
             lanes: [{ id: "l1", label: "Prep", type: "prep" }],
             nodes
+        });
+    }
+    if (lower.includes("complex")) {
+        return JSON.stringify({
+            title: "Complex Mock Recipe",
+            lanes: [
+                { id: "l1", label: "Prep", type: "prep" },
+                { id: "l2", label: "Cook", type: "cook" }
+            ],
+            nodes: [
+                // Parents (ingredients)
+                { id: "1", laneId: "l1", text: "Ingredient A", type: "ingredient", visualDescription: "Ing A" },
+                { id: "2", laneId: "l1", text: "Ingredient B", type: "ingredient", visualDescription: "Ing B" },
+                // A and B (first level actions)
+                { id: "3", laneId: "l1", text: "Process A", type: "action", inputs: ["1"], visualDescription: "Proc A" },
+                { id: "4", laneId: "l1", text: "Process B", type: "action", inputs: ["2"], visualDescription: "Proc B" },
+                // C - common node that A and B both point to
+                { id: "5", laneId: "l2", text: "Combine (Common)", type: "action", inputs: ["3", "4"], visualDescription: "Common" },
+                // D - extra thing A points to
+                { id: "6", laneId: "l1", text: "Extra from A", type: "action", inputs: ["3"], visualDescription: "Extra A" },
+                // E - extra thing B points to
+                { id: "7", laneId: "l1", text: "Extra from B", type: "action", inputs: ["4"], visualDescription: "Extra B" },
+                // F - one of the things C points to, also receives from D
+                { id: "8", laneId: "l2", text: "Final Step F", type: "action", inputs: ["5", "6"], visualDescription: "Final F" },
+                // G - the other thing C points to
+                { id: "9", laneId: "l2", text: "Final Step G", type: "action", inputs: ["5"], visualDescription: "Final G" },
+            ]
         });
     }
     // Generic fallback for E2E tests

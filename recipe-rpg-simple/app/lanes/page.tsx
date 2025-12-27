@@ -765,7 +765,10 @@ function RecipeLanesContent() {
                         textPos={textPos} 
                         isLive={isLive} 
                         onInteraction={() => setInputExpanded(false)}
-                        onSave={(newGraph) => setGraph(newGraph)}
+                        onSave={(newGraph) => {
+                            setGraph(newGraph);
+                            if (newGraph.title) setRecipeTitle(newGraph.title);
+                        }}
                         isLoggedIn={!!user}
                         isOwner={isOwner}
                         onNotify={showNotification}

@@ -22,11 +22,11 @@ export async function POST(request: NextRequest) {
     let sessionCookie;
 
     try {
-        if (isFirebaseEnabled) {
+        if (isFirebaseEnabled && process.env.NEXT_PUBLIC_MOCK_AUTH !== 'true') {
             sessionCookie = await auth.createSessionCookie(idToken, { expiresIn });
         } else {
             const uid = getUidFromToken(idToken) || 'local-user';
-            sessionCookie = `mock-${uid}`;
+            sessionCookie = idToken.startsWith('mock-') ? idToken : `mock-${uid}`;
         }
     } catch (e) {
         console.warn('Failed to create session cookie (likely ADC permissions), falling back to ID token.', e);
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     (await cookies()).set('session', sessionCookie, {
       maxAge: expiresIn,
-      httpOnly: true,
+      httpOnly: process.env.NEXT_PUBLIC_MOCK_AUTH !== 'true', // Allow client read if mocking
       secure: process.env.NODE_ENV === 'production',
       path: '/',
       sameSite: 'lax',

@@ -81,10 +81,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async () => {
     setError(null);
-    if (!isInitialized) {
-        setError('Firebase not configured (missing API Key).');
+    const forceMock = process.env.NEXT_PUBLIC_MOCK_AUTH === 'true';
+
+    if (!isInitialized || forceMock) {
+        try {
+            // Mock Login: Send a fake token. The backend (if in mock mode) will use it to create a session cookie.
+            const mockUid = 'user-' + Math.floor(Math.random() * 10000);
+            await fetch('/api/auth/login', { 
+                method: 'POST', 
+                body: JSON.stringify({ idToken: `mock-${mockUid}` }) 
+            });
+            window.location.reload();
+        } catch (e) {
+            console.error('Mock login failed', e);
+        }
         return;
     }
+
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
@@ -98,7 +111,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     setError(null);
-    if (!isInitialized) return;
+    const forceMock = process.env.NEXT_PUBLIC_MOCK_AUTH === 'true';
+
+    if (!isInitialized || forceMock) {
+        try {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            setUser(null);
+            router.refresh();
+        } catch (e) {
+            console.error('Mock logout failed:', e);
+        }
+        return;
+    }
+
     try {
       await signOut(auth);
       // onAuthStateChanged will handle the rest (cookie clear + refresh)

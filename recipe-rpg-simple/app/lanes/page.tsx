@@ -729,6 +729,7 @@ function RecipeLanesContent() {
                         onInteraction={() => setInputExpanded(false)}
                         onSave={(newGraph) => setGraph(newGraph)}
                         isLoggedIn={!!user}
+                        isOwner={isOwner}
                         onNotify={showNotification}
                     />
                 ) : (

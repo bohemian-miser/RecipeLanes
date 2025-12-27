@@ -611,12 +611,7 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
         dragRef.current = { active: false };
         if (isOwner) {
             handleSave();
-        } else if (onNotify && isDirty) {
-             // Optional: warn user they need to fork? 
-             // But existing copy logic handles it on load.
-             // If they modify structure, they should use "Save a Copy" or similar.
-             // For now, just save if owner.
-        }
+        } 
     };
 
     return (
@@ -641,6 +636,7 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
                 nodeDragThreshold={5} // Prevent accidental drags
                 defaultEdgeOptions={{ type: 'floating' }}
                 onlyRenderVisibleElements={false}
+                multiSelectionKeyCode={['Shift']}
             >
                 <Background color="#f4f4f5" gap={20} />
                 <Controls showInteractive={false} />

@@ -31,8 +31,10 @@ export class RealAuthService implements AuthService {
         const sessionCookie = cookieStore.get('session')?.value;
 
         if (authHeader || sessionCookie) {
-            const mockUid = sessionCookie?.startsWith('mock-') ? sessionCookie : 'mock-local-user';
-            return { uid: mockUid, email: `${mockUid}@localhost`, name: mockUid, isAdmin: true };
+            let uid = (sessionCookie?.startsWith('mock-') ? sessionCookie : 'mock-local-user');
+            if (uid.startsWith('mock-')) uid = uid.replace('mock-', '');
+            
+            return { uid, email: `${uid}@localhost`, name: uid, isAdmin: true };
         }
         return null;
     }

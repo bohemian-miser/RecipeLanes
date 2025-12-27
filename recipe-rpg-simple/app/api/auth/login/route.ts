@@ -2,6 +2,16 @@ import { auth, isFirebaseEnabled } from '@/lib/firebase-admin';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
+function getUidFromToken(token: string) {
+    try {
+        const payload = token.split('.')[1];
+        const decoded = JSON.parse(Buffer.from(payload, 'base64').toString());
+        return decoded.user_id || decoded.sub;
+    } catch (e) {
+        return null;
+    }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { idToken } = await request.json();
@@ -15,7 +25,8 @@ export async function POST(request: NextRequest) {
         if (isFirebaseEnabled) {
             sessionCookie = await auth.createSessionCookie(idToken, { expiresIn });
         } else {
-            sessionCookie = 'mock-session-token';
+            const uid = getUidFromToken(idToken) || 'local-user';
+            sessionCookie = `mock-${uid}`;
         }
     } catch (e) {
         console.warn('Failed to create session cookie (likely ADC permissions), falling back to ID token.', e);

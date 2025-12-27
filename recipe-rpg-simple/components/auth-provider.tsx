@@ -35,7 +35,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const checkMockCookie = () => {
              const match = document.cookie.match(/session=(mock-[^;]+)/);
              if (match) {
-                 const uid = match[1];
+                 let uid = match[1];
+                 if (uid.startsWith('mock-')) uid = uid.replace('mock-', '');
                  // Mock User object
                  const mockUser: any = { 
                      uid, 

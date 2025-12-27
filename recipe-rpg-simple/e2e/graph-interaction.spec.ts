@@ -1,122 +1,149 @@
-import { test, expect, devices } from '@playwright/test';
+import { test, expect, devices, Page } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 
-// Use iPhone 12 for mobile simulation
-test.use({ ...devices['iPad Mini'] });
+const deviceConfigs = [
+  { name: 'phone', viewport: devices['iPhone 12'].viewport!, isMobile: true },
+  { name: 'desktop', viewport: { width: 1280, height: 720 }, isMobile: false },
+];
+
+// This creates a directory structure of screenshots like:
+//
+// test_screenshots/
+// ├── pan-diagram/
+// │   ├── phone/
+// │   │   ├── 01-initial-page.png
+// │   │   ├── 02-recipe-entered.png
+// │   │   └── ...
+// │   └── desktop/
+// │       ├── 01-initial-page.png
+// │       └── ...
+// └── delete-node-undo/
+//     ├── phone/
+//     │   ├── 01-initial-page.png
+//     │   └── ...
+//     └── desktop/
+//         └── ...
+// import { test, expect, devices, Page } from '@playwright/test';
+// import * as fs from 'fs';
+// import * as path from 'path';
+
+
+const screenshotDir = (testName: string, deviceName: string) => {
+  const dir = path.join('test_screenshots', testName, deviceName);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+};
+
+const screenshot = async (page: Page, dir: string, name: string) => {
+  await page.screenshot({
+    path: path.join(dir, `${name}.png`),
+    fullPage: true,
+  });
+};
 
 test.describe('Graph Interaction', () => {
-  test.slow(); // Mark all tests in this describe block as slow
-  
-  test('mobile: can pan diagram (full screen check)', async ({ page }) => {
-    await page.goto('/lanes');
+  test.slow();
 
-    // Create Recipe
-    await page.getByPlaceholder('Paste recipe here...').fill('Toast: Put bread in toaster.');
-    await page.locator('button.bg-yellow-500').click();
+  for (const device of deviceConfigs) {
+    test(`${device.name}: can pan diagram`, async ({ page }) => {
+      const dir = screenshotDir('pan-diagram', device.name);
 
-    // Wait for graph
-    const viewport = page.locator('.react-flow__viewport');
-    await expect(viewport).toBeVisible({ timeout: 15000 });
-    
-    const initialTransform = await viewport.getAttribute('style');
+      await page.setViewportSize(device.viewport);
+      await page.goto('/lanes');
+      await screenshot(page, dir, '01-initial-page');
 
-    // 1. Pan from Center (Should always work)
-    await page.mouse.move(200, 400);
-    await page.mouse.down();
-    await page.mouse.move(200, 200); // Drag up
-    await page.mouse.up();
-    await page.waitForTimeout(2000); // Increased wait
-    
-    const midTransform = await viewport.getAttribute('style');
-    expect(midTransform).not.toBe(initialTransform);
+      await page.getByPlaceholder('Paste recipe here...').fill('Toast: Put bread in toaster.');
+      await screenshot(page, dir, '02-recipe-entered');
 
-    // Verify viewport height covers the screen (extends to bottom)
-    // iPhone 12 height is 664 (viewport in Playwright).
-    // Before fix: height would be ~600 (664 - 64).
-    // After fix: height should be ~664.
-    const box = await viewport.boundingBox();
-    expect(box?.height).toBeGreaterThan(500); 
-  });
+      await page.locator('button.bg-yellow-500').click();
+      await screenshot(page, dir, '03-create-clicked');
 
-  test('graph logic: delete node and undo restores edges', async ({ page }) => {
-    // We need a recipe with edges.
-    await page.goto('/lanes');
-    await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
-    await page.locator('button.bg-yellow-500').click();
+      const viewport = page.locator('.react-flow__viewport');
+      await expect(viewport).toBeVisible({ timeout: 15000 });
+      await screenshot(page, dir, '04-graph-visible');
 
-    const viewport = page.locator('.react-flow__viewport');
-    await expect(viewport).toBeVisible({ timeout: 30000 });
-    
-    // Wait for nodes to appear
-    await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 10000 });
-    // Wait for edges to appear
-    await expect(page.locator('.react-flow__edge').first()).toBeAttached({ timeout: 10000 });
+      const initialTransform = await viewport.getAttribute('style');
 
-    // Helper
-    const getEdgeCount = () => page.locator('.react-flow__edge').count();
+      await page.mouse.move(200, 400);
+      await page.mouse.down();
+      await screenshot(page, dir, '05-pan-started');
 
-    const initialEdges = await getEdgeCount();
-    expect(initialEdges).toBeGreaterThan(0);
+      await page.mouse.move(200, 200);
+      await page.mouse.up();
+      await page.waitForTimeout(2000);
+      await screenshot(page, dir, '06-pan-completed');
 
-    // Find a node (e.g. "Mock Ingredient 2")
-    const node = page.locator('.react-flow__node').filter({ hasText: 'Mock Ingredient 2' }).first();
-    await expect(node).toBeVisible({ timeout: 30000 });
-    
-    console.log(`[DEBUG] Initial Node Count: ${await page.locator('.react-flow__node').count()}`);
-    console.log(`[DEBUG] Target Node HTML: ${await node.innerHTML()}`);
-    
-    await node.click();
-    await page.screenshot({ path: 'full-page-selected.png', fullPage: true });
-    console.log('[DEBUG] Node clicked/selected');
-    await node.hover(); 
-    await page.waitForTimeout(1000); 
+      const midTransform = await viewport.getAttribute('style');
+      expect(midTransform).not.toBe(initialTransform);
 
-    // The trash/delete icon is an X icon in MinimalNode.
-    const deleteBtn = node.getByRole('button', { name: /Delete Step/i });
-    console.log(`[DEBUG] deleteBtn: ${JSON.stringify(deleteBtn)}`);
-    console.log(`[DEBUG] deleteBtn: ${deleteBtn.innerHTML()}`);
-    await expect(deleteBtn).toBeVisible();
-    
-    const btnBox = await deleteBtn.boundingBox();
-    console.log(`[DEBUG] Delete Button Box: ${JSON.stringify(btnBox)}`);
-    console.log(`[DEBUG] Delete Button HTML: ${await deleteBtn.innerHTML()}`);
-    
-    // Use force click to bypass any potential overlay/pointer-event issues
-    await deleteBtn.click({ force: true });
+      const box = await viewport.boundingBox();
+      expect(box?.height).toBeGreaterThan(500);
+      await screenshot(page, dir, '07-final-state');
+    });
 
-    await page.screenshot({ path: 'full-page-del-clicked.png', fullPage: true });
-    console.log('[DEBUG] Delete button clicked (forced)');
-    
-    // Wait for delete animation/state update
-    await page.waitForTimeout(2000); 
+    test(`${device.name}: delete node and undo restores edges`, async ({ page }) => {
+      const dir = screenshotDir('delete-node-undo', device.name);
 
-    // Verify node is gone
-    const isVisible = await node.isVisible();
-    const countAfter = await page.locator('.react-flow__node').count();
-    console.log(`[DEBUG] Node visible after delete? ${isVisible}`);
-    console.log(`[DEBUG] Node Count after delete: ${countAfter}`);
-    
-    if (isVisible) {
-         console.log(`[DEBUG] Remaining Node HTML: ${await node.innerHTML()}`);
-    }
+      await page.setViewportSize(device.viewport);
+      await page.goto('/lanes');
+      await screenshot(page, dir, '01-initial-page');
 
-    await expect(node).not.toBeVisible({ timeout: 10000 });
-    
-    // Verify edges changed (should be less or bridged)
-    const deletedEdges = await getEdgeCount();
-    expect(deletedEdges).toBeLessThan(initialEdges);
+      await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
+      await page.locator('button.bg-yellow-500').click();
+      await screenshot(page, dir, '02-recipe-created');
 
-    // Undo
-    const undoBtn = page.locator('button[title="Undo (Ctrl+Z)"]');
-    await undoBtn.click();
-    
-    // Verify node is back
-    await expect(node).toBeVisible();
-    
-    // Wait for edges to re-render
-    await page.waitForTimeout(2000); // Increased wait
+      const viewport = page.locator('.react-flow__viewport');
+      await expect(viewport).toBeVisible({ timeout: 30000 });
+      await screenshot(page, dir, '03-graph-visible');
 
-    // Verify edges restored
-    const restoredEdges = await getEdgeCount();
-    expect(restoredEdges).toBe(initialEdges);
-  });
+      await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('.react-flow__edge').first()).toBeAttached({ timeout: 10000 });
+      await screenshot(page, dir, '04-nodes-and-edges-loaded');
+
+      const getEdgeCount = () => page.locator('.react-flow__edge').count();
+      const initialEdges = await getEdgeCount();
+      expect(initialEdges).toBeGreaterThan(0);
+
+      const node = page.locator('.react-flow__node').filter({ hasText: 'Mock Ingredient 2' }).first();
+      await expect(node).toBeVisible({ timeout: 30000 });
+      await screenshot(page, dir, '05-target-node-found');
+
+      await node.click();
+      await screenshot(page, dir, '06-node-selected');
+
+      await node.hover();
+      await page.waitForTimeout(1000);
+      await screenshot(page, dir, '07-node-hovered');
+
+      const deleteBtn = node.getByRole('button', { name: /Delete Step/i });
+      await expect(deleteBtn).toBeVisible();
+      await screenshot(page, dir, '08-delete-button-visible');
+
+      await deleteBtn.click({ force: true });
+      await screenshot(page, dir, '09-delete-clicked');
+
+      await page.waitForTimeout(2000);
+      await screenshot(page, dir, '10-after-delete-wait');
+
+      await expect(node).not.toBeVisible({ timeout: 10000 });
+      await screenshot(page, dir, '11-node-deleted');
+
+      const deletedEdges = await getEdgeCount();
+      expect(deletedEdges).toBeLessThan(initialEdges);
+
+      const undoBtn = page.locator('button[title="Undo (Ctrl+Z)"]');
+      await undoBtn.click();
+      await screenshot(page, dir, '12-undo-clicked');
+
+      await expect(node).toBeVisible();
+      await screenshot(page, dir, '13-node-restored');
+
+      await page.waitForTimeout(2000);
+      await screenshot(page, dir, '14-final-state');
+
+      const restoredEdges = await getEdgeCount();
+      expect(restoredEdges).toBe(initialEdges);
+    });
+  }
 });

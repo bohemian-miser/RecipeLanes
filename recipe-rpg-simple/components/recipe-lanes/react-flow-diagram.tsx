@@ -26,7 +26,7 @@ import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
 import FloatingEdge from './edges/floating-edge';
 import { toPng } from 'html-to-image';
-import { Download, Share2, Undo, Redo, Check, Save, RefreshCw } from 'lucide-react';
+import { Download, Share2, Undo, Redo, Check, Save } from 'lucide-react';
 import { saveRecipeAction } from '@/app/actions';
 
 interface ReactFlowDiagramProps {
@@ -483,28 +483,6 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
         toggleVisibility: toggleVisibility
     }));
 
-    const handleRotateSelection = () => {
-        takeSnapshot();
-        const currentNodes = getNodes();
-        const selected = currentNodes.filter(n => n.selected);
-        if (selected.length > 0) {
-            const cx = selected.reduce((sum, n) => sum + n.position.x, 0) / selected.length;
-            const cy = selected.reduce((sum, n) => sum + n.position.y, 0) / selected.length;
-            
-            setNodes(nds => nds.map(n => {
-                if (n.selected) {
-                    const dx = n.position.x - cx;
-                    const dy = n.position.y - cy;
-                    return {
-                        ...n,
-                        position: { x: cx - dy, y: cy + dx }
-                    };
-                }
-                return n;
-            }));
-        }
-    };
-
     const selectBranch = (nodeId: string) => {
         const getAncestors = (id: string, visited = new Set<string>()): string[] => {
             if (visited.has(id)) return [];
@@ -622,8 +600,6 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
         dragRef.current = { active: false };
     };
 
-    const hasSelection = nodes.some(n => n.selected);
-
     return (
         <div className="w-full h-full touch-none" ref={flowWrapper}>
             <ReactFlow
@@ -668,16 +644,6 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
                             <Redo className="w-4 h-4" />
                         </button>
                     </div>
-
-                    {hasSelection && (
-                        <button 
-                            onClick={handleRotateSelection}
-                            className="bg-white p-2 rounded shadow-md border border-zinc-200 hover:bg-zinc-50 text-blue-600 animate-in fade-in zoom-in"
-                            title="Rotate Selection 90°"
-                        >
-                            <RefreshCw className="w-4 h-4" />
-                        </button>
-                    )}
 
                      <button 
                         onClick={handleSave} 

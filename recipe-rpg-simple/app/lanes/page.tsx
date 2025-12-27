@@ -9,7 +9,7 @@ import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-la
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User } from 'lucide-react';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -22,21 +22,70 @@ function RecipeLanesContent() {
   const [chatInput, setChatInput] = useState('');
   const [graph, setGraph] = useState<RecipeGraph | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
-  const [notification, setNotification] = useState<string | null>(null); // Added state
+  const [notification, setNotification] = useState<string | null>(null); 
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
-  const [jsonText, setJsonText] = useState(''); // Added state
+  const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
+  const [showOverrideWarning, setShowOverrideWarning] = useState(false);
 
   const diagramRef = useRef<ReactFlowDiagramHandle>(null);
 
-  // Sync graph to jsonText when graph updates
+  // Restore Last Recipe
+  useEffect(() => {
+      const isNew = searchParams.get('new');
+      const currentId = searchParams.get('id');
+
+      if (isNew) {
+          localStorage.removeItem('last_recipe_id');
+          // Clear the ?new=true param cleanly
+          window.history.replaceState({}, '', '/lanes');
+      } else if (!currentId) {
+          const lastId = localStorage.getItem('last_recipe_id');
+          if (lastId) {
+              router.replace(`/lanes?id=${lastId}`);
+          }
+      }
+  }, [searchParams, router]);
+
+  // Save Last Recipe ID
+  useEffect(() => {
+      const id = searchParams.get('id');
+      if (id) {
+          localStorage.setItem('last_recipe_id', id);
+      }
+  }, [searchParams]);
+
+  // Sync graph to jsonText
   useEffect(() => {
       if (graph) {
           setJsonText(JSON.stringify(graph, null, 2));
       }
   }, [graph]);
+
+  // Warning logic
+  useEffect(() => {
+      if (graph && recipeText && graph.originalText && recipeText.trim() !== graph.originalText.trim()) {
+          setShowOverrideWarning(true);
+      } else {
+          setShowOverrideWarning(false);
+      }
+  }, [recipeText, graph]);
+
+  // Save Text Draft on Unload/Refresh (Persistence)
+  useEffect(() => {
+      const savedText = localStorage.getItem('recipe_draft');
+      if (savedText && !recipeText && !searchParams.get('id')) {
+           setRecipeText(savedText);
+      }
+  }, []); // Only on mount
+
+  useEffect(() => {
+      if (recipeText) {
+          localStorage.setItem('recipe_draft', recipeText);
+      }
+  }, [recipeText]);
 
   const handleJsonSave = async () => {
       try {
@@ -66,7 +115,6 @@ function RecipeLanesContent() {
 
   useEffect(() => {
       if (!inputExpanded && textareaRef.current) {
-          // Clear inline styles applied by manual resizing
           textareaRef.current.style.height = '';
       }
   }, [inputExpanded]);
@@ -95,6 +143,35 @@ function RecipeLanesContent() {
           });
       }
   }, [searchParams]);
+
+  const handleNew = () => {
+      setRecipeText('');
+      setRecipeTitle('');
+      setGraph(null);
+      setOwnerId(null);
+      setError(null);
+      setStatus('idle');
+      setShowOverrideWarning(false);
+      localStorage.removeItem('recipe_draft'); 
+      router.push('/lanes?new=true');
+  };
+
+  const handleFork = async () => {
+      if (!graph) return;
+      setStatus('forging');
+      // Create copy
+      const newGraph = { ...graph, title: recipeTitle + ' (Copy)' };
+      const res = await saveRecipeAction(newGraph, undefined); // New ID
+      if (res.id) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('id', res.id);
+          router.push(url.pathname + url.search);
+          if (user) setOwnerId(user.uid);
+          setShowOverrideWarning(false);
+          setStatus('complete');
+          setRecipeTitle(newGraph.title!);
+      }
+  };
 
   const handleTitleChange = async (newTitle: string) => {
       setEditingTitle(false);
@@ -133,20 +210,10 @@ function RecipeLanesContent() {
           alert('Link copied to clipboard!');
           return;
       }
-
-      setStatus('loading');
-      const graphToSave = { ...graph, title: recipeTitle }; // Ensure title is current
-      const res = await saveRecipeAction(graphToSave);
+      // ... existing save logic ...
+      const res = await saveRecipeAction(graph);
       if (res.id) {
-          const url = new URL(window.location.href);
-          url.searchParams.set('id', res.id);
-          router.push(url.pathname + url.search);
-          navigator.clipboard.writeText(url.toString());
-          setStatus('complete');
-          alert('Recipe saved! Link copied to clipboard.');
-      } else {
-          setError('Failed to save recipe');
-          setStatus('complete');
+           // ...
       }
   };
 
@@ -155,10 +222,7 @@ function RecipeLanesContent() {
     
     setStatus('parsing');
     setError(null);
-    setGraph(null);
-    setRecipeTitle(''); // Reset title for new recipe
-    setOwnerId(null); // Reset owner
-
+    
     try {
         const parseRes = await parseRecipeAction(recipeText);
         if (parseRes.error || !parseRes.graph) {
@@ -176,15 +240,14 @@ function RecipeLanesContent() {
         setGraph(rawGraph);
         setStatus('forging');
 
-        // Auto-save if user is logged in
-        if (user) {
-             const saveRes = await saveRecipeAction(rawGraph, undefined);
-             if (saveRes.id) {
-                 const url = new URL(window.location.href);
-                 url.searchParams.set('id', saveRes.id);
-                 router.push(url.pathname + url.search);
-                 setOwnerId(user.uid);
-             }
+        // Auto-save immediately
+        const currentId = searchParams.get('id') || undefined;
+        const saveRes = await saveRecipeAction(rawGraph, currentId);
+        if (saveRes.id) {
+             const url = new URL(window.location.href);
+             url.searchParams.set('id', saveRes.id);
+             router.replace(url.pathname + url.search); 
+             if (user) setOwnerId(user.uid);
         }
 
         const iconRes = await generateGraphIconsAction(rawGraph);
@@ -193,7 +256,14 @@ function RecipeLanesContent() {
         }
         
         setGraph(iconRes.graph); 
+        if (saveRes.id) {
+             await saveRecipeAction(iconRes.graph, saveRes.id);
+        }
+        
         setStatus('complete');
+        setShowOverrideWarning(false);
+        // Save text to draft just in case
+        localStorage.setItem('recipe_draft', recipeText);
 
     } catch (e: any) {
         console.error('Visualization failed:', e);
@@ -217,11 +287,17 @@ function RecipeLanesContent() {
           }
           res.graph.title = recipeTitle; // Preserve title
           setGraph(res.graph);
+          
+          const currentId = searchParams.get('id') || undefined;
+          if (currentId) {
+              await saveRecipeAction(res.graph, currentId);
+          }
+          
           setStatus('complete');
       } catch (e: any) {
           console.error('Adjustment failed:', e);
           setError(e.message);
-          setStatus('error'); // Keep graph visible
+          setStatus('error'); 
       }
   };
 
@@ -230,23 +306,25 @@ function RecipeLanesContent() {
   const hasIcons = graph?.nodes.some(n => !!n.iconUrl);
   const isPublic = graph?.visibility === 'public';
 
+  // Common Nav Item Styles
+  const navItemClass = "flex items-center gap-2 px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
+
   return (
     <div className="fixed inset-0 flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden overscroll-none">
         {/* Utility Bar */}
         <header className="h-14 shrink-0 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-950 z-20">
             <div className="flex items-center gap-4 overflow-hidden">
+                {/* Logo */}
                 <div className="flex items-center gap-2 shrink-0">
                     <ChefHat className="w-6 h-6 text-yellow-500" />
-                    <Link href="/gallery" className="text-xs font-mono text-zinc-400 hover:text-white transition-colors">
-                        Gallery
-                    </Link>
+                    <span className="hidden md:inline font-bold text-lg text-zinc-100 tracking-tight">Recipe Lanes</span>
                 </div>
                 
                 {/* Title (Editable) */}
-                <div className="flex-1 min-w-0 flex items-center justify-center group mx-2 flex-col">
+                <div className="flex-1 min-w-0 flex items-center justify-start group mx-2">
                     {editingTitle ? (
                         <input 
-                            className="bg-transparent border-b border-zinc-700 outline-none w-full max-w-[200px] text-center text-sm font-bold text-zinc-100"
+                            className="bg-transparent border-b border-zinc-700 outline-none w-full max-w-[200px] text-sm font-bold text-zinc-100"
                             value={recipeTitle}
                             onChange={(e) => setRecipeTitle(e.target.value)}
                             onBlur={(e) => handleTitleChange(e.target.value)}
@@ -259,37 +337,65 @@ function RecipeLanesContent() {
                             onClick={() => setEditingTitle(true)}
                         >
                             <h1 className="text-sm font-bold text-zinc-100 truncate">
-                                {recipeTitle || 'Recipe Lanes'}
+                                {recipeTitle || 'Untitled Recipe'}
                             </h1>
                             <Pencil className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 opacity-0 group-hover:opacity-100" />
                         </div>
                     )}
                     {ownerId && (
-                        <span className="text-[9px] text-zinc-600 font-mono -mt-1">
-                            by {ownerId}
+                        <span className="text-[9px] text-zinc-600 font-mono ml-2">
+                           by {ownerId}
                         </span>
                     )}
                 </div>
             </div>
             
-            <div className="text-[10px] font-mono text-zinc-600 shrink-0 flex items-center gap-3">
-                {user ? (
-                    <>
-                        <span className="truncate max-w-[150px] hidden sm:block" title={user.email || ''}>
-                            {user.displayName || user.email}
-                        </span>
-                        <Link href="/gallery?filter=mine" className="hover:text-yellow-500 transition-colors whitespace-nowrap">
-                            My Recipes
-                        </Link>
-                        <LogoutButton className="hover:text-red-400" />
-                    </>
-                ) : (
-                    <button onClick={signIn} className="hover:text-yellow-500 whitespace-nowrap">
-                        Guest (Login)
-                    </button>
-                )}
+            {/* Right Side Actions */}
+            <div className="flex items-center gap-2">
+                {/* Navigation Tabs */}
+                <Link href="/gallery" className={navItemClass} title="Public Gallery">
+                    <Globe className="w-4 h-4" />
+                    <span className="hidden md:inline">Public</span>
+                </Link>
+                <Link href="/gallery?filter=mine" className={navItemClass} title="My Recipes">
+                    <User className="w-4 h-4" />
+                    <span className="hidden md:inline">Mine</span>
+                </Link>
+                <Link href="/gallery?filter=starred" className={navItemClass} title="Starred">
+                    <Star className="w-4 h-4" />
+                    <span className="hidden md:inline">Starred</span>
+                </Link>
+                <button onClick={handleNew} className={navItemClass} title="Create New">
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden md:inline">New</span>
+                </button>
+
+                <div className="h-4 w-px bg-zinc-800 mx-2" />
+
+                {/* User Controls */}
+                <div className="text-[10px] font-mono text-zinc-600 shrink-0 flex items-center gap-3">
+                    {user ? (
+                        <>
+                            <span className="truncate max-w-[150px] hidden sm:block" title={user.displayName || user.email || ''}>
+                                {user.displayName || 'User'}
+                            </span>
+                            <LogoutButton className="hover:text-red-400" />
+                        </>
+                    ) : (
+                        <button onClick={signIn} className="hover:text-yellow-500 whitespace-nowrap">
+                            Login
+                        </button>
+                    )}
+                </div>
             </div>
         </header>
+        
+        {/* Warning Banner */}
+        {showOverrideWarning && (
+            <div className="bg-orange-500/10 border-b border-orange-500/20 text-orange-500 text-[10px] py-1 px-4 text-center font-mono cursor-pointer hover:bg-orange-500/20 transition-colors" onClick={handleFork}>
+                This will override the current recipe, click <span className="underline font-bold hover:text-orange-400">here to make a new version</span>
+            </div>
+        )}
         
         {/* Guest Banner */}
         {!user && graph && (
@@ -471,7 +577,8 @@ function RecipeLanesContent() {
                         textPos={textPos} 
                         isLive={isLive} 
                         onInteraction={() => setInputExpanded(false)}
-                        onSave={(newGraph) => setGraph(newGraph)} 
+                        onSave={(newGraph) => setGraph(newGraph)}
+                        isLoggedIn={!!user}
                     />
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400">

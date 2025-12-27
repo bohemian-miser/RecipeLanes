@@ -5,6 +5,8 @@ import { AUTH_DISABLED } from './config';
 export interface AuthSession {
   uid: string;
   email?: string;
+  name?: string;
+  picture?: string;
   isAdmin: boolean;
 }
 
@@ -17,7 +19,7 @@ export class RealAuthService implements AuthService {
     
     // 0. Global Auth Disable Flag
     if (AUTH_DISABLED) {
-        return { uid: 'disabled-auth-user', email: 'admin@noauth.com', isAdmin: true };
+        return { uid: 'disabled-auth-user', email: 'admin@noauth.com', name: 'Admin User', isAdmin: true };
     }
 
     // 1. Mock/Local Bypass (if Firebase Admin is not configured)
@@ -29,7 +31,7 @@ export class RealAuthService implements AuthService {
         const sessionCookie = cookieStore.get('session')?.value;
 
         if (authHeader || sessionCookie) {
-            return { uid: 'mock-local-user', email: 'admin@localhost', isAdmin: true };
+            return { uid: 'mock-local-user', email: 'admin@localhost', name: 'Local Admin', isAdmin: true };
         }
         return null;
     }
@@ -102,6 +104,8 @@ export class RealAuthService implements AuthService {
     return {
         uid: decoded.uid,
         email,
+        name: decoded.name || decoded.display_name,
+        picture: decoded.picture || decoded.photo_url,
         isAdmin: isDbAdmin || isEnvAdmin
     };
   }
@@ -110,7 +114,7 @@ export class RealAuthService implements AuthService {
 export class MockAuthService implements AuthService {
   private mockUser: AuthSession | null;
 
-  constructor(user: AuthSession | null = { uid: 'mock-user', email: 'mock@example.com', isAdmin: true }) {
+  constructor(user: AuthSession | null = { uid: 'mock-user', email: 'mock@example.com', name: 'Mock User', isAdmin: true }) {
       this.mockUser = user;
   }
 

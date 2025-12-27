@@ -40,6 +40,8 @@ interface ReactFlowDiagramProps {
   onSave?: (newGraph: RecipeGraph) => void;
   isPublic?: boolean;
   onVisibilityChange?: (isPublic: boolean) => void;
+  isLoggedIn?: boolean;
+  onNotify?: (msg: string) => void;
 }
 
 export interface ReactFlowDiagramHandle {
@@ -47,7 +49,7 @@ export interface ReactFlowDiagramHandle {
     toggleVisibility: () => Promise<void>;
 }
 
-const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onSave, isPublic: propIsPublic, onVisibilityChange }, ref) => {
+const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify }, ref) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const { fitView, getNodes, getEdges } = useReactFlow();
@@ -404,7 +406,7 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
                 download(dataUrl);
             } catch (e2) {
                 console.error("Download failed again:", e2);
-                alert("Download failed. Please try again or check console.");
+                onNotify?.("Download failed. Check console/CORS.");
             }
         }
     };
@@ -433,14 +435,20 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
     };
 
     const handleSave = async () => {
+        if (!isLoggedIn) {
+            onNotify?.('Log in to save recipe');
+            return;
+        }
         const res = await performSave();
         if (res.id) {
             const url = new URL(window.location.href);
             url.searchParams.set('id', res.id);
             router.push(url.pathname + url.search);
             setIsDirty(false);
+            onNotify?.("Saved changes.");
         } else {
             console.error('Failed to save.');
+            onNotify?.("Failed to save.");
         }
     };
 

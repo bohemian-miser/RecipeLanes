@@ -234,7 +234,7 @@ test.describe('Graph Interaction', () => {
       await screenshot(page, dir, '10-edges-after-delete');
 
       // --- UNDO ---
-      const undoBtn = page.locator('button[title="Undo (Ctrl+Z)"]');
+      const undoBtn = page.getByRole('button', { name: /Undo/i });
       await undoBtn.click();
       await screenshot(page, dir, '11-undo-clicked');
 
@@ -267,7 +267,7 @@ test.describe('Graph Interaction', () => {
       await screenshot(page, dir, '14-all-nodes-verified');
 
       // --- REDO ---
-      const redoBtn = page.locator('button[title="Redo (Ctrl+Y)"]');
+      const redoBtn = page.getByRole('button', { name: /Redo/i });
       await redoBtn.click();
       await screenshot(page, dir, '15-redo-clicked');
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import ReactFlow, { 
     Background, 
     Controls, 
@@ -26,7 +26,7 @@ import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
 import FloatingEdge from './edges/floating-edge';
 import { toPng } from 'html-to-image';
-import { Download, Share2, RotateCcw, RefreshCw, Undo, Redo, Check, Save } from 'lucide-react';
+import { Download, Share2, Undo, Redo, Check, Save, RefreshCw } from 'lucide-react';
 import { saveRecipeAction } from '@/app/actions';
 
 interface ReactFlowDiagramProps {
@@ -38,9 +38,16 @@ interface ReactFlowDiagramProps {
   isLive?: boolean;
   onInteraction?: () => void;
   onSave?: (newGraph: RecipeGraph) => void;
+  isPublic?: boolean;
+  onVisibilityChange?: (isPublic: boolean) => void;
 }
 
-const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onSave }) => {
+export interface ReactFlowDiagramHandle {
+    resetLayout: () => void;
+    toggleVisibility: () => Promise<void>;
+}
+
+const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onSave, isPublic: propIsPublic, onVisibilityChange }, ref) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const { fitView, getNodes, getEdges } = useReactFlow();
@@ -51,18 +58,28 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     const [copied, setCopied] = useState(false);
     
     // Initialize from graph.visibility (injected by service)
+    // If prop is provided, use it, otherwise fallback to internal state logic (though moving to prop driven is better)
     const initialVisibility = graph.visibility === 'public';
-    const [isPublic, setIsPublic] = useState(initialVisibility);
-    const visibilityRef = useRef(initialVisibility);
+    const [internalIsPublic, setInternalIsPublic] = useState(initialVisibility);
     
+    const isPublic = propIsPublic !== undefined ? propIsPublic : internalIsPublic;
+
+    // We still need a ref for the save function to access the latest state without re-creating the function
+    const visibilityRef = useRef(isPublic);
+    
+    useEffect(() => {
+        visibilityRef.current = isPublic;
+    }, [isPublic]);
+
     const [isDirty, setIsDirty] = useState(false);
 
     // Update state if graph prop changes (e.g. fresh load)
     useEffect(() => {
         const pub = graph.visibility === 'public';
-        setIsPublic(pub);
-        visibilityRef.current = pub;
-    }, [graph.visibility]);
+        if (propIsPublic === undefined) {
+             setInternalIsPublic(pub);
+        }
+    }, [graph.visibility, propIsPublic]);
 
     // Wrap change handlers to track dirty state
     const onNodesChangeWrapped = useCallback((changes: any) => {
@@ -441,8 +458,14 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
     };
 
     const toggleVisibility = async () => {
-        const newPublic = !isPublic;
-        setIsPublic(newPublic);
+        const newPublic = !visibilityRef.current;
+        
+        if (onVisibilityChange) {
+            onVisibilityChange(newPublic);
+        } else {
+            setInternalIsPublic(newPublic);
+        }
+        
         visibilityRef.current = newPublic;
         setIsDirty(true);
         // Save immediately
@@ -454,6 +477,11 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
         takeSnapshot();
         runLayout(false); 
     };
+
+    useImperativeHandle(ref, () => ({
+        resetLayout: handleReset,
+        toggleVisibility: toggleVisibility
+    }));
 
     const handleRotateSelection = () => {
         takeSnapshot();
@@ -650,21 +678,6 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
                             <RefreshCw className="w-4 h-4" />
                         </button>
                     )}
-                    <button 
-                        onClick={handleReset} 
-                        className="bg-white p-2 rounded shadow-md border border-zinc-200 hover:bg-zinc-50 text-zinc-600"
-                        title="Reset Layout"
-                    >
-                        <RotateCcw className="w-4 h-4" />
-                    </button>
-                    
-                    <button 
-                        onClick={toggleVisibility}
-                        className={`text-[10px] px-2 py-1.5 rounded shadow-md border transition-colors font-mono ${isPublic ? 'bg-yellow-500/10 border-yellow-500 text-yellow-500' : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'}`}
-                        title="Toggle Visibility"
-                    >
-                        {isPublic ? 'Public' : 'Unlisted'}
-                    </button>
 
                      <button 
                         onClick={handleSave} 
@@ -693,12 +706,14 @@ const DiagramInner: React.FC<ReactFlowDiagramProps> = ({ graph, mode, spacing = 
             </ReactFlow>
         </div>
     );
-};
+});
+DiagramInner.displayName = "DiagramInner";
 
-const ReactFlowDiagram = (props: ReactFlowDiagramProps) => (
+const ReactFlowDiagram = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((props, ref) => (
     <ReactFlowProvider>
-        <DiagramInner {...props} />
+        <DiagramInner {...props} ref={ref} />
     </ReactFlowProvider>
-);
+));
+ReactFlowDiagram.displayName = "ReactFlowDiagram";
 
 export default ReactFlowDiagram;

@@ -5,11 +5,11 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
-import ReactFlowDiagram from '@/components/recipe-lanes/react-flow-diagram';
+import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock } from 'lucide-react';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -28,6 +28,8 @@ function RecipeLanesContent() {
   const [showJson, setShowJson] = useState(false);
   const [jsonText, setJsonText] = useState(''); // Added state
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
+
+  const diagramRef = useRef<ReactFlowDiagramHandle>(null);
 
   // Sync graph to jsonText when graph updates
   useEffect(() => {
@@ -226,6 +228,7 @@ function RecipeLanesContent() {
   if (authLoading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 font-mono">Loading...</div>;
   
   const hasIcons = graph?.nodes.some(n => !!n.iconUrl);
+  const isPublic = graph?.visibility === 'public';
 
   return (
     <div className="fixed inset-0 flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden overscroll-none">
@@ -368,6 +371,16 @@ function RecipeLanesContent() {
                     >
                         <Orbit className="w-4 h-4" />
                     </button>
+                    
+                    {graph && (
+                        <button
+                            onClick={() => diagramRef.current?.resetLayout()}
+                            className="p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ml-2 border-l border-zinc-100"
+                            title="Reset Layout"
+                        >
+                            <RotateCcw className="w-4 h-4" />
+                        </button>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -425,13 +438,24 @@ function RecipeLanesContent() {
 
                     {/* JSON Toggle */}
                     {graph && (
-                        <button 
-                            onClick={() => setShowJson(!showJson)}
-                            className={`p-1.5 rounded hover:bg-zinc-100 transition-colors ${showJson ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-400'}`}
-                            title="Toggle JSON View"
-                        >
-                            <Code className="w-4 h-4" />
-                        </button>
+                        <>
+                            <button 
+                                onClick={() => diagramRef.current?.toggleVisibility()}
+                                className={`flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded shadow-sm border transition-colors font-mono ${isPublic ? 'bg-yellow-500/10 border-yellow-500 text-yellow-600' : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'}`}
+                                title="Toggle Visibility"
+                            >
+                                {isPublic ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                                <span className="hidden xl:inline">{isPublic ? 'Public' : 'Unlisted'}</span>
+                            </button>
+
+                            <button 
+                                onClick={() => setShowJson(!showJson)}
+                                className={`p-1.5 rounded hover:bg-zinc-100 transition-colors ${showJson ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-400'}`}
+                                title="Toggle JSON View"
+                            >
+                                <Code className="w-4 h-4" />
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
@@ -439,6 +463,7 @@ function RecipeLanesContent() {
             <div className="absolute inset-0 pt-12 bottom-0"> 
                 {graph ? (
                     <ReactFlowDiagram 
+                        ref={diagramRef}
                         graph={graph} 
                         mode={layoutMode} 
                         spacing={spacing} 

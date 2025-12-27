@@ -191,9 +191,27 @@ function RecipeLanesContent() {
       setStatus('forging');
       // Create copy
       const currentId = searchParams.get('id');
+      
+      // Smarter Naming
+      let newTitle = recipeTitle;
+      if (newTitle.startsWith('Yet another copy of ')) {
+         const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
+         if (match) {
+             newTitle = `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;
+         } else {
+             newTitle = `${newTitle} (1)`;
+         }
+      } else if (newTitle.startsWith('Another copy of ')) {
+         newTitle = newTitle.replace('Another copy of ', 'Yet another copy of ');
+      } else if (newTitle.startsWith('Copy of ')) {
+         newTitle = newTitle.replace('Copy of ', 'Another copy of ');
+      } else {
+         newTitle = `Copy of ${newTitle}`;
+      }
+
       const newGraph = { 
           ...graph, 
-          title: recipeTitle + ' (Copy)',
+          title: newTitle,
           sourceId: currentId || undefined
       };
       const res = await saveRecipeAction(newGraph, undefined); // New ID
@@ -317,10 +335,25 @@ function RecipeLanesContent() {
              console.log('Forking recipe because user is not owner');
              currentGraph.sourceId = currentId;
              currentId = undefined; // Force new creation
-             if (currentGraph.title && !currentGraph.title.startsWith('Copy of ')) {
-                 currentGraph.title = `Copy of ${currentGraph.title}`;
-                 setRecipeTitle(currentGraph.title);
+             // Smarter Copy Naming
+             let newTitle = currentGraph.title || 'Untitled';
+             if (newTitle.startsWith('Yet another copy of ')) {
+                 const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
+                 if (match) {
+                     newTitle = `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;
+                 } else {
+                     newTitle = `${newTitle} (1)`;
+                 }
+             } else if (newTitle.startsWith('Another copy of ')) {
+                 newTitle = newTitle.replace('Another copy of ', 'Yet another copy of ');
+             } else if (newTitle.startsWith('Copy of ')) {
+                 newTitle = newTitle.replace('Copy of ', 'Another copy of ');
+             } else {
+                 newTitle = `Copy of ${newTitle}`;
              }
+             
+             currentGraph.title = newTitle;
+             setRecipeTitle(newTitle);
         }
 
         const saveRes = await saveRecipeAction(currentGraph, currentId);

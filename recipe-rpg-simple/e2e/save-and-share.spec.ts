@@ -20,24 +20,15 @@ const screenshot = async (page: Page, dir: string, name: string) => {
   });
 };
 
-test.skip('Save and Share Functionality', () => {
+test.describe('Save and Share Functionality', () => {
   test.slow();
 
   for (const device of deviceConfigs) {
     test(`${device.name}: guest save and share flow`, async ({ page, context }) => {
-      // Setup listener for save completion
-      let saveResolved = false;
-      const savePromise = new Promise<void>(resolve => {
-          page.on('console', msg => {
-              console.log(`[Browser Console] ${msg.text()}`);
-              if (msg.text().includes('Save result:')) {
-                  saveResolved = true;
-                  resolve();
-              }
-          });
-      });
-
+      const dir = screenshotDir('guest-save-share', device.name);
+      
       // Create a recipe
+      await page.goto('/lanes?new=true');
       await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
       await page.locator('button.bg-yellow-500').click();
       
@@ -45,61 +36,43 @@ test.skip('Save and Share Functionality', () => {
       const viewport = page.locator('.react-flow__viewport');
       await expect(viewport).toBeVisible({ timeout: 15000 });
       
-      // Wait for auto-save to complete
-      await savePromise;
-      await page.waitForTimeout(1000); // Allow router update
-
       // Auto-save check: URL should have ID immediately after generation
       await expect(page).toHaveURL(/id=/, { timeout: 20000 });
       const urlBefore = page.url();
 
-      // 1. Test "Save" button (should warn guest)
-      // Save button is the Check/Save icon in the panel.
-      // It has title "Log in to save recipe" if !isLoggedIn.
-      const saveBtn = page.locator('button[title="Log in to save recipe"]');
-      // If it's not found, maybe isLoggedIn is true? (Should be false by default in E2E)
-      await expect(saveBtn).toBeVisible();
-      
-      await saveBtn.click();
-      await screenshot(page, dir, '04-save-clicked');
-      
-      // Check for notification
-      // The notification banner is div with text "Log in to save recipe"
-      const notification = page.locator('div.bg-green-500\/10').filter({ hasText: 'Log in to save recipe' });
-      await expect(notification).toBeVisible();
-      await screenshot(page, dir, '05-login-notification');
-
-      // Wait a bit or click Share
-      // 2. Test "Share" button (should save and copy link)
-      // Share button has title "Save & Copy Link" or "Copied!"
-      // Since it's already saved (auto-save), it might just copy link.
+      // 1. Test "Share" button (Guests CAN share/copy link)
       const shareBtn = page.locator('button[title="Save & Copy Link"]');
       await expect(shareBtn).toBeVisible();
-      
       await shareBtn.click();
-      await screenshot(page, dir, '05-share-clicked');
       
-      // Check notification "Link copied..."
-      const shareNotification = page.locator('div.bg-green-500\/10').filter({ hasText: /Link copied/ });
-      await expect(shareNotification).toBeVisible();
-      await screenshot(page, dir, '06-share-notification');
+      // Should show "Copied!" tooltip/title on button
+      await expect(page.locator('button[title="Copied!"]')).toBeVisible();
+      await screenshot(page, dir, '01-share-clicked');
+
+      // 2. Test "Save" button (Guests cannot explicit save)
+      // First, make it dirty to enable the button
+      const node = page.locator('.react-flow__node').first();
+      await node.dragTo(page.locator('.react-flow__pane'), { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 50, y: 50 } });
       
-      // Verify URL hasn't changed drastically (same ID)
-      expect(page.url()).toBe(urlBefore);
+      const saveBtn = page.locator('button[title="Save Changes"]');
+      await expect(saveBtn).toBeVisible();
+      await saveBtn.click();
+      
+      // Check for login warning notification
+      const loginNotification = page.getByText('Log in to save recipe');
+      await expect(loginNotification).toBeVisible();
+      await screenshot(page, dir, '02-save-clicked-guest');
 
       // 3. Test "New" button
-      // New button is a Link with title "Create New"
-      const newLink = page.locator('a[title="Create New"]');
-      await newLink.click();
+      const newBtn = page.locator('button[title="Create New"]');
+      await newBtn.click();
       
       // Wait for URL to clear ID
       await expect(page).not.toHaveURL(/id=/);
-      
-      // Verify input cleared
       await expect(page.getByPlaceholder('Paste recipe here...')).toHaveValue('');
       await expect(viewport).not.toBeVisible();
       
-      await screenshot(page, dir, '07-new-clicked-cleared');
+      await screenshot(page, dir, '03-new-clicked-cleared');
     });
   }
 });

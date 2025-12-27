@@ -1,0 +1,1707 @@
+▲ Next.js 16.1.0 (Turbopack)
+- Local:         http://localhost:8002
+- Network:       http://192.168.1.90:8002
+- Environments: .env
+- Experiments (use with caution):
+  · serverActions
+
+✓ Starting...
+✓ Ready in 839ms
+ GET / 200 in 1447ms (compile: 1226ms, render: 221ms)
+ GET / 200 in 71ms (compile: 18ms, render: 53ms)
+ GET /lanes?new=true 200 in 372ms (compile: 213ms, render: 159ms)
+ GET /lanes 200 in 28ms (compile: 6ms, render: 22ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Recipe"
+
+ POST /lanes 200 in 1086ms (compile: 6ms, render: 1081ms)
+Forcing MemoryDataService
+ POST /lanes 200 in 52ms (compile: 36ms, render: 16ms)
+ GET /lanes?id=5d872bec-e2b3-403d-aeee-f227361dec4f 200 in 60ms (compile: 10ms, render: 49ms)
+ POST /lanes?id=5d872bec-e2b3-403d-aeee-f227361dec4f 200 in 14ms (compile: 6ms, render: 8ms)
+ POST /lanes?id=5d872bec-e2b3-403d-aeee-f227361dec4f 200 in 23ms (compile: 7ms, render: 16ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Recipe Modified"
+
+ POST /lanes?id=5d872bec-e2b3-403d-aeee-f227361dec4f 200 in 17ms (compile: 6ms, render: 12ms)
+ POST /lanes?id=5d872bec-e2b3-403d-aeee-f227361dec4f 200 in 16ms (compile: 8ms, render: 8ms)
+ POST /lanes?id=5d872bec-e2b3-403d-aeee-f227361dec4f 200 in 15ms (compile: 6ms, render: 9ms)
+ GET /lanes?new=true 200 in 71ms (compile: 21ms, render: 50ms)
+ GET /lanes 200 in 33ms (compile: 10ms, render: 22ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Recipe"
+
+ POST /lanes 200 in 17ms (compile: 8ms, render: 9ms)
+ POST /lanes 200 in 16ms (compile: 7ms, render: 9ms)
+ GET /lanes?id=24a6ac96-9451-4b13-b483-7b8a94247b0a 200 in 53ms (compile: 9ms, render: 44ms)
+ POST /lanes?id=24a6ac96-9451-4b13-b483-7b8a94247b0a 200 in 17ms (compile: 10ms, render: 8ms)
+ POST /lanes?id=24a6ac96-9451-4b13-b483-7b8a94247b0a 200 in 21ms (compile: 9ms, render: 12ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Recipe Modified"
+
+ POST /lanes?id=24a6ac96-9451-4b13-b483-7b8a94247b0a 200 in 17ms (compile: 6ms, render: 11ms)
+ POST /lanes?id=24a6ac96-9451-4b13-b483-7b8a94247b0a 200 in 16ms (compile: 8ms, render: 8ms)
+ POST /lanes?id=24a6ac96-9451-4b13-b483-7b8a94247b0a 200 in 18ms (compile: 8ms, render: 11ms)
+ GET /lanes?new=true 200 in 52ms (compile: 10ms, render: 42ms)
+ GET /lanes 200 in 24ms (compile: 6ms, render: 17ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Recipe"
+
+ POST /lanes 200 in 14ms (compile: 6ms, render: 9ms)
+ POST /lanes 200 in 18ms (compile: 8ms, render: 10ms)
+ GET /lanes?id=55dc962c-546a-453b-8551-635a57c55243 200 in 46ms (compile: 6ms, render: 40ms)
+ POST /lanes?id=55dc962c-546a-453b-8551-635a57c55243 200 in 13ms (compile: 7ms, render: 6ms)
+ POST /lanes?id=55dc962c-546a-453b-8551-635a57c55243 200 in 17ms (compile: 6ms, render: 10ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Recipe Modified"
+
+ POST /lanes?id=55dc962c-546a-453b-8551-635a57c55243 200 in 14ms (compile: 6ms, render: 7ms)
+ POST /lanes?id=55dc962c-546a-453b-8551-635a57c55243 200 in 15ms (compile: 6ms, render: 9ms)
+ POST /lanes?id=55dc962c-546a-453b-8551-635a57c55243 200 in 19ms (compile: 7ms, render: 12ms)
+ GET / 200 in 69ms (compile: 23ms, render: 45ms)
+ GET / 200 in 49ms (compile: 14ms, render: 35ms)
+ GET /lanes?new=true 200 in 788ms (compile: 558ms, render: 230ms)
+ GET /lanes 200 in 30ms (compile: 7ms, render: 23ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Recipe"
+
+ POST /lanes 200 in 519ms (compile: 6ms, render: 514ms)
+Forcing MemoryDataService
+ POST /lanes 200 in 20ms (compile: 7ms, render: 13ms)
+ GET /lanes?id=ba9890e6-6cd6-48b3-8744-d52c3e342007 200 in 46ms (compile: 6ms, render: 41ms)
+ POST /lanes?id=ba9890e6-6cd6-48b3-8744-d52c3e342007 200 in 18ms (compile: 10ms, render: 8ms)
+ POST /lanes?id=ba9890e6-6cd6-48b3-8744-d52c3e342007 200 in 21ms (compile: 9ms, render: 12ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Recipe Modified"
+
+ POST /lanes?id=ba9890e6-6cd6-48b3-8744-d52c3e342007 200 in 15ms (compile: 7ms, render: 8ms)
+ POST /lanes?id=ba9890e6-6cd6-48b3-8744-d52c3e342007 200 in 21ms (compile: 7ms, render: 14ms)
+ GET / 200 in 56ms (compile: 22ms, render: 35ms)
+ GET / 200 in 35ms (compile: 6ms, render: 29ms)
+ GET /lanes 200 in 548ms (compile: 19ms, render: 529ms)
+ GET /lanes 200 in 965ms (compile: 9ms, render: 956ms)
+ GET /lanes?new=true 200 in 1002ms (compile: 44ms, render: 958ms)
+ GET /lanes?new=true 200 in 1008ms (compile: 49ms, render: 960ms)
+ GET /lanes 200 in 1007ms (compile: 49ms, render: 957ms)
+ GET /lanes?new=true 200 in 975ms (compile: 49ms, render: 926ms)
+ GET /lanes 200 in 941ms (compile: 43ms, render: 898ms)
+ GET /lanes?new=true 200 in 917ms (compile: 52ms, render: 865ms)
+ GET /lanes 200 in 836ms (compile: 12ms, render: 823ms)
+ GET /lanes 200 in 839ms (compile: 55ms, render: 784ms)
+ GET /lanes?new=true 200 in 799ms (compile: 43ms, render: 757ms)
+ GET /lanes?new=true 200 in 773ms (compile: 59ms, render: 714ms)
+ GET /lanes 200 in 729ms (compile: 110ms, render: 618ms)
+ GET /lanes?new=true 200 in 635ms (compile: 185ms, render: 450ms)
+ GET /lanes?new=true 200 in 592ms (compile: 178ms, render: 414ms)
+ GET /lanes 200 in 433ms (compile: 110ms, render: 323ms)
+ GET /lanes 200 in 341ms (compile: 60ms, render: 280ms)
+ GET /lanes?new=true 200 in 295ms (compile: 44ms, render: 251ms)
+ GET /lanes?new=true 200 in 267ms (compile: 50ms, render: 218ms)
+ GET /gallery 200 in 1218ms (compile: 271ms, render: 947ms)
+ POST /api/auth/login 200 in 251ms (compile: 217ms, render: 34ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ GET /lanes 200 in 373ms (compile: 21ms, render: 351ms)
+ POST /lanes 200 in 62ms (compile: 17ms, render: 44ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ GET /lanes 200 in 270ms (compile: 20ms, render: 250ms)
+ POST /lanes 200 in 100ms (compile: 53ms, render: 47ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ POST /lanes 200 in 100ms (compile: 19ms, render: 82ms)
+ POST /lanes 200 in 112ms (compile: 25ms, render: 87ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"complex test"
+
+ GET /lanes 200 in 340ms (compile: 26ms, render: 315ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ GET /lanes 200 in 595ms (compile: 38ms, render: 557ms)
+ POST /lanes 200 in 155ms (compile: 39ms, render: 116ms)
+ POST /lanes 200 in 197ms (compile: 48ms, render: 149ms)
+ POST /lanes 200 in 149ms (compile: 62ms, render: 87ms)
+ GET /lanes 200 in 285ms (compile: 34ms, render: 252ms)
+ POST /lanes 200 in 158ms (compile: 69ms, render: 89ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ POST /lanes 200 in 130ms (compile: 26ms, render: 105ms)
+ POST /lanes 200 in 141ms (compile: 57ms, render: 85ms)
+ POST /lanes 200 in 105ms (compile: 25ms, render: 80ms)
+ POST /lanes 200 in 76ms (compile: 18ms, render: 58ms)
+ POST /lanes?id=d75ed647-1c97-432c-820d-e7cede8e89c2 200 in 69ms (compile: 18ms, render: 51ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Ingredients Test
+2 carrots
+1 onion"
+
+ GET /lanes 200 in 246ms (compile: 25ms, render: 221ms)
+ GET /lanes?new=true 200 in 564ms (compile: 40ms, render: 525ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Soup
+Boil water."
+
+ GET /lanes 200 in 206ms (compile: 38ms, render: 168ms)
+ POST /lanes 200 in 59ms (compile: 18ms, render: 41ms)
+ POST /lanes 200 in 92ms (compile: 17ms, render: 75ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ GET /lanes?id=d75ed647-1c97-432c-820d-e7cede8e89c2 200 in 186ms (compile: 24ms, render: 162ms)
+ GET /lanes 200 in 186ms (compile: 44ms, render: 142ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ POST /lanes 200 in 68ms (compile: 11ms, render: 58ms)
+ POST /lanes 200 in 74ms (compile: 22ms, render: 52ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Recipe"
+
+ GET /lanes 200 in 143ms (compile: 9ms, render: 134ms)
+ POST /lanes 200 in 55ms (compile: 19ms, render: 36ms)
+ POST /lanes 200 in 30ms (compile: 12ms, render: 18ms)
+ POST /lanes 200 in 24ms (compile: 6ms, render: 18ms)
+ POST /lanes 200 in 67ms (compile: 27ms, render: 40ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test complex"
+
+ GET /lanes 200 in 157ms (compile: 9ms, render: 148ms)
+ POST /lanes 200 in 55ms (compile: 32ms, render: 23ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test complex"
+
+ POST /lanes 200 in 80ms (compile: 14ms, render: 66ms)
+ POST /lanes 200 in 79ms (compile: 24ms, render: 55ms)
+ POST /lanes 200 in 32ms (compile: 11ms, render: 21ms)
+ GET /lanes 200 in 148ms (compile: 10ms, render: 138ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ POST /lanes 200 in 16ms (compile: 7ms, render: 9ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ POST /lanes 200 in 13ms (compile: 7ms, render: 7ms)
+ GET /lanes 200 in 20ms (compile: 5ms, render: 15ms)
+ POST /lanes 200 in 21ms (compile: 6ms, render: 15ms)
+ POST /lanes?id=f84d2d10-c882-4cbe-b403-84f7f6355261 200 in 18ms (compile: 6ms, render: 12ms)
+ POST /api/auth/logout 200 in 83ms (compile: 69ms, render: 13ms)
+ POST /lanes 200 in 88ms (compile: 5ms, render: 83ms)
+ POST /lanes 200 in 131ms (compile: 50ms, render: 81ms)
+ POST /lanes 200 in 114ms (compile: 66ms, render: 49ms)
+ GET /lanes?id=f84d2d10-c882-4cbe-b403-84f7f6355261 200 in 193ms (compile: 13ms, render: 180ms)
+ GET /lanes?id=1c8c6e4b-567a-4402-8ea9-8b93e3c9271a 200 in 209ms (compile: 26ms, render: 183ms)
+ GET /lanes?id=91444446-5aa3-4c1a-9be7-7685d4703366 200 in 86ms (compile: 7ms, render: 79ms)
+ POST /lanes?id=91444446-5aa3-4c1a-9be7-7685d4703366 200 in 15ms (compile: 6ms, render: 9ms)
+ POST /lanes?id=1c8c6e4b-567a-4402-8ea9-8b93e3c9271a 200 in 21ms (compile: 5ms, render: 16ms)
+ POST /lanes?id=0ad24564-a381-4226-9810-ed840b882640 200 in 21ms (compile: 13ms, render: 8ms)
+ GET /lanes?id=0ad24564-a381-4226-9810-ed840b882640 200 in 25ms (compile: 6ms, render: 19ms)
+[generateAndStoreIcon] Generating for: Mock Ing 1
+[MockAIService] generateText received prompt: Describe a distinct and recognizable visual representation of 'Mock Ing 1' for a 64x64 pixel art icon. If it is an action (e.g. 'chop onion'), describe the tools and objects interacting (e.g. 'A knife slicing a red onion'). Do not describe hands. If it is an object (e.g. 'bag of sugar'), describe it with defining features or labels to ensure it is identifiable (e.g. 'A paper sack labeled "SUGAR" with a few cubes spilling out'). Keep it concise (under 30 words). Focus on visual subject matter only.
+ GET /lanes?new=true 200 in 33ms (compile: 5ms, render: 28ms)
+[getOrCreateIconAction] Found group: Mock Ing 1
+[generateAndStoreIcon] Generating for: Mock Ing 1
+[MockAIService] generateText received prompt: Describe a distinct and recognizable visual representation of 'Mock Ing 1' for a 64x64 pixel art icon. If it is an action (e.g. 'chop onion'), describe the tools and objects interacting (e.g. 'A knife slicing a red onion'). Do not describe hands. If it is an object (e.g. 'bag of sugar'), describe it with defining features or labels to ensure it is identifiable (e.g. 'A paper sack labeled "SUGAR" with a few cubes spilling out'). Keep it concise (under 30 words). Focus on visual subject matter only.
+ GET /lanes 200 in 25ms (compile: 5ms, render: 20ms)
+ GET /lanes?new=true 200 in 20ms (compile: 5ms, render: 14ms)
+ GET /lanes 200 in 21ms (compile: 5ms, render: 16ms)
+ POST /lanes?id=1c8c6e4b-567a-4402-8ea9-8b93e3c9271a 200 in 511ms (compile: 7ms, render: 504ms)
+ POST /lanes?id=91444446-5aa3-4c1a-9be7-7685d4703366 200 in 564ms (compile: 6ms, render: 558ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Recipe Modified"
+
+ POST /lanes?id=1c8c6e4b-567a-4402-8ea9-8b93e3c9271a 200 in 13ms (compile: 5ms, render: 8ms)
+ POST /lanes?id=91444446-5aa3-4c1a-9be7-7685d4703366 200 in 18ms (compile: 9ms, render: 9ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE:** Extract or generate a concise, descriptive 
+_title_
+ for the recipe.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Soup
+Boil water.
+Add salt."
+
+ POST /lanes?id=91444446-5aa3-4c1a-9be7-7685d4703366 200 in 16ms (compile: 7ms, render: 9ms)
+ POST /lanes?id=1c8c6e4b-567a-4402-8ea9-8b93e3c9271a 200 in 15ms (compile: 6ms, render: 10ms)
+ POST /lanes?id=91444446-5aa3-4c1a-9be7-7685d4703366 200 in 39ms (compile: 7ms, render: 32ms)
+ GET /lanes?id=91444446-5aa3-4c1a-9be7-7685d4703366 200 in 62ms (compile: 9ms, render: 53ms)
+ POST /lanes?id=91444446-5aa3-4c1a-9be7-7685d4703366 200 in 13ms (compile: 6ms, render: 7ms)
+[getOrCreateIconAction] Found group: Mock Ing 1
+ POST /lanes?id=91444446-5aa3-4c1a-9be7-7685d4703366 200 in 16ms (compile: 6ms, render: 10ms)
+ POST /lanes?id=91444446-5aa3-4c1a-9be7-7685d4703366 200 in 17ms (compile: 5ms, render: 12ms)

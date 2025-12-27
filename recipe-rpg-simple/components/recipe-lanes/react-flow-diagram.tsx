@@ -420,9 +420,36 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
         });
         const graphToSave = { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
         
-        const currentId = searchParams.get('id') || undefined;
+        let currentId = searchParams.get('id') || undefined;
         // Use ref for latest value (important for toggleVisibility which is async)
         const visibility = visibilityRef.current ? 'public' : 'unlisted';
+        
+        // Forking Logic for Non-Owners (Alice Copy)
+        if (isLoggedIn && !isOwner && currentId) {
+             console.log('[ReactFlow] Forking on Save (Non-Owner)');
+             const sourceId = currentId;
+             currentId = undefined; // Force new creation
+             graphToSave.sourceId = sourceId;
+
+             // Smarter Copy Naming
+             let newTitle = graphToSave.title || 'Untitled';
+             if (newTitle.startsWith('Yet another copy of ')) {
+                 const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
+                 if (match) {
+                     newTitle = `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;
+                 } else {
+                     newTitle = `${newTitle} (1)`;
+                 }
+             } else if (newTitle.startsWith('Another copy of ')) {
+                 newTitle = newTitle.replace('Another copy of ', 'Yet another copy of ');
+             } else if (newTitle.startsWith('Copy of ')) {
+                 newTitle = newTitle.replace('Copy of ', 'Another copy of ');
+             } else {
+                 newTitle = `Copy of ${newTitle}`;
+             }
+             graphToSave.title = newTitle;
+             onNotify?.("Saving a copy...");
+        }
         
         // Ensure visibility is part of the graph object passed back
         graphToSave.visibility = visibility;

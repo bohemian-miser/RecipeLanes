@@ -331,8 +331,13 @@ function RecipeLanesContent() {
         let currentId = searchParams.get('id') || undefined;
         
         // Forking Logic: If we are not the owner, we fork on save
-        if (user && ownerId && user.uid !== ownerId && currentId) {
-             console.log('Forking recipe because user is not owner');
+        // This applies if:
+        // 1. We are logged in but not the owner (Alice/Bob)
+        // 2. We are a guest and the recipe has an owner (Guest/Alice)
+        const isNotOwner = (user && ownerId && user.uid !== ownerId) || (!user && ownerId);
+        
+        if (isNotOwner && currentId) {
+             console.log('Forking recipe because user is not owner (or guest)');
              currentGraph.sourceId = currentId;
              currentId = undefined; // Force new creation
              // Smarter Copy Naming

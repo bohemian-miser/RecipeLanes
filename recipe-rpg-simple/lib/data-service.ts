@@ -39,11 +39,26 @@ export interface DataService {
   deleteIngredientCategory(ingredientName: string): Promise<void>;
   incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number): Promise<void>;
   listDebugFiles(): Promise<any[]>;
+  checkExistingCopies(originalId: string, userId: string): Promise<any[]>;
 }
 
 // --- Firebase Implementation ---
 export class FirebaseDataService implements DataService { 
   
+  async checkExistingCopies(originalId: string, userId: string): Promise<any[]> {
+      try {
+          const snapshot = await db.collection('recipes')
+              .where('ownerId', '==', userId)
+              .where('sourceId', '==', originalId)
+              .orderBy('created_at', 'desc')
+              .get();
+          return this.mapRecipes(snapshot);
+      } catch (e: any) {
+          console.warn('checkExistingCopies failed:', e.message);
+          return [];
+      }
+  }
+
   async getPublicRecipes(limit: number = 50): Promise<any[]> {
       try {
           const snapshot = await db.collection('recipes')
@@ -111,6 +126,7 @@ export class FirebaseDataService implements DataService {
       if (userId) data.ownerId = userId;
       if (visibility) data.visibility = visibility;
       if (graph.title) data.title = graph.title;
+      if (graph.sourceId) data.sourceId = graph.sourceId;
 
       if (existingId) {
           // Enforce ownership check
@@ -396,6 +412,7 @@ export class MemoryDataService implements DataService {
     private recipes = new Map<string, {
         graph: RecipeGraph;
         ownerId?: string;
+        sourceId?: string;
         visibility: string;
         stats: { likes: number; dislikes: number };
         created_at: number;
@@ -403,6 +420,13 @@ export class MemoryDataService implements DataService {
     
     private userVotes = new Map<string, { liked: Set<string>; disliked: Set<string> }>();
     private userStars = new Map<string, Set<string>>();
+
+    async checkExistingCopies(originalId: string, userId: string): Promise<any[]> {
+        return Array.from(this.recipes.entries())
+            .filter(([_, r]) => r.ownerId === userId && r.sourceId === originalId)
+            .sort((a, b) => b[1].created_at - a[1].created_at)
+            .map(([id, r]) => this.mapMemoryRecipe(id, r));
+    }
 
     async getPublicRecipes(limit: number): Promise<any[]> {
         return Array.from(this.recipes.entries())
@@ -517,6 +541,7 @@ export class MemoryDataService implements DataService {
         this.recipes.set(id, {
             graph,
             ownerId,
+            sourceId: graph.sourceId,
             visibility,
             stats,
             created_at

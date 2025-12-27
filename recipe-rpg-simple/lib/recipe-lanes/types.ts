@@ -34,6 +34,7 @@ export interface NodeLayout {
 
 export interface RecipeGraph {
   title?: string;
+  sourceId?: string;
   originalText?: string;
   layoutMode?: string;
   visibility?: 'public' | 'unlisted' | 'private';

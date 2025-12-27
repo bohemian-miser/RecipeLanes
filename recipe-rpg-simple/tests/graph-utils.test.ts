@@ -26,14 +26,14 @@ function testVertical() {
 
     const result = getEdgeParams(n1, n2, h1, h2);
     
-    // MinimalNode centers icon at y+32. Radius 46.
-    // sy = 32 + 46 = 78
-    // ty = (200 + 32) - 46 = 186
+    // MinimalNode centers icon at y+32. Radius 36.
+    // sy = 32 + 36 = 68
+    // ty = (200 + 32) - 36 = 196
     
     assertClose(result.sx, 50, 0.1, 'SX');
-    assertClose(result.sy, 78, 0.1, 'SY');
+    assertClose(result.sy, 68, 0.1, 'SY');
     assertClose(result.tx, 50, 0.1, 'TX');
-    assertClose(result.ty, 186, 0.1, 'TY');
+    assertClose(result.ty, 196, 0.1, 'TY');
     
     console.log("Vertical PASS");
 }
@@ -48,12 +48,12 @@ function testHorizontal() {
 
     const result = getEdgeParams(n1, n2, h1, h2);
     
-    // Radius = 46
+    // Radius = 36
     // Vector (1, 0)
-    // sx = 50 + 46 = 96
+    // sx = 50 + 36 = 86
     // sy = 32 (MinimalNode center Y)
     
-    assertClose(result.sx, 96, 0.1, 'SX');
+    assertClose(result.sx, 86, 0.1, 'SX');
     assertClose(result.sy, 32, 0.1, 'SY');
     
     console.log("Horizontal PASS");

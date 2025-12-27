@@ -6,7 +6,8 @@ import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
-import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction } from '@/app/actions';
+import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction, checkExistingCopiesAction, getOrCreateIconAction } from '@/app/actions';
+import { IngredientsSummary } from '@/components/recipe-lanes/ui/ingredients-summary';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User } from 'lucide-react';
@@ -29,8 +30,12 @@ function RecipeLanesContent() {
   const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
   const [showOverrideWarning, setShowOverrideWarning] = useState(false);
+  const [existingCopies, setExistingCopies] = useState<any[]>([]);
+  const [forgingProgress, setForgingProgress] = useState<{ completed: number, total: number } | null>(null);
 
   const diagramRef = useRef<ReactFlowDiagramHandle>(null);
+
+  const isOwner = !ownerId || (!!user && user.uid === ownerId);
 
   // Restore Last Recipe
   useEffect(() => {
@@ -54,7 +59,14 @@ function RecipeLanesContent() {
   // Sync graph to jsonText
   useEffect(() => {
       if (graph) {
-          setJsonText(JSON.stringify(graph, null, 2));
+          const safeGraph = { 
+              ...graph, 
+              nodes: graph.nodes.map(n => {
+                  const { iconUrl, ...rest } = n;
+                  return rest;
+              })
+          };
+          setJsonText(JSON.stringify(safeGraph, null, 2));
       }
   }, [graph]);
 
@@ -88,7 +100,15 @@ function RecipeLanesContent() {
 
   const handleJsonSave = async () => {
       try {
-          const newGraph = JSON.parse(jsonText);
+          const partialGraph = JSON.parse(jsonText);
+          
+          // Restore iconUrls from existing graph
+          const newNodes = partialGraph.nodes.map((n: any) => {
+              const original = graph?.nodes.find(o => o.id === n.id);
+              return { ...n, iconUrl: original?.iconUrl };
+          });
+          
+          const newGraph = { ...partialGraph, nodes: newNodes };
           setGraph(newGraph);
           if (user) {
               const res = await saveRecipeAction(newGraph, searchParams.get('id') || undefined);
@@ -124,6 +144,7 @@ function RecipeLanesContent() {
           getRecipeAction(id).then(res => {
               if (res.graph) {
                   setGraph(res.graph);
+                  if (res.ownerId) setOwnerId(res.ownerId);
                   setRecipeText(res.graph.originalText || '');
                   setRecipeTitle(res.graph.title || '');
                   
@@ -142,6 +163,17 @@ function RecipeLanesContent() {
       }
   }, [searchParams]);
 
+  useEffect(() => {
+      const id = searchParams.get('id');
+      if (id && user && ownerId && user.uid !== ownerId) {
+           checkExistingCopiesAction(id).then(res => {
+               if (res.copies && res.copies.length > 0) {
+                   setExistingCopies(res.copies);
+               }
+           });
+      }
+  }, [searchParams, user, ownerId]);
+
   const handleNew = () => {
       setRecipeText('');
       setRecipeTitle('');
@@ -158,7 +190,12 @@ function RecipeLanesContent() {
       if (!graph) return;
       setStatus('forging');
       // Create copy
-      const newGraph = { ...graph, title: recipeTitle + ' (Copy)' };
+      const currentId = searchParams.get('id');
+      const newGraph = { 
+          ...graph, 
+          title: recipeTitle + ' (Copy)',
+          sourceId: currentId || undefined
+      };
       const res = await saveRecipeAction(newGraph, undefined); // New ID
       if (res.id) {
           const url = new URL(window.location.href);
@@ -169,6 +206,27 @@ function RecipeLanesContent() {
           setStatus('complete');
           setRecipeTitle(newGraph.title!);
           showNotification("New version created.");
+      }
+  };
+
+  const handleOverrideCopy = async (copyId: string) => {
+      if (!graph) return;
+      setStatus('loading');
+      // Overwrite the existing copy with current graph
+      // Preserve the copy's ID, but update content.
+      // We might want to keep the copy's title? Or update it?
+      // Prompt says "override". Usually implies full replace.
+      // We'll keep current graph's title (Bob's title) or maybe Alice wants to keep her title?
+      // For simplicity, we save 'graph' to 'copyId'.
+      const res = await saveRecipeAction(graph, copyId);
+      if (res.id) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('id', res.id);
+          router.push(url.pathname + url.search);
+          if (user) setOwnerId(user.uid);
+          setExistingCopies([]); // Clear banner
+          setStatus('complete');
+          showNotification("Existing copy updated.");
       }
   };
 
@@ -188,7 +246,9 @@ function RecipeLanesContent() {
                await saveRecipeAction(newGraph, currentId);
           } else if (user) {
                showNotification("Saving a copy to your profile...");
-               const res = await saveRecipeAction(newGraph, undefined);
+               const currentId = searchParams.get('id');
+               const copyGraph = { ...newGraph, sourceId: currentId || undefined };
+               const res = await saveRecipeAction(copyGraph, undefined);
                if (res.id) {
                    const url = new URL(window.location.href);
                    url.searchParams.set('id', res.id);
@@ -230,6 +290,7 @@ function RecipeLanesContent() {
     
     setStatus('parsing');
     setError(null);
+    setForgingProgress(null);
     
     try {
         const parseRes = await parseRecipeAction(recipeText);
@@ -237,52 +298,92 @@ function RecipeLanesContent() {
             throw new Error(parseRes.error || 'Failed to parse recipe structure.');
         }
         
-        const rawGraph = parseRes.graph;
+        let currentGraph = parseRes.graph;
         
-        if (!recipeTitle && rawGraph.title) {
-            setRecipeTitle(rawGraph.title);
+        if (!recipeTitle && currentGraph.title) {
+            setRecipeTitle(currentGraph.title);
         } else {
-            rawGraph.title = recipeTitle || rawGraph.title;
+            currentGraph.title = recipeTitle || currentGraph.title;
         }
         
-        setGraph(rawGraph);
-        setStatus('forging');
+        setGraph(currentGraph);
+        
+        // Auto-save immediately (Structure only)
+        console.log('Auto-saving structure...');
+        let currentId = searchParams.get('id') || undefined;
+        
+        // Forking Logic: If we are not the owner, we fork on save
+        if (user && ownerId && user.uid !== ownerId && currentId) {
+             console.log('Forking recipe because user is not owner');
+             currentGraph.sourceId = currentId;
+             currentId = undefined; // Force new creation
+             if (currentGraph.title && !currentGraph.title.startsWith('Copy of ')) {
+                 currentGraph.title = `Copy of ${currentGraph.title}`;
+                 setRecipeTitle(currentGraph.title);
+             }
+        }
 
-        // Auto-save immediately
-        console.log('Auto-saving...');
-        const currentId = searchParams.get('id') || undefined;
-        const saveRes = await saveRecipeAction(rawGraph, currentId);
-        console.log('Save result:', saveRes);
+        const saveRes = await saveRecipeAction(currentGraph, currentId);
+        
         if (saveRes.id) {
              const url = new URL(window.location.href);
              url.searchParams.delete('new');
              url.searchParams.set('id', saveRes.id);
-             console.log('Navigating to:', url.toString());
-             router.push(url.pathname + url.search); 
+             window.history.replaceState({}, '', url.pathname + url.search);
              if (user) setOwnerId(user.uid);
-        } else {
-            console.error('Auto-save failed:', saveRes);
+             
+             // Update currentId for subsequent saves in this function
+             currentId = saveRes.id;
         }
 
-        const iconRes = await generateGraphIconsAction(rawGraph);
-        if (iconRes.error) {
-            console.warn('Icon generation incomplete:', iconRes.error);
-        }
+        setStatus('forging');
+
+        // Client-side Icon Generation Loop
+        const nodesToProcess = currentGraph.nodes.filter(n => !n.iconUrl && n.visualDescription);
+        const total = nodesToProcess.length;
+        let completed = 0;
         
-        setGraph(iconRes.graph); 
+        if (total > 0) {
+            setForgingProgress({ completed: 0, total });
+            
+            const chunkSize = 3;
+            for (let i = 0; i < total; i += chunkSize) {
+                const batch = nodesToProcess.slice(i, i + chunkSize);
+                
+                await Promise.all(batch.map(async (node) => {
+                    if (!node.visualDescription) return;
+                    const result = await getOrCreateIconAction(node.visualDescription);
+                    
+                    if (result && !result.error && result.iconUrl) {
+                        setGraph(prev => {
+                            if (!prev) return null;
+                            const newNodes = prev.nodes.map(n => n.id === node.id ? { ...n, iconUrl: result.iconUrl } : n);
+                            return { ...prev, nodes: newNodes };
+                        });
+                        // Update local currentGraph for final save reference (though state is better)
+                        currentGraph.nodes = currentGraph.nodes.map(n => n.id === node.id ? { ...n, iconUrl: result.iconUrl } : n);
+                    }
+                    completed++;
+                    setForgingProgress({ completed, total });
+                }));
+            }
+        }
+
+        // Final Save with icons
         if (saveRes.id) {
-             await saveRecipeAction(iconRes.graph, saveRes.id);
+             await saveRecipeAction(currentGraph, saveRes.id);
         }
         
         setStatus('complete');
+        setForgingProgress(null);
         setShowOverrideWarning(false);
-        // Save text to draft just in case
         localStorage.setItem('recipe_draft', recipeText);
 
     } catch (e: any) {
         console.error('Visualization failed:', e);
         setError(e.message);
         setStatus('error');
+        setForgingProgress(null);
     }
   };
 
@@ -404,6 +505,29 @@ function RecipeLanesContent() {
             </div>
         </header>
         
+        {/* Existing Copies Banner */}
+        {existingCopies.length > 0 && (
+            <div className="bg-blue-500/10 border-b border-blue-500/20 text-blue-400 text-[10px] py-2 px-4 text-center font-mono flex flex-col gap-1 items-center animate-in slide-in-from-top-2">
+                <span>You have {existingCopies.length} existing {existingCopies.length === 1 ? 'copy' : 'copies'} of this recipe.</span>
+                <div className="flex gap-4">
+                    <button onClick={() => router.push(`/lanes?id=${existingCopies[0].id}`)} className="underline font-bold hover:text-blue-300">
+                        Open {existingCopies.length === 1 ? 'it' : 'latest'}
+                    </button>
+                    <button onClick={() => handleOverrideCopy(existingCopies[0].id)} className="underline font-bold hover:text-blue-300" title="Overwrite your existing copy with this version">
+                        Override it
+                    </button>
+                    <button onClick={handleFork} className="underline font-bold hover:text-blue-300">
+                        Make another copy
+                    </button>
+                    {existingCopies.length > 1 && (
+                        <Link href={`/gallery?filter=mine&search=${encodeURIComponent(recipeTitle)}`} className="underline font-bold hover:text-blue-300">
+                            See all
+                        </Link>
+                    )}
+                </div>
+            </div>
+        )}
+
         {/* Notification Banner */}
         {notification && (
             <div className="bg-green-500/10 border-b border-green-500/20 text-green-500 text-[10px] py-1 px-4 text-center font-mono animate-in slide-in-from-top-2">
@@ -466,9 +590,12 @@ function RecipeLanesContent() {
         </div>
 
         {/* Visualizer (Full Remaining Height) */}
-        <div className="flex-1 relative overflow-hidden bg-zinc-100">
+        <div className="flex-1 flex flex-col relative overflow-hidden bg-zinc-100">
             {/* Toolbar */}
-            <div className="absolute top-0 left-0 right-0 h-12 bg-white/90 backdrop-blur border-b border-zinc-200 flex items-center justify-between px-4 overflow-x-auto z-10 no-scrollbar">
+            <div className="shrink-0 h-12 bg-white/90 backdrop-blur border-b border-zinc-200 flex items-center justify-between px-4 overflow-x-auto z-10 no-scrollbar relative">
+                {status === 'forging' && forgingProgress && (
+                    <div className="absolute bottom-0 left-0 h-0.5 bg-yellow-500 transition-all duration-300" style={{ width: `${(forgingProgress.completed / forgingProgress.total) * 100}%` }} />
+                )}
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setLayoutMode('swimlanes')}
@@ -526,7 +653,7 @@ function RecipeLanesContent() {
                          <select 
                              value={textPos} 
                              onChange={(e) => setTextPos(e.target.value as any)}
-                             className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1"
+                             className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1 text-zinc-900"
                          >
                              <option value="bottom">Bottom</option>
                              <option value="top">Top</option>
@@ -541,7 +668,7 @@ function RecipeLanesContent() {
                          <select 
                              value={edgeStyle} 
                              onChange={(e) => setEdgeStyle(e.target.value as any)}
-                             className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1"
+                             className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1 text-zinc-900"
                          >
                              <option value="straight">Straight</option>
                              <option value="step">Step</option>
@@ -587,7 +714,9 @@ function RecipeLanesContent() {
                 </div>
             </div>
             
-            <div className="absolute inset-0 pt-12 bottom-0"> 
+            {graph && <IngredientsSummary graph={graph} />}
+
+            <div className="flex-1 relative"> 
                 {graph ? (
                     <ReactFlowDiagram 
                         ref={diagramRef}

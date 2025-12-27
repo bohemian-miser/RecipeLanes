@@ -51,10 +51,9 @@ export function getEdgeParams(
 
     // Calculate Radius
     // User requested "stop short at the radius from the centre to a corner" of the icon.
-    // Icon is 64x64. Half is 32. Corner distance = sqrt(32^2 + 32^2) ≈ 45.25.
-    // We use 46 to be safe.
-    const r1 = sourceHandlePos ? 46 : (Math.min(source.width??100, source.height??50)/2 + 5);
-    const r2 = targetHandlePos ? 46 : (Math.min(target.width??100, target.height??50)/2 + 5);
+    // Icon is 64x64. Radius is 32. We want to be close. 36 gives 4px padding.
+    const r1 = sourceHandlePos ? 36 : (Math.min(source.width??100, source.height??50)/2 + 5);
+    const r2 = targetHandlePos ? 36 : (Math.min(target.width??100, target.height??50)/2 + 5);
 
     const sInter = getNodeIntersection(c1, c2, r1);
     const tInter = getNodeIntersection(c2, c1, r2);

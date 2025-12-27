@@ -21,7 +21,6 @@ import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import MinimalNode from './nodes/minimal-node';
-import CardNode from './nodes/card-node';
 import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
 import FloatingEdge from './edges/floating-edge';
@@ -42,6 +41,7 @@ interface ReactFlowDiagramProps {
   onVisibilityChange?: (isPublic: boolean) => void;
   isLoggedIn?: boolean;
   onNotify?: (msg: string) => void;
+  isOwner?: boolean; // YOLO: Added to support auto-save on move logic
 }
 
 export interface ReactFlowDiagramHandle {
@@ -49,7 +49,7 @@ export interface ReactFlowDiagramHandle {
     toggleVisibility: () => Promise<void>;
 }
 
-const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify }, ref) => {
+const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false }, ref) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const { fitView, getNodes, getEdges } = useReactFlow();
@@ -106,10 +106,9 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
 
     const nodeTypes = useMemo(() => ({
         minimal: MinimalNode,
-        card: CardNode,
         lane: LaneNode,
         micro: MicroNode
-    }), []);
+    }), []); // YOLO: Removed CardNode as requested
 
     const edgeTypes = useMemo(() => ({
         floating: FloatingEdge
@@ -511,14 +510,18 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
 
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
         onInteraction?.();
-        if (event.shiftKey) {
-            const hasOtherSelection = nodes.some(n => n.selected && n.id !== node.id);
-            if (hasOtherSelection) {
-                takeSnapshot(); 
-                return;
-            }
+        if (event.altKey) {
             takeSnapshot(); 
             selectBranch(node.id);
+            return;
+        }
+        // Shift+Click handled by ReactFlow for multi-selection
+        if (event.shiftKey) {
+            takeSnapshot();
+        }
+        // Mobile/Click-again logic: If already selected, select branch
+        if (node.selected) {
+             selectBranch(node.id);
         }
     };
 

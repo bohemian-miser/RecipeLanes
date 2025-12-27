@@ -28,8 +28,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    if (!isInitialized) {
-        setLoading(false);
+    const forceMock = process.env.NEXT_PUBLIC_MOCK_AUTH === 'true';
+    
+    if (!isInitialized || forceMock) {
+        // Mock Auth check from cookie for E2E/Local
+        const checkMockCookie = () => {
+             const match = document.cookie.match(/session=(mock-[^;]+)/);
+             if (match) {
+                 const uid = match[1];
+                 // Mock User object
+                 const mockUser: any = { 
+                     uid, 
+                     email: `${uid}@test.com`, 
+                     displayName: uid,
+                     getIdToken: async () => 'mock-token'
+                 };
+                 setUser(mockUser);
+             } else {
+                 setUser(null);
+             }
+             setLoading(false);
+        };
+        checkMockCookie();
+        // Also listen for cookie changes if possible, or just run once. 
+        // For E2E we usually reload page or set cookie before load.
         return;
     }
 

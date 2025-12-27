@@ -22,8 +22,8 @@ export class RealAuthService implements AuthService {
         return { uid: 'disabled-auth-user', email: 'admin@noauth.com', name: 'Admin User', isAdmin: true };
     }
 
-    // 1. Mock/Local Bypass (if Firebase Admin is not configured)
-    if (!isFirebaseEnabled) {
+    // 1. Mock/Local Bypass (if Firebase Admin is not configured OR Mock forced)
+    if (!isFirebaseEnabled || process.env.NEXT_PUBLIC_MOCK_AUTH === 'true') {
         // Check if ANY auth token/cookie is present to simulate "logged in" state
         // If the client sends a token/cookie, we treat them as a logged-in admin.
         const authHeader = (await headers()).get('Authorization');
@@ -31,7 +31,8 @@ export class RealAuthService implements AuthService {
         const sessionCookie = cookieStore.get('session')?.value;
 
         if (authHeader || sessionCookie) {
-            return { uid: 'mock-local-user', email: 'admin@localhost', name: 'Local Admin', isAdmin: true };
+            const mockUid = sessionCookie?.startsWith('mock-') ? sessionCookie : 'mock-local-user';
+            return { uid: mockUid, email: `${mockUid}@localhost`, name: mockUid, isAdmin: true };
         }
         return null;
     }

@@ -410,7 +410,17 @@ export async function getRecipeAction(id: string) {
   try {
     const dataService = getDataService();
     const recipeData = await dataService.getRecipe(id);
-    return { graph: recipeData?.graph };
+    
+    if (recipeData?.graph && !recipeData.graph.visibility) {
+        // Backfill visibility if missing (default to unlisted)
+        console.log(`[getRecipeAction] Backfilling visibility for ${id}`);
+        recipeData.graph.visibility = 'unlisted';
+        // We don't necessarily need to await this save to return the data, 
+        // but it's safer to ensure consistency.
+        await dataService.saveRecipe(recipeData.graph, id, undefined, 'unlisted');
+    }
+
+    return { graph: recipeData?.graph, ownerId: recipeData?.ownerId };
   } catch (e: any) {
     return { error: e.message };
   }
@@ -520,5 +530,17 @@ export async function copyRecipeAction(recipeId: string): Promise<{ newId?: stri
         return { newId };
     } catch (e: any) {
         return { error: e.message };
+    }
+}
+
+export async function checkExistingCopiesAction(originalId: string): Promise<{ copies: any[]; error?: string }> {
+    try {
+        const session = await getAuthService().verifyAuth();
+        if (!session) return { copies: [] }; // Or error? Prompt implies "If she opens bob's link... again" -> likely logged in check
+        
+        const copies = await getDataService().checkExistingCopies(originalId, session.uid);
+        return { copies };
+    } catch (e: any) {
+        return { copies: [], error: e.message };
     }
 }

@@ -4,11 +4,10 @@ import { NodeProps } from 'reactflow';
 const LaneNode = ({ data }: NodeProps) => {
   return (
     <div 
-        className="w-full h-full border-r border-zinc-100 relative group"
-        style={{ backgroundColor: data.color }}
+        className="w-full h-full border-r-2 border-zinc-200 border-dashed relative group"
     >
       <div className="absolute top-4 left-0 w-full text-center">
-          <span className="text-xs font-bold text-zinc-300 uppercase tracking-widest">{data.label}</span>
+          <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">{data.label}</span>
       </div>
     </div>
   );

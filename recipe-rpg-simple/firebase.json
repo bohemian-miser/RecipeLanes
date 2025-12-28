@@ -26,6 +26,9 @@
     },
     "singleProjectMode": true
   },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
   "storage": {
     "rules": "storage.rules"
   }

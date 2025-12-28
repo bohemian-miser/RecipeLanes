@@ -550,13 +550,14 @@ const handleVisualize = async () => {
              currentId = saveRes.id;
         }
 
-        await debugLogAction('Starting forging process...');
+        debugLogAction('Starting forging process...');
         setStatus('forging');
 
         // Use helper for icon generation
+        console.log('Calling populateIcons...');
         await populateIcons(currentGraph, currentId);
         
-        await debugLogAction('Visualization complete');
+        debugLogAction('Visualization complete');
         setStatus('complete');
         setForgingProgress(null);
         setShowOverrideWarning(false);

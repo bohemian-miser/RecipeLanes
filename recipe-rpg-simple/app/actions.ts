@@ -309,6 +309,7 @@ export async function getOrCreateIconAction(
                   };
     } catch (e: any) {
         console.error('[getOrCreateIconAction] Fatal Error:', e);
+        return { error: e.message || 'Unknown error during icon generation' };
     }
 }
 

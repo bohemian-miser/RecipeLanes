@@ -5,9 +5,10 @@ import { getAIService } from '@/lib/ai-service';
 import { getDataService } from '@/lib/data-service';
 import { getAuthService } from '@/lib/auth-service';
 import { z } from 'zod';
-import { generateRecipePrompt, parseRecipeGraph } from '@/lib/recipe-lanes/parser';
+import { generateRecipePrompt, parseRecipeGraph, extractServes } from '@/lib/recipe-lanes/parser';
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import { generateIconFlow } from '@/lib/flows';
+// import { processIcon } from '@/lib/image-processing';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 
 // Constants for Generation Gating
@@ -45,58 +46,84 @@ function toTitleCase(str: string) {
     .join(' ');
 }
 
-async function generateAndStoreIcon(ingredient: string, ingredientDocId: string): Promise<{ url: string, lcb: number, imagePrompt: string }> {
-  console.log('[generateAndStoreIcon] Generating for:', ingredient);
+async function generateAndStoreIcon(ingredient: string, ingredientDocId: string): Promise<{ url: string, lcb: number, fullPrompt: string, visualDescription: string }> {
+  console.log(`[generateAndStoreIcon] 🟢 START for: "${ingredient}" (DocID: ${ingredientDocId})`);
   
-  // 1. Run Genkit Flow (Text + Image)
-  // This encapsulates the prompt enrichment and image generation logic
-  const { url: downloadURL, visualDescription, imagePrompt, fullImagePrompt } = await generateIconFlow({ ingredient });
-  
-  // 2. Download Buffer for Storage
-  let imageBuffer: ArrayBuffer;
   try {
-      const response = await fetch(downloadURL);
-      imageBuffer = await response.arrayBuffer();
+      // 1. Run Genkit Flow (Image generation)
+      console.log(`[generateAndStoreIcon] Calling generateIconFlow...`);
+      const { url: downloadURL, imagePrompt: fullPrompt } = await generateIconFlow({ ingredient });
+      const visualDescription = ingredient;
+      console.log(`[generateAndStoreIcon] 🎨 Generated URL: ${downloadURL?.substring(0, 50)}...`);
+      
+      // 2. Download Buffer for Storage
+      let imageBuffer: ArrayBuffer;
+      try {
+          console.log(`[generateAndStoreIcon] Downloading image...`);
+          const response = await fetch(downloadURL);
+          if (!response.ok) throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
+          imageBuffer = await response.arrayBuffer();
+          console.log(`[generateAndStoreIcon] Downloaded ${imageBuffer.byteLength} bytes.`);
+      } catch (e) {
+          console.error('[generateAndStoreIcon] 🔴 Failed to download generated image:', e);
+          throw new Error('Failed to download generated image');
+      }
+      let finalBuffer: ArrayBuffer | Buffer = imageBuffer;
+    //   // 3. Process Image (Remove Background)
+    //   let finalBuffer: ArrayBuffer | Buffer = imageBuffer;
+    //   try {
+    //       console.log(`[generateAndStoreIcon] Processing image (background removal)...`);
+    //       finalBuffer = await processIcon(imageBuffer);
+    //       console.log(`[generateAndStoreIcon] Processed image size: ${finalBuffer.byteLength} bytes.`);
+    //   } catch (e) {
+    //       console.warn('[generateAndStoreIcon] ⚠️ Background removal failed, using original image:', e);
+    //   }
+
+      const initialImpressions = 1;
+      const initialRejections = 0;
+      const lcb = calculateWilsonLCB(initialImpressions, initialRejections);
+
+      // 4. Save via Service
+      let finalUrl = downloadURL;
+      try {
+          console.log(`[generateAndStoreIcon] Saving to DataService...`);
+          const savedUrl = await getDataService().saveIcon(
+              ingredientDocId,
+              ingredient,
+              visualDescription,
+              fullPrompt,
+              downloadURL,
+              finalBuffer,
+              {
+                  lcb,
+                  impressions: initialImpressions,
+                  rejections: initialRejections,
+                  textModel,
+                  imageModel: imageModelName
+              }
+          );
+          finalUrl = savedUrl;
+          console.log(`[generateAndStoreIcon] ✅ Saved successfully. Final URL: ${finalUrl}`);
+      } catch (e) {
+          console.error('[generateAndStoreIcon] 🔴 DataService save failed:', e);
+      }
+
+      return { url: finalUrl, lcb, fullPrompt, visualDescription };
   } catch (e) {
-      console.error('Failed to download generated image for storage:', e);
-      throw new Error('Failed to download generated image');
+      console.error(`[generateAndStoreIcon] 🔴 Fatal error for "${ingredient}":`, e);
+      throw e;
   }
-
-  const initialImpressions = 1;
-  const initialRejections = 0;
-  const lcb = calculateWilsonLCB(initialImpressions, initialRejections);
-
-  // 3. Save via Service
-  let finalUrl = downloadURL;
-  try {
-      const savedUrl = await getDataService().saveIcon(
-          ingredientDocId,
-          ingredient,
-          visualDescription,
-          imagePrompt,
-          fullImagePrompt,
-          downloadURL,
-          imageBuffer,
-          {
-              lcb,
-              impressions: initialImpressions,
-              rejections: initialRejections,
-              textModel,
-              imageModel: imageModelName
-          }
-      );
-      finalUrl = savedUrl;
-  } catch (e) {
-      console.error('DataService save failed:', e);
-  }
-
-  return { url: finalUrl, lcb, imagePrompt };
 }
 
 export async function getAllIconsAction() {
     const session = await getAuthService().verifyAuth();
     if (!session?.isAdmin) return [];
     return getDataService().getAllIcons();
+}
+
+export async function getPagedIconsAction(page: number = 1, limit: number = 20, query?: string) {
+    // Public access allowed for gallery
+    return getDataService().getPagedIcons(page, limit, query);
 }
 
 export async function getAllStorageFilesAction() {
@@ -134,150 +161,155 @@ export async function getSharedGalleryAction() {
 }
 
 export async function getOrCreateIconAction(
-    rawIngredient: string, 
+    rawIngredient: string,
     rawSessionRejections = 0,
     rawSeenUrls: string[] = []
 ) {
-  try {
-      // Guests allowed, but we check session for accounting if needed
-      const session = await getAuthService().verifyAuth();
+    console.log(`[getOrCreateIconAction] Starting for: ${rawIngredient}`);
+    try {
+        // Guests allowed, but we check session for accounting if needed
+        const session = await getAuthService().verifyAuth();
       
-      // Validate Input
-      const ingredientParse = IngredientSchema.safeParse(rawIngredient);
-      if (!ingredientParse.success) return { error: 'Invalid ingredient' };
-      let ingredient = toTitleCase(ingredientParse.data);
+        // Validate Input
+        const ingredientParse = IngredientSchema.safeParse(rawIngredient);
+        if (!ingredientParse.success) {
+            console.warn(`[getOrCreateIconAction] Invalid ingredient: ${rawIngredient}`);
+            return { error: 'Invalid ingredient' };
+        }
+        let ingredient = toTitleCase(ingredientParse.data);
 
-      const countParse = CountSchema.safeParse(rawSessionRejections);
-      const sessionRejections = countParse.success ? countParse.data : 0;
+        const countParse = CountSchema.safeParse(rawSessionRejections);
+        const sessionRejections = countParse.success ? countParse.data : 0;
 
-      const seenParse = SeenUrlsSchema.safeParse(rawSeenUrls);
-      const seenUrls = new Set(seenParse.success ? seenParse.data : []);
+        const seenParse = SeenUrlsSchema.safeParse(rawSeenUrls);
+        const seenUrls = new Set(seenParse.success ? seenParse.data : []);
 
-      // 1. Search for Ingredient Group
-      let bestMatch = await getDataService().getIngredientByName(ingredient);
-      if (bestMatch) {
-          ingredient = bestMatch.data.name; // Canonical name
-      }
+        // 1. Search for Ingredient Group
+        let bestMatch = await getDataService().getIngredientByName(ingredient);
+        if (bestMatch) {
+            ingredient = bestMatch.data.name; // Canonical name
+            console.log(`[getOrCreateIconAction] Found existing group: ${ingredient}`);
+        } else {
+            console.log(`[getOrCreateIconAction] New ingredient group: ${ingredient}`);
+        }
 
-      // 2. Decide: Pick Existing or Generate New
-      if (bestMatch) {
-          console.log(`[getOrCreateIconAction] Found group: ${ingredient}`);
-          const icons = await getDataService().getIconsForIngredient(bestMatch.id);
+        // 2. Decide: Pick Existing or Generate New
+        if (bestMatch) {
+            const icons = await getDataService().getIconsForIngredient(bestMatch.id);
+            console.log(`[getOrCreateIconAction] Found ${icons.length} existing icons for ${ingredient}`);
 
-          // Calculate LCB for decision making
-          const evaluated = icons
-              .map((icon: any) => {
-                  const n = icon.impressions || 0;
-                  const r = icon.rejections || 0;
+            // Calculate LCB for decision making
+            const evaluated = icons
+                .map((icon: any) => {
+                    const n = icon.impressions || 0;
+                    const r = icon.rejections || 0;
+                    return {
+                        ...icon,
+                        lcb: calculateWilsonLCB(n, r),
+                        n, r
+                    };
+                })
+                .filter((i: any) => !i.marked_for_deletion && !seenUrls.has(i.url));
+
+            // Debug Info
+            const sortedCandidates = [...evaluated].sort((a: any, b: any) => b.lcb - a.lcb);
+            const debugInfo = {
+                candidates: sortedCandidates.slice(0, 5).map((c: any) => ({
+                    url: c.url,
+                    score: c.lcb,
+                    impressions: c.n,
+                    rejections: c.r
+                })),
+                sessionRejections,
+                totalAvailable: evaluated.length,
+                decision: 'UNKNOWN'
+            };
+
+            // Generation Logic
+            let shouldGenerate = false;
+            const provenIcons = evaluated.filter((i: any) => i.n >= PROVEN_SAMPLE_SIZE);
+            const bestProvenLCB = provenIcons.length > 0 ? Math.max(...provenIcons.map((i: any) => i.lcb)) : 0;
+          
+            if (evaluated.length === 0) {
+                console.log(`[getOrCreateIconAction] Cache exhausted for ${ingredient}, generating new.`);
+                debugInfo.decision = 'CACHE_EXHAUSTED';
+                shouldGenerate = true;
+            } else if (sessionRejections >= SESSION_REJECT_LIMIT) {
+                if (provenIcons.length > 0 && bestProvenLCB < QUALITY_FLOOR_LCB) {
+                    console.log(`[getOrCreateIconAction] Quality floor breach for ${ingredient}, generating new.`);
+                    debugInfo.decision = 'QUALITY_FLOOR_BREACH';
+                    shouldGenerate = true;
+                } else if (icons.length < MIN_CACHE_SIZE) {
+                    console.log(`[getOrCreateIconAction] Cache too small for ${ingredient} and rejections high, generating new.`);
+                    debugInfo.decision = 'CACHE_TOO_SMALL_REJECT_STREAK';
+                    shouldGenerate = true;
+                } else {
+                    debugInfo.decision = 'CACHE_SUFFICIENT';
+                }
+            } else {
+                debugInfo.decision = 'NORMAL_SELECTION';
+            }
+
+            if (!shouldGenerate) {
+                const selected = sortedCandidates[0];
+                console.log(`[getOrCreateIconAction] Returning cached icon: ${selected.url}`);
+                const newImpressions = (selected.n || 0) + 1;
+                const newLCB = calculateWilsonLCB(newImpressions, selected.r || 0);
+
+                try {
+                    await getDataService().incrementImpressions(
+                        bestMatch.id,
+                        selected.id,
+                        selected.url,
+                        newLCB,
+                        newImpressions
+                    );
+                } catch (e) {
+                    console.error('Failed to increment impressions:', e);
+                }
+
+                return {
+                    iconUrl: selected.url,
+                    isNew: false,
+                    popularityScore: newLCB,
+                    fullPrompt: selected.fullPrompt || selected.imagePrompt,
+                    visualDescription: selected.visualDescription || selected.prompt,
+                    debugInfo
+                };
+            }
+          
+                      console.log(`[getOrCreateIconAction] Calling generateAndStoreIcon for ${ingredient}...`);
+                      const result = await generateAndStoreIcon(ingredient, bestMatch.id);
+                      console.log(`[getOrCreateIconAction] Generation success for ${ingredient}: ${result.url}`);
+                      return { 
+                          ...result,
+                          iconUrl: result.url, 
+                          isNew: true, 
+                          debugInfo: { ...debugInfo, decision: 'GENERATED_NEW' } 
+                      };
+                  } 
+                  
+                  // 3. Create New Ingredient Group (Requires Auth)
+                  if (!session) {
+                      console.warn(`[getOrCreateIconAction] Item not found and user not logged in: ${ingredient}`);
+                      return { error: 'Item not found. Login to forge new items.' };
+                  }
+            
+                  console.log(`[getOrCreateIconAction] Creating new ingredient group for ${ingredient}...`);
+                  const newDocId = await getDataService().createIngredient(ingredient);
+                  const result = await generateAndStoreIcon(ingredient, newDocId);
+                  console.log(`[getOrCreateIconAction] Initial generation success for ${ingredient}: ${result.url}`);
                   return { 
-                      ...icon, 
-                      lcb: calculateWilsonLCB(n, r), 
-                      n, r 
+                      ...result,
+                      iconUrl: result.url,
+                      isNew: true, 
+                      debugInfo: { decision: 'NEW_INGREDIENT_GROUP' } 
                   };
-              })
-              .filter((i: any) => !i.marked_for_deletion && !seenUrls.has(i.url));
-
-          // Debug Info
-          const sortedCandidates = [...evaluated].sort((a: any, b: any) => b.lcb - a.lcb);
-          const debugInfo = {
-              candidates: sortedCandidates.slice(0, 5).map((c: any) => ({
-                  url: c.url,
-                  score: c.lcb,
-                  impressions: c.n,
-                  rejections: c.r
-              })),
-              sessionRejections,
-              totalAvailable: evaluated.length,
-              decision: 'UNKNOWN'
-          };
-
-          // Generation Logic
-          let shouldGenerate = false;
-          const provenIcons = evaluated.filter((i: any) => i.n >= PROVEN_SAMPLE_SIZE);
-          const bestProvenLCB = provenIcons.length > 0 ? Math.max(...provenIcons.map((i: any) => i.lcb)) : 0;
-          
-          if (evaluated.length === 0) {
-              debugInfo.decision = 'CACHE_EXHAUSTED';
-              shouldGenerate = true;
-          } else if (sessionRejections >= SESSION_REJECT_LIMIT) {
-              if (provenIcons.length > 0 && bestProvenLCB < QUALITY_FLOOR_LCB) {
-                  debugInfo.decision = 'QUALITY_FLOOR_BREACH';
-                  shouldGenerate = true;
-              } else if (icons.length < MIN_CACHE_SIZE) {
-                  debugInfo.decision = 'CACHE_TOO_SMALL_REJECT_STREAK';
-                  shouldGenerate = true;
-              } else {
-                  debugInfo.decision = 'CACHE_SUFFICIENT';
-              }
-          } else {
-              debugInfo.decision = 'NORMAL_SELECTION';
-          }
-
-          if (shouldGenerate) {
-              // Guests allowed to generate (removed cache enforcement)
-          }
-
-          if (!shouldGenerate) {
-              const selected = sortedCandidates[0];
-              const newImpressions = (selected.n || 0) + 1;
-              const newLCB = calculateWilsonLCB(newImpressions, selected.r || 0);
-
-              try {
-                  await getDataService().incrementImpressions(
-                      bestMatch.id,
-                      selected.id,
-                      selected.url,
-                      newLCB,
-                      newImpressions
-                  );
-              } catch (e) {
-                  console.error('Failed to increment impressions:', e);
-              }
-
-              return { 
-                  iconUrl: selected.url, 
-                  isNew: false, 
-                  popularityScore: newLCB,
-                  imagePrompt: selected.imagePrompt,
-                  debugInfo 
-              };
-          }
-          
-          const { url: newUrl, lcb, imagePrompt } = await generateAndStoreIcon(ingredient, bestMatch.id);
-          return { 
-              iconUrl: newUrl, 
-              isNew: true, 
-              popularityScore: lcb, 
-              imagePrompt,
-              debugInfo: { ...debugInfo, decision: 'GENERATED_NEW' } 
-          };
-      } 
-      
-      // 3. Create New Ingredient Group (Requires Auth)
-      if (!session) return { error: 'Item not found. Login to forge new items.' };
-
-      const newDocId = await getDataService().createIngredient(ingredient);
-      const { url: newUrl, lcb, imagePrompt } = await generateAndStoreIcon(ingredient, newDocId);
-      return { 
-          iconUrl: newUrl, 
-          isNew: true, 
-          popularityScore: lcb,
-          imagePrompt,
-          debugInfo: { decision: 'NEW_INGREDIENT_GROUP' } 
-      };
-
-  } catch (e: any) {
-      console.error('[getOrCreateIconAction] Error:', e);
-      const msg = e.message || '';
-      if (msg.includes('invalid_grant')) {
-          return { error: 'Server authentication failed. Please check backend credentials.' };
-      }
-      if (msg.includes('API key expired') || msg.includes('API key not valid')) {
-          return { error: 'AI Service Error: The API Key is invalid or expired. Please contact the administrator.' };
-      }
-      return { error: `Failed to forge item: ${msg}` };
-  }
+    } catch (e: any) {
+        console.error('[getOrCreateIconAction] Fatal Error:', e);
+    }
 }
+
 
 export async function recordRejectionAction(rawIconUrl: string, rawIngredient: string) {
     const session = await getAuthService().verifyAuth();
@@ -362,6 +394,16 @@ export async function parseRecipeAction(recipeText: string): Promise<{ graph?: R
 
         const graph = parseRecipeGraph(text);
         graph.originalText = recipeText;
+        
+        const serves = extractServes(recipeText);
+        if (serves) {
+            graph.baseServes = serves;
+            graph.serves = serves;
+        } else {
+            graph.baseServes = 1;
+            graph.serves = 1;
+        }
+
         return { graph };
 
     } catch (e: any) {
@@ -427,34 +469,39 @@ export async function getRecipeAction(id: string) {
 }
 
 export async function generateGraphIconsAction(graph: RecipeGraph): Promise<{ graph: RecipeGraph; error?: string }> {
+    console.log(`[generateGraphIconsAction] 🚀 Starting for graph with ${graph.nodes.length} nodes.`);
     try {
-        // Guests allowed to forge (uses cache mostly, or generates if needed)
-        // Note: Cost implications for unauth generation, but requested by user.
-
-        // Clone graph to ensure reference change for React
         const newGraph: RecipeGraph = JSON.parse(JSON.stringify(graph));
         
-        // Process in parallel? Or sequential to avoid rate limits?
-        // Parallel chunks of 3 is safe.
+        const nodesToProcess = newGraph.nodes.filter(n => n.visualDescription && !n.iconUrl);
+        console.log(`[generateGraphIconsAction] Found ${nodesToProcess.length} nodes needing icons.`);
+
         const chunk = 3;
         for (let i = 0; i < newGraph.nodes.length; i += chunk) {
             const batch = newGraph.nodes.slice(i, i + chunk);
             await Promise.all(batch.map(async (node) => {
-                // If iconUrl is already present (preserved from previous graph), skip!
                 if (node.visualDescription && !node.iconUrl) {
-                    const result = await getOrCreateIconAction(node.visualDescription);
-                    if (result && 'iconUrl' in result) {
-                        node.iconUrl = result.iconUrl;
+                    console.log(`[generateGraphIconsAction] Processing node: ${node.text} (Visual: ${node.visualDescription})`);
+                    try {
+                        const result = await getOrCreateIconAction(node.visualDescription);
+                        if (result && 'iconUrl' in result && result.iconUrl) {
+                            console.log(`[generateGraphIconsAction] Icon assigned for "${node.text}": ${result.iconUrl.substring(0, 30)}...`);
+                            node.iconUrl = result.iconUrl;
+                        } else {
+                            console.warn(`[generateGraphIconsAction] No icon returned for "${node.text}"`);
+                        }
+                    } catch (e) {
+                        console.error(`[generateGraphIconsAction] Error processing node "${node.text}":`, e);
                     }
                 }
             }));
-            // No need to push, batch elements are references to newGraph.nodes objects
         }
 
+        console.log(`[generateGraphIconsAction] 🏁 Finished.`);
         return { graph: newGraph };
 
     } catch (e: any) {
-        console.error('generateGraphIconsAction failed:', e);
+        console.error('[generateGraphIconsAction] 🔴 Failed:', e);
         return { graph, error: e.message };
     }
 }
@@ -543,4 +590,8 @@ export async function checkExistingCopiesAction(originalId: string): Promise<{ c
     } catch (e: any) {
         return { copies: [], error: e.message };
     }
+}
+
+export async function debugLogAction(message: string) {
+    console.log(`[CLIENT-LOG] ${message}`);
 }

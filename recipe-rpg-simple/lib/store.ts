@@ -10,9 +10,8 @@ export interface IconData {
   marked_for_deletion: boolean;
   embedding?: number[];
   ingredientId?: string;
-  prompt?: string;
-  imagePrompt?: string;
-  fullImagePrompt?: string;
+  visualDescription?: string;
+  fullPrompt?: string;
   textModel?: string;
   imageModel?: string;
 }

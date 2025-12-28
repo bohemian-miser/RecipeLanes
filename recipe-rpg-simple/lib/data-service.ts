@@ -15,10 +15,9 @@ export interface DataService {
       ingredientId: string, 
       ingredientName: string, 
       visualDescription: string, 
-      imagePrompt: string,
-      fullImagePrompt: string,
+      fullPrompt: string,
       publicUrl: string, 
-      imageBuffer: ArrayBuffer, 
+      imageBuffer: ArrayBuffer | Buffer, 
       meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string }
   ): Promise<string>;
   
@@ -40,11 +39,51 @@ export interface DataService {
   incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number): Promise<void>;
   listDebugFiles(): Promise<any[]>;
   checkExistingCopies(originalId: string, userId: string): Promise<any[]>;
+  getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }>;
 }
 
 // --- Firebase Implementation ---
 export class FirebaseDataService implements DataService { 
   
+  async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
+      try {
+          let q: FirebaseFirestore.Query = db.collectionGroup('icons').where('marked_for_deletion', '==', false);
+          
+          if (query && query.trim()) {
+              // Simple prefix search on ingredient_name. Note: This requires the name to be stored in Title Case if we search that way.
+              // We'll try to match case-insensitive by storing/searching a normalized field, but for now assuming strict prefix.
+              // To make it robust, let's assume the user types matching case or we capitalize it.
+              const term = query.trim();
+               // Search by ingredient name prefix
+              q = q.where('ingredient_name', '>=', term).where('ingredient_name', '<=', term + '\uf8ff').orderBy('ingredient_name');
+          } else {
+              q = q.orderBy('created_at', 'desc');
+          }
+
+          // Aggregation for total count
+          const countSnapshot = await q.count().get();
+          const total = countSnapshot.data().count;
+
+          const snapshot = await q.offset((page - 1) * limit).limit(limit).get();
+          const icons = snapshot.docs.map(doc => this.mapIconDoc(doc));
+
+          return { icons, total };
+      } catch (e: any) {
+          console.warn('getPagedIcons failed:', e.message);
+          return { icons: [], total: 0 };
+      }
+  }
+
+  private mapIconDoc(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) {
+      const data = doc.data()!;
+      return {
+          id: doc.id,
+          path: doc.ref.path,
+          ...data,
+          created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at || null,
+      };
+  }
+
   async checkExistingCopies(originalId: string, userId: string): Promise<any[]> {
       try {
           const snapshot = await db.collection('recipes')
@@ -283,18 +322,30 @@ export class FirebaseDataService implements DataService {
          return snapshot.docs.map(doc => ({ id: doc.id, path: doc.ref.path, ...doc.data() })).sort((a: any, b: any) => (b.popularity_score || 0) - (a.popularity_score || 0));
      } catch (e: any) { return []; }
   }
-  async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, imagePrompt: string, fullImagePrompt: string, publicUrl: string, imageBuffer: ArrayBuffer, meta: any) {
+  async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any) {
+      // Optimisation: In Mock AI mode (e.g. tests), skip Storage upload to avoid emulator issues.
+      // The publicUrl is likely a Data URI or placeholder which fits in Firestore.
+      if (process.env.MOCK_AI === 'true') {
+          console.log('[saveIcon] Mock AI detected, skipping Storage upload.');
+          const finalUrl = publicUrl;
+          await db.collection('ingredients').doc(ingredientId).collection('icons').add({
+              url: finalUrl, ...meta, ingredient_name: ingredientName, created_at: FieldValue.serverTimestamp(), marked_for_deletion: false, visualDescription: visualDescription, fullPrompt: fullPrompt
+          });
+          return finalUrl;
+      }
+
       const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app';
       const bucket = storage.bucket(bucketName);
       const fileName = `icons/${ingredientName.replace(/\s+/g, '-')}-${Date.now()}.png`;
       const file = bucket.file(fileName);
       const token = randomUUID();
-      await file.save(Buffer.from(imageBuffer), {
+      const bufferToSave = Buffer.isBuffer(imageBuffer) ? imageBuffer : Buffer.from(imageBuffer as ArrayBuffer);
+      await file.save(bufferToSave, {
           metadata: { contentType: 'image/png', metadata: { firebaseStorageDownloadTokens: token, ...meta } }
       });
       const finalUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
       await db.collection('ingredients').doc(ingredientId).collection('icons').add({
-          url: finalUrl, ...meta, ingredient_name: ingredientName, created_at: FieldValue.serverTimestamp(), marked_for_deletion: false, prompt: visualDescription, imagePrompt: imagePrompt, fullImagePrompt: fullImagePrompt
+          url: finalUrl, ...meta, ingredient_name: ingredientName, created_at: FieldValue.serverTimestamp(), marked_for_deletion: false, visualDescription: visualDescription, fullPrompt: fullPrompt
       });
       return finalUrl;
   }
@@ -420,6 +471,22 @@ export class MemoryDataService implements DataService {
     
     private userVotes = new Map<string, { liked: Set<string>; disliked: Set<string> }>();
     private userStars = new Map<string, Set<string>>();
+
+    async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
+        let icons = memoryStore.getAllIcons().filter(i => !i.marked_for_deletion);
+        
+        if (query) {
+            const term = query.toLowerCase();
+            icons = icons.filter(i => i.ingredient.toLowerCase().includes(term));
+        } else {
+             // Sort by date desc by default
+             icons.sort((a, b) => b.created_at - a.created_at);
+        }
+
+        const total = icons.length;
+        const paginated = icons.slice((page - 1) * limit, page * limit);
+        return { icons: paginated, total };
+    }
 
     async checkExistingCopies(originalId: string, userId: string): Promise<any[]> {
         return Array.from(this.recipes.entries())
@@ -598,7 +665,7 @@ export class MemoryDataService implements DataService {
         return memoryStore.getAllIcons().sort((a, b) => b.popularity_score - a.popularity_score);
     }
 
-    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, imagePrompt: string, fullImagePrompt: string, publicUrl: string, imageBuffer: ArrayBuffer, meta: any): Promise<string> {
+    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any): Promise<string> {
         memoryStore.addIcon({
             url: publicUrl,
             ingredient: ingredientName,
@@ -608,9 +675,8 @@ export class MemoryDataService implements DataService {
             rejections: meta.rejections,
             created_at: Date.now(),
             marked_for_deletion: false,
-            prompt: visualDescription,
-            imagePrompt: imagePrompt,
-            fullImagePrompt: fullImagePrompt,
+            visualDescription: visualDescription,
+            fullPrompt: fullPrompt,
             textModel: meta.textModel,
             imageModel: meta.imageModel
         });
@@ -659,13 +725,13 @@ let currentDataService: DataService | null = null;
 export function getDataService(): DataService {
   if (currentDataService) return currentDataService;
   
-  if (process.env.FORCE_MEMORY_DB === 'true' || !isFirebaseEnabled) {
-      if (process.env.FORCE_MEMORY_DB === 'true') console.warn("Forcing MemoryDataService");
-      else console.warn("Firebase not enabled, using MemoryDataService");
-      currentDataService = new MemoryDataService();
-  } else {
+  // if (process.env.FORCE_MEMORY_DB === 'true' || !isFirebaseEnabled) {
+  //     if (process.env.FORCE_MEMORY_DB === 'true') console.warn("Forcing MemoryDataService");
+  //     else console.warn("Firebase not enabled, using MemoryDataService");
+  //     currentDataService = new MemoryDataService();
+  // } else {
       currentDataService = new FirebaseDataService();
-  }
+  // }
   return currentDataService;
 }
 export function setDataService(service: DataService) { currentDataService = service; }

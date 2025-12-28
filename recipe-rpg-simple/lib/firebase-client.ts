@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, Auth, User, connectAuthEmulator } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, Auth, User, connectAuthEmulator, signInWithCustomToken } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -26,6 +26,11 @@ if (firebaseConfig.apiKey) {
 
   googleProvider = new GoogleAuthProvider();
   isInitialized = true;
+   // Expose for E2E testing                                                                                                                                                                                                                           
+   if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {                                                                                                                                                                       
+       (window as any)._firebaseAuth = auth;                                                                                                                                                                                                           
+       (window as any)._signInWithCustomToken = signInWithCustomToken;                                                                                                                                                                                 
+   }
 } else {
   console.warn('Firebase Client SDK missing API Key (likely during build). Using mock auth.');
   // Mock Auth for Build Time

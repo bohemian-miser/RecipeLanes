@@ -1,34 +1,47 @@
-import { test, expect } from '@playwright/test';
+// Important: Import 'test' from your custom fixtures, not '@playwright/test'
+import { test, expect } from './utils/fixtures'; 
+import { screenshot, screenshotDir } from './utils/screenshot';
+import { deviceConfigs } from './utils/devices';
 
 test.describe('Authentication Flow', () => {
-  test('Login and Logout (Mock Mode)', async ({ page, context }) => {
-    // 1. Start as Guest
-    await page.goto('/lanes');
-    
-    // Check for Login button
-    const loginBtn = page.getByRole('button', { name: 'Login' });
-    await expect(loginBtn).toBeVisible();
-    await expect(page.getByTitle('Logout')).not.toBeVisible();
+  for (const device of deviceConfigs) {
+    test(`${device.name}: Login and Logout (Emulator)`, async ({ page, login }) => {
+      const dir = screenshotDir('auth-flow', device.name);
+      await page.setViewportSize(device.viewport);
 
-    // 2. Click Login (should trigger mock login logic)
-    await loginBtn.click();
-    
-    // Wait for reload/update
-    // The mock login reloads the page, so we wait for the logout button to appear
-    const logoutBtn = page.getByTitle('Logout');
-    await expect(logoutBtn).toBeVisible({ timeout: 10000 });
-    
-    // Verify user name/id presence (mock user usually "User" or "mock-user-...")
-    // The specific name depends on how we set it. In `signIn`, we set `mock-user-XXXX`.
-    // In `checkMockCookie`, we display `displayName: uid`.
-    // So we should see "user-XXXX" text.
-    await expect(page.getByText(/user-\d+/)).toBeVisible();
+      // 1. Start as Guest
+      await page.goto('/lanes');
+      
+      // Verify Guest UI
+      await screenshot(page, dir, '01-start');
+      const loginBtn = page.getByRole('button', { name: 'Login' });
+      await expect(loginBtn).toBeVisible();
+      await expect(page.getByTitle('Logout')).not.toBeVisible();
 
-    // 3. Click Logout
-    await logoutBtn.click();
+      // 2. Log In Programmatically
+      // We use Chef Ramsay to verify profile data propagation
+      await screenshot(page, dir, '02-before-login');
+      await login('user-ramsay', { displayName: 'Chef Ramsay' });
+      
+      // Wait for auth update
+      const logoutBtn = page.getByTitle('Logout');
+      await expect(logoutBtn).toBeVisible({ timeout: 15000 });
+      
+      // Name is hidden on mobile via CSS, so we check for attachment instead of visibility
+      await screenshot(page, dir, '03-after-login');
+      if (device.isMobile) {
+          await expect(page.getByText(/Chef Ramsay/)).toBeAttached();
+      } else {
+          await expect(page.getByText(/Chef Ramsay/)).toBeVisible();
+      }
 
-    // Wait for Login button to reappear
-    await expect(loginBtn).toBeVisible({ timeout: 10000 });
-    await expect(logoutBtn).not.toBeVisible();
-  });
+      // 3. Click Logout
+      await logoutBtn.click();
+
+      // 4. Verify Return to Guest UI
+      await expect(loginBtn).toBeVisible();
+      await expect(logoutBtn).not.toBeVisible();
+      await screenshot(page, dir, '04-after-logout');
+    });
+  }
 });

@@ -18,27 +18,9 @@
 // import { test, expect, devices, Page } from '@playwright/test';
 // import * as fs from 'fs';
 // import * as path from 'path';
-import { test, expect, devices, Page } from '@playwright/test';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-
-const deviceConfigs = [
-  { name: 'phone', viewport: devices['iPhone 12'].viewport!, isMobile: true },
-  { name: 'desktop', viewport: { width: 1280, height: 720 }, isMobile: false },
-];
-
-const screenshotDir = (testName: string, deviceName: string) => {
-  const dir = path.join('test_screenshots', testName, deviceName);
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
-};
-
-const screenshot = async (page: Page, dir: string, name: string) => {
-  await page.screenshot({
-    path: path.join(dir, `${name}.png`),
-    fullPage: true,
-  });
-};
+import { test, expect, Page } from './utils/fixtures';
+import { screenshot, screenshotDir } from './utils/screenshot';
+import { deviceConfigs } from './utils/devices';
 
 test.describe('Graph Interaction', () => {
   test.slow();
@@ -103,7 +85,7 @@ test.describe('Graph Interaction', () => {
       const initialEdges = await getEdgeCount();
       expect(initialEdges).toBeGreaterThan(0);
 
-      const node = page.locator('.react-flow__node').filter({ hasText: 'Mock Ingredient 2' }).first();
+      const node = page.locator('.react-flow__node').filter({ hasText: 'Flour' }).first();
       await expect(node).toBeVisible({ timeout: 30000 });
       await screenshot(page, dir, '05-target-node-found');
 

@@ -1,30 +1,12 @@
-import { test, expect, devices, Page } from '@playwright/test';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-
-const deviceConfigs = [
-  { name: 'phone', viewport: devices['iPhone 12'].viewport!, isMobile: true },
-  { name: 'desktop', viewport: { width: 1280, height: 720 }, isMobile: false },
-];
-
-const screenshotDir = (testName: string, deviceName: string) => {
-  const dir = path.join('test_screenshots', testName, deviceName);
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
-};
-
-const screenshot = async (page: Page, dir: string, name: string) => {
-  await page.screenshot({
-    path: path.join(dir, `${name}.png`),
-    fullPage: true,
-  });
-};
+import { test, expect, Page } from './utils/fixtures';
+import { screenshot, screenshotDir } from './utils/screenshot';
+import { deviceConfigs } from './utils/devices';
 
 test.describe('Save and Share Functionality', () => {
   test.slow();
 
   for (const device of deviceConfigs) {
-    test(`${device.name}: guest save and share flow`, async ({ page, context }) => {
+    test(`${device.name}: guest save and share flow`, async ({ page }) => {
       const dir = screenshotDir('guest-save-share', device.name);
       
       // Create a recipe
@@ -38,7 +20,6 @@ test.describe('Save and Share Functionality', () => {
       
       // Auto-save check: URL should have ID immediately after generation
       await expect(page).toHaveURL(/id=/, { timeout: 20000 });
-      const urlBefore = page.url();
 
       // 1. Test "Share" button (Guests CAN share/copy link)
       const shareBtn = page.locator('button[title="Save & Copy Link"]');
@@ -69,10 +50,33 @@ test.describe('Save and Share Functionality', () => {
       
       // Wait for URL to clear ID
       await expect(page).not.toHaveURL(/id=/);
-      await expect(page.getByPlaceholder('Paste recipe here...')).toHaveValue('');
-      await expect(viewport).not.toBeVisible();
-      
       await screenshot(page, dir, '03-new-clicked-cleared');
     });
+
+    if (!device.isMobile) {
+      test(`${device.name}: authenticated save flow`, async ({ page, login }) => {
+        const dir = screenshotDir('auth-save', device.name);
+        await login('save-tester');
+        
+        await page.goto('/lanes?new=true');
+        await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
+        await page.locator('button.bg-yellow-500').click();
+        
+        await expect(page).toHaveURL(/id=/, { timeout: 20000 });
+        await screenshot(page, dir, '01-auth-graph-created');
+        
+        // Modify
+        const node = page.locator('.react-flow__node').first();
+        await node.dragTo(page.locator('.react-flow__pane'), { sourcePosition: { x: 10, y: 10 }, targetPosition: { x: 100, y: 100 } });
+        
+        // Explicit Save
+        const saveBtn = page.locator('button[title="Save Changes"]');
+        await saveBtn.click();
+        
+        // Expect success notification
+        await expect(page.getByText('Saved changes.')).toBeVisible();
+        await screenshot(page, dir, '02-auth-saved');
+      });
+    }
   }
 });

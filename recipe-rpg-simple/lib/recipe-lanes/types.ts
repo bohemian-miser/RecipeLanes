@@ -18,6 +18,11 @@ export interface RecipeNode {
   // Action Metadata
   temperature?: string; // "Medium Heat"
   duration?: string; // "5 min"
+
+  // Quantity Metadata (Parsed or AI)
+  quantity?: number;
+  unit?: string;
+  canonicalName?: string; // "Carrot" vs "2 Carrots"
   
   // Layout Persistence
   x?: number;
@@ -38,6 +43,11 @@ export interface RecipeGraph {
   originalText?: string;
   layoutMode?: string;
   visibility?: 'public' | 'unlisted' | 'private';
+  
+  // Scaling
+  serves?: number; // Current servings setting
+  baseServes?: number; // Original recipe servings
+
   lanes: Lane[];
   nodes: RecipeNode[];
   layouts?: Record<string, NodeLayout[]>;

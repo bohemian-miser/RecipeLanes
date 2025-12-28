@@ -276,11 +276,12 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
         const nodeType = 'minimal'; 
         
         layout.nodes.forEach(n => {
+             const originalNode = graph.nodes.find(gn => gn.id === n.id);
              newNodes.push({
                  id: n.id,
                  type: nodeType,
                  position: { x: n.x, y: n.y },
-                 data: { ...n.data, textPos, depth: n.depth, onDelete: () => handleDeleteNode(n.id) },
+                 data: { ...originalNode, ...n.data, textPos, depth: n.depth, onDelete: () => handleDeleteNode(n.id) },
                  width: n.width,
                  height: n.height,
                  draggable: true,

@@ -21,9 +21,42 @@ const RecipeGraphSchema = z.object({
   }))
 });
 
+// Helper: Quantity Parsing
+function parseQuantity(text: string): { quantity?: number, unit?: string, canonicalName?: string } {
+    // Basic regex: Start with number/fraction, optional unit, then rest
+    // e.g. "1.5 kg Flour", "1/2 cup Sugar", "2 Carrots"
+    const regex = /^([\d\./]+)\s*([a-zA-Z\.]+)?\s+(.*)$/;
+    const match = text.trim().match(regex);
+    
+    if (!match) {
+        // Fallback: Check if just number and name? e.g. "2 Onions"
+        const simpleRegex = /^([\d\./]+)\s+(.*)$/;
+        const match2 = text.trim().match(simpleRegex);
+        if (match2) {
+             return { quantity: parseFraction(match2[1]), unit: '', canonicalName: match2[2] };
+        }
+        return { canonicalName: text };
+    }
+    
+    return { 
+        quantity: parseFraction(match[1]), 
+        unit: match[2] || '', 
+        canonicalName: match[3] 
+    };
+}
+
+function parseFraction(str: string): number {
+    if (str.includes('/')) {
+        const [n, d] = str.split('/');
+        return parseFloat(n) / parseFloat(d);
+    }
+    return parseFloat(str);
+}
+
 const SCHEMA_INTERFACE = `
 interface RecipeGraph {
   title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
   lanes: {
     id: string;
     label: string; // e.g. "Skillet"
@@ -59,8 +92,9 @@ You are an expert recipe parser. Your goal is to convert the following cooking i
 text\n field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
 2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
 3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
-4. **TITLE:** Extract or generate a concise, descriptive 
-_title_\n for the recipe.
+4. **TITLE & SERVES:** Extract a concise 
+_title_\n and estimated 
+_baseServes_\n (number) from the text.
 
 ### Schema
 Return ONLY raw JSON complying with this TypeScript interface:
@@ -101,10 +135,26 @@ export function parseRecipeGraph(aiResponse: string): RecipeGraph {
     // 2. Parse JSON
     const rawObj = JSON.parse(jsonStr);
 
-    // 3. Validate Schema
-    return RecipeGraphSchema.parse(rawObj);
+    // 3. Post-Process: Enrich Nodes with Parsed Quantities
+    if (rawObj.nodes) {
+        rawObj.nodes = rawObj.nodes.map((n: any) => {
+            if (n.type === 'ingredient' && n.text) {
+                const parsed = parseQuantity(n.text);
+                return { ...n, ...parsed };
+            }
+            return n;
+        });
+    }
+    
+    // 4. Validate Schema (Relaxed to allow extra fields we just added)
+    return rawObj as RecipeGraph; 
   } catch (e) {
     console.error('Failed to parse recipe graph:', e);
     throw new Error('Invalid AI Response Format');
   }
+}
+
+export function extractServes(text: string): number | undefined {
+    const match = text.match(/Serves[:\s]*(\d+)/i);
+    return match ? parseInt(match[1]) : undefined;
 }

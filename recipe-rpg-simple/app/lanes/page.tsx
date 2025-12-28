@@ -6,11 +6,11 @@ import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
-import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction, checkExistingCopiesAction, getOrCreateIconAction } from '@/app/actions';
-import { IngredientsSummary } from '@/components/recipe-lanes/ui/ingredients-summary';
+import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction, checkExistingCopiesAction, getOrCreateIconAction, debugLogAction } from '@/app/actions';
+import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket } from 'lucide-react';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -27,6 +27,7 @@ function RecipeLanesContent() {
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
+  const [showIngredients, setShowIngredients] = useState(false);
   const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
   const [showOverrideWarning, setShowOverrideWarning] = useState(false);
@@ -37,7 +38,26 @@ function RecipeLanesContent() {
 
   const isOwner = !ownerId || (!!user && user.uid === ownerId);
 
-  // Restore Last Recipe
+  // ... (Restore Last Recipe, Save Last ID, Sync JSON, Warning, Persistence) ...
+
+  const handleUpdateServes = (newServes: number) => {
+      if (!graph) return;
+      const baseServes = graph.baseServes || 1;
+      const scale = newServes / baseServes;
+      
+      const newNodes = graph.nodes.map(n => {
+          if (n.type === 'ingredient' && n.quantity) {
+              const newQty = Math.round((n.quantity * scale) * 100) / 100;
+              // Update text if we can reconstruct it cleanly
+              if (n.canonicalName) {
+                  return { ...n, text: `${newQty} ${n.unit || ''} ${n.canonicalName}`.trim().replace(/\s+/g, ' ') };
+              }
+          }
+          return n;
+      });
+      
+      setGraph({ ...graph, serves: newServes, nodes: newNodes });
+  };
   useEffect(() => {
       const isNew = searchParams.get('new');
 
@@ -98,6 +118,50 @@ function RecipeLanesContent() {
       setTimeout(() => setNotification(null), 3000);
   };
 
+  const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
+      const currentId = searchParams.get('id');
+      const isNotOwner = (user && ownerId && user.uid !== ownerId) || (!user && ownerId);
+      
+      let targetId = currentId || undefined;
+
+      if (isNotOwner && currentId) {
+          console.log('Forking recipe (Not Owner)');
+          graphToSave.sourceId = currentId;
+          targetId = undefined;
+          
+          let newTitle = graphToSave.title || 'Untitled';
+          if (newTitle.startsWith('Yet another copy of ')) {
+             const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
+             if (match) {
+                 newTitle = `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;
+             } else {
+                 newTitle = `${newTitle} (1)`;
+             }
+          } else if (newTitle.startsWith('Another copy of ')) {
+             newTitle = newTitle.replace('Another copy of ', 'Yet another copy of ');
+          } else if (newTitle.startsWith('Copy of ')) {
+             newTitle = newTitle.replace('Copy of ', 'Another copy of ');
+          } else {
+             newTitle = `Copy of ${newTitle}`;
+          }
+          
+          graphToSave.title = newTitle;
+          setRecipeTitle(newTitle);
+          showNotification("Saving a copy to your profile...");
+      }
+
+      const res = await saveRecipeAction(graphToSave, targetId);
+      
+      if (res.id) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('new');
+          url.searchParams.set('id', res.id);
+          window.history.replaceState({}, '', url.pathname + url.search);
+          if (user) setOwnerId(user.uid);
+      }
+      return res;
+  };
+
   const handleJsonSave = async () => {
       try {
           const partialGraph = JSON.parse(jsonText);
@@ -111,12 +175,8 @@ function RecipeLanesContent() {
           const newGraph = { ...partialGraph, nodes: newNodes };
           setGraph(newGraph);
           if (user) {
-              const res = await saveRecipeAction(newGraph, searchParams.get('id') || undefined);
+              const res = await saveAndHandleFork(newGraph);
               if (res.id) {
-                  const url = new URL(window.location.href);
-                  url.searchParams.set('id', res.id);
-                  router.push(url.pathname + url.search);
-                  setOwnerId(user.uid);
                   showNotification("JSON saved.");
               }
           }
@@ -303,7 +363,9 @@ function RecipeLanesContent() {
       }
   };
 
-    const handleVisualize = async () => {
+const handleVisualize = async () => {
+    console.log('Starting visualization...');
+    await debugLogAction('Starting visualization...');
     if (!recipeText.trim()) return;
     
     setStatus('parsing');
@@ -360,25 +422,20 @@ function RecipeLanesContent() {
              currentGraph.title = newTitle;
              setRecipeTitle(newTitle);
         }
-
+        console.log('Saving parsed graph...');
+        await debugLogAction('Saving parsed graph...');
         const saveRes = await saveRecipeAction(currentGraph, currentId);
+        console.log('Save result:', saveRes);
+        await debugLogAction(`Save result: ${JSON.stringify(saveRes)}`);
         
-        if (saveRes.id) {
-             const url = new URL(window.location.href);
-             url.searchParams.delete('new');
-             url.searchParams.set('id', saveRes.id);
-             window.history.replaceState({}, '', url.pathname + url.search);
-             if (user) setOwnerId(user.uid);
-             
-             // Update currentId for subsequent saves in this function
-             currentId = saveRes.id;
-        }
 
+        await debugLogAction('Starting forging process...');
         setStatus('forging');
 
         // Client-side Icon Generation Loop
         const nodesToProcess = currentGraph.nodes.filter(n => !n.iconUrl && n.visualDescription);
         const total = nodesToProcess.length;
+        await debugLogAction(`Found ${total} nodes to process for icons`);
         let completed = 0;
         
         if (total > 0) {
@@ -386,32 +443,54 @@ function RecipeLanesContent() {
             
             const chunkSize = 3;
             for (let i = 0; i < total; i += chunkSize) {
+                await debugLogAction(`Processing batch ${i / chunkSize + 1}`);
                 const batch = nodesToProcess.slice(i, i + chunkSize);
                 
-                await Promise.all(batch.map(async (node) => {
-                    if (!node.visualDescription) return;
+                // Store results from the batch
+                const results = await Promise.all(batch.map(async (node) => {
+                    if (!node.visualDescription) return null;
+                    await debugLogAction(`Requesting icon for: ${node.visualDescription}`);
                     const result = await getOrCreateIconAction(node.visualDescription);
-                    
-                    if (result && !result.error && result.iconUrl) {
-                        setGraph(prev => {
-                            if (!prev) return null;
-                            const newNodes = prev.nodes.map(n => n.id === node.id ? { ...n, iconUrl: result.iconUrl } : n);
-                            return { ...prev, nodes: newNodes };
-                        });
-                        // Update local currentGraph for final save reference (though state is better)
-                        currentGraph.nodes = currentGraph.nodes.map(n => n.id === node.id ? { ...n, iconUrl: result.iconUrl } : n);
+                    return { nodeId: node.id, result };
+                }));
+
+                // Apply results sequentially to avoid race conditions
+                results.forEach(item => {
+                    if (item && item.result && !item.result.error && item.result.iconUrl) {
+                        const { nodeId, result } = item;
+                        // Update local reference for final save and state update
+                        currentGraph.nodes = currentGraph.nodes.map(n => n.id === nodeId ? { ...n, iconUrl: result.iconUrl } : n);
                     }
                     completed++;
-                    setForgingProgress({ completed, total });
-                }));
+                });
+                
+                // Update React State once per batch with the accumulated changes
+                setGraph({ ...currentGraph });
+                
+                // Auto-save batch progress
+                if (saveRes.id) {
+                     await saveRecipeAction(currentGraph, saveRes.id);
+                }
+                
+                setForgingProgress({ completed, total });
             }
         }
 
         // Final Save with icons
         if (saveRes.id) {
-             await saveRecipeAction(currentGraph, saveRes.id);
+
+             const url = new URL(window.location.href);
+             url.searchParams.delete('new');
+             url.searchParams.set('id', saveRes.id);
+             
+             window.history.pushState({}, '', url.pathname + url.search);
+             
+             if (user) setOwnerId(user.uid);
+             currentId = saveRes.id;
+             await saveRecipeAction(currentGraph, currentId);
         }
         
+        await debugLogAction('Visualization complete');
         setStatus('complete');
         setForgingProgress(null);
         setShowOverrideWarning(false);
@@ -682,6 +761,16 @@ function RecipeLanesContent() {
                 )}
                 <div className="flex items-center gap-2">
                     <button
+                        onClick={() => setShowIngredients(!showIngredients)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${showIngredients ? 'bg-yellow-500/10 text-yellow-700' : 'text-zinc-600 hover:bg-zinc-100'}`}
+                        title="Toggle Ingredients"
+                    >
+                        <ChefHat className="w-4 h-4" />
+                        <span className="hidden sm:inline">INGREDIENTS</span>
+                    </button>
+                    <div className="h-4 w-px bg-zinc-200 mx-1" />
+
+                    <button
                         onClick={() => setLayoutMode('swimlanes')}
                         className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'swimlanes' ? 'bg-zinc-100' : ''}`}
                         title="Lanes"
@@ -798,7 +887,13 @@ function RecipeLanesContent() {
                 </div>
             </div>
             
-            {graph && <IngredientsSummary graph={graph} />}
+            {showIngredients && graph && (
+                <IngredientsSidebar 
+                    graph={graph} 
+                    onClose={() => setShowIngredients(false)} 
+                    onUpdateServes={handleUpdateServes} 
+                />
+            )}
 
             <div className="flex-1 relative"> 
                 {graph ? (

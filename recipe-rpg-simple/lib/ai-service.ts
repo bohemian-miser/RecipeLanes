@@ -15,13 +15,16 @@ export class RealAIService implements AIService {
   }
 
   async generateImage(prompt: string): Promise<string> {
+    console.log(`[RealAIService] generateImage called with prompt: "${prompt.substring(0, 30)}..."`);
     const response = await ai.generate({
       model: imageModelName,
       prompt: prompt,
     });
     if (!response.media || !response.media.url) {
+      console.error('[RealAIService] No media returned');
       throw new Error('Real AI Image generation failed: No media returned');
     }
+    console.log(`[RealAIService] Success. URL: ${response.media.url.substring(0, 50)}...`);
     return response.media.url;
   }
 }
@@ -31,12 +34,13 @@ export class MockAIService implements AIService {
     const lower = prompt.toLowerCase();
     console.log("[MockAIService] generateText received prompt:", prompt);
     if (lower.includes("test eggs")) {
-        const extraIngredient = lower.includes("test eggs with ") ? lower.split("test eggs with ")[1].trim() : null;
+        // .slice(0, -1); is to remove trailing '"'
+        const extraIngredient = lower.includes("test eggs with ") ? lower.split("test eggs with ")[1].trim().slice(0, -1) : null;
         
         const nodes = [
-                { id: "1", laneId: "l1", text: "Mock Ingredient 1", type: "ingredient", visualDescription: "Mock Ing 1" },
-                { id: "2", laneId: "l1", text: "Mock Ingredient 2", type: "ingredient", visualDescription: "Mock Ing 2" },
-                { id: "3", laneId: "l1", text: "Mock Action", type: "action", inputs: ["1", "2"], visualDescription: "Mock Act" }
+                { id: "1", laneId: "l1", text: "2 Eggs", type: "ingredient", visualDescription: "2 Eggs" },
+                { id: "2", laneId: "l1", text: "100g Flour", type: "ingredient", visualDescription: "Flour" },
+                { id: "3", laneId: "l1", text: "Mix", type: "action", inputs: ["1", "2"], visualDescription: "Mixing bowl" }
         ];
 
         if (extraIngredient) {
@@ -87,9 +91,12 @@ export class MockAIService implements AIService {
   }
 
   async generateImage(prompt: string): Promise<string> {
+    console.log(`[MockAIService] generateImage called for: "${prompt.substring(0, 30)}..."`);
     // Append random UUID to ensure unique URL for each generation (simulate reroll)
     const uuid = Math.random().toString(36).substring(7);
-    return `https://placehold.co/64x64/png?text=Mock+${encodeURIComponent(prompt.slice(0, 10))}&uuid=${uuid}`;
+    const url = `https://placehold.co/64x64/png?text=Mock+${encodeURIComponent(prompt.slice(0, 10))}&uuid=${uuid}`;
+    console.log(`[MockAIService] Returning mock URL: ${url}`);
+    return url;
   }
 }
 

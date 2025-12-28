@@ -6,64 +6,2525 @@
   · serverActions
 
 ✓ Starting...
-✓ Ready in 847ms
+⚠ Turbopack's filesystem cache has been deleted because we previously detected an internal error in Turbopack. Builds or page loads may be slower as a result.
+✓ Ready in 830ms
 ○ Compiling /lanes ...
 WARNING: You are using the Auth Emulator, which is intended for local testing only.  Do not use with production credentials.
- GET /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 5.8s (compile: 5.4s, render: 478ms)
- GET /lanes?id=mRodhcadrb7XFDol4cvw 200 in 5.9s (compile: 5.4s, render: 409ms)
- GET /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 5.9s (compile: 5.5s, render: 378ms)
+ GET /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 5.7s (compile: 5.4s, render: 330ms)
+ GET /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 4.5s (compile: 4.1s, render: 406ms)
 Initializing Firebase Genkit Monitoring.
 registering /util/generate
 Registering v2 plugin vertexai...
+ POST /api/auth/logout 200 in 796ms (compile: 700ms, render: 96ms)
+ GET / 200 in 2.2s (compile: 2.2s, render: 75ms)
 🔥 Admin SDK switching to Emulator mode via Env Vars
 [CLIENT-LOG] loading recipe for id: dGFw7paBS2IWtbjZhDbC
- POST /api/auth/logout 200 in 526ms (compile: 494ms, render: 31ms)
- POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 1217ms (compile: 10ms, render: 1207ms)
+ POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 1309ms (compile: 19ms, render: 1290ms)
+ GET / 200 in 489ms (compile: 400ms, render: 89ms)
 [CLIENT-LOG] loading recipe for id dGFw7paBS2IWtbjZhDbC and graph null
- POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 16ms (compile: 7ms, render: 9ms)
-[CLIENT-LOG] loading recipe for id: mRodhcadrb7XFDol4cvw
- POST /lanes?id=mRodhcadrb7XFDol4cvw 200 in 40ms (compile: 27ms, render: 13ms)
- POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 187ms (compile: 18ms, render: 169ms)
-[CLIENT-LOG] loading recipe for id mRodhcadrb7XFDol4cvw and graph null
- POST /lanes?id=mRodhcadrb7XFDol4cvw 200 in 45ms (compile: 6ms, render: 39ms)
- GET /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 47ms (compile: 15ms, render: 31ms)
- POST /lanes?id=mRodhcadrb7XFDol4cvw 200 in 30ms (compile: 7ms, render: 23ms)
-[CLIENT-LOG] checking icons for recipe id dGFw7paBS2IWtbjZhDbC
- POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 14ms (compile: 5ms, render: 9ms)
-[CLIENT-LOG] loading recipe for id: j2P4GB2zyfuJC8bvLHz2
- POST /api/auth/logout 200 in 21ms (compile: 3ms, render: 18ms)
- POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 23ms (compile: 10ms, render: 13ms)
-[CLIENT-LOG] checking icons for recipe id mRodhcadrb7XFDol4cvw
- POST /lanes?id=mRodhcadrb7XFDol4cvw 200 in 12ms (compile: 5ms, render: 8ms)
-[CLIENT-LOG] loading recipe for id: dGFw7paBS2IWtbjZhDbC
  POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 18ms (compile: 6ms, render: 12ms)
-[CLIENT-LOG] loading recipe for id j2P4GB2zyfuJC8bvLHz2 and graph null
- POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 11ms (compile: 4ms, render: 6ms)
-🔥 Admin SDK switching to Emulator mode via Env Vars
-[CLIENT-LOG] loading recipe for id dGFw7paBS2IWtbjZhDbC and graph {"title":"Mock Recipe","lanes":[{"id":"l1","label":"Prep","type":"prep"}],"originalText":"test eggs with sun","baseServes":1,"serves":1,"nodes":[{"id":"1","laneId":"l1","text":"2 Eggs","type":"ingredient","visualDescription":"2 Eggs","quantity":2,"unit":"","canonicalName":"Eggs","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=0mozq9"},{"id":"2","laneId":"l1","text":"100g Flour","type":"ingredient","visualDescription":"Flour","quantity":100,"unit":"g","canonicalName":"Flour","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ioyuyl"},{"id":"3","laneId":"l1","text":"Mix","type":"action","inputs":["1","2","4"],"visualDescription":"Mixing bowl","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ljrb6f"},{"id":"4","laneId":"l1","text":"sun","type":"ingredient","visualDescription":"sun","canonicalName":"sun","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=xokryq"}],"visibility":"unlisted"}
- POST /api/auth/login 200 in 279ms (compile: 239ms, render: 40ms)
- POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 32ms (compile: 5ms, render: 28ms)
- POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 33ms (compile: 13ms, render: 20ms)
- POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 62ms (compile: 5ms, render: 57ms)
- GET /lanes?id=mRodhcadrb7XFDol4cvw 200 in 63ms (compile: 18ms, render: 45ms)
- GET /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 24ms (compile: 4ms, render: 19ms)
+ POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 189ms (compile: 7ms, render: 183ms)
+ GET /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 38ms (compile: 8ms, render: 29ms)
+ POST /api/auth/logout 200 in 10ms (compile: 3ms, render: 7ms)
+[CLIENT-LOG] loading recipe for id: FBteAcGrT1LScUZwBeEe
 [CLIENT-LOG] checking icons for recipe id dGFw7paBS2IWtbjZhDbC
- POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 11ms (compile: 5ms, render: 6ms)
-[CLIENT-LOG] checking icons for recipe id j2P4GB2zyfuJC8bvLHz2
- POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 11ms (compile: 5ms, render: 6ms)
-[CLIENT-LOG] loading recipe for id: mRodhcadrb7XFDol4cvw
- POST /lanes?id=mRodhcadrb7XFDol4cvw 200 in 16ms (compile: 7ms, render: 9ms)
+ POST /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 26ms (compile: 6ms, render: 20ms)
+ POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 26ms (compile: 16ms, render: 9ms)
+[CLIENT-LOG] loading recipe for id FBteAcGrT1LScUZwBeEe and graph null
+ POST /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 15ms (compile: 6ms, render: 9ms)
+[CLIENT-LOG] loading recipe for id: dGFw7paBS2IWtbjZhDbC
+ POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 32ms (compile: 6ms, render: 26ms)
+ POST /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 39ms (compile: 20ms, render: 19ms)
+ GET /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 27ms (compile: 5ms, render: 22ms)
+[CLIENT-LOG] checking icons for recipe id FBteAcGrT1LScUZwBeEe
+ POST /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 20ms (compile: 9ms, render: 11ms)
+[getOrCreateIconAction] Starting for: Ing A
+[getOrCreateIconAction] Starting for: Ing B
+[getOrCreateIconAction] Starting for: Proc A
+[getOrCreateIconAction] Starting for: Proc B
+[getOrCreateIconAction] Starting for: Common
+[getOrCreateIconAction] Found existing group: Ing B
+[getOrCreateIconAction] Found existing group: Ing A
+[getOrCreateIconAction] Found existing group: Proc A
+[getOrCreateIconAction] Found existing group: Proc B
+[getOrCreateIconAction] Found existing group: Common
+[getOrCreateIconAction] Found 1 existing icons for Ing B
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=d6qbrh
+[getOrCreateIconAction] Found 1 existing icons for Proc A
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=kaw1
+[getOrCreateIconAction] Found 1 existing icons for Ing A
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=iu6juq
+[getOrCreateIconAction] Found 1 existing icons for Proc B
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=capjum
+[getOrCreateIconAction] Found 1 existing icons for Common
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=0jhi7p
+[getOrCreateIconAction] Starting for: Extra A
+[getOrCreateIconAction] Starting for: Extra B
+[getOrCreateIconAction] Starting for: Final F
+[getOrCreateIconAction] Starting for: Final G
+[getOrCreateIconAction] Found existing group: Extra A
+[getOrCreateIconAction] Found existing group: Final F
+[getOrCreateIconAction] Found existing group: Extra B
+[getOrCreateIconAction] Found existing group: Final G
+[getOrCreateIconAction] Found 2 existing icons for Extra A
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=g97gzq
+[getOrCreateIconAction] Found 1 existing icons for Final F
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=fu163o
+[getOrCreateIconAction] Found 1 existing icons for Final G
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ujne1n
+[getOrCreateIconAction] Found 1 existing icons for Extra B
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=vhaly
+ POST /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 322ms (compile: 6ms, render: 316ms)
+[CLIENT-LOG] loading recipe for id: FBteAcGrT1LScUZwBeEe
+ POST /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 150ms (compile: 47ms, render: 103ms)
+ GET /lanes?new=true 200 in 871ms (compile: 24ms, render: 847ms)
+ GET /lanes?new=true 200 in 1026ms (compile: 117ms, render: 909ms)
+ GET /lanes 200 in 955ms (compile: 18ms, render: 937ms)
+ GET /lanes 200 in 983ms (compile: 97ms, render: 886ms)
+ GET /lanes?new=true 200 in 942ms (compile: 43ms, render: 899ms)
+ GET /lanes?new=true 200 in 997ms (compile: 52ms, render: 945ms)
+ GET /lanes?new=true 200 in 1007ms (compile: 214ms, render: 792ms)
+ GET /lanes?new=true 200 in 837ms (compile: 61ms, render: 776ms)
+ GET /lanes 200 in 833ms (compile: 63ms, render: 769ms)
+ GET /lanes 200 in 814ms (compile: 62ms, render: 752ms)
+ GET /lanes 200 in 820ms (compile: 63ms, render: 757ms)
+ GET /lanes?new=true 200 in 836ms (compile: 20ms, render: 816ms)
+ GET / 200 in 812ms (compile: 10ms, render: 802ms)
+ GET /lanes 200 in 796ms (compile: 17ms, render: 779ms)
+ GET /lanes?new=true 200 in 791ms (compile: 41ms, render: 750ms)
+ GET /lanes?new=true 200 in 763ms (compile: 43ms, render: 720ms)
+ GET /lanes 200 in 733ms (compile: 48ms, render: 685ms)
+ GET /lanes?new=true 200 in 697ms (compile: 43ms, render: 655ms)
+ GET /lanes 200 in 670ms (compile: 52ms, render: 618ms)
+ GET /lanes?new=true 200 in 630ms (compile: 45ms, render: 584ms)
+ GET /lanes 200 in 596ms (compile: 55ms, render: 541ms)
+ GET /lanes 200 in 555ms (compile: 102ms, render: 453ms)
+ GET /lanes?new=true 200 in 470ms (compile: 55ms, render: 415ms)
+ GET /lanes?new=true 200 in 431ms (compile: 45ms, render: 386ms)
+ GET /lanes?new=true 200 in 401ms (compile: 50ms, render: 351ms)
+ GET /lanes?new=true 200 in 366ms (compile: 46ms, render: 321ms)
+ GET /lanes?new=true 200 in 334ms (compile: 51ms, render: 283ms)
+ GET /lanes?new=true 200 in 387ms (compile: 46ms, render: 342ms)
+ GET /lanes?new=true 200 in 357ms (compile: 52ms, render: 305ms)
+ GET /lanes 200 in 193ms (compile: 28ms, render: 165ms)
+ POST /api/auth/logout 200 in 23ms (compile: 15ms, render: 8ms)
+[CLIENT-LOG] loading recipe for id: null
+ POST /lanes 200 in 68ms (compile: 27ms, render: 41ms)
+ GET /lanes?new=true 200 in 385ms (compile: 23ms, render: 362ms)
+ POST /api/auth/logout 200 in 75ms (compile: 21ms, render: 53ms)
+ POST /api/auth/logout 200 in 51ms (compile: 40ms, render: 10ms)
+[CLIENT-LOG] loading recipe for id: null
+ POST /lanes 200 in 75ms (compile: 47ms, render: 28ms)
+ GET /lanes 200 in 214ms (compile: 44ms, render: 169ms)
+ POST /api/auth/logout 200 in 31ms (compile: 21ms, render: 10ms)
+ GET /lanes 200 in 226ms (compile: 32ms, render: 193ms)
+ POST /api/auth/logout 200 in 46ms (compile: 18ms, render: 28ms)
+ POST /api/auth/logout 200 in 35ms (compile: 28ms, render: 8ms)
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 304ms (compile: 30ms, render: 274ms)
+ GET /lanes?new=true 200 in 565ms (compile: 27ms, render: 538ms)
+ POST /lanes 200 in 94ms (compile: 38ms, render: 56ms)
+ POST /api/auth/logout 200 in 113ms (compile: 20ms, render: 93ms)
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 594ms (compile: 30ms, render: 564ms)
+ GET /lanes 200 in 383ms (compile: 23ms, render: 360ms)
+[CLIENT-LOG] Starting visualization...
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 247ms (compile: 59ms, render: 188ms)
+ POST /lanes 200 in 128ms (compile: 25ms, render: 103ms)
+ POST /api/auth/logout 200 in 85ms (compile: 66ms, render: 19ms)
+ POST /lanes 200 in 134ms (compile: 63ms, render: 71ms)
+ POST /api/auth/logout 200 in 30ms (compile: 21ms, render: 8ms)
+ POST /lanes 200 in 131ms (compile: 72ms, render: 59ms)
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 444ms (compile: 28ms, render: 416ms)
+[CLIENT-LOG] loading recipe for id: null
+ POST /api/auth/logout 200 in 49ms (compile: 33ms, render: 16ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Notification Test"
+
+ POST /lanes 200 in 128ms (compile: 29ms, render: 99ms)
+ POST /lanes 200 in 141ms (compile: 38ms, render: 102ms)
+ POST /lanes 200 in 131ms (compile: 37ms, render: 94ms)
+[CLIENT-LOG] Starting visualization...
+[CLIENT-LOG] Starting visualization...
+[CLIENT-LOG] loading recipe for id: null
+ POST /api/auth/logout 200 in 115ms (compile: 56ms, render: 59ms)
+ POST /lanes 200 in 178ms (compile: 80ms, render: 98ms)
+ POST /lanes 200 in 178ms (compile: 87ms, render: 91ms)
+ POST /lanes 200 in 178ms (compile: 94ms, render: 84ms)
+[CLIENT-LOG] Starting visualization...
+ GET / 200 in 357ms (compile: 57ms, render: 300ms)
+ POST /api/auth/logout 200 in 96ms (compile: 25ms, render: 71ms)
+ GET /lanes 200 in 600ms (compile: 34ms, render: 567ms)
+[CLIENT-LOG] Saving parsed graph...
+ POST /lanes 200 in 154ms (compile: 54ms, render: 100ms)
+ GET /lanes?new=true 200 in 831ms (compile: 26ms, render: 806ms)
+ GET /lanes?new=true 200 in 832ms (compile: 43ms, render: 789ms)
+ POST /lanes 200 in 177ms (compile: 90ms, render: 87ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test complex"
+
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Guest Recipe"
+
+ GET /lanes 200 in 228ms (compile: 63ms, render: 165ms)
+[CLIENT-LOG] Starting visualization...
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ POST /lanes 200 in 131ms (compile: 49ms, render: 83ms)
+ POST /lanes 200 in 131ms (compile: 57ms, render: 74ms)
+ GET /lanes 200 in 599ms (compile: 46ms, render: 553ms)
+ POST /lanes 200 in 112ms (compile: 45ms, render: 67ms)
+ POST /lanes 200 in 95ms (compile: 35ms, render: 60ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ GET /lanes 200 in 551ms (compile: 62ms, render: 490ms)
+ POST /api/auth/logout 200 in 42ms (compile: 32ms, render: 9ms)
+ GET /lanes 200 in 526ms (compile: 79ms, render: 447ms)
+[CLIENT-LOG] loading recipe for id: null
+ POST /lanes 200 in 93ms (compile: 22ms, render: 71ms)
+ POST /lanes 200 in 87ms (compile: 28ms, render: 59ms)
+ POST /lanes 200 in 230ms (compile: 31ms, render: 199ms)
+[CLIENT-LOG] Saving parsed graph...
+ POST /api/auth/logout 200 in 90ms (compile: 24ms, render: 66ms)
+ GET / 200 in 746ms (compile: 24ms, render: 722ms)
+[CLIENT-LOG] Saving parsed graph...
+ GET /lanes 200 in 464ms (compile: 34ms, render: 430ms)
+[CLIENT-LOG] Saving parsed graph...
+ POST /lanes 200 in 177ms (compile: 89ms, render: 88ms)
+ POST /lanes 200 in 182ms (compile: 85ms, render: 97ms)
+[CLIENT-LOG] Saving parsed graph...
+ GET /lanes 200 in 276ms (compile: 46ms, render: 230ms)
+ POST /api/auth/logout 200 in 132ms (compile: 53ms, render: 79ms)
+ GET /lanes?new=true 200 in 764ms (compile: 31ms, render: 733ms)
+ POST /lanes 200 in 210ms (compile: 36ms, render: 173ms)
+⨯ Error: aborted
+    at ignore-listed frames {
+  code: 'ECONNRESET',
+  digest: '416835904'
+}
+ POST /lanes 200 in 241ms (compile: 93ms, render: 148ms)
+[CLIENT-LOG] loading recipe for id: null
+ POST /api/auth/logout 200 in 104ms (compile: 65ms, render: 39ms)
+ GET /lanes 200 in 321ms (compile: 76ms, render: 246ms)
+ POST /lanes 200 in 157ms (compile: 73ms, render: 84ms)
+ POST /lanes 200 in 383ms (compile: 59ms, render: 324ms)
+ POST /api/auth/logout 200 in 98ms (compile: 33ms, render: 65ms)
+ POST /lanes 200 in 329ms (compile: 60ms, render: 269ms)
+ GET /lanes 200 in 198ms (compile: 64ms, render: 134ms)
+ GET /lanes?new=true&id=KXeggmPeaoaChl24uPw9 200 in 578ms (compile: 36ms, render: 542ms)
+ POST /api/auth/logout 200 in 34ms (compile: 24ms, render: 10ms)
+ POST /lanes 200 in 348ms (compile: 68ms, render: 280ms)
+[CLIENT-LOG] Save result: {"id":"T318oywOzVromFmHA9xq"}
+[CLIENT-LOG] loading recipe for id: null
+ POST /lanes 200 in 511ms (compile: 29ms, render: 481ms)
+ POST /lanes 200 in 300ms (compile: 54ms, render: 246ms)
+ POST /lanes 200 in 299ms (compile: 72ms, render: 228ms)
+[CLIENT-LOG] Save result: {"id":"X4GMMC6XYEOYzktTqANk"}
+ GET /lanes?new=true 200 in 1033ms (compile: 29ms, render: 1003ms)
+ POST /api/auth/logout 200 in 58ms (compile: 32ms, render: 25ms)
+[CLIENT-LOG] Save result: {"id":"ayEyQLz3pYFHpsQXmCzO"}
+ GET /lanes 200 in 485ms (compile: 21ms, render: 464ms)
+ POST /lanes 200 in 109ms (compile: 24ms, render: 85ms)
+[CLIENT-LOG] Starting visualization...
+ POST /api/auth/logout 200 in 55ms (compile: 47ms, render: 8ms)
+ GET /lanes?new=true 200 in 1012ms (compile: 59ms, render: 953ms)
+ POST /lanes 200 in 130ms (compile: 43ms, render: 87ms)
+[CLIENT-LOG] loading recipe for id: null
+[CLIENT-LOG] loading recipe for id: T318oywOzVromFmHA9xq
+ POST /lanes 200 in 128ms (compile: 53ms, render: 75ms)
+[CLIENT-LOG] loading recipe for id: X4GMMC6XYEOYzktTqANk
+ POST /lanes 200 in 94ms (compile: 29ms, render: 66ms)
+ POST /lanes?id=T318oywOzVromFmHA9xq 200 in 94ms (compile: 43ms, render: 51ms)
+[CLIENT-LOG] loading recipe for id: ayEyQLz3pYFHpsQXmCzO
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test complex"
+
+[CLIENT-LOG] loading recipe for id: null
+ POST /api/auth/logout 200 in 57ms (compile: 17ms, render: 40ms)
+ POST /lanes?id=X4GMMC6XYEOYzktTqANk 200 in 101ms (compile: 19ms, render: 81ms)
+ GET /lanes?new=true 200 in 833ms (compile: 38ms, render: 795ms)
+ POST /lanes?id=ayEyQLz3pYFHpsQXmCzO 200 in 94ms (compile: 22ms, render: 72ms)
+ POST /lanes 200 in 94ms (compile: 30ms, render: 64ms)
+ POST /lanes 200 in 94ms (compile: 44ms, render: 50ms)
+[CLIENT-LOG] loading recipe for id: null
+ POST /api/auth/logout 200 in 79ms (compile: 47ms, render: 31ms)
+ GET /lanes 200 in 411ms (compile: 35ms, render: 375ms)
+ POST /lanes 200 in 137ms (compile: 41ms, render: 96ms)
+ POST /api/auth/logout 200 in 47ms (compile: 40ms, render: 7ms)
+[CLIENT-LOG] Starting visualization...
+[CLIENT-LOG] Starting visualization...
+ GET /lanes 200 in 505ms (compile: 36ms, render: 469ms)
+ GET /lanes 200 in 854ms (compile: 80ms, render: 774ms)
+ POST /lanes 200 in 163ms (compile: 67ms, render: 96ms)
+ POST /lanes 200 in 163ms (compile: 75ms, render: 88ms)
+[CLIENT-LOG] Saving parsed graph...
+ GET /lanes 200 in 255ms (compile: 50ms, render: 205ms)
+ POST /api/auth/logout 200 in 91ms (compile: 31ms, render: 60ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ POST /lanes 200 in 146ms (compile: 25ms, render: 121ms)
+[CLIENT-LOG] Starting visualization...
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 252ms (compile: 53ms, render: 198ms)
+ POST /api/auth/logout 200 in 107ms (compile: 45ms, render: 62ms)
+ GET /lanes 200 in 562ms (compile: 53ms, render: 509ms)
+ POST /lanes 200 in 165ms (compile: 23ms, render: 142ms)
+ POST /lanes 200 in 164ms (compile: 32ms, render: 132ms)
+ GET /lanes 200 in 602ms (compile: 26ms, render: 576ms)
+ POST /lanes 200 in 168ms (compile: 42ms, render: 126ms)
+ POST /lanes 200 in 156ms (compile: 39ms, render: 117ms)
+ GET /lanes 200 in 209ms (compile: 68ms, render: 141ms)
+ POST /api/auth/logout 200 in 57ms (compile: 24ms, render: 32ms)
+ GET /lanes 200 in 580ms (compile: 23ms, render: 557ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+[CLIENT-LOG] Starting visualization...
+[CLIENT-LOG] Saving parsed graph...
+[CLIENT-LOG] Saving parsed graph...
+[CLIENT-LOG] loading recipe for id: null
+ POST /api/auth/logout 200 in 59ms (compile: 45ms, render: 14ms)
+ GET /lanes 200 in 586ms (compile: 30ms, render: 557ms)
+ POST /lanes 200 in 161ms (compile: 26ms, render: 134ms)
+ POST /lanes 200 in 158ms (compile: 53ms, render: 105ms)
+ POST /lanes 200 in 228ms (compile: 83ms, render: 144ms)
+ POST /lanes 200 in 354ms (compile: 25ms, render: 329ms)
+ POST /lanes 200 in 165ms (compile: 33ms, render: 132ms)
+ POST /lanes 200 in 165ms (compile: 40ms, render: 124ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ POST /api/auth/logout 200 in 38ms (compile: 27ms, render: 11ms)
+ GET /lanes?new=true 200 in 839ms (compile: 24ms, render: 815ms)
+[CLIENT-LOG] Save result: {"id":"ynuxDoxcGsDIK0WlJN7U"}
+ POST /lanes 200 in 174ms (compile: 21ms, render: 153ms)
+ POST /lanes 200 in 182ms (compile: 71ms, render: 111ms)
+[CLIENT-LOG] Saving parsed graph...
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes?new=true 200 in 868ms (compile: 36ms, render: 832ms)
+ GET /lanes 200 in 565ms (compile: 30ms, render: 536ms)
+ GET /lanes 200 in 235ms (compile: 50ms, render: 186ms)
+ POST /lanes 200 in 98ms (compile: 36ms, render: 62ms)
+ POST /lanes 200 in 97ms (compile: 45ms, render: 52ms)
+ GET /lanes?new=true 200 in 779ms (compile: 51ms, render: 728ms)
+ GET /lanes 200 in 558ms (compile: 33ms, render: 524ms)
+ POST /lanes 200 in 290ms (compile: 65ms, render: 225ms)
+[CLIENT-LOG] loading recipe for id: ynuxDoxcGsDIK0WlJN7U
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 493ms (compile: 96ms, render: 397ms)
+[CLIENT-LOG] Starting visualization...
+ POST /lanes?id=ynuxDoxcGsDIK0WlJN7U 200 in 166ms (compile: 56ms, render: 110ms)
+ POST /lanes 200 in 163ms (compile: 60ms, render: 103ms)
+[CLIENT-LOG] Saving parsed graph...
+[CLIENT-LOG] Save result: {"id":"fwWuI5azsxNGcOtvQ1cP"}
+ POST /lanes 200 in 431ms (compile: 105ms, render: 326ms)
+ POST /lanes 200 in 133ms (compile: 45ms, render: 88ms)
+ POST /api/auth/logout 200 in 56ms (compile: 37ms, render: 19ms)
+ POST /lanes 200 in 166ms (compile: 76ms, render: 91ms)
+ POST /lanes 200 in 166ms (compile: 85ms, render: 81ms)
+[CLIENT-LOG] Starting visualization...
+[CLIENT-LOG] Save result: {"id":"Ksl3cYvgiJAXaRf4AvID"}
+ POST /lanes 200 in 147ms (compile: 79ms, render: 67ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+[CLIENT-LOG] loading recipe for id: fwWuI5azsxNGcOtvQ1cP
+ POST /lanes 200 in 141ms (compile: 52ms, render: 89ms)
+ POST /lanes 200 in 329ms (compile: 59ms, render: 269ms)
+ POST /lanes 200 in 92ms (compile: 29ms, render: 63ms)
+ POST /lanes?id=fwWuI5azsxNGcOtvQ1cP 200 in 91ms (compile: 47ms, render: 44ms)
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 465ms (compile: 35ms, render: 430ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+[CLIENT-LOG] Save result: {"id":"ypyxeDEfkhpPe7THvKYD"}
+[CLIENT-LOG] loading recipe for id: Ksl3cYvgiJAXaRf4AvID
+ POST /api/auth/logout 200 in 110ms (compile: 82ms, render: 28ms)
+ GET /lanes?new=true 200 in 812ms (compile: 85ms, render: 728ms)
+ POST /lanes 200 in 246ms (compile: 40ms, render: 205ms)
+ POST /api/auth/logout 200 in 119ms (compile: 106ms, render: 13ms)
+ POST /lanes 200 in 172ms (compile: 22ms, render: 150ms)
+ POST /lanes 200 in 172ms (compile: 44ms, render: 128ms)
+ POST /lanes 200 in 172ms (compile: 56ms, render: 116ms)
+ POST /lanes?id=Ksl3cYvgiJAXaRf4AvID 200 in 171ms (compile: 90ms, render: 81ms)
+ GET /lanes 200 in 543ms (compile: 26ms, render: 517ms)
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 448ms (compile: 20ms, render: 428ms)
+[CLIENT-LOG] Saving parsed graph...
+[CLIENT-LOG] Starting visualization...
+ POST /lanes 200 in 117ms (compile: 23ms, render: 94ms)
+ GET /lanes 200 in 526ms (compile: 58ms, render: 467ms)
+ POST /lanes 200 in 117ms (compile: 33ms, render: 84ms)
+ POST /lanes 200 in 117ms (compile: 50ms, render: 67ms)
+[CLIENT-LOG] loading recipe for id: ypyxeDEfkhpPe7THvKYD
+[CLIENT-LOG] Starting visualization...
+ POST /api/auth/logout 200 in 99ms (compile: 81ms, render: 18ms)
+ POST /lanes?id=ypyxeDEfkhpPe7THvKYD 200 in 153ms (compile: 24ms, render: 129ms)
+[CLIENT-LOG] Saving parsed graph...
+[CLIENT-LOG] loading recipe for id: null
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Original Text"
+
+ GET /lanes 200 in 540ms (compile: 65ms, render: 474ms)
+ POST /lanes 200 in 207ms (compile: 52ms, render: 155ms)
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 541ms (compile: 92ms, render: 448ms)
+ POST /lanes 200 in 217ms (compile: 101ms, render: 115ms)
+ POST /api/auth/logout 200 in 72ms (compile: 59ms, render: 13ms)
+ POST /lanes 200 in 178ms (compile: 61ms, render: 118ms)
+ POST /lanes 200 in 178ms (compile: 72ms, render: 106ms)
+ POST /lanes 200 in 167ms (compile: 53ms, render: 114ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Shared"
+
+ POST /api/auth/logout 200 in 77ms (compile: 60ms, render: 17ms)
+[CLIENT-LOG] Starting visualization...
+ GET /lanes?id=ypyxeDEfkhpPe7THvKYD 200 in 592ms (compile: 50ms, render: 541ms)
+ POST /lanes 200 in 186ms (compile: 55ms, render: 132ms)
+ POST /lanes 200 in 454ms (compile: 116ms, render: 338ms)
+ POST /lanes 200 in 185ms (compile: 90ms, render: 95ms)
+[CLIENT-LOG] Saving parsed graph...
+[CLIENT-LOG] loading recipe for id: null
+[CLIENT-LOG] loading recipe for id: null
+ POST /api/auth/logout 200 in 102ms (compile: 60ms, render: 42ms)
+ GET /lanes 200 in 650ms (compile: 64ms, render: 586ms)
+ POST / 200 in 427ms (compile: 62ms, render: 364ms)
+ POST /lanes 200 in 134ms (compile: 21ms, render: 113ms)
+ GET /lanes 200 in 683ms (compile: 29ms, render: 654ms)
+ POST /lanes 200 in 139ms (compile: 65ms, render: 73ms)
+ POST /lanes 200 in 138ms (compile: 75ms, render: 63ms)
+ POST /lanes 200 in 359ms (compile: 35ms, render: 324ms)
+[CLIENT-LOG] Saving parsed graph...
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+[getOrCreateIconAction] Starting for: Golden Apple
+ POST /lanes?id=ypyxeDEfkhpPe7THvKYD 200 in 505ms (compile: 54ms, render: 451ms)
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 561ms (compile: 42ms, render: 518ms)
+ POST /lanes 200 in 126ms (compile: 25ms, render: 101ms)
+ POST /lanes 200 in 125ms (compile: 42ms, render: 83ms)
+[CLIENT-LOG] Starting visualization...
+ POST /lanes 200 in 164ms (compile: 61ms, render: 103ms)
+[CLIENT-LOG] Save result: {"id":"QOwVZ9GQGz3SsvursiY7"}
+[CLIENT-LOG] loading recipe for id: null
+[getOrCreateIconAction] Found existing group: Golden Apple
+ GET /lanes 200 in 608ms (compile: 44ms, render: 564ms)
+ POST /lanes 200 in 177ms (compile: 62ms, render: 116ms)
+ POST /lanes 200 in 171ms (compile: 62ms, render: 109ms)
+ POST /lanes 200 in 171ms (compile: 72ms, render: 98ms)
+[CLIENT-LOG] Starting visualization...
+[getOrCreateIconAction] Found 1 existing icons for Golden Apple
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=a3jdpp
+ GET /lanes 200 in 668ms (compile: 62ms, render: 606ms)
+[CLIENT-LOG] loading recipe for id: null
+[CLIENT-LOG] Saving parsed graph...
+ GET /lanes 200 in 644ms (compile: 67ms, render: 576ms)
+ GET /lanes 200 in 525ms (compile: 31ms, render: 494ms)
+ POST /lanes 200 in 123ms (compile: 44ms, render: 79ms)
+ POST /lanes 200 in 334ms (compile: 36ms, render: 298ms)
+[CLIENT-LOG] Starting visualization...
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Soup
+Boil water."
+
+ POST /lanes 200 in 186ms (compile: 63ms, render: 123ms)
+ POST /lanes 200 in 186ms (compile: 73ms, render: 113ms)
+ POST / 200 in 487ms (compile: 55ms, render: 432ms)
+[CLIENT-LOG] loading recipe for id: null
+[CLIENT-LOG] loading recipe for id: QOwVZ9GQGz3SsvursiY7
+ POST /lanes 200 in 142ms (compile: 43ms, render: 99ms)
+ POST /lanes 200 in 141ms (compile: 76ms, render: 65ms)
+[CLIENT-LOG] Save result: {"id":"THMCVkDGEBqHXZr8BxIX"}
+ POST /lanes 200 in 148ms (compile: 85ms, render: 64ms)
+ POST /lanes?id=QOwVZ9GQGz3SsvursiY7 200 in 148ms (compile: 95ms, render: 53ms)
+ POST /lanes 200 in 285ms (compile: 15ms, render: 270ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+[CLIENT-LOG] Starting visualization...
+ POST /lanes 200 in 110ms (compile: 21ms, render: 90ms)
+ GET /lanes?id=ypyxeDEfkhpPe7THvKYD 200 in 519ms (compile: 109ms, render: 409ms)
+ POST /lanes 200 in 116ms (compile: 28ms, render: 88ms)
+ POST /lanes 200 in 115ms (compile: 68ms, render: 47ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"complex test"
+
+[CLIENT-LOG] Save result: {"id":"DLoFnkfFgdhiMTIXX1ye"}
+ POST /api/auth/logout 200 in 68ms (compile: 54ms, render: 14ms)
+ GET /lanes 200 in 606ms (compile: 33ms, render: 573ms)
+ GET /gallery 200 in 9.2s (compile: 1674ms, render: 7.5s)
+ GET /gallery 200 in 9.2s (compile: 1719ms, render: 7.5s)
+ GET /lanes?id=ypyxeDEfkhpPe7THvKYD 200 in 701ms (compile: 82ms, render: 619ms)
+ POST /lanes 200 in 210ms (compile: 26ms, render: 184ms)
+ POST /lanes 200 in 210ms (compile: 42ms, render: 168ms)
+ POST /lanes 200 in 337ms (compile: 61ms, render: 277ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Recipe"
+
+[CLIENT-LOG] Saving parsed graph...
+ POST /api/auth/logout 200 in 126ms (compile: 34ms, render: 92ms)
+ POST /api/auth/logout 200 in 126ms (compile: 42ms, render: 84ms)
+ POST /api/auth/logout 200 in 124ms (compile: 81ms, render: 43ms)
+ GET /lanes 200 in 699ms (compile: 23ms, render: 676ms)
+[CLIENT-LOG] loading recipe for id: THMCVkDGEBqHXZr8BxIX
+ GET /lanes?id=QOwVZ9GQGz3SsvursiY7 200 in 643ms (compile: 59ms, render: 584ms)
+[CLIENT-LOG] Saving parsed graph...
+ POST /lanes 200 in 246ms (compile: 53ms, render: 193ms)
+ POST /lanes 200 in 245ms (compile: 72ms, render: 174ms)
+[CLIENT-LOG] Save result: {"id":"QC51TwaJ0CA5ZygFXcCI"}
+ GET /lanes 200 in 727ms (compile: 22ms, render: 704ms)
+ POST /lanes?id=THMCVkDGEBqHXZr8BxIX 200 in 242ms (compile: 133ms, render: 109ms)
+[CLIENT-LOG] loading recipe for id: DLoFnkfFgdhiMTIXX1ye
+ POST /api/auth/logout 200 in 95ms (compile: 32ms, render: 63ms)
+ POST /lanes 200 in 215ms (compile: 60ms, render: 155ms)
+[CLIENT-LOG] Saving parsed graph...
+ POST /lanes 200 in 190ms (compile: 70ms, render: 119ms)
+ POST /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 134ms (compile: 25ms, render: 109ms)
+ GET /lanes 200 in 722ms (compile: 40ms, render: 682ms)
+ POST /lanes 200 in 139ms (compile: 83ms, render: 56ms)
+[CLIENT-LOG] Saving parsed graph...
+ GET /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 305ms (compile: 70ms, render: 235ms)
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 675ms (compile: 62ms, render: 613ms)
+ POST /lanes 200 in 103ms (compile: 44ms, render: 59ms)
+[CLIENT-LOG] loading recipe for id: QC51TwaJ0CA5ZygFXcCI
+ GET /lanes?id=ypyxeDEfkhpPe7THvKYD 200 in 726ms (compile: 82ms, render: 644ms)
+ POST /lanes 200 in 123ms (compile: 39ms, render: 84ms)
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 548ms (compile: 86ms, render: 462ms)
+ POST /lanes?id=QC51TwaJ0CA5ZygFXcCI 200 in 85ms (compile: 24ms, render: 61ms)
+ GET /lanes?new=true 200 in 449ms (compile: 94ms, render: 355ms)
+ POST /lanes 200 in 96ms (compile: 49ms, render: 47ms)
+[CLIENT-LOG] Starting visualization...
+ POST /api/auth/logout 200 in 83ms (compile: 55ms, render: 28ms)
+ GET /lanes?id=QOwVZ9GQGz3SsvursiY7 200 in 630ms (compile: 113ms, render: 517ms)
+ POST /lanes?id=THMCVkDGEBqHXZr8BxIX 200 in 280ms (compile: 12ms, render: 268ms)
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 432ms (compile: 38ms, render: 394ms)
+ POST /lanes 200 in 119ms (compile: 48ms, render: 71ms)
+[CLIENT-LOG] Starting visualization...
+ POST /lanes 200 in 169ms (compile: 76ms, render: 93ms)
+ POST /lanes 200 in 372ms (compile: 31ms, render: 341ms)
+ POST /lanes 200 in 409ms (compile: 51ms, render: 358ms)
+ GET /lanes?id=HAekB083xHG3p72Azl7b 200 in 142ms (compile: 114ms, render: 28ms)
+ POST /lanes 200 in 360ms (compile: 13ms, render: 347ms)
+ POST /lanes 200 in 156ms (compile: 40ms, render: 116ms)
+ GET /lanes?id=QC51TwaJ0CA5ZygFXcCI 200 in 438ms (compile: 48ms, render: 390ms)
+ POST /lanes?id=QOwVZ9GQGz3SsvursiY7 200 in 367ms (compile: 39ms, render: 328ms)
+ POST /lanes 200 in 293ms (compile: 19ms, render: 275ms)
+[CLIENT-LOG] Starting visualization...
+[CLIENT-LOG] Save result: {"id":"0qg5cuGsYZulJbTQK1XQ"}
+[CLIENT-LOG] Save result: {"id":"YWAsn1e9w3ei9r8tSKmE"}
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ GET /lanes 200 in 278ms (compile: 49ms, render: 229ms)
+ GET /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 720ms (compile: 60ms, render: 660ms)
+ POST /lanes 200 in 131ms (compile: 38ms, render: 93ms)
+ POST /lanes 200 in 131ms (compile: 49ms, render: 83ms)
+ POST /lanes 200 in 132ms (compile: 58ms, render: 74ms)
+ POST /lanes 200 in 132ms (compile: 67ms, render: 65ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+[CLIENT-LOG] Save result: {"id":"M79I87wsno51LEEsv1nL"}
+[CLIENT-LOG] loading recipe for id: null
+ GET /lanes 200 in 472ms (compile: 61ms, render: 411ms)
+ POST /lanes 200 in 105ms (compile: 16ms, render: 89ms)
+ POST /lanes 200 in 103ms (compile: 41ms, render: 62ms)
+ GET /lanes?id=YWAsn1e9w3ei9r8tSKmE 200 in 62ms (compile: 20ms, render: 42ms)
+ GET /lanes 200 in 523ms (compile: 22ms, render: 501ms)
+ POST /lanes 200 in 106ms (compile: 47ms, render: 59ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+⨯ Error: aborted
+    at ignore-listed frames {
+  code: 'ECONNRESET',
+  digest: '416835904'
+}
+[CLIENT-LOG] loading recipe for id: 0qg5cuGsYZulJbTQK1XQ
+[CLIENT-LOG] loading recipe for id: M79I87wsno51LEEsv1nL
+ GET /lanes 200 in 474ms (compile: 11ms, render: 463ms)
+ POST /lanes 200 in 75ms (compile: 13ms, render: 62ms)
+ POST /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 74ms (compile: 30ms, render: 44ms)
+[CLIENT-LOG] Starting visualization...
+[CLIENT-LOG] Saving parsed graph...
+ POST /lanes?id=M79I87wsno51LEEsv1nL 200 in 78ms (compile: 27ms, render: 51ms)
+ POST /lanes 200 in 74ms (compile: 51ms, render: 23ms)
+ GET /lanes 200 in 394ms (compile: 13ms, render: 381ms)
+ GET /lanes?id=QC51TwaJ0CA5ZygFXcCI 200 in 392ms (compile: 76ms, render: 316ms)
+ POST /lanes 200 in 78ms (compile: 35ms, render: 42ms)
+ GET /lanes?id=QOwVZ9GQGz3SsvursiY7 200 in 268ms (compile: 26ms, render: 242ms)
+[CLIENT-LOG] Saving parsed graph...
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"test eggs"
+
+ GET /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 279ms (compile: 40ms, render: 240ms)
+ POST /lanes 200 in 71ms (compile: 33ms, render: 38ms)
+ POST /lanes 200 in 70ms (compile: 49ms, render: 21ms)
+[CLIENT-LOG] Saving parsed graph...
+[CLIENT-LOG] loading recipe for id: QOwVZ9GQGz3SsvursiY7
+ GET /lanes?id=M79I87wsno51LEEsv1nL 200 in 249ms (compile: 12ms, render: 237ms)
+ POST /lanes 200 in 57ms (compile: 8ms, render: 49ms)
+ POST /lanes?id=QOwVZ9GQGz3SsvursiY7 200 in 55ms (compile: 37ms, render: 18ms)
+ GET /lanes 200 in 259ms (compile: 34ms, render: 225ms)
+ POST /lanes 200 in 155ms (compile: 42ms, render: 112ms)
+ GET /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 177ms (compile: 11ms, render: 166ms)
+[CLIENT-LOG] Save result: {"id":"JJWCXTOjXWHAAXUQBb1p"}
+ GET /lanes?id=QC51TwaJ0CA5ZygFXcCI 200 in 280ms (compile: 6ms, render: 273ms)
+ POST /lanes 200 in 65ms (compile: 7ms, render: 58ms)
+ GET /lanes?id=M79I87wsno51LEEsv1nL 200 in 172ms (compile: 15ms, render: 157ms)
+ POST /lanes 200 in 120ms (compile: 7ms, render: 113ms)
+[CLIENT-LOG] Saving parsed graph...
+ POST /lanes 200 in 73ms (compile: 31ms, render: 42ms)
+[CLIENT-LOG] Save result: {"id":"TewQvc5p3EXugI0tC8EP"}
+ POST /lanes 200 in 198ms (compile: 7ms, render: 191ms)
+[CLIENT-LOG] loading recipe for id: JJWCXTOjXWHAAXUQBb1p
+ POST /lanes 200 in 67ms (compile: 32ms, render: 35ms)
+ POST /lanes?id=JJWCXTOjXWHAAXUQBb1p 200 in 79ms (compile: 40ms, render: 39ms)
+[CLIENT-LOG] Save result: {"id":"nwwDM3nAnIRMF5YSoKYX"}
+ POST /lanes 200 in 82ms (compile: 63ms, render: 19ms)
+ GET /lanes?id=JJWCXTOjXWHAAXUQBb1p 200 in 156ms (compile: 13ms, render: 143ms)
+[CLIENT-LOG] loading recipe for id: TewQvc5p3EXugI0tC8EP
+ GET /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 324ms (compile: 16ms, render: 309ms)
+ POST /lanes?id=TewQvc5p3EXugI0tC8EP 200 in 52ms (compile: 31ms, render: 21ms)
+ POST /lanes 200 in 167ms (compile: 15ms, render: 152ms)
+[CLIENT-LOG] loading recipe for id: DLoFnkfFgdhiMTIXX1ye
+[CLIENT-LOG] loading recipe for id: nwwDM3nAnIRMF5YSoKYX
+ GET /lanes?id=M79I87wsno51LEEsv1nL 200 in 372ms (compile: 13ms, render: 359ms)
+ POST /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 115ms (compile: 26ms, render: 90ms)
+ POST /lanes?id=nwwDM3nAnIRMF5YSoKYX 200 in 114ms (compile: 77ms, render: 37ms)
+[CLIENT-LOG] Save result: {"id":"BySyNxI3LPuBfyqKFUER"}
+ GET /lanes?id=TewQvc5p3EXugI0tC8EP 200 in 272ms (compile: 18ms, render: 255ms)
+ GET /lanes?id=nwwDM3nAnIRMF5YSoKYX 200 in 173ms (compile: 11ms, render: 162ms)
+ POST /lanes 200 in 59ms (compile: 12ms, render: 47ms)
+ GET /lanes?id=JJWCXTOjXWHAAXUQBb1p 200 in 240ms (compile: 9ms, render: 232ms)
+ GET /lanes?new=true 200 in 243ms (compile: 61ms, render: 182ms)
+[CLIENT-LOG] loading recipe for id: BySyNxI3LPuBfyqKFUER
+ POST /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 83ms (compile: 47ms, render: 36ms)
+ GET /lanes?id=TewQvc5p3EXugI0tC8EP 200 in 254ms (compile: 21ms, render: 233ms)
+ GET /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 383ms (compile: 33ms, render: 349ms)
+ GET /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 245ms (compile: 32ms, render: 213ms)
+ GET /lanes 200 in 182ms (compile: 32ms, render: 149ms)
+ GET /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 282ms (compile: 14ms, render: 267ms)
+ GET /lanes?id=JJWCXTOjXWHAAXUQBb1p 200 in 224ms (compile: 16ms, render: 208ms)
+ GET /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 92ms (compile: 10ms, render: 82ms)
+ GET /lanes?id=TewQvc5p3EXugI0tC8EP 200 in 193ms (compile: 14ms, render: 179ms)
+ GET /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 127ms (compile: 8ms, render: 119ms)
+ POST /api/auth/logout 200 in 13ms (compile: 7ms, render: 6ms)
+[CLIENT-LOG] loading recipe for id: M79I87wsno51LEEsv1nL
+ POST /lanes?id=M79I87wsno51LEEsv1nL 200 in 25ms (compile: 8ms, render: 17ms)
+[CLIENT-LOG] loading recipe for id M79I87wsno51LEEsv1nL and graph null
+ POST /lanes?id=M79I87wsno51LEEsv1nL 200 in 29ms (compile: 9ms, render: 21ms)
+ POST /lanes?id=M79I87wsno51LEEsv1nL 200 in 42ms (compile: 10ms, render: 32ms)
+[CLIENT-LOG] loading recipe for id: DLoFnkfFgdhiMTIXX1ye
+ POST /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 61ms (compile: 11ms, render: 50ms)
+[CLIENT-LOG] loading recipe for id: 0qg5cuGsYZulJbTQK1XQ
+[CLIENT-LOG] loading recipe for id DLoFnkfFgdhiMTIXX1ye and graph null
+ POST /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 64ms (compile: 7ms, render: 57ms)
+ POST /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 69ms (compile: 46ms, render: 22ms)
+[CLIENT-LOG] checking icons for recipe id M79I87wsno51LEEsv1nL
+[CLIENT-LOG] loading recipe for id: JJWCXTOjXWHAAXUQBb1p
+[CLIENT-LOG] loading recipe for id: TewQvc5p3EXugI0tC8EP
+ POST /api/auth/logout 200 in 47ms (compile: 17ms, render: 30ms)
+ POST /api/auth/logout 200 in 48ms (compile: 20ms, render: 28ms)
+ POST /lanes?id=M79I87wsno51LEEsv1nL 200 in 58ms (compile: 11ms, render: 47ms)
+ POST /lanes?id=JJWCXTOjXWHAAXUQBb1p 200 in 57ms (compile: 25ms, render: 32ms)
+ POST /lanes?id=TewQvc5p3EXugI0tC8EP 200 in 57ms (compile: 32ms, render: 25ms)
+ GET /lanes?id=M79I87wsno51LEEsv1nL 200 in 208ms (compile: 23ms, render: 186ms)
+[CLIENT-LOG] loading recipe for id JJWCXTOjXWHAAXUQBb1p and graph null
+ POST /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 55ms (compile: 9ms, render: 46ms)
+[CLIENT-LOG] loading recipe for id TewQvc5p3EXugI0tC8EP and graph null
+[getOrCreateIconAction] Starting for: Mock Ing 1
+ POST /lanes?id=JJWCXTOjXWHAAXUQBb1p 200 in 30ms (compile: 7ms, render: 23ms)
+ POST /lanes?id=TewQvc5p3EXugI0tC8EP 200 in 38ms (compile: 17ms, render: 21ms)
+[getOrCreateIconAction] Found existing group: Mock Ing 1
+ GET /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 240ms (compile: 15ms, render: 225ms)
+[getOrCreateIconAction] Found 1 existing icons for Mock Ing 1
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=xq8mu
+ POST /lanes?id=JJWCXTOjXWHAAXUQBb1p 200 in 48ms (compile: 6ms, render: 42ms)
+[CLIENT-LOG] checking icons for recipe id DLoFnkfFgdhiMTIXX1ye
+[CLIENT-LOG] loading recipe for id: BySyNxI3LPuBfyqKFUER
+ POST /api/auth/logout 200 in 35ms (compile: 6ms, render: 29ms)
+ POST /lanes?id=TewQvc5p3EXugI0tC8EP 200 in 78ms (compile: 14ms, render: 64ms)
+ POST /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 41ms (compile: 11ms, render: 30ms)
+ POST /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 41ms (compile: 20ms, render: 22ms)
+ POST /lanes?id=M79I87wsno51LEEsv1nL 200 in 153ms (compile: 8ms, render: 146ms)
+[CLIENT-LOG] loading recipe for id BySyNxI3LPuBfyqKFUER and graph null
+[CLIENT-LOG] checking icons for recipe id JJWCXTOjXWHAAXUQBb1p
+[getOrCreateIconAction] Starting for: Mock Ing 1
+ POST /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 43ms (compile: 20ms, render: 23ms)
+[CLIENT-LOG] checking icons for recipe id TewQvc5p3EXugI0tC8EP
+ POST /lanes?id=JJWCXTOjXWHAAXUQBb1p 200 in 40ms (compile: 16ms, render: 24ms)
+[CLIENT-LOG] loading recipe for id: M79I87wsno51LEEsv1nL
+ POST /lanes?id=TewQvc5p3EXugI0tC8EP 200 in 32ms (compile: 9ms, render: 23ms)
+[getOrCreateIconAction] Found existing group: Mock Ing 1
+ POST /lanes?id=M79I87wsno51LEEsv1nL 200 in 46ms (compile: 7ms, render: 39ms)
+[getOrCreateIconAction] Starting for: 2 Eggs
+[getOrCreateIconAction] Starting for: Flour
+[getOrCreateIconAction] Starting for: Mixing bowl
+[getOrCreateIconAction] Found 1 existing icons for Mock Ing 1
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=xq8mu
+ GET /lanes?id=JJWCXTOjXWHAAXUQBb1p 200 in 176ms (compile: 8ms, render: 168ms)
+ POST /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 68ms (compile: 15ms, render: 52ms)
+ GET /lanes?id=TewQvc5p3EXugI0tC8EP 200 in 177ms (compile: 25ms, render: 152ms)
+[getOrCreateIconAction] Starting for: 2 Eggs
+[getOrCreateIconAction] Starting for: Flour
+[getOrCreateIconAction] Starting for: Mixing bowl
+[getOrCreateIconAction] Found existing group: Flour
+[getOrCreateIconAction] Found existing group: Mixing Bowl
+[getOrCreateIconAction] Found existing group: 2 Eggs
+ POST /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 199ms (compile: 7ms, render: 192ms)
+[getOrCreateIconAction] Found 1 existing icons for Mixing Bowl
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ljrb6f
+[getOrCreateIconAction] Found 1 existing icons for Flour
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ioyuyl
+[getOrCreateIconAction] Found existing group: 2 Eggs
+[getOrCreateIconAction] Found 1 existing icons for 2 Eggs
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=0mozq9
+[getOrCreateIconAction] Found existing group: Flour
+[getOrCreateIconAction] Found existing group: Mixing Bowl
+[getOrCreateIconAction] Found 1 existing icons for 2 Eggs
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=0mozq9
+[getOrCreateIconAction] Found 1 existing icons for Flour
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ioyuyl
+[getOrCreateIconAction] Found 1 existing icons for Mixing Bowl
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ljrb6f
+ POST /lanes?id=JJWCXTOjXWHAAXUQBb1p 200 in 179ms (compile: 18ms, render: 161ms)
+[CLIENT-LOG] checking icons for recipe id BySyNxI3LPuBfyqKFUER
+ POST /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 19ms (compile: 8ms, render: 11ms)
+ POST /lanes?id=TewQvc5p3EXugI0tC8EP 200 in 165ms (compile: 9ms, render: 156ms)
+ GET /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 130ms (compile: 9ms, render: 121ms)
+[getOrCreateIconAction] Starting for: 2 Eggs
+[getOrCreateIconAction] Starting for: Flour
+[getOrCreateIconAction] Starting for: Mixing bowl
+[getOrCreateIconAction] Found existing group: 2 Eggs
+[getOrCreateIconAction] Found existing group: Mixing Bowl
+[getOrCreateIconAction] Found existing group: Flour
+[getOrCreateIconAction] Found 1 existing icons for 2 Eggs
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=0mozq9
+[getOrCreateIconAction] Found 1 existing icons for Flour
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ioyuyl
+[getOrCreateIconAction] Found 1 existing icons for Mixing Bowl
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ljrb6f
+ POST /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 69ms (compile: 5ms, render: 64ms)
+[CLIENT-LOG] loading recipe for id: TewQvc5p3EXugI0tC8EP
+ POST /lanes?id=TewQvc5p3EXugI0tC8EP 200 in 11ms (compile: 5ms, render: 7ms)
+[CLIENT-LOG] loading recipe for id: 0qg5cuGsYZulJbTQK1XQ
+[CLIENT-LOG] loading recipe for id: JJWCXTOjXWHAAXUQBb1p
+ POST /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 34ms (compile: 6ms, render: 28ms)
+ POST /lanes?id=JJWCXTOjXWHAAXUQBb1p 200 in 22ms (compile: 6ms, render: 16ms)
+[CLIENT-LOG] loading recipe for id 0qg5cuGsYZulJbTQK1XQ and graph null
+ POST /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 12ms (compile: 5ms, render: 7ms)
+[CLIENT-LOG] loading recipe for id: BySyNxI3LPuBfyqKFUER
+ POST /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 13ms (compile: 4ms, render: 9ms)
+ POST /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 28ms (compile: 5ms, render: 22ms)
+[CLIENT-LOG] Starting visualization...
+ POST /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 10ms (compile: 4ms, render: 6ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Shared"
+
+ POST /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 19ms (compile: 6ms, render: 13ms)
+[CLIENT-LOG] checking icons for recipe id 0qg5cuGsYZulJbTQK1XQ
+ POST /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 12ms (compile: 5ms, render: 7ms)
+[getOrCreateIconAction] Starting for: Mock Ing 1
+[getOrCreateIconAction] Found existing group: Mock Ing 1
+[CLIENT-LOG] Saving parsed graph...
+ POST /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 20ms (compile: 12ms, render: 8ms)
+[getOrCreateIconAction] Found 1 existing icons for Mock Ing 1
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=xq8mu
+ POST /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 51ms (compile: 5ms, render: 46ms)
+ POST /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 72ms (compile: 5ms, render: 67ms)
+[CLIENT-LOG] Save result: {"id":"DLoFnkfFgdhiMTIXX1ye"}
+ POST /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 12ms (compile: 5ms, render: 7ms)
+[CLIENT-LOG] loading recipe for id: DLoFnkfFgdhiMTIXX1ye
+ POST /lanes?id=DLoFnkfFgdhiMTIXX1ye 200 in 14ms (compile: 6ms, render: 8ms)
+[CLIENT-LOG] Starting visualization...
+ POST /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 13ms (compile: 6ms, render: 8ms)
+[MockAIService] generateText received prompt: 
+You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+
+### Core Philosophy: The State-Flow Pattern
+1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+
+### Critical Rules
+1. **QUANTITY:** The 
+text
+ field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+4. **TITLE & SERVES:** Extract a concise 
+_title_
+ and estimated 
+_baseServes_
+ (number) from the text.
+
+### Schema
+Return ONLY raw JSON complying with this TypeScript interface:
+
+```typescript
+
+interface RecipeGraph {
+  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+  baseServes?: number; // Estimated servings (e.g. 4)
+  lanes: {
+    id: string;
+    label: string; // e.g. "Skillet"
+    type: 'prep' | 'cook' | 'serve';
+  }[];
+  nodes: {
+    id: string;
+    laneId: string; // Must match a lane.id
+    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+    visualDescription: string; // Detailed prompt for pixel-art icon
+    type: 'ingredient' | 'action';
+    inputs?: string[]; // IDs of previous nodes flowing into this one
+    temperature?: string; // e.g. "Medium Heat" (for actions)
+    duration?: string; // e.g. "5 min" (for actions)
+  }[];
+}
+
+```
+
+### Visual Description Guidelines (CRITICAL)
+These are cached, so simplicity and consistency is key.
+
+1. **INGREDIENT Nodes (The "Item"):**
+   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+   - **Examples:**
+     - "3 Eggs" -> "egg"
+     - "A pinch of Salt" -> "Salt"
+     - "Bottle of Olive Oil" -> "Olive Oil"
+     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+
+2. **ACTION Nodes (The "State"):
+
+### Input Recipe
+"Alice Soup
+Boil water.
+Add salt."
+
+ POST /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 13ms (compile: 5ms, render: 8ms)
+[CLIENT-LOG] Saving parsed graph...
+ POST /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 18ms (compile: 8ms, render: 10ms)
+ GET /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 89ms (compile: 5ms, render: 85ms)
+ POST /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 80ms (compile: 5ms, render: 75ms)
+[CLIENT-LOG] Save result: {"id":"0qg5cuGsYZulJbTQK1XQ"}
+ POST /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 13ms (compile: 6ms, render: 7ms)
+[CLIENT-LOG] loading recipe for id: BySyNxI3LPuBfyqKFUER
+ POST /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 13ms (compile: 5ms, render: 8ms)
+ POST /api/auth/logout 200 in 8ms (compile: 3ms, render: 5ms)
+[CLIENT-LOG] loading recipe for id: 0qg5cuGsYZulJbTQK1XQ
+[CLIENT-LOG] loading recipe for id BySyNxI3LPuBfyqKFUER and graph null
+ POST /lanes?id=0qg5cuGsYZulJbTQK1XQ 200 in 31ms (compile: 11ms, render: 20ms)
+ POST /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 13ms (compile: 5ms, render: 8ms)
+ POST /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 22ms (compile: 5ms, render: 17ms)
+ GET /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 25ms (compile: 6ms, render: 19ms)
+[CLIENT-LOG] checking icons for recipe id BySyNxI3LPuBfyqKFUER
+ POST /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 14ms (compile: 6ms, render: 7ms)
+[getOrCreateIconAction] Starting for: 2 Eggs
+[getOrCreateIconAction] Starting for: Flour
+[getOrCreateIconAction] Starting for: Mixing bowl
+[getOrCreateIconAction] Found existing group: 2 Eggs
+[getOrCreateIconAction] Found existing group: Flour
+[getOrCreateIconAction] Found existing group: Mixing Bowl
+[getOrCreateIconAction] Found 1 existing icons for 2 Eggs
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=0mozq9
+[getOrCreateIconAction] Found 1 existing icons for Flour
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ioyuyl
+[getOrCreateIconAction] Found 1 existing icons for Mixing Bowl
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ljrb6f
+ POST /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 64ms (compile: 7ms, render: 57ms)
+[CLIENT-LOG] loading recipe for id: BySyNxI3LPuBfyqKFUER
+ POST /lanes?id=BySyNxI3LPuBfyqKFUER 200 in 12ms (compile: 5ms, render: 7ms)
+✓ Compiled in 67ms
+✓ Compiled in 53ms
+Persisting failed: Failed to compact database
+
+Caused by:
+    0: Failed to merge database files for family 2
+    1: Unable to open static sorted file referenced from 00000025.meta
+    2: Unable to open static sorted file 00000001.sst
+    3: No such file or directory (os error 2)
+✓ Compiled in 60ms
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+✓ Compiled in 104ms
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+✓ Compiled in 58ms
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+WARNING: You are using the Auth Emulator, which is intended for local testing only.  Do not use with production credentials.
+ GET /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 816ms (compile: 540ms, render: 276ms)
+🔥 Admin SDK switching to Emulator mode via Env Vars
 [CLIENT-LOG] loading recipe for id: j2P4GB2zyfuJC8bvLHz2
- POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 12ms (compile: 5ms, render: 7ms)
-[CLIENT-LOG] loading recipe for id mRodhcadrb7XFDol4cvw and graph {"title":"Mock Recipe","baseServes":1,"serves":1,"originalText":"complex","lanes":[{"id":"l1","label":"Prep","type":"prep"},{"id":"l2","label":"Cook","type":"cook"}],"visibility":"unlisted","nodes":[{"id":"1","laneId":"l1","text":"Ingredient A","type":"ingredient","visualDescription":"Ing A","canonicalName":"Ingredient A","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=iu6juq"},{"id":"2","laneId":"l1","text":"Ingredient B","type":"ingredient","visualDescription":"Ing B","canonicalName":"Ingredient B","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=d6qbrh"},{"id":"3","laneId":"l1","text":"Process A","type":"action","inputs":["1"],"visualDescription":"Proc A","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=kaw1"},{"id":"4","laneId":"l1","text":"Process B","type":"action","inputs":["2"],"visualDescription":"Proc B","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=capjum"},{"id":"5","laneId":"l2","text":"Combine (Common)","type":"action","inputs":["3","4"],"visualDescription":"Common","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=0jhi7p"},{"id":"6","laneId":"l1","text":"Extra from A","type":"action","inputs":["3"],"visualDescription":"Extra A","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=llpbno"},{"id":"7","laneId":"l1","text":"Extra from B","type":"action","inputs":["4"],"visualDescription":"Extra B","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=vhaly"},{"id":"8","laneId":"l2","text":"Final Step F","type":"action","inputs":["5","6"],"visualDescription":"Final F","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=fu163o"},{"id":"9","laneId":"l2","text":"Final Step G","type":"action","inputs":["5"],"visualDescription":"Final G","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ujne1n"}]}
-[CLIENT-LOG] loading recipe for id j2P4GB2zyfuJC8bvLHz2 and graph {"title":"Copy of Mock Recipe","lanes":[{"id":"l1","label":"Prep","type":"prep"}],"originalText":"test eggs with legs","baseServes":1,"serves":1,"nodes":[{"id":"1","laneId":"l1","text":"2 Eggs","type":"ingredient","visualDescription":"2 Eggs","quantity":2,"unit":"","canonicalName":"Eggs","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=0mozq9","x":-162.22763530116885,"y":160.81226364181228},{"id":"2","laneId":"l1","text":"100g Flour","type":"ingredient","visualDescription":"Flour","quantity":100,"unit":"g","canonicalName":"Flour","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ioyuyl","x":170,"y":20},{"id":"3","laneId":"l1","text":"Mix","type":"action","inputs":["1","2","4"],"visualDescription":"Mixing bowl","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ljrb6f","x":121.38392857142856,"y":155.65178571428572},{"id":"4","laneId":"l1","text":"legs","type":"ingredient","visualDescription":"legs","canonicalName":"legs","iconUrl":"https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=vdq9im","x":320,"y":20}],"visibility":"unlisted","layoutMode":"dagre","layouts":{"dagre":[{"id":"1","x":-162.22763530116885,"y":160.81226364181228},{"id":"2","x":170,"y":20},{"id":"3","x":121.38392857142856,"y":155.65178571428572},{"id":"4","x":320,"y":20}]},"sourceId":"nKxq2BmoPLg4szjexF0t"}
- POST /lanes?id=mRodhcadrb7XFDol4cvw 200 in 40ms (compile: 15ms, render: 25ms)
- POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 39ms (compile: 26ms, render: 13ms)
- POST /lanes?id=mRodhcadrb7XFDol4cvw 200 in 33ms (compile: 6ms, render: 26ms)
- POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 33ms (compile: 15ms, render: 17ms)
+⨯ Error: ENOENT: no such file or directory, open '/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/.next/dev/server/app/api/auth/logout/[__metadata_id__]/route/app-paths-manifest.json'
+    at ignore-listed frames {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/.next/dev/server/app/api/auth/logout/[__metadata_id__]/route/app-paths-manifest.json'
+}
+ POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 741ms (compile: 7ms, render: 734ms)
+
+thread 'tokio-runtime-worker' (2803465) panicked at turbopack/crates/turbo-persistence/src/static_sorted_file.rs:387:51:
+range start index 18446744073709550887 out of range for slice of length 79
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'tokio-runtime-worker' (2803374) panicked at /build/turbopack/crates/turbo-tasks-backend/src/backend/operation/mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for EcmascriptInputTransforms::extend (TaskId 445448))
+
+Caused by:
+    0: Looking up data for TaskId 445448 from database failed
+    1: Unable to open static sorted file referenced from 00000034.meta
+    2: Unable to open static sorted file 00000029.sst
+    3: No such file or directory (os error 2)
+
+thread 'tokio-runtime-worker' (2803374) panicked at turbopack/crates/turbo-persistence/src/static_sorted_file.rs:387:51:
+range start index 18446744073709550887 out of range for slice of length 79
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to /tmp/next-panic-219ce6d4ad9d46d699a76ef0d4bd8f76.log.
+
+To help make Turbopack better, report this error by clicking here: https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20range%20start%20index%2018446744073709550887%20out%20of%20range%20for%20slice%20of%20length%2079&body=Turbopack%20version%3A%20%60ea1df5f2%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0ATurbopack%20Error%3A%20range%20start%20index%2018446744073709550887%20out%20of%20range%20for%20slice%20of%20length%2079%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+⨯ Error [TurbopackInternalError]: range start index 18446744073709550887 out of range for slice of length 79
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of PlainIssue::from_issue failed
+- Execution of <ResolvingIssue as Issue>::detail failed
+- range start index 18446744073709550887 out of range for slice of length 79
+    at <unknown> (TurbopackInternalError: range start index 18446744073709550887 out of range for slice of length 79) {
+  location: 'turbopack/crates/turbo-persistence/src/static_sorted_file.rs:387:51'
+}
+Error: ENOENT: no such file or directory, open '/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/.next/dev/server/app/api/auth/logout/[__metadata_id__]/route/app-paths-manifest.json'
+    at ignore-listed frames {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/.next/dev/server/app/api/auth/logout/[__metadata_id__]/route/app-paths-manifest.json'
+}
+⨯ Error [TurbopackInternalError]: range start index 18446744073709550887 out of range for slice of length 79
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of PlainIssue::from_issue failed
+- Execution of <ResolvingIssue as Issue>::detail failed
+- range start index 18446744073709550887 out of range for slice of length 79
+    at <unknown> (TurbopackInternalError: range start index 18446744073709550887 out of range for slice of length 79) {
+  location: 'turbopack/crates/turbo-persistence/src/static_sorted_file.rs:387:51'
+}
+Error [TurbopackInternalError]: range start index 18446744073709550887 out of range for slice of length 79
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of PlainIssue::from_issue failed
+- Execution of <ResolvingIssue as Issue>::detail failed
+- range start index 18446744073709550887 out of range for slice of length 79
+    at <unknown> (TurbopackInternalError: range start index 18446744073709550887 out of range for slice of length 79) {
+  location: 'turbopack/crates/turbo-persistence/src/static_sorted_file.rs:387:51'
+}
+[CLIENT-LOG] loading recipe for id j2P4GB2zyfuJC8bvLHz2 and graph null
+ POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 17ms (compile: 7ms, render: 10ms)
+ POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 20ms (compile: 4ms, render: 16ms)
+ GET /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 25ms (compile: 5ms, render: 20ms)
 [CLIENT-LOG] checking icons for recipe id j2P4GB2zyfuJC8bvLHz2
- POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 10ms (compile: 4ms, render: 6ms)
-[CLIENT-LOG] checking icons for recipe id mRodhcadrb7XFDol4cvw
- POST /lanes?id=mRodhcadrb7XFDol4cvw 200 in 9ms (compile: 4ms, render: 5ms)
-✓ Compiled in 63ms
-✓ Compiled in 50ms
+ POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 17ms (compile: 5ms, render: 11ms)
+[CLIENT-LOG] loading recipe for id: j2P4GB2zyfuJC8bvLHz2
+ POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 16ms (compile: 7ms, render: 9ms)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+⚠ Found a change in next.config.ts. Restarting the server to apply the changes...
+▲ Next.js 16.1.0 (Turbopack)
+- Local:         http://localhost:8002
+- Network:       http://192.168.1.90:8002
+- Environments: .env
+- Experiments (use with caution):
+  · serverActions
+
+✓ Starting...
+⚠ Turbopack's filesystem cache has been deleted because we previously detected an internal error in Turbopack. Builds or page loads may be slower as a result.
+✓ Ready in 873ms
+○ Compiling /lanes ...
+WARNING: You are using the Auth Emulator, which is intended for local testing only.  Do not use with production credentials.
+ GET /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 5.7s (compile: 5.2s, render: 446ms)
+ GET /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 5.7s (compile: 5.3s, render: 375ms)
+ GET /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 5.8s (compile: 5.4s, render: 349ms)
+Initializing Firebase Genkit Monitoring.
+registering /util/generate
+Registering v2 plugin vertexai...
+ POST /api/auth/logout 200 in 767ms (compile: 731ms, render: 36ms)
+🔥 Admin SDK switching to Emulator mode via Env Vars
+[CLIENT-LOG] loading recipe for id: dGFw7paBS2IWtbjZhDbC
+ POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 1193ms (compile: 10ms, render: 1184ms)
+[CLIENT-LOG] loading recipe for id dGFw7paBS2IWtbjZhDbC and graph null
+ POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 24ms (compile: 15ms, render: 9ms)
+[CLIENT-LOG] loading recipe for id: FBteAcGrT1LScUZwBeEe
+ POST /api/auth/logout 200 in 26ms (compile: 10ms, render: 16ms)
+ POST /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 47ms (compile: 19ms, render: 28ms)
+ POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 244ms (compile: 8ms, render: 236ms)
+ POST /api/auth/logout 200 in 11ms (compile: 2ms, render: 8ms)
+[CLIENT-LOG] loading recipe for id: j2P4GB2zyfuJC8bvLHz2
+ POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 17ms (compile: 6ms, render: 11ms)
+[CLIENT-LOG] loading recipe for id FBteAcGrT1LScUZwBeEe and graph null
+ POST /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 12ms (compile: 5ms, render: 7ms)
+ GET /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 46ms (compile: 10ms, render: 36ms)
+[CLIENT-LOG] loading recipe for id j2P4GB2zyfuJC8bvLHz2 and graph null
+ POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 11ms (compile: 5ms, render: 6ms)
+ POST /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 24ms (compile: 4ms, render: 19ms)
+ POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 19ms (compile: 5ms, render: 14ms)
+[CLIENT-LOG] checking icons for recipe id dGFw7paBS2IWtbjZhDbC
+ POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 55ms (compile: 25ms, render: 29ms)
+ GET /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 58ms (compile: 6ms, render: 52ms)
+ GET /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 57ms (compile: 33ms, render: 24ms)
+[CLIENT-LOG] loading recipe for id: dGFw7paBS2IWtbjZhDbC
+ POST /lanes?id=dGFw7paBS2IWtbjZhDbC 200 in 12ms (compile: 5ms, render: 8ms)
+[CLIENT-LOG] checking icons for recipe id j2P4GB2zyfuJC8bvLHz2
+ POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 12ms (compile: 4ms, render: 8ms)
+[CLIENT-LOG] loading recipe for id: j2P4GB2zyfuJC8bvLHz2
+[CLIENT-LOG] checking icons for recipe id FBteAcGrT1LScUZwBeEe
+ POST /lanes?id=j2P4GB2zyfuJC8bvLHz2 200 in 21ms (compile: 6ms, render: 15ms)
+ POST /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 23ms (compile: 16ms, render: 7ms)
+[getOrCreateIconAction] Starting for: Ing A
+[getOrCreateIconAction] Starting for: Ing B
+[getOrCreateIconAction] Starting for: Proc A
+[getOrCreateIconAction] Starting for: Proc B
+[getOrCreateIconAction] Starting for: Common
+[getOrCreateIconAction] Found existing group: Ing A
+[getOrCreateIconAction] Found existing group: Proc A
+[getOrCreateIconAction] Found existing group: Ing B
+[getOrCreateIconAction] Found existing group: Common
+[getOrCreateIconAction] Found existing group: Proc B
+[getOrCreateIconAction] Found 1 existing icons for Ing B
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=d6qbrh
+[getOrCreateIconAction] Found 1 existing icons for Proc A
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=kaw1
+[getOrCreateIconAction] Found 1 existing icons for Ing A
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=iu6juq
+[getOrCreateIconAction] Found 1 existing icons for Common
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=0jhi7p
+[getOrCreateIconAction] Found 1 existing icons for Proc B
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=capjum
+[getOrCreateIconAction] Starting for: Extra A
+[getOrCreateIconAction] Starting for: Extra B
+[getOrCreateIconAction] Starting for: Final F
+[getOrCreateIconAction] Starting for: Final G
+[getOrCreateIconAction] Found existing group: Extra B
+[getOrCreateIconAction] Found existing group: Extra A
+[getOrCreateIconAction] Found existing group: Final F
+[getOrCreateIconAction] Found existing group: Final G
+[getOrCreateIconAction] Found 1 existing icons for Extra B
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=vhaly
+[getOrCreateIconAction] Found 1 existing icons for Final F
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=fu163o
+[getOrCreateIconAction] Found 2 existing icons for Extra A
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=g97gzq
+[getOrCreateIconAction] Found 1 existing icons for Final G
+[getOrCreateIconAction] Returning cached icon: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=ujne1n
+ POST /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 201ms (compile: 5ms, render: 197ms)
+[CLIENT-LOG] loading recipe for id: FBteAcGrT1LScUZwBeEe
+ POST /lanes?id=FBteAcGrT1LScUZwBeEe 200 in 16ms (compile: 8ms, render: 8ms)

@@ -385,6 +385,39 @@ export async function deleteIngredientCategoryAction(rawIngredient: string): Pro
 
 // --- Recipe Lanes Actions ---
 
+export async function populateRecipeIconsAction(recipeId: string): Promise<{ updates?: { nodeId: string, iconUrl: string }[], success: boolean, error?: string }> {
+    try {
+        const recipeData = await getDataService().getRecipe(recipeId);
+        if (!recipeData) throw new Error("Recipe not found");
+        
+        const graph = recipeData.graph;
+        const nodesToProcess = graph.nodes.filter(n => !n.iconUrl && n.visualDescription);
+        if (nodesToProcess.length === 0) return { success: true, updates: [] };
+
+        const updates: { nodeId: string, iconUrl: string }[] = [];
+        
+        // Limit concurrency
+        const chunk = 5;
+        for (let i = 0; i < nodesToProcess.length; i += chunk) {
+            const batch = nodesToProcess.slice(i, i + chunk);
+            const results = await Promise.all(batch.map(async (node) => {
+                 const result = await getOrCreateIconAction(node.visualDescription!);
+                 if (result && 'iconUrl' in result && result.iconUrl) {
+                     return { nodeId: node.id, iconUrl: result.iconUrl };
+                 }
+                 return null;
+            }));
+            results.filter(Boolean).forEach(r => updates.push(r!));
+        }
+        
+        return { success: true, updates };
+
+    } catch (e: any) {
+        console.error('populateRecipeIconsAction failed:', e);
+        return { success: false, error: e.message };
+    }
+}
+
 export async function parseRecipeAction(recipeText: string): Promise<{ graph?: RecipeGraph; error?: string }> {
     try {
         // Guests allowed

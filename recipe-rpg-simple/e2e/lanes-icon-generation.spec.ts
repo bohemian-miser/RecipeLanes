@@ -24,12 +24,17 @@ test.describe('Lanes Icon Generation', () => {
       await screenshot(page, dir, '03-text-entered');
       
       // 2. Visualize
-      await page.locator('button.bg-yellow-500').click();
+      await page.locator('button:has(svg.lucide-arrow-right)').click();
       
       // 3. Wait for Graph
       const viewport = page.locator('.react-flow__viewport');
       await expect(viewport).toBeVisible({ timeout: 15000 });
       await screenshot(page, dir, '04-graph-visible');
+      
+      // Check for Forging Progress Bar (indicates icon generation started)
+      // It's a div with bg-yellow-500 style width...
+      // Might be fast with mock, so we use a loose check or omit if it's too fast.
+      // But we can check that icons appear.
 
       // 4. Verify Icons
       // We expect nodes to eventually have images.

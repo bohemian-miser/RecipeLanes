@@ -19,52 +19,14 @@ export const test = base.extend<AuthFixtures>({
     
     // The Helper Function
     const loginFn = async (uid: string = 'test-user-default', options: AuthOptions = {}) => {
-      // Check for mock mode first
-      const isMock = await page.evaluate(() => (window as any)._authMockMode);
-      
-      if (isMock) {
-          // Set mock cookie directly
-          await page.context().addCookies([{
-              name: 'session',
-              value: `mock-${uid}`,
-              domain: 'localhost',
-              path: '/'
-          }]);
-          await page.reload();
-          return;
-      }
-
-      const { claims, displayName } = options;
-      
-      // A. Mint the token (Node.js context)
-      // We pass the displayName so admin-utils can update the user record
-      const { token } = await getTestUserToken(uid, claims, displayName);
-
-      // B. Inject into Browser (Client context)
-      await page.evaluate(async (tokenString) => {
-        
-        // Helper to check if our exposed variables are ready
-        const isReady = () => (window as any)._firebaseAuth && (window as any)._signInWithCustomToken;
-
-        // Wait loop: Playwright is sometimes faster than your app's hydration
-        if (!isReady()) {
-          await new Promise<void>((resolve) => {
-             const interval = setInterval(() => {
-                if (isReady()) {
-                   clearInterval(interval);
-                   resolve();
-                }
-             }, 50);
-          });
-        }
-
-        // Grab the exposed instances
-        const auth = (window as any)._firebaseAuth;
-        const signInWithCustomToken = (window as any)._signInWithCustomToken;
-
-        // Perform the login
-        await signInWithCustomToken(auth, tokenString);
-      }, token);
+      // Always try cookie-based mock login first (supported in dev/test)
+      await page.context().addCookies([{
+          name: 'session',
+          value: `mock-${uid}`,
+          domain: 'localhost',
+          path: '/'
+      }]);
+      await page.reload();
     };
 
     // Pass the function to the test

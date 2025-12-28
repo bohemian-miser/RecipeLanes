@@ -24,6 +24,7 @@ export default defineConfig({
       MOCK_AI: 'true',
       FORCE_MEMORY_DB: 'true',
       NEXT_PUBLIC_MOCK_AUTH: 'true',
+      DIST_DIR: '.next-test',
     },
   },
 });

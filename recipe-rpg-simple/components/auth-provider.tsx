@@ -29,8 +29,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const forceMock = process.env.NEXT_PUBLIC_MOCK_AUTH === 'true';
+    const hasMockCookie = process.env.NODE_ENV === 'development' && document.cookie.includes('session=mock-');
     
-    if (!isInitialized || forceMock) {
+    console.log('[AuthProvider] Init check:', { isInitialized, forceMock, hasMockCookie, cookie: document.cookie });
+
+    if (!isInitialized || forceMock || hasMockCookie) {
         (window as any)._authMockMode = true;
         // Mock Auth check from cookie for E2E/Local
         const checkMockCookie = () => {

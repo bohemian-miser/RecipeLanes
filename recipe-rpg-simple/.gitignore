@@ -42,3 +42,4 @@ next-env.d.ts
 .firebase/
 test-results/
 e2e/test_screenshots/
+.next-test

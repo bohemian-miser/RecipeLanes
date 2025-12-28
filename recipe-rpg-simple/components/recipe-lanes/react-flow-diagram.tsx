@@ -47,6 +47,7 @@ interface ReactFlowDiagramProps {
 export interface ReactFlowDiagramHandle {
     resetLayout: () => void;
     toggleVisibility: () => Promise<void>;
+    getGraph: () => RecipeGraph;
 }
 
 const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false }, ref) => {
@@ -411,15 +412,24 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
         }
     };
 
-    const performSave = async () => {
-        const currentNodes = getNodes();
+    const getGraph = useCallback((): RecipeGraph => {
+        const currentNodes = getNodes().filter(n => n.type !== 'lane');
         const layouts = graph.layouts || {};
         layouts[mode as string] = currentNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
-        const nodesWithPos = graph.nodes.map(n => {
-           const rfn = currentNodes.find(rn => rn.id === n.id);
-           return rfn ? { ...n, x: rfn.position.x, y: rfn.position.y } : n;
-        });
-        const graphToSave = { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
+        
+        // Filter out nodes that are no longer in the ReactFlow state (deleted)
+        const nodesWithPos = graph.nodes
+            .filter(n => currentNodes.some(rn => rn.id === n.id))
+            .map(n => {
+               const rfn = currentNodes.find(rn => rn.id === n.id)!;
+               return { ...n, x: rfn.position.x, y: rfn.position.y };
+            });
+            
+        return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
+    }, [graph, mode, getNodes]);
+
+    const performSave = async () => {
+        const graphToSave = getGraph();
         
         let currentId = searchParams.get('id') || undefined;
         // Use ref for latest value (important for toggleVisibility which is async)
@@ -515,7 +525,8 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
 
     useImperativeHandle(ref, () => ({
         resetLayout: handleReset,
-        toggleVisibility: toggleVisibility
+        toggleVisibility: toggleVisibility,
+        getGraph: getGraph
     }));
 
     const selectBranch = (nodeId: string) => {

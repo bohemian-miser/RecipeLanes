@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
-import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction, checkExistingCopiesAction, getOrCreateIconAction, debugLogAction } from '@/app/actions';
+import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction, checkExistingCopiesAction, getOrCreateIconAction, debugLogAction, populateRecipeIconsAction } from '@/app/actions';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
@@ -24,6 +24,11 @@ function RecipeLanesContent() {
   const [chatInput, setChatInput] = useState('');
   const [graph, setGraph] = useState<RecipeGraph | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
+  
+  useEffect(() => {
+      console.log('[RecipeLanesPage] User:', user?.uid, 'Owner:', ownerId);
+  }, [user, ownerId]);
+
   const [notification, setNotification] = useState<string | null>(null); 
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -186,6 +191,24 @@ function RecipeLanesContent() {
           showNotification("Invalid JSON");
       }
   };
+
+  const handleToggleJson = () => {
+      if (!showJson && diagramRef.current) {
+          const freshGraph = diagramRef.current.getGraph();
+          if (freshGraph) {
+              const safeGraph = { 
+                  ...freshGraph, 
+                  nodes: freshGraph.nodes.map(n => {
+                      const { iconUrl, ...rest } = n;
+                      return rest;
+                  })
+              };
+              setJsonText(JSON.stringify(safeGraph, null, 2));
+          }
+      }
+      setShowJson(!showJson);
+  };
+
   const [spacing, setSpacing] = useState(1);
   const [edgeStyle, setEdgeStyle] = useState<'straight' | 'step' | 'bezier'>('straight');
   const [textPos, setTextPos] = useState<'bottom' | 'top' | 'left' | 'right'>('bottom');
@@ -215,12 +238,22 @@ function RecipeLanesContent() {
                   setRecipeTitle(res.graph.title || '');
                   debugLogAction(`checking icons for recipe id ${id}`);
                   if (res.graph.nodes.some(n => !n.iconUrl)) {
-                      
-                    debugLogAction(`populating icons for recipe id ${id}`);
-                      populateIcons(res.graph, id);
+                      setStatus('forging');
+                      populateRecipeIconsAction(id).then(popRes => {
+                          if (popRes.success && popRes.updates) {
+                              const newNodes = res.graph.nodes.map((n: any) => {
+                                  const update = popRes.updates?.find(u => u.nodeId === n.id);
+                                  return update ? { ...n, iconUrl: update.iconUrl } : n;
+                              });
+                              setGraph({ ...res.graph, nodes: newNodes });
+                              setStatus('complete');
+                          } else {
+                              setStatus('complete');
+                          }
+                      });
+                  } else {
+                      setStatus('complete');
                   }
-
-                  setStatus('complete');
               } else {
                   setError('Recipe not found');
                   setStatus('error');
@@ -370,9 +403,12 @@ function RecipeLanesContent() {
 
   const handleShare = async () => {
       if (!graph) return;
-      const currentId = searchParams.get('id');
+      // Check real URL first because searchParams might be stale due to shallow update
+      const url = new URL(window.location.href);
+      const currentId = url.searchParams.get('id') || searchParams.get('id');
+      
       if (currentId) {
-          navigator.clipboard.writeText(window.location.href);
+          navigator.clipboard.writeText(url.toString());
           showNotification('Link copied to clipboard!');
           return;
       }
@@ -396,10 +432,10 @@ function RecipeLanesContent() {
   const populateIcons = async (startGraph: RecipeGraph, recipeId?: string) => {
         const nodesToProcess = startGraph.nodes.filter(n => !n.iconUrl && n.visualDescription);
         const total = nodesToProcess.length;
+        console.log(`[populateIcons] Found ${total} nodes to process`);
         if (total === 0) return;
 
         setForgingProgress({ completed: 0, total });
-        // Use local copy for accumulation
         let currentGraph = JSON.parse(JSON.stringify(startGraph)); 
         
         let completed = 0;
@@ -409,15 +445,21 @@ function RecipeLanesContent() {
             const batch = nodesToProcess.slice(i, i + chunkSize);
             const results = await Promise.all(batch.map(async (node) => {
                  const result = await getOrCreateIconAction(node.visualDescription!);
+                 if (result && 'error' in result) {
+                     console.error(`[populateIcons] Failed for ${node.text}:`, result.error);
+                 }
                  return { nodeId: node.id, result };
             }));
             
+            let batchUpdates = 0;
             results.forEach(item => {
                 if (item?.result && 'iconUrl' in item.result) {
                     currentGraph.nodes = currentGraph.nodes.map((n: any) => n.id === item.nodeId ? { ...n, iconUrl: item.result.iconUrl } : n);
+                    batchUpdates++;
                 }
                 completed++;
             });
+            console.log(`[populateIcons] Batch finished. Updates: ${batchUpdates}`);
             
             setGraph({ ...currentGraph });
             setForgingProgress({ completed, total });
@@ -857,7 +899,7 @@ const handleVisualize = async () => {
                             </button>
 
                             <button 
-                                onClick={() => setShowJson(!showJson)}
+                                onClick={handleToggleJson}
                                 className={`p-1.5 rounded hover:bg-zinc-100 transition-colors ${showJson ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-400'}`}
                                 title="Toggle JSON View"
                             >

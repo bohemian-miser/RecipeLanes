@@ -44,3 +44,4 @@ test-results/
 e2e/test_screenshots/
 .next-test
 .next-verify
+service-account.json

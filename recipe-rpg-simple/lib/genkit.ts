@@ -3,7 +3,7 @@ import { vertexAI } from '@genkit-ai/google-genai';
 import { enableFirebaseTelemetry } from '@genkit-ai/firebase';
 import { logger } from 'genkit/logging';
 
-const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'ropgcp';
+const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 
 // Enable debug logging for visibility
 logger.setLogLevel('debug');

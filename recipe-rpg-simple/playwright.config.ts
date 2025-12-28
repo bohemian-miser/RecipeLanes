@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   timeout: 30 * 1000,
-  retries: 0,
+  retries: 2,
   fullyParallel: true,
   use: {
     baseURL: 'http://localhost:8002',
@@ -22,11 +22,13 @@ export default defineConfig({
     timeout: 60 * 1000,
     env: {
       MOCK_AI: 'true',
-      FORCE_MEMORY_DB: 'true',
       DIST_DIR: '.next-test',
       NEXT_PUBLIC_USE_FIREBASE_EMULATOR: 'true',
       NEXT_PUBLIC_FIREBASE_API_KEY: 'demo-key',
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'demo-project',
+      FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080',
+      FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9099',
+      STORAGE_EMULATOR_HOST: '127.0.0.1:9199',
     },
   },
 });

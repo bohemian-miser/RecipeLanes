@@ -43,3 +43,4 @@ next-env.d.ts
 test-results/
 e2e/test_screenshots/
 .next-test
+.next-verify

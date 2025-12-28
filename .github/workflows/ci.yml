@@ -31,7 +31,9 @@ jobs:
           java-version: '21'
 
       - name: Install Firebase Tools
-        run: npm install -g firebase-tools
+        run: |
+          npm install -g firebase-tools
+          firebase experiments:enable webframeworks
 
       - name: Start Emulators
         run: |

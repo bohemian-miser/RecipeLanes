@@ -31,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const forceMock = process.env.NEXT_PUBLIC_MOCK_AUTH === 'true';
     
     if (!isInitialized || forceMock) {
+        (window as any)._authMockMode = true;
         // Mock Auth check from cookie for E2E/Local
         const checkMockCookie = () => {
              const match = document.cookie.match(/session=(mock-[^;]+)/);

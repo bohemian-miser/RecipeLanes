@@ -1,25 +1,5 @@
-// This creates a directory structure of screenshots like:
-//
-// test_screenshots/
-// ├── pan-diagram/
-// │   ├── phone/
-// │   │   ├── 01-initial-page.png
-// │   │   ├── 02-recipe-entered.png
-// │   │   └── ...
-// │   └── desktop/
-// │       ├── 01-initial-page.png
-// │       └── ...
-// └── delete-node-undo/
-//     ├── phone/
-//     │   ├── 01-initial-page.png
-//     │   └── ...
-//     └── desktop/
-//         └── ...
-// import { test, expect, devices, Page } from '@playwright/test';
-// import * as fs from 'fs';
-// import * as path from 'path';
-import { test, expect, Page } from './utils/fixtures';
-import { screenshot, screenshotDir } from './utils/screenshot';
+import { test, expect } from './utils/fixtures';
+import { screenshot, screenshotDir, cleanupScreenshots} from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 
 test.describe('Graph Interaction', () => {
@@ -31,35 +11,36 @@ test.describe('Graph Interaction', () => {
 
       await page.setViewportSize(device.viewport);
       await page.goto('/lanes');
-      await screenshot(page, dir, '01-initial-page');
+      await screenshot(page, dir, 'initial-page');
 
       await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
-      await screenshot(page, dir, '02-recipe-entered');
+      await screenshot(page, dir, 'recipe-entered');
 
-      await page.locator('button.bg-yellow-500').click();
-      await screenshot(page, dir, '03-create-clicked');
+      await page.locator('button:has(svg.lucide-arrow-right)').click();
+      await screenshot(page, dir, 'create-clicked');
 
       const viewport = page.locator('.react-flow__viewport');
       await expect(viewport).toBeVisible({ timeout: 15000 });
-      await screenshot(page, dir, '04-graph-visible');
+      await screenshot(page, dir, 'graph-visible');
 
       const initialTransform = await viewport.getAttribute('style');
 
       await page.mouse.move(200, 400);
       await page.mouse.down();
-      await screenshot(page, dir, '05-pan-started');
+      await screenshot(page, dir, 'pan-started');
 
       await page.mouse.move(200, 200);
       await page.mouse.up();
       await page.waitForTimeout(2000);
-      await screenshot(page, dir, '06-pan-completed');
+      await screenshot(page, dir, 'pan-completed');
 
       const midTransform = await viewport.getAttribute('style');
       expect(midTransform).not.toBe(initialTransform);
 
       const box = await viewport.boundingBox();
       expect(box?.height).toBeGreaterThan(500);
-      await screenshot(page, dir, '07-final-state');
+      await screenshot(page, dir, 'final-state');
+      cleanupScreenshots(dir);
     });
 
     test(`${device.name}: delete node and undo restores edges`, async ({ page }) => {
@@ -67,19 +48,19 @@ test.describe('Graph Interaction', () => {
 
       await page.setViewportSize(device.viewport);
       await page.goto('/lanes');
-      await screenshot(page, dir, '01-initial-page');
+      await screenshot(page, dir, 'initial-page');
 
       await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
-      await page.locator('button.bg-yellow-500').click();
-      await screenshot(page, dir, '02-recipe-created');
+      await page.locator('button:has(svg.lucide-arrow-right)').click();
+      await screenshot(page, dir, 'recipe-created');
 
       const viewport = page.locator('.react-flow__viewport');
       await expect(viewport).toBeVisible({ timeout: 30000 });
-      await screenshot(page, dir, '03-graph-visible');
+      await screenshot(page, dir, 'graph-visible');
 
       await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 10000 });
       await expect(page.locator('.react-flow__edge').first()).toBeAttached({ timeout: 10000 });
-      await screenshot(page, dir, '04-nodes-and-edges-loaded');
+      await screenshot(page, dir, 'nodes-and-edges-loaded');
 
       const getEdgeCount = () => page.locator('.react-flow__edge').count();
       const initialEdges = await getEdgeCount();
@@ -87,18 +68,18 @@ test.describe('Graph Interaction', () => {
 
       const node = page.locator('.react-flow__node').filter({ hasText: 'Flour' }).first();
       await expect(node).toBeVisible({ timeout: 30000 });
-      await screenshot(page, dir, '05-target-node-found');
+      await screenshot(page, dir, 'target-node-found');
 
       // Click and hover to reveal delete button
       await node.click();
-      await screenshot(page, dir, '06-node-selected');
+      await screenshot(page, dir, 'node-selected');
 
       await node.hover();
-      await screenshot(page, dir, '07-node-hovered');
+      await screenshot(page, dir, 'node-hovered');
 
       const deleteBtn = node.getByRole('button', { name: /Delete Step/i });
       await expect(deleteBtn).toBeVisible();
-      await screenshot(page, dir, '08-delete-button-visible');
+      await screenshot(page, dir, 'delete-button-visible');
 
       // More robust delete: wait for button to be ready, then click with retries
       await deleteBtn.waitFor({ state: 'visible' });
@@ -107,7 +88,7 @@ test.describe('Graph Interaction', () => {
       // Try clicking and verify it worked
       let deleted = false;
       for (let attempt = 0; attempt < 3 && !deleted; attempt++) {
-        await screenshot(page, dir, `09-delete-attempt-${attempt + 1}`);
+        await screenshot(page, dir, `delete-attempt-${attempt + 1}`);
         
         // Re-hover to ensure button is still visible (especially on mobile)
         await node.hover();
@@ -120,46 +101,47 @@ test.describe('Graph Interaction', () => {
         deleted = !(await node.isVisible());
       }
       
-      await screenshot(page, dir, '10-after-delete-attempts');
+      await screenshot(page, dir, 'after-delete-attempts');
 
       await expect(node).not.toBeVisible({ timeout: 10000 });
-      await screenshot(page, dir, '11-node-deleted');
+      await screenshot(page, dir, 'node-deleted');
 
       const deletedEdges = await getEdgeCount();
       expect(deletedEdges).toBeLessThan(initialEdges);
 
       const undoBtn = page.locator('button[title="Undo (Ctrl+Z)"]');
       await undoBtn.click();
-      await screenshot(page, dir, '12-undo-clicked');
+      await screenshot(page, dir, 'undo-clicked');
 
       await expect(node).toBeVisible();
-      await screenshot(page, dir, '13-node-restored');
+      await screenshot(page, dir, 'node-restored');
 
       await page.waitForTimeout(2000);
-      await screenshot(page, dir, '14-final-state');
+      await screenshot(page, dir, 'final-state');
 
       const restoredEdges = await getEdgeCount();
       expect(restoredEdges).toBe(initialEdges);
+      cleanupScreenshots(dir);
     });
     test(`${device.name}: delete common node with undo and redo`, async ({ page }) => {
       const dir = screenshotDir('delete-common-node-undo-redo', device.name);
 
       await page.setViewportSize(device.viewport);
       await page.goto('/lanes');
-      await screenshot(page, dir, '01-initial-page');
+      await screenshot(page, dir, 'initial-page');
 
       // Create complex graph with diamond pattern
       await page.getByPlaceholder('Paste recipe here...').fill('test complex');
-      await page.locator('button.bg-yellow-500').click();
-      await screenshot(page, dir, '02-recipe-created');
+      await page.locator('button:has(svg.lucide-arrow-right)').click();
+      await screenshot(page, dir, 'recipe-created');
 
       const viewport = page.locator('.react-flow__viewport');
       await expect(viewport).toBeVisible({ timeout: 30000 });
-      await screenshot(page, dir, '03-graph-visible');
+      await screenshot(page, dir, 'graph-visible');
 
       await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 10000 });
       await expect(page.locator('.react-flow__edge').first()).toBeAttached({ timeout: 10000 });
-      await screenshot(page, dir, '04-nodes-and-edges-loaded');
+      await screenshot(page, dir, 'nodes-and-edges-loaded');
 
       const getEdgeCount = () => page.locator('.react-flow__edge').count();
       const getNodeCount = () => page.locator('.react-flow__node').count();
@@ -170,12 +152,12 @@ test.describe('Graph Interaction', () => {
       // Complex graph should have 9 nodes and 9 edges
       expect(initialNodes).toBe(9);
       expect(initialEdges).toBe(9);
-      await screenshot(page, dir, '05-initial-counts-verified');
+      await screenshot(page, dir, 'initial-counts-verified');
 
       // Find the common node "Combine (Common)"
       const commonNode = page.locator('.react-flow__node').filter({ hasText: 'Combine (Common)' }).first();
       await expect(commonNode).toBeVisible({ timeout: 30000 });
-      await screenshot(page, dir, '06-common-node-found');
+      await screenshot(page, dir, 'common-node-found');
 
       // Helper function to delete node with retry logic
       const deleteNode = async (node: typeof commonNode, attemptPrefix: string) => {
@@ -199,12 +181,12 @@ test.describe('Graph Interaction', () => {
       };
 
       // Delete the common node
-      await deleteNode(commonNode, '07-delete');
-      await screenshot(page, dir, '08-after-delete');
+      await deleteNode(commonNode, 'delete');
+      await screenshot(page, dir, 'after-delete');
 
       // Verify common node is gone
       await expect(commonNode).not.toBeVisible({ timeout: 10000 });
-      await screenshot(page, dir, '09-node-deleted');
+      await screenshot(page, dir, 'node-deleted');
 
       // Verify node count decreased
       const nodesAfterDelete = await getNodeCount();
@@ -213,26 +195,23 @@ test.describe('Graph Interaction', () => {
       // Verify edges stayed the same (common node had 2 in, 2 out, now each of the in's needs to be doubled so -2+2 = 0)
       const edgesAfterDelete = await getEdgeCount();
       expect(edgesAfterDelete).toBe(initialEdges);
-      await screenshot(page, dir, '10-edges-after-delete');
+      await screenshot(page, dir, 'edges-after-delete');
 
       // --- UNDO ---
       const undoBtn = page.getByRole('button', { name: /Undo/i });
       await undoBtn.click();
-      await screenshot(page, dir, '11-undo-clicked');
+      await screenshot(page, dir, 'undo-clicked');
 
       // Verify common node is restored
       await expect(commonNode).toBeVisible({ timeout: 10000 });
-      await screenshot(page, dir, '12-node-restored');
+      await screenshot(page, dir, 'node-restored');
 
-      // Verify node count restored
-      await page.waitForTimeout(1000);
-      const nodesAfterUndo = await getNodeCount();
-      expect(nodesAfterUndo).toBe(initialNodes);
+      // Verify node count restored (using retry assertion)
+      await expect(page.locator('.react-flow__node')).toHaveCount(initialNodes);
 
       // Verify edge count restored
-      const edgesAfterUndo = await getEdgeCount();
-      expect(edgesAfterUndo).toBe(initialEdges);
-      await screenshot(page, dir, '13-edges-restored');
+      await expect(page.locator('.react-flow__edge')).toHaveCount(initialEdges);
+      await screenshot(page, dir, 'edges-restored');
 
       // Verify specific edges are back by checking connections
       // The common node should have edges from "Process A" and "Process B"
@@ -246,36 +225,36 @@ test.describe('Graph Interaction', () => {
       const finalGNode = page.locator('.react-flow__node').filter({ hasText: 'Final Step G' }).first();
       await expect(finalFNode).toBeVisible();
       await expect(finalGNode).toBeVisible();
-      await screenshot(page, dir, '14-all-nodes-verified');
+      await screenshot(page, dir, 'all-nodes-verified');
 
       // --- REDO ---
       const redoBtn = page.getByRole('button', { name: /Redo/i });
       await redoBtn.click();
-      await screenshot(page, dir, '15-redo-clicked');
+      await screenshot(page, dir, 'redo-clicked');
 
       // Verify common node is deleted again
       await expect(commonNode).not.toBeVisible({ timeout: 10000 });
-      await screenshot(page, dir, '16-node-deleted-again');
+      await screenshot(page, dir, 'node-deleted-again');
 
-      // Verify node count decreased again
-      await page.waitForTimeout(1000);
-      const nodesAfterRedo = await getNodeCount();
-      expect(nodesAfterRedo).toBe(initialNodes - 1);
+      // Verify node count decreased again (using retry assertion)
+      await expect(page.locator('.react-flow__node')).toHaveCount(initialNodes - 1);
 
       // Verify edge count decreased again
-      const edgesAfterRedo = await getEdgeCount();
-      expect(edgesAfterRedo).toBe(edgesAfterDelete);
-      await screenshot(page, dir, '17-edges-after-redo');
+      await expect(page.locator('.react-flow__edge')).toHaveCount(initialEdges); // Edges stay same count because of reconnection logic?
+      // Wait, in previous code: expect(edgesAfterRedo).toBe(edgesAfterDelete);
+      // edgesAfterDelete was expect(edgesAfterDelete).toBe(initialEdges);
+      // So edges count should be initialEdges.
+      
+      await screenshot(page, dir, 'edges-after-redo');
 
       // --- UNDO again to leave graph in original state ---
       await undoBtn.click();
       await expect(commonNode).toBeVisible({ timeout: 10000 });
       
-      const finalEdges = await getEdgeCount();
-      const finalNodes = await getNodeCount();
-      expect(finalNodes).toBe(initialNodes);
-      expect(finalEdges).toBe(initialEdges);
-      await screenshot(page, dir, '18-final-state-restored');
+      await expect(page.locator('.react-flow__node')).toHaveCount(initialNodes);
+      await expect(page.locator('.react-flow__edge')).toHaveCount(initialEdges);
+      await screenshot(page, dir, 'final-state-restored');
+      cleanupScreenshots(dir);
     });
   }
 });

@@ -11,6 +11,7 @@ import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sid
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket } from 'lucide-react';
+import { Banner } from '@/components/ui/banner';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -33,6 +34,7 @@ function RecipeLanesContent() {
   const [showOverrideWarning, setShowOverrideWarning] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[]>([]);
   const [forgingProgress, setForgingProgress] = useState<{ completed: number, total: number } | null>(null);
+  const [guestBannerDismissed, setGuestBannerDismissed] = useState(false);
 
   const diagramRef = useRef<ReactFlowDiagramHandle>(null);
 
@@ -199,7 +201,11 @@ function RecipeLanesContent() {
 
   useEffect(() => {
       const id = searchParams.get('id');
+
+    debugLogAction('loading recipe for id: ' + id);
       if (id && !graph) {
+          
+          debugLogAction(`loading recipe for id ${id} and graph ${JSON.stringify(graph)}`);
           setStatus('loading');
           getRecipeAction(id).then(res => {
               if (res.graph) {
@@ -207,11 +213,11 @@ function RecipeLanesContent() {
                   if (res.ownerId) setOwnerId(res.ownerId);
                   setRecipeText(res.graph.originalText || '');
                   setRecipeTitle(res.graph.title || '');
-                  
+                  debugLogAction(`checking icons for recipe id ${id}`);
                   if (res.graph.nodes.some(n => !n.iconUrl)) {
-                      generateGraphIconsAction(res.graph).then(iconRes => {
-                          if (iconRes.graph) setGraph(iconRes.graph);
-                      });
+                      
+                    debugLogAction(`populating icons for recipe id ${id}`);
+                      populateIcons(res.graph, id);
                   }
 
                   setStatus('complete');
@@ -221,6 +227,29 @@ function RecipeLanesContent() {
               }
           });
       }
+
+    //   if (id && graph) {
+          
+    //       debugLogAction(`loading recipe for id ${id} and graph ${graph}`);
+    //       setStatus('loading');
+          
+    //           if (graph) {
+    //             //   setGraph(graph);
+    //             //   if (res.ownerId) setOwnerId(res.ownerId);
+    //               setRecipeText(graph.originalText || '');
+    //               setRecipeTitle(graph.title || '');
+                  
+    //               if (graph.nodes.some(n => !n.iconUrl)) {
+    //                   populateIcons(graph, id);
+    //               }
+
+    //               setStatus('complete');
+    //           } else {
+    //               setError('Recipe not found');
+    //               setStatus('error');
+    //           }
+          
+    //   }
   }, [searchParams]);
 
   useEffect(() => {
@@ -242,6 +271,7 @@ function RecipeLanesContent() {
       setError(null);
       setStatus('idle');
       setShowOverrideWarning(false);
+      setGuestBannerDismissed(false);
       localStorage.removeItem('recipe_draft'); 
       router.push('/lanes?new=true');
   };
@@ -363,6 +393,43 @@ function RecipeLanesContent() {
       }
   };
 
+  const populateIcons = async (startGraph: RecipeGraph, recipeId?: string) => {
+        const nodesToProcess = startGraph.nodes.filter(n => !n.iconUrl && n.visualDescription);
+        const total = nodesToProcess.length;
+        if (total === 0) return;
+
+        setForgingProgress({ completed: 0, total });
+        // Use local copy for accumulation
+        let currentGraph = JSON.parse(JSON.stringify(startGraph)); 
+        
+        let completed = 0;
+        const chunkSize = 3;
+        
+        for (let i = 0; i < total; i += chunkSize) {
+            const batch = nodesToProcess.slice(i, i + chunkSize);
+            const results = await Promise.all(batch.map(async (node) => {
+                 const result = await getOrCreateIconAction(node.visualDescription!);
+                 return { nodeId: node.id, result };
+            }));
+            
+            results.forEach(item => {
+                if (item?.result && 'iconUrl' in item.result) {
+                    currentGraph.nodes = currentGraph.nodes.map((n: any) => n.id === item.nodeId ? { ...n, iconUrl: item.result.iconUrl } : n);
+                }
+                completed++;
+            });
+            
+            setGraph({ ...currentGraph });
+            setForgingProgress({ completed, total });
+            
+            const targetId = recipeId || searchParams.get('id');
+            if (targetId) {
+                 await saveRecipeAction(currentGraph, targetId);
+            }
+        }
+        setForgingProgress(null);
+  };
+
 const handleVisualize = async () => {
     console.log('Starting visualization...');
     await debugLogAction('Starting visualization...');
@@ -371,6 +438,7 @@ const handleVisualize = async () => {
     setStatus('parsing');
     setError(null);
     setForgingProgress(null);
+    setGuestBannerDismissed(false);
     
     try {
         const parseRes = await parseRecipeAction(recipeText);
@@ -428,57 +496,8 @@ const handleVisualize = async () => {
         console.log('Save result:', saveRes);
         await debugLogAction(`Save result: ${JSON.stringify(saveRes)}`);
         
-
-        await debugLogAction('Starting forging process...');
-        setStatus('forging');
-
-        // Client-side Icon Generation Loop
-        const nodesToProcess = currentGraph.nodes.filter(n => !n.iconUrl && n.visualDescription);
-        const total = nodesToProcess.length;
-        await debugLogAction(`Found ${total} nodes to process for icons`);
-        let completed = 0;
-        
-        if (total > 0) {
-            setForgingProgress({ completed: 0, total });
-            
-            const chunkSize = 3;
-            for (let i = 0; i < total; i += chunkSize) {
-                await debugLogAction(`Processing batch ${i / chunkSize + 1}`);
-                const batch = nodesToProcess.slice(i, i + chunkSize);
-                
-                // Store results from the batch
-                const results = await Promise.all(batch.map(async (node) => {
-                    if (!node.visualDescription) return null;
-                    await debugLogAction(`Requesting icon for: ${node.visualDescription}`);
-                    const result = await getOrCreateIconAction(node.visualDescription);
-                    return { nodeId: node.id, result };
-                }));
-
-                // Apply results sequentially to avoid race conditions
-                results.forEach(item => {
-                    if (item && item.result && !item.result.error && item.result.iconUrl) {
-                        const { nodeId, result } = item;
-                        // Update local reference for final save and state update
-                        currentGraph.nodes = currentGraph.nodes.map(n => n.id === nodeId ? { ...n, iconUrl: result.iconUrl } : n);
-                    }
-                    completed++;
-                });
-                
-                // Update React State once per batch with the accumulated changes
-                setGraph({ ...currentGraph });
-                
-                // Auto-save batch progress
-                if (saveRes.id) {
-                     await saveRecipeAction(currentGraph, saveRes.id);
-                }
-                
-                setForgingProgress({ completed, total });
-            }
-        }
-
-        // Final Save with icons
+        // Update URL immediately using history API to avoid router remounts
         if (saveRes.id) {
-
              const url = new URL(window.location.href);
              url.searchParams.delete('new');
              url.searchParams.set('id', saveRes.id);
@@ -487,8 +506,13 @@ const handleVisualize = async () => {
              
              if (user) setOwnerId(user.uid);
              currentId = saveRes.id;
-             await saveRecipeAction(currentGraph, currentId);
         }
+
+        await debugLogAction('Starting forging process...');
+        setStatus('forging');
+
+        // Use helper for icon generation
+        await populateIcons(currentGraph, currentId);
         
         await debugLogAction('Visualization complete');
         setStatus('complete');
@@ -625,91 +649,48 @@ const handleVisualize = async () => {
                 <div className="absolute top-16 left-0 right-0 z-50 flex flex-col items-center pointer-events-none gap-2">
         
                     {/* Existing Copies Banner */}
-        
                     {existingCopies.length > 0 && (
-        
-                        <div className="bg-blue-500/95 backdrop-blur-sm text-blue-100 text-[10px] py-2 px-4 text-center font-mono flex items-center justify-center gap-4 animate-in slide-in-from-top-2 pointer-events-auto shadow-lg rounded-lg w-fit border border-blue-400/30">
-        
+                        <Banner color="blue" onDismiss={() => setExistingCopies([])}>
                             <span>You have {existingCopies.length} existing {existingCopies.length === 1 ? 'copy' : 'copies'} of this recipe.</span>
-        
-                            <div className="flex gap-4">
-        
+                            <div className="flex flex-wrap justify-center gap-2">
                                 <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">
-        
                                     Open {existingCopies.length === 1 ? 'it' : 'latest'}
-        
                                 </Link>
-        
                                 <button onClick={() => handleOverrideCopy(existingCopies[0].id)} className="underline font-bold hover:text-white" title="Overwrite your existing copy with this version">
-        
                                     Override it
-        
                                 </button>
-        
                                 <button onClick={handleFork} className="underline font-bold hover:text-white">
-        
                                     Make another copy
-        
                                 </button>
-        
                                 {existingCopies.length > 1 && (
-        
                                     <Link href={`/gallery?filter=mine&search=${encodeURIComponent(recipeTitle)}`} className="underline font-bold hover:text-white">
-        
                                         See all
-        
                                     </Link>
-        
                                 )}
-        
                             </div>
-        
-                        </div>
-        
+                        </Banner>
                     )}
-        
-        
-        
+
                     {/* Notification Banner */}
-        
                     {notification && (
-        
-                        <div className="bg-green-500/90 backdrop-blur-sm text-white text-[10px] py-1.5 px-4 text-center font-mono animate-in slide-in-from-top-2 pointer-events-auto shadow-lg rounded-full w-fit border border-green-400/30">
-        
+                        <Banner color="green" onDismiss={() => setNotification(null)}>
                             {notification}
-        
-                        </div>
-        
+                        </Banner>
                     )}
-        
-        
-        
+
                     {/* Warning Banner */}
-        
                     {showOverrideWarning && (
-        
-                        <div className="bg-orange-500/90 backdrop-blur-sm text-white text-[10px] py-1.5 px-4 text-center font-mono cursor-pointer hover:bg-orange-600/90 transition-colors pointer-events-auto shadow-lg rounded-full w-fit border border-orange-400/30" onClick={handleFork}>
-        
+                        <Banner color="orange" onClick={handleFork}>
                             This will override the current recipe, click <span className="underline font-bold hover:text-white">here to make a new version</span>
-        
-                        </div>
-        
+                        </Banner>
                     )}
-        
                     
-        
                     {/* Guest Banner */}
-        
-                    {!user && graph && (
-        
-                        <div className="bg-yellow-500/90 backdrop-blur-sm text-black text-[10px] py-1.5 px-4 text-center font-mono pointer-events-auto shadow-lg rounded-full w-fit border border-yellow-400/30">
-        
-                            Recipe not saved to account. <button onClick={signIn} className="underline font-bold hover:text-zinc-800">Log in</button> to save edits permanently.
-        
-                        </div>
-        
+                    {!user && graph && !guestBannerDismissed && (
+                        <Banner color="yellow" onDismiss={() => setGuestBannerDismissed(true)}>
+                            Recipe not saved to account. <button onClick={(e) => { e.stopPropagation(); signIn(); }} className="underline font-bold hover:text-zinc-800">Log in</button> to save edits permanently.
+                        </Banner>
                     )}
-        
                 </div>
 
         {/* Input Area (Collapsible) */}

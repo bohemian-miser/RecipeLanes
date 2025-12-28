@@ -288,12 +288,14 @@ export async function getOrCreateIconAction(
                           debugInfo: { ...debugInfo, decision: 'GENERATED_NEW' } 
                       };
                   } 
-                  
-                  // 3. Create New Ingredient Group (Requires Auth)
-                  if (!session) {
-                      console.warn(`[getOrCreateIconAction] Item not found and user not logged in: ${ingredient}`);
-                      return { error: 'Item not found. Login to forge new items.' };
-                  }
+                        
+                // 3. Create New Ingredient Group (Requires Auth)
+                // This is currently commented out so anyone can forge new ingredients.
+                // I will add this back as soon as there are any shenanigans or costs.
+                //   if (!session) {
+                //       console.warn(`[getOrCreateIconAction] Item not found and user not logged in: ${ingredient}`);
+                //       return { error: 'Item not found. Login to forge new items.' };
+                //   }
             
                   console.log(`[getOrCreateIconAction] Creating new ingredient group for ${ingredient}...`);
                   const newDocId = await getDataService().createIngredient(ingredient);

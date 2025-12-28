@@ -1,5 +1,5 @@
 import { test, expect } from './utils/fixtures';
-import { screenshot, screenshotDir } from './utils/screenshot';
+import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 
 test.describe('Forking Workflow', () => {
@@ -11,14 +11,15 @@ test.describe('Forking Workflow', () => {
       await page.setViewportSize(device.viewport);
 
       // 1. Login as Alice
+      await page.goto('/lanes?new=true');
       await login('mock-alice');
 
       // 2. Create Recipe
-      await page.goto('/lanes?new=true');
       await page.getByPlaceholder('Paste recipe here...').fill('Alice Soup\nBoil water.');
-      await page.locator('button.bg-yellow-500').click();
+      await page.locator('button:has(svg.lucide-arrow-right)').click();
       
       // Wait for ID
+      await screenshot(page, dir, '00-debug-before-alice-id');
       await expect(page).toHaveURL(/id=/, { timeout: 15000 });
       const aliceUrl = page.url();
       const aliceId = new URL(aliceUrl).searchParams.get('id');
@@ -31,6 +32,7 @@ test.describe('Forking Workflow', () => {
       // 4. Bob visits Alice's recipe
       await page.goto(aliceUrl);
       // Wait for load
+      await screenshot(page, dir, '00-debug-before-bob-view-text');
       await expect(page.getByPlaceholder('Paste recipe here...')).toHaveValue('Alice Soup\nBoil water.', { timeout: 15000 });
       await screenshot(page, dir, '02-bob-views-alice');
 
@@ -41,6 +43,7 @@ test.describe('Forking Workflow', () => {
       
       // 6. Verify Fork
       // URL should change to new ID (wait for it)
+      await screenshot(page, dir, '00-debug-before-bob-fork-id');
       await expect(page).toHaveURL(new RegExp(`id=(?!${aliceId})`), { timeout: 15000 });
       const bobId = new URL(page.url()).searchParams.get('id');
       console.log('Bob Copy ID:', bobId);
@@ -49,6 +52,7 @@ test.describe('Forking Workflow', () => {
       // Title should change (Assuming "Copy of..." logic works on title derived from text)
       // Note: Parse might title it "Alice Soup". Fork becomes "Copy of Alice Soup".
       // We check for "Copy of"
+      await screenshot(page, dir, '00-debug-before-bob-title');
       await expect(page.locator('h1').first()).toHaveText(/Copy of/);
       await screenshot(page, dir, '03-bob-forked');
 
@@ -56,14 +60,17 @@ test.describe('Forking Workflow', () => {
       await page.goto(aliceUrl);
       
       // 8. Verify Banner
+      await screenshot(page, dir, '00-debug-before-banner');
       const banner = page.locator('text=You have 1 existing copy');
       await expect(banner).toBeVisible();
       
       // Check buttons
+      await screenshot(page, dir, '00-debug-before-banner-buttons');
       await expect(page.getByRole('link', { name: 'Open it' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Override it' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Make another copy' })).toBeVisible();
       await screenshot(page, dir, '04-bob-banner');
+      cleanupScreenshots(dir);
     });
   }
 });

@@ -1,5 +1,5 @@
 import { test, expect } from './utils/fixtures';
-import { screenshot, screenshotDir } from './utils/screenshot';
+import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 
 test.describe('Icon Generation Pipeline', () => {
@@ -11,12 +11,13 @@ test.describe('Icon Generation Pipeline', () => {
       await page.setViewportSize(device.viewport);
 
       // 1. Login
-      await login('icon-tester');
       await page.goto('/');
+      await login('icon-tester');
       await screenshot(page, dir, '01-initial');
       
       // 2. Input Ingredient
       const input = page.getByPlaceholder('ENTER INGREDIENT...');
+      await screenshot(page, dir, '00-debug-before-input-visible');
       await expect(input).toBeVisible();
       await input.fill('Golden Apple');
       await screenshot(page, dir, '02-input');
@@ -24,15 +25,14 @@ test.describe('Icon Generation Pipeline', () => {
       // 3. Generate
       await page.getByRole('button', { name: 'Generate Icon' }).click();
       
-      // 4. Verify Pending State (Optional, might be fast)
-      // await expect(page.getByText('Forging...')).toBeVisible(); 
-      
       // 5. Verify Result
       // Wait for the "Remove from Inventory" button which appears on the card
       const removeBtn = page.locator('button[title="Remove from Inventory"]').last();
+      await screenshot(page, dir, '00-debug-before-remove-btn');
       await expect(removeBtn).toBeVisible({ timeout: 30000 });
       
       const img = page.locator('.grid img').last();
+      await screenshot(page, dir, '00-debug-before-img-visible');
       await expect(img).toBeVisible();
       
       const src = await img.getAttribute('src');
@@ -45,11 +45,11 @@ test.describe('Icon Generation Pipeline', () => {
           expect(src).toContain('placehold.co');
       } else {
           // If we are using Real (or Emulator Storage)
-          // It should be a storage URL or Data URI
           expect(src).toMatch(/^http|data:/);
       }
 
       await screenshot(page, dir, '03-generated');
+      cleanupScreenshots(dir);
     });
   }
 });

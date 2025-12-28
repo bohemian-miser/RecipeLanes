@@ -1,5 +1,5 @@
 import { test, expect } from './utils/fixtures';
-import { screenshot, screenshotDir } from './utils/screenshot';
+import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 
 test.describe('Lanes Icon Generation', () => {
@@ -58,6 +58,7 @@ test.describe('Lanes Icon Generation', () => {
       await expect(viewport).toBeVisible();
       await expect(imgs.first()).toBeVisible({ timeout: 10000 });
       await screenshot(page, dir, '07-persistence-check');
+      cleanupScreenshots(dir);
     });
   }
 });

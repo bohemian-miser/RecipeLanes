@@ -1,5 +1,5 @@
 import { test, expect } from './utils/fixtures';
-import { screenshot, screenshotDir } from './utils/screenshot';
+import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 
 test.describe('Comprehensive Feature Tests', () => {
@@ -11,17 +11,19 @@ test.describe('Comprehensive Feature Tests', () => {
       const dir = screenshotDir('comprehensive-autosave', device.name);
       await page.setViewportSize(device.viewport);
       
+      await page.goto('/lanes?new=true');
       // Login as Owner
       await login('owner-user');
 
-      await page.goto('/lanes?new=true');
       await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
-      await page.locator('button.bg-yellow-500').click();
+      await page.locator('button:has(svg.lucide-arrow-right)').click();
       
       // Wait for graph
+      await screenshot(page, dir, 'debug-before-node-check');
       await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 15000 });
+      await screenshot(page, dir, 'debug-before-url-check');
       await expect(page).toHaveURL(/id=/, { timeout: 20000 });
-      await screenshot(page, dir, '01-initial-graph');
+      await screenshot(page, dir, 'initial-graph');
 
       const node = page.locator('.react-flow__node').first();
       const box1 = await node.boundingBox();
@@ -39,29 +41,33 @@ test.describe('Comprehensive Feature Tests', () => {
       // In updated logic, we look for notification banner.
       // If we are owner, it just saves.
       await page.waitForTimeout(1000); // Wait for save
-      await screenshot(page, dir, '02-after-drag');
+      await screenshot(page, dir, 'after-drag');
+      cleanupScreenshots(dir);
     });
 
     test(`${device.name}: JSON View Hides iconUrl`, async ({ page, login }) => {
       const dir = screenshotDir('comprehensive-json', device.name);
       await page.setViewportSize(device.viewport);
       
+      await page.goto('/lanes?new=true');
       await login('json-tester');
 
-      await page.goto('/lanes?new=true');
       await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
-      await page.locator('button.bg-yellow-500').click();
+      await page.locator('button:has(svg.lucide-arrow-right)').click();
+      await screenshot(page, dir, 'debug-before-node-visible');
       await expect(page.locator('.react-flow__node').first()).toBeVisible();
 
       // Toggle JSON
       await page.getByTitle('Toggle JSON View').click();
       const jsonTextarea = page.locator('textarea[placeholder="Graph JSON..."]');
+      await screenshot(page, dir, 'debug-before-json-textarea');
       await expect(jsonTextarea).toBeVisible();
-      await screenshot(page, dir, '01-json-view');
+      await screenshot(page, dir, 'json-view');
       
       const jsonContent = await jsonTextarea.inputValue();
       expect(jsonContent).toContain('"id":');
       expect(jsonContent).not.toContain('"iconUrl":');
+      cleanupScreenshots(dir);
     });
 
     test(`${device.name}: Draft Persistence`, async ({ page }) => {
@@ -71,28 +77,31 @@ test.describe('Comprehensive Feature Tests', () => {
       await page.goto('/lanes?new=true');
       const input = page.getByPlaceholder('Paste recipe here...');
       await input.fill('My Secret Draft Recipe');
-      await screenshot(page, dir, '01-text-entered');
+      await screenshot(page, dir, 'text-entered');
       
       // Reload
       await page.reload();
       
       // Check if text persists
+      await screenshot(page, dir, 'debug-before-persistence-check');
       await expect(input).toHaveValue('My Secret Draft Recipe');
-      await screenshot(page, dir, '02-text-persisted');
+      await screenshot(page, dir, 'text-persisted');
+      cleanupScreenshots(dir);
     });
 
     test(`${device.name}: Shift+Click Multi-Select`, async ({ page, login }) => {
       const dir = screenshotDir('comprehensive-multiselect', device.name);
       await page.setViewportSize(device.viewport);
       
-      await login('select-tester');
-
       // Use "complex" mock to get multiple nodes
       await page.goto('/lanes?new=true');
+      await login('select-tester');
+
       await page.getByPlaceholder('Paste recipe here...').fill('complex test');
-      await page.locator('button.bg-yellow-500').click();
+      await page.locator('button:has(svg.lucide-arrow-right)').click();
       
       const nodes = page.locator('.react-flow__node');
+      await screenshot(page, dir, 'debug-before-nodes-count');
       await expect(nodes).toHaveCount(9); // Complex mock has 9 nodes
 
       const node1 = nodes.nth(0);
@@ -100,9 +109,10 @@ test.describe('Comprehensive Feature Tests', () => {
 
       // Click first
       await node1.click();
+      await screenshot(page, dir, 'debug-after-first-click');
       await expect(node1).toHaveClass(/selected/);
       await expect(node2).not.toHaveClass(/selected/);
-      await screenshot(page, dir, '01-first-selected');
+      await screenshot(page, dir, 'first-selected');
 
       // Shift+Click second
       await page.keyboard.down('Shift');
@@ -110,9 +120,11 @@ test.describe('Comprehensive Feature Tests', () => {
       await page.keyboard.up('Shift');
 
       // Both should be selected
+      await screenshot(page, dir, 'debug-after-shift-click');
       await expect(node1).toHaveClass(/selected/);
       await expect(node2).toHaveClass(/selected/);
-      await screenshot(page, dir, '02-both-selected');
+      await screenshot(page, dir, 'both-selected');
+      cleanupScreenshots(dir);
     });
   }
 });

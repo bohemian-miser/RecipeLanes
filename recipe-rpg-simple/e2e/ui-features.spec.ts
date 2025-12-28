@@ -1,5 +1,5 @@
 import { test, expect } from './utils/fixtures';
-import { screenshot, screenshotDir } from './utils/screenshot';
+import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 
 test.describe('UI Features', () => {
@@ -29,6 +29,7 @@ test.describe('UI Features', () => {
       await node1.click();
       await expect(node1).toHaveClass(/selected/);
       await screenshot(page, dir, '03-branch-selected-logic');
+      cleanupScreenshots(dir);
     });
   }
 });

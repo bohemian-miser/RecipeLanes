@@ -1,6 +1,6 @@
 // Important: Import 'test' from your custom fixtures, not '@playwright/test'
 import { test, expect } from './utils/fixtures'; 
-import { screenshot, screenshotDir } from './utils/screenshot';
+import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 
 test.describe('Authentication Flow', () => {
@@ -39,9 +39,10 @@ test.describe('Authentication Flow', () => {
       await logoutBtn.click();
 
       // 4. Verify Return to Guest UI
+      await screenshot(page, dir, '04-after-logout');
       await expect(loginBtn).toBeVisible();
       await expect(logoutBtn).not.toBeVisible();
-      await screenshot(page, dir, '04-after-logout');
+      cleanupScreenshots(dir);
     });
   }
 });

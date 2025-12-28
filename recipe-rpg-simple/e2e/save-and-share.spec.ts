@@ -1,5 +1,5 @@
 import { test, expect, Page } from './utils/fixtures';
-import { screenshot, screenshotDir } from './utils/screenshot';
+import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 
 test.describe('Save and Share Functionality', () => {
@@ -51,19 +51,19 @@ test.describe('Save and Share Functionality', () => {
       // Wait for URL to clear ID
       await expect(page).not.toHaveURL(/id=/);
       await screenshot(page, dir, '03-new-clicked-cleared');
+      cleanupScreenshots(dir);
     });
 
     if (!device.isMobile) {
       test(`${device.name}: authenticated save flow`, async ({ page, login }) => {
         const dir = screenshotDir('auth-save', device.name);
-        await login('save-tester');
-        
         await page.goto('/lanes?new=true');
+        await login('save-tester');
         await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
         await page.locator('button.bg-yellow-500').click();
         
         await expect(page).toHaveURL(/id=/, { timeout: 20000 });
-        await screenshot(page, dir, '01-auth-graph-created');
+        await screenshot(page, dir, 'auth-graph-created');
         
         // Modify
         const node = page.locator('.react-flow__node').first();
@@ -75,7 +75,8 @@ test.describe('Save and Share Functionality', () => {
         
         // Expect success notification
         await expect(page.getByText('Saved changes.')).toBeVisible();
-        await screenshot(page, dir, '02-auth-saved');
+        await screenshot(page, dir, 'auth-saved');
+        cleanupScreenshots(dir);
       });
     }
   }

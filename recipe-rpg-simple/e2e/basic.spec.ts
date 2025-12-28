@@ -1,5 +1,5 @@
 import { test, expect } from './utils/fixtures';
-import { screenshot, screenshotDir } from './utils/screenshot';
+import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 
 test.describe('Basic Sanity', () => {
@@ -9,8 +9,10 @@ test.describe('Basic Sanity', () => {
       await page.setViewportSize(device.viewport);
       
       await page.goto('/lanes');
+      await screenshot(page, dir, 'debug-before-title-check');
       await expect(page).toHaveTitle(/Recipe Lanes/);
-      await screenshot(page, dir, '01-home-page');
+      await screenshot(page, dir, 'home-page');
+      cleanupScreenshots(dir);
     });
 
     test(`${device.name}: loads gallery`, async ({ page }) => {
@@ -19,8 +21,10 @@ test.describe('Basic Sanity', () => {
 
       await page.goto('/gallery');
       // Heading might be "Community Collection" or "Public Gallery" depending on impl
+      await screenshot(page, dir, 'debug-before-gallery-check');
       await expect(page.locator('h1, h2').filter({ hasText: /Gallery|Collection/ })).toBeVisible();
-      await screenshot(page, dir, '01-gallery-page');
+      await screenshot(page, dir, 'gallery-page');
+      cleanupScreenshots(dir);
     });
   }
 });

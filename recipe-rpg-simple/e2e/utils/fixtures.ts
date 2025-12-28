@@ -19,6 +19,21 @@ export const test = base.extend<AuthFixtures>({
     
     // The Helper Function
     const loginFn = async (uid: string = 'test-user-default', options: AuthOptions = {}) => {
+      // Check for mock mode first
+      const isMock = await page.evaluate(() => (window as any)._authMockMode);
+      
+      if (isMock) {
+          // Set mock cookie directly
+          await page.context().addCookies([{
+              name: 'session',
+              value: `mock-${uid}`,
+              domain: 'localhost',
+              path: '/'
+          }]);
+          await page.reload();
+          return;
+      }
+
       const { claims, displayName } = options;
       
       // A. Mint the token (Node.js context)

@@ -23,8 +23,10 @@ export default defineConfig({
     env: {
       MOCK_AI: 'true',
       FORCE_MEMORY_DB: 'true',
-      NEXT_PUBLIC_MOCK_AUTH: 'true',
       DIST_DIR: '.next-test',
+      NEXT_PUBLIC_USE_FIREBASE_EMULATOR: 'true',
+      NEXT_PUBLIC_FIREBASE_API_KEY: 'demo-key',
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'demo-project',
     },
   },
 });

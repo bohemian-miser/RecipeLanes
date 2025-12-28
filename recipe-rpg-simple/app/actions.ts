@@ -284,6 +284,7 @@ export async function getOrCreateIconAction(
                       return { 
                           ...result,
                           iconUrl: result.url, 
+                          popularityScore: result.lcb,
                           isNew: true, 
                           debugInfo: { ...debugInfo, decision: 'GENERATED_NEW' } 
                       };
@@ -304,6 +305,7 @@ export async function getOrCreateIconAction(
                   return { 
                       ...result,
                       iconUrl: result.url,
+                      popularityScore: result.lcb,
                       isNew: true, 
                       debugInfo: { decision: 'NEW_INGREDIENT_GROUP' } 
                   };

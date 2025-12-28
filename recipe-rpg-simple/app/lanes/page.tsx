@@ -232,20 +232,21 @@ function RecipeLanesContent() {
           setStatus('loading');
           getRecipeAction(id).then(res => {
               if (res.graph) {
-                  setGraph(res.graph);
+                  const currentGraph = res.graph;
+                  setGraph(currentGraph);
                   if (res.ownerId) setOwnerId(res.ownerId);
-                  setRecipeText(res.graph.originalText || '');
-                  setRecipeTitle(res.graph.title || '');
+                  setRecipeText(currentGraph.originalText || '');
+                  setRecipeTitle(currentGraph.title || '');
                   debugLogAction(`checking icons for recipe id ${id}`);
-                  if (res.graph.nodes.some(n => !n.iconUrl)) {
+                  if (currentGraph.nodes.some(n => !n.iconUrl)) {
                       setStatus('forging');
                       populateRecipeIconsAction(id).then(popRes => {
                           if (popRes.success && popRes.updates) {
-                              const newNodes = res.graph.nodes.map((n: any) => {
+                              const newNodes = currentGraph.nodes.map((n: any) => {
                                   const update = popRes.updates?.find(u => u.nodeId === n.id);
                                   return update ? { ...n, iconUrl: update.iconUrl } : n;
                               });
-                              setGraph({ ...res.graph, nodes: newNodes });
+                              setGraph({ ...currentGraph, nodes: newNodes });
                               setStatus('complete');
                           } else {
                               setStatus('complete');

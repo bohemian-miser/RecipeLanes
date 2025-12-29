@@ -8,9 +8,11 @@ import { useSearchParams } from 'next/navigation';
 // Track rejected URLs for the session to prevent them from reappearing immediately
 const sessionRejectedUrls = new Set<string>();
 
-const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?: () => void }>) => {
+const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?: () => void, onSetLongPress?: (active: boolean) => void }>) => {
   const isIngredient = data.type === 'ingredient';
   const [isRerolling, setIsRerolling] = useState(false);
+  const [isPivotMode, setIsPivotMode] = useState(false);
+  const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
   const { setNodes } = useReactFlow();
   const searchParams = useSearchParams();
   const recipeId = searchParams.get('id');
@@ -26,6 +28,27 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
       right: 'flex-row',
       left: 'flex-row-reverse'
   }[textPos];
+
+  const handleTouchStart = () => {
+      longPressTimer.current = setTimeout(() => {
+          setIsPivotMode(true);
+          if (data.onSetLongPress) data.onSetLongPress(true);
+          // Optional: Vibrate
+          if (navigator.vibrate) navigator.vibrate(50);
+      }, 600); // 600ms hold
+  };
+
+  const handleTouchEnd = () => {
+      if (longPressTimer.current) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+      }
+      // Reset visual state after a delay or drag starts (handled by parent consuming the flag)
+      // Actually, if we just tapped (no drag), we should reset.
+      // If we dragged, the parent consumed the flag.
+      // But we need to reset the visual `isPivotMode`.
+      setTimeout(() => setIsPivotMode(false), 500); 
+  };
 
   const handleDelete = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -84,6 +107,10 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
             }}
   
             title={data.visualDescription || data.text}
+            
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchMove={handleTouchEnd} // Cancel on move if dragging before timer
   
         >
   
@@ -95,7 +122,7 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
   
           
   
-                <div className={`relative w-16 h-16 flex-shrink-0 flex items-center justify-center transition-all duration-200 z-10 ${selected ? 'border-2 border-dashed border-blue-500 rounded-lg bg-blue-50/10' : ''}`}>
+                <div className={`relative w-16 h-16 flex-shrink-0 flex items-center justify-center transition-all duration-200 z-10 ${selected || isPivotMode ? 'border-2 border-dashed border-blue-500 rounded-lg bg-blue-50/10' : ''} ${isPivotMode ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`}>
   
           
   

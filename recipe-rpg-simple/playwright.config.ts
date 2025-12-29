@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 30 * 1000,
   retries: 2,
-  fullyParallel: true,
+  fullyParallel: false,
   use: {
     baseURL: 'http://localhost:8002',
     trace: 'on-first-retry',

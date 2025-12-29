@@ -114,6 +114,12 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         ancestors?: string[];
         initialPositions?: Record<string, { x: number, y: number }>;
     }>({ active: false });
+    
+    // Long Press State for Mobile Pivot
+    const longPressTriggered = useRef(false);
+    const setLongPress = useCallback((active: boolean) => {
+        longPressTriggered.current = active;
+    }, []);
 
     // History
     const [past, setPast] = useState<{ nodes: Node[], edges: Edge[] }[]>([]);
@@ -282,7 +288,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                  id: n.id,
                  type: nodeType,
                  position: { x: n.x, y: n.y },
-                 data: { ...originalNode, ...n.data, textPos, depth: n.depth, onDelete: () => handleDeleteNode(n.id) },
+                 data: { ...originalNode, ...n.data, textPos, depth: n.depth, onDelete: () => handleDeleteNode(n.id), onSetLongPress: setLongPress },
                  width: n.width,
                  height: n.height,
                  draggable: true,
@@ -573,7 +579,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const onNodeDragStart = (event: React.MouseEvent, node: Node) => {
         onInteraction?.();
         takeSnapshot(); 
-        if (event.shiftKey) {
+        if (event.shiftKey || longPressTriggered.current) {
+            longPressTriggered.current = false; // Reset immediately
             const allNodes = getNodes();
             const outgoing = edges.find(e => e.source === node.id);
             const child = outgoing ? allNodes.find(n => n.id === outgoing.target) : null;

@@ -24,6 +24,7 @@ const counters = new Map<string, number>();
 
 export const screenshotDir = (testName: string, deviceName: string) => {
   const dir = path.join('e2e', 'test_screenshots', testName, deviceName);
+  cleanupScreenshots(dir);
   fs.mkdirSync(dir, { recursive: true });
   counters.set(dir, 0); // Initialize/reset counter for this specific dir
   return dir;

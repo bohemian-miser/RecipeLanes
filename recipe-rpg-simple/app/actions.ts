@@ -46,7 +46,7 @@ function toTitleCase(str: string) {
     .join(' ');
 }
 
-async function generateAndStoreIcon(ingredient: string, ingredientDocId: string): Promise<{ url: string, lcb: number, fullPrompt: string, visualDescription: string }> {
+async function generateAndStoreIcon(ingredient: string, ingredientDocId: string): Promise<{ id: string, url: string, lcb: number, fullPrompt: string, visualDescription: string }> {
   console.log(`[generateAndStoreIcon] 🟢 START for: "${ingredient}" (DocID: ${ingredientDocId})`);
   
   try {
@@ -85,9 +85,10 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
 
       // 4. Save via Service
       let finalUrl = downloadURL;
+      let finalId = '';
       try {
           console.log(`[generateAndStoreIcon] Saving to DataService...`);
-          const savedUrl = await getDataService().saveIcon(
+          const savedResult = await getDataService().saveIcon(
               ingredientDocId,
               ingredient,
               visualDescription,
@@ -102,13 +103,14 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
                   imageModel: imageModelName
               }
           );
-          finalUrl = savedUrl;
+          finalUrl = savedResult.url;
+          finalId = savedResult.id;
           console.log(`[generateAndStoreIcon] ✅ Saved successfully. Final URL: ${finalUrl}`);
       } catch (e) {
           console.error('[generateAndStoreIcon] 🔴 DataService save failed:', e);
       }
 
-      return { url: finalUrl, lcb, fullPrompt, visualDescription };
+      return { id: finalId, url: finalUrl, lcb, fullPrompt, visualDescription };
   } catch (e) {
       console.error(`[generateAndStoreIcon] 🔴 Fatal error for "${ingredient}":`, e);
       throw e;
@@ -269,6 +271,7 @@ export async function getOrCreateIconAction(
                 }
 
                 return {
+                    iconId: selected.id,
                     iconUrl: selected.url,
                     isNew: false,
                     popularityScore: newLCB,
@@ -283,6 +286,7 @@ export async function getOrCreateIconAction(
                       console.log(`[getOrCreateIconAction] Generation success for ${ingredient}: ${result.url}`);
                       return { 
                           ...result,
+                          iconId: result.id,
                           iconUrl: result.url, 
                           popularityScore: result.lcb,
                           isNew: true, 
@@ -304,6 +308,7 @@ export async function getOrCreateIconAction(
                   console.log(`[getOrCreateIconAction] Initial generation success for ${ingredient}: ${result.url}`);
                   return { 
                       ...result,
+                      iconId: result.id,
                       iconUrl: result.url,
                       popularityScore: result.lcb,
                       isNew: true, 
@@ -428,12 +433,32 @@ export async function createVisualRecipeAction(recipeText: string): Promise<{ gr
                             .sort((a: any, b: any) => (b.popularity_score || 0) - (a.popularity_score || 0))[0];
                         
                         if (bestIcon) {
+                            // Quality Check: If proven bad, treat as missing to trigger regeneration
+                            const n = bestIcon.impressions || 0;
+                            const score = bestIcon.popularity_score || 0;
+                            
+                            // IF the best icon is very bad, skip it and make a new one.
+                            if (n >= PROVEN_SAMPLE_SIZE && score < QUALITY_FLOOR_LCB) {
+                                console.log(`[createVisualRecipeAction] Skipping '${name}' icon (Score ${score.toFixed(2)} below floor).`);
+                                return node; // Return without iconId -> Trigger Background
+                            }
+
+                            console.log(`[createVisualRecipeAction] Selected icon for '${name}': ${bestIcon.url}`);
+                            
+                            // Increment Impressions for the selected icon
+                            const newImpressions = (bestIcon.impressions || 0) + 1;
+                            const newLCB = calculateWilsonLCB(newImpressions, bestIcon.rejections || 0);
+                            await getDataService().incrementImpressions(match.id, bestIcon.id, bestIcon.url, newLCB, newImpressions);
+
                             return { 
                                 ...node, 
                                 iconId: bestIcon.id, 
                                 iconUrl: bestIcon.url // Keep URL for immediate display
                             };
                         }
+                    }else {
+                        console.log(`[createVisualRecipeAction] CACHE MISS for '${name}'.`);
+
                     }
                 } catch (e) {
                     console.warn(`[createVisualRecipeAction] Cache lookup failed for ${node.text}`, e);
@@ -617,7 +642,7 @@ export async function generateGraphIconsAction(graph: RecipeGraph): Promise<{ gr
     }
 }
 
-export async function rerollIconAction(nodeId: string, ingredientName: string, currentIconUrl: string, seenUrls: string[] = []) {
+export async function rerollIconAction(nodeId: string, ingredientName: string, currentIconUrl: string, seenUrls: string[] = [], recipeId?: string) {
     try {
         // Record Rejection if possible
         if (currentIconUrl) {
@@ -633,8 +658,27 @@ export async function rerollIconAction(nodeId: string, ingredientName: string, c
         const result = await getOrCreateIconAction(ingredientName, 0, allSeen);
         
         if ('error' in result) return { error: result.error };
+
+        // Update Stored Recipe if recipeId is provided
+        if (recipeId) {
+            const recipeData = await getDataService().getRecipe(recipeId);
+            if (recipeData) {
+                const graph = recipeData.graph;
+                const nodeIndex = graph.nodes.findIndex(n => n.id === nodeId);
+                if (nodeIndex !== -1) {
+                    graph.nodes[nodeIndex] = {
+                        ...graph.nodes[nodeIndex],
+                        iconId: result.iconId,
+                        iconUrl: result.iconUrl
+                    };
+                    await getDataService().saveRecipe(graph, recipeId, recipeData.ownerId, recipeData.visibility as any);
+                    console.log(`[rerollIconAction] Updated recipe ${recipeId} node ${nodeId} with new icon.`);
+                }
+            }
+        }
         
         return { 
+            iconId: result.iconId,
             iconUrl: result.iconUrl,
             nodeId 
         };

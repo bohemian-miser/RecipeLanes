@@ -48,10 +48,20 @@ async function testMetadataPopulation() {
     // 3. Verify Storage Metadata
     console.log('[Step 3] Verifying Storage Metadata...');
     try {
-        const matches = iconUrl.match(new RegExp('/o/([^?]+)'));
-        if (!matches || !matches[1]) throw new Error("Could not parse Storage path from URL");
+        let filePath: string;
+        if (iconUrl.includes('/o/')) {
+            const matches = iconUrl.match(new RegExp('/o/([^?]+)'));
+            if (!matches || !matches[1]) throw new Error("Could not parse Storage path from API URL");
+            filePath = decodeURIComponent(matches[1]);
+        } else {
+            // Handle https://storage.googleapis.com/BUCKET/PATH
+            const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
+            const parts = iconUrl.split(bucketName);
+            if (parts.length < 2) throw new Error("Could not parse Storage path from Public URL");
+            filePath = decodeURIComponent(parts[1]);
+            if (filePath.startsWith('/')) filePath = filePath.substring(1);
+        }
         
-        const filePath = decodeURIComponent(matches[1]);
         const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app');
         const file = bucket.file(filePath);
         
@@ -60,7 +70,7 @@ async function testMetadataPopulation() {
 
         console.log(' -> Fetched Metadata:', custom);
 
-        const expectedKeys = ['lcb', 'impressions', 'rejections', 'fullPrompt', 'visualDescription'];
+        const expectedKeys = ['popularity_score', 'impressions', 'rejections', 'fullPrompt', 'visualDescription'];
         let missing = false;
 
         for (const key of expectedKeys) {
@@ -70,10 +80,10 @@ async function testMetadataPopulation() {
             }
         }
 
-        if (custom.lcb === '1.0' && custom.impressions === '0') {
-            console.log('SUCCESS: Core metrics (lcb, impressions) are correct.');
+        if (custom.popularity_score === '1.0' && custom.impressions === '0') {
+            console.log('SUCCESS: Core metrics (popularity_score, impressions) are correct.');
         } else {
-            console.error(`FAILURE: Metadata values incorrect. lcb=${custom.lcb}, impressions=${custom.impressions}`);
+            console.error(`FAILURE: Metadata values incorrect. popularity_score=${custom.popularity_score}, impressions=${custom.impressions}`);
             missing = true;
         }
 

@@ -3,6 +3,7 @@ import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
 import { RefreshCw, RotateCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { rerollIconAction } from '@/app/actions';
+import { useSearchParams } from 'next/navigation';
 
 // Track rejected URLs for the session to prevent them from reappearing immediately
 const sessionRejectedUrls = new Set<string>();
@@ -11,6 +12,9 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
   const isIngredient = data.type === 'ingredient';
   const [isRerolling, setIsRerolling] = useState(false);
   const { setNodes } = useReactFlow();
+  const searchParams = useSearchParams();
+  const recipeId = searchParams.get('id');
+
   const rotation = data.rotation || 0;
   
   const textPos = data.textPos || 'bottom';
@@ -45,13 +49,13 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
       }
 
       try {
-        const res = await rerollIconAction(id, ingredientName, currentUrl, Array.from(sessionRejectedUrls));
+        const res = await rerollIconAction(id, ingredientName, currentUrl, Array.from(sessionRejectedUrls), recipeId || undefined);
         if (res && res.iconUrl) {
             setNodes((nodes) => nodes.map(n => {
                 // Update all nodes that share the same visual description/text
                 const nName = n.data.visualDescription || n.data.text;
                 if (nName === ingredientName) {
-                    return { ...n, data: { ...n.data, iconUrl: res.iconUrl } };
+                    return { ...n, data: { ...n.data, iconUrl: res.iconUrl, iconId: res.iconId } };
                 }
                 return n;
             }));

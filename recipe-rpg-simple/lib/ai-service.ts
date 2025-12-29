@@ -86,7 +86,7 @@ export class MockAIService implements AIService {
     // Generic fallback for E2E tests - Try to extract ingredient from prompt
     // Prompt usually contains: "convert the following cooking instructions... Input Recipe ... "
     // Handle both quoted and unquoted inputs, and varying newlines
-    const match = prompt.match(/Input Recipe\s*\n\s*"?(.*?)"?\s*$/s);
+    const match = prompt.match(/Input Recipe\s*\n\s*"?(.*)"?\s*$/);
     const inputDerived = match ? match[1].trim() : "Mock Ingredient 1";
     // Extract first noun-phrase-ish thing or just use the whole text if short
     const displayText = inputDerived.length < 50 ? inputDerived : "Mock Ingredient";

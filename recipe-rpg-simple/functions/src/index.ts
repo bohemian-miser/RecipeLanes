@@ -83,7 +83,10 @@ export const processNewRecipe = onDocumentCreated("recipes/{recipeId}", async (e
     await Promise.all(nodesToProcess.map(async (node: any, index: number) => {
         try {
             // 1. Check Cache (Ingredients Collection)
-            const name = node.visualDescription.toLowerCase().trim();
+            // Normalize to Title Case consistently with the main app
+            const rawName = node.visualDescription.trim();
+            const name = rawName.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+            
             const ingredientsRef = db.collection('ingredients');
             const q = await ingredientsRef.where('name', '==', name).limit(1).get();
             

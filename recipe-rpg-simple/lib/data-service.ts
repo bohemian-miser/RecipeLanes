@@ -19,7 +19,7 @@ export interface DataService {
       publicUrl: string, 
       imageBuffer: ArrayBuffer | Buffer, 
       meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string }
-  ): Promise<string>;
+  ): Promise<{ id: string, url: string }>;
   
   saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public'): Promise<string>;
   getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null>;
@@ -310,12 +310,22 @@ export class FirebaseDataService implements DataService {
 
   async getIngredientByName(name: string) {
     console.log(`[FirebaseDataService] getIngredientByName: ${name}`);
-    const snapshot = await db.collection('ingredients').get();
-    const doc = snapshot.docs.find(d => d.data().name.toLowerCase() === name.toLowerCase());
+    // Normalize to Title Case for consistent lookup
+    const normalized = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    const snapshot = await db.collection('ingredients').where('name', '==', normalized).limit(1).get();
+    
+    if (!snapshot.empty) {
+        return { id: snapshot.docs[0].id, data: snapshot.docs[0].data() };
+    }
+
+    // Fallback: Full scan for legacy or mis-cased data (one-time cost until next save)
+    const allSnapshot = await db.collection('ingredients').get();
+    const doc = allSnapshot.docs.find(d => d.data().name.toLowerCase() === name.toLowerCase());
     return doc ? { id: doc.id, data: doc.data() } : null;
   }
   async createIngredient(name: string) {
-    const doc = await db.collection('ingredients').add({ name, created_at: FieldValue.serverTimestamp() });
+    const normalized = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    const doc = await db.collection('ingredients').add({ name: normalized, created_at: FieldValue.serverTimestamp() });
     return doc.id;
   }
   async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number) {
@@ -342,10 +352,10 @@ export class FirebaseDataService implements DataService {
       if (process.env.MOCK_AI === 'true') {
           console.log('[saveIcon] Mock AI detected, skipping Storage upload.');
           const finalUrl = publicUrl;
-          await db.collection('ingredients').doc(ingredientId).collection('icons').add({
+          const doc = await db.collection('ingredients').doc(ingredientId).collection('icons').add({
               url: finalUrl, ...meta, ingredient_name: ingredientName, created_at: FieldValue.serverTimestamp(), marked_for_deletion: false, visualDescription: visualDescription, fullPrompt: fullPrompt
           });
-          return finalUrl;
+          return { id: doc.id, url: finalUrl };
       }
 
       const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
@@ -358,10 +368,10 @@ export class FirebaseDataService implements DataService {
           metadata: { contentType: 'image/png', metadata: { firebaseStorageDownloadTokens: token, ...meta } }
       });
       const finalUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
-      await db.collection('ingredients').doc(ingredientId).collection('icons').add({
+      const doc = await db.collection('ingredients').doc(ingredientId).collection('icons').add({
           url: finalUrl, ...meta, ingredient_name: ingredientName, created_at: FieldValue.serverTimestamp(), marked_for_deletion: false, visualDescription: visualDescription, fullPrompt: fullPrompt
       });
-      return finalUrl;
+      return { id: doc.id, url: finalUrl };
   }
   async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
     const iconsRef = db.collection('ingredients').doc(ingredientId).collection('icons');
@@ -700,8 +710,8 @@ export class MemoryDataService implements DataService {
         return memoryStore.getAllIcons().sort((a, b) => b.popularity_score - a.popularity_score);
     }
 
-    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any): Promise<string> {
-        memoryStore.addIcon({
+    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any): Promise<{ id: string, url: string }> {
+        const id = memoryStore.addIcon({
             url: publicUrl,
             ingredient: ingredientName,
             ingredientId: ingredientId,
@@ -715,7 +725,7 @@ export class MemoryDataService implements DataService {
             textModel: meta.textModel,
             imageModel: meta.imageModel
         });
-        return publicUrl;
+        return { id, url: publicUrl };
     }
 
     async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {

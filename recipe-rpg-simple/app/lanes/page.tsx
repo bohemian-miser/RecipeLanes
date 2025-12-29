@@ -41,6 +41,7 @@ function RecipeLanesContent() {
   const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
   const [showOverrideWarning, setShowOverrideWarning] = useState(false);
+  const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[]>([]);
   // const [forgingProgress, setForgingProgress] = useState<{ completed: number, total: number } | null>(null); // Removed as it's now background
   const [guestBannerDismissed, setGuestBannerDismissed] = useState(false);
@@ -103,12 +104,12 @@ function RecipeLanesContent() {
 
   // Warning logic
   useEffect(() => {
-      if (graph && recipeText && graph.originalText && recipeText.trim() !== graph.originalText.trim()) {
+      if (!warningDismissed && graph && recipeText && graph.originalText && recipeText.trim() !== graph.originalText.trim()) {
           setShowOverrideWarning(true);
       } else {
           setShowOverrideWarning(false);
       }
-  }, [recipeText, graph]);
+  }, [recipeText, graph, warningDismissed]);
 
   // Save Text Draft on Unload/Refresh (Persistence)
   useEffect(() => {
@@ -233,6 +234,7 @@ function RecipeLanesContent() {
 
       debugLogAction('Setting up listener for recipe: ' + id);
       setStatus('loading');
+      setWarningDismissed(false);
 
       // Use Firestore Listener
       const unsubscribe = onSnapshot(doc(db, 'recipes', id), (docSnapshot) => {
@@ -305,6 +307,7 @@ function RecipeLanesContent() {
       setError(null);
       setStatus('idle');
       setShowOverrideWarning(false);
+      setWarningDismissed(false);
       setGuestBannerDismissed(false);
       localStorage.removeItem('recipe_draft'); 
       router.push('/lanes?new=true');
@@ -470,6 +473,7 @@ const handleVisualize = async () => {
         setStatus('complete');
         // No explicit populateIcons call. Background worker handles it.
         setShowOverrideWarning(false);
+        setWarningDismissed(false);
         localStorage.setItem('recipe_draft', recipeText);
 
     } catch (e: any) {
@@ -631,8 +635,8 @@ const handleVisualize = async () => {
 
                     {/* Warning Banner */}
                     {showOverrideWarning && (
-                        <Banner color="orange" onClick={handleFork}>
-                            This will override the current recipe, click <span className="underline font-bold hover:text-white">here to make a new version</span>
+                        <Banner color="orange" onClick={() => setWarningDismissed(true)}>
+                            This will override the current recipe
                         </Banner>
                     )}
                     

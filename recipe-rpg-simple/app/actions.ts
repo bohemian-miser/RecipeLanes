@@ -394,7 +394,7 @@ export async function deleteIngredientCategoryAction(rawIngredient: string): Pro
 // ... existing imports ...
 
 // New Action for "Optimistic Return + Background Trigger"
-export async function createVisualRecipeAction(recipeText: string): Promise<{ graph?: RecipeGraph; id?: string; error?: string }> {
+export async function createVisualRecipeAction(recipeText: string, currentId?: string): Promise<{ graph?: RecipeGraph; id?: string; error?: string }> {
     try {
         console.log('[createVisualRecipeAction] 🚀 Starting...');
         
@@ -424,8 +424,11 @@ export async function createVisualRecipeAction(recipeText: string): Promise<{ gr
                     const name = toTitleCase(node.visualDescription);
                     const match = await getDataService().getIngredientByName(name);
                     
+                    console.log(`[createVisualRecipeAction] Lookup '${name}' -> Match: ${match ? match.id : 'null'}`);
+
                     if (match) {
                         const icons = await getDataService().getIconsForIngredient(match.id);
+                        console.log(`[createVisualRecipeAction] '${name}' has ${icons.length} icons.`);
                         
                         // Pick best icon (Simple highest score)
                         const bestIcon = icons
@@ -474,8 +477,46 @@ export async function createVisualRecipeAction(recipeText: string): Promise<{ gr
         const session = await getAuthService().verifyAuth();
         const userId = session?.uid;
         
+        let targetId = undefined;
+        let visibility: 'unlisted' | 'public' | 'private' = 'unlisted';
+
+        if (currentId && userId) {
+            const original = await getDataService().getRecipe(currentId);
+            if (original) {
+                if (original.ownerId === userId) {
+                    // Owner -> Update existing
+                    console.log('[createVisualRecipeAction] Updating existing recipe:', currentId);
+                    targetId = currentId;
+                    visibility = (original.visibility as any) || 'unlisted';
+                    if (original.graph.title) graph.title = original.graph.title; // Preserve title if not parsed
+                } else {
+                    // Not Owner -> Fork
+                    console.log('[createVisualRecipeAction] Forking from', currentId);
+                    graph.sourceId = currentId;
+                    
+                    // Smart Naming
+                    let newTitle = graph.title || original.graph.title || 'Untitled';
+                    if (newTitle.startsWith('Yet another copy of ')) {
+                        const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
+                        if (match) {
+                            newTitle = `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;
+                        } else {
+                            newTitle = `${newTitle} (1)`;
+                        }
+                    } else if (newTitle.startsWith('Another copy of ')) {
+                        newTitle = newTitle.replace('Another copy of ', 'Yet another copy of ');
+                    } else if (newTitle.startsWith('Copy of ')) {
+                        newTitle = newTitle.replace('Copy of ', 'Another copy of ');
+                    } else {
+                        newTitle = `Copy of ${newTitle}`;
+                    }
+                    graph.title = newTitle;
+                }
+            }
+        }
+        
         console.log('[createVisualRecipeAction] 💾 Saving recipe...');
-        const id = await getDataService().saveRecipe(graph, undefined, userId, 'unlisted');
+        const id = await getDataService().saveRecipe(graph, targetId, userId, visibility);
         
         console.log(`[createVisualRecipeAction] ✅ Complete. ID: ${id}`);
         return { graph, id };

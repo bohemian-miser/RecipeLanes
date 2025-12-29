@@ -439,7 +439,8 @@ const handleVisualize = async () => {
     
     try {
         // Use New Fast Path Action
-        const res = await createVisualRecipeAction(recipeText);
+        const currentId = searchParams.get('id');
+        const res = await createVisualRecipeAction(recipeText, currentId || undefined);
         
         if (res.error || !res.graph) {
             throw new Error(res.error || 'Failed to parse recipe structure.');

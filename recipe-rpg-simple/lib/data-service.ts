@@ -47,27 +47,24 @@ export class FirebaseDataService implements DataService {
   
   async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
       try {
-          let q: FirebaseFirestore.Query = db.collectionGroup('icons').where('marked_for_deletion', '==', false);
+          // Robust implementation: Fetch recent 500 and filter in-memory to avoid complex index requirements
+          const snapshot = await db.collectionGroup('icons')
+              .where('marked_for_deletion', '==', false)
+              .orderBy('created_at', 'desc')
+              .limit(500)
+              .get();
+          
+          let icons: any[] = snapshot.docs.map(doc => this.mapIconDoc(doc));
           
           if (query && query.trim()) {
-              // Simple prefix search on ingredient_name. Note: This requires the name to be stored in Title Case if we search that way.
-              // We'll try to match case-insensitive by storing/searching a normalized field, but for now assuming strict prefix.
-              // To make it robust, let's assume the user types matching case or we capitalize it.
-              const term = query.trim();
-               // Search by ingredient name prefix
-              q = q.where('ingredient_name', '>=', term).where('ingredient_name', '<=', term + '\uf8ff').orderBy('ingredient_name');
-          } else {
-              q = q.orderBy('created_at', 'desc');
+              const term = query.toLowerCase().trim();
+              icons = icons.filter(i => i.ingredient_name?.toLowerCase().includes(term));
           }
 
-          // Aggregation for total count
-          const countSnapshot = await q.count().get();
-          const total = countSnapshot.data().count;
+          const total = icons.length;
+          const paginated = icons.slice((page - 1) * limit, page * limit);
 
-          const snapshot = await q.offset((page - 1) * limit).limit(limit).get();
-          const icons = snapshot.docs.map(doc => this.mapIconDoc(doc));
-
-          return { icons, total };
+          return { icons: paginated, total };
       } catch (e: any) {
           console.warn('getPagedIcons failed:', e.message);
           return { icons: [], total: 0 };

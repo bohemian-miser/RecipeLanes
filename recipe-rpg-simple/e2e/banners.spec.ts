@@ -2,7 +2,7 @@ import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 
-test.skip('Banner Logic', () => {
+test.describe('Banner Logic', () => {
   for (const device of deviceConfigs) {
     if (device.isMobile) continue;
 

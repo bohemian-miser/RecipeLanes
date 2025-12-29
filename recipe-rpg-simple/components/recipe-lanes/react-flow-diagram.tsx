@@ -505,6 +505,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
             setIsDirty(false);
+            onNotify?.("Link copied to clipboard");
         }
     };
 

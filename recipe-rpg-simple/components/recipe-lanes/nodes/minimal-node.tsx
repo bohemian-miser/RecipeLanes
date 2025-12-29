@@ -110,7 +110,6 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
             
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
-            onTouchMove={handleTouchEnd} // Cancel on move if dragging before timer
   
         >
   

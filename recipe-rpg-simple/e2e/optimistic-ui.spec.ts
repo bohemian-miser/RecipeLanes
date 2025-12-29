@@ -1,0 +1,92 @@
+import { test, expect } from './utils/fixtures';
+import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
+import { deviceConfigs } from './utils/devices';
+import { seedCommonIngredients } from './utils/seed-data';
+
+test.describe('Optimistic UI & Background Trigger', () => {
+  
+  test.beforeAll(async () => {
+      // Seed Eggs and Flour (Global Setup)
+      await seedCommonIngredients();
+  });
+
+  for (const device of deviceConfigs) {
+    test(`${device.name}: Load graph and populate icons in background`, async ({ page, login }) => {
+      const dir = screenshotDir('optimistic-ui', device.name);
+      cleanupScreenshots(dir);
+        await page.setViewportSize(device.viewport);
+
+        // 1. Login Programmatically
+        await page.goto('/lanes?new=true');
+        await login('user-optimistic', { displayName: 'Optimistic Chef' });
+        await screenshot(page, dir, 'logged-in');
+
+        // 2. Enter Recipe
+        const newIngredient = `Ham ${Date.now()}`;
+        // Use specific trigger phrase for Mock AI (if MOCK_AI=true) or just text that parses well
+        // We use the pattern we set up in the previous step for Mock AI consistency
+        const recipeText = `test eggs with ${newIngredient}.`;
+        
+        const textarea = page.locator('textarea[placeholder="Paste recipe here..."]');
+        await textarea.fill(recipeText);
+        await screenshot(page, dir, 'recipe-entered');
+        
+        // 3. Click Visualize
+        const visualizeBtn = page.locator('button:has-text("Visualise")').or(page.locator('button:has(.lucide-arrow-right)'));
+      await visualizeBtn.click();
+      
+      await screenshot(page, dir, 'after click');
+
+        // 4. Assert Immediate Graph Load (Optimistic)
+        // Wait for graph container
+      await expect(page.locator('.react-flow')).toBeVisible({ timeout: 1000 });
+      
+      await screenshot(page, dir, 'after click2');
+        
+        const eggNode = page.locator('.react-flow__node-minimal', { hasText: '2 Eggs' }).or(page.locator('.react-flow__node-minimal', { hasText: 'Eggs' })).first();
+        const flourNode = page.locator('.react-flow__node-minimal', { hasText: '100g Flour' }).or(page.locator('.react-flow__node-minimal', { hasText: 'Flour' })).first();
+        const hamNode = page.locator('.react-flow__node-minimal', { hasText: newIngredient }).first();
+        const fryNode = page.locator('.react-flow__node-minimal', { hasText: 'Fry' }).first();
+
+        // Check text presence first
+        await expect(eggNode).toBeVisible();
+        await expect(flourNode).toBeVisible();
+        await expect(hamNode).toBeVisible();
+      await expect(fryNode).toBeVisible();
+      await screenshot(page, dir, 'before ham check');
+        
+        await screenshot(page, dir, 'graph-loaded');
+
+        // 5. Assert Cached Icons are Present Immediately
+        const eggImg = eggNode.locator('img');
+        const flourImg = flourNode.locator('img');
+        const hamImg = hamNode.locator('img');
+        
+        // Wait for hydration if needed, but they should be there fast
+        await expect(eggImg).toBeVisible();
+        await expect(eggImg).toHaveAttribute('src', /firebasestorage|googleapis|placehold/);
+        
+        await expect(flourImg).toBeVisible();
+        await expect(flourImg).toHaveAttribute('src', /firebasestorage|googleapis|placehold/);
+        
+        // 6. Assert New Icons are Missing Initially (Optimistic Cache Miss)
+        // Ham should be missing icon, so it should render the placeholder (Carrot Emoji)
+        await expect(hamNode).toContainText('🥕'); // Verify placeholder emoji presence
+        await expect(hamImg).not.toBeVisible(); // Verify NO image tag
+
+
+        await screenshot(page, dir, 'icons-cached-only');
+
+        // 7. Wait for Background Worker (Listener Update)
+        console.log('Waiting for background icon generation...');
+        
+        // We expect both images to eventually appear with Storage URLs
+        await expect(hamImg).toBeVisible({ timeout: 60000 }); 
+        await expect(hamImg).toHaveAttribute('src', /firebasestorage|googleapis/, { timeout: 60000 });
+        
+        await screenshot(page, dir, 'icons-fully-populated');
+        
+        cleanupScreenshots(dir);
+    });
+  }
+});

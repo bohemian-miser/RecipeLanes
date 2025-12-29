@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx tsx tests/undo-scrambled-logic.test.ts && npx tsx tests/social-features.test.ts && npx tsx tests/gallery-view.test.ts",
-    "test:e2e": "export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 && export PATH=$JAVA_HOME/bin:$PATH && npx firebase emulators:exec --only auth,firestore,storage 'npx playwright test'",
+    "test:e2e": "./scripts/test-e2e.sh",
     "mcp": "npx tsx scripts/mcp-server.ts",
     "emulators": "./scripts/start-emulators.sh",
     "dev:emulators": "NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 STORAGE_EMULATOR_HOST=127.0.0.1:9199 next dev -p 8001",
@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@genkit-ai/firebase": "^1.26.0",
-    "@genkit-ai/google-genai": "^1.25.0",
+    "@genkit-ai/google-genai": "^1.27.0",
     "@types/dagre": "^0.7.53",
     "clsx": "^2.1.1",
     "d3-force": "^3.0.0",

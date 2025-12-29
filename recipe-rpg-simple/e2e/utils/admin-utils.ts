@@ -31,12 +31,24 @@ export async function getTestUserToken(uid: string, claims?: object, displayName
     
   } catch (error) {
     // 3. If not found, CREATE them with the name
-    await admin.auth().createUser({
-      uid,
-      email: `${uid}@example.com`,
-      displayName: finalDisplayName,
-      emailVerified: true,
-    });
+    try {
+      await admin.auth().createUser({
+        uid,
+        email: `${uid}@example.com`,
+        displayName: finalDisplayName,
+        emailVerified: true,
+      });
+    } catch (createError: any) {
+        // If race condition and user now exists, update them instead
+        if (createError.code === 'auth/uid-already-exists') {
+             await admin.auth().updateUser(uid, { 
+                displayName: finalDisplayName,
+                emailVerified: true 
+             });
+        } else {
+            throw createError;
+        }
+    }
   }
 
   // 4. Return the token (and the name, if you want to verify it later)

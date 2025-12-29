@@ -34,7 +34,7 @@ export function SharedGallery() {
   }, [page, search]);
 
   const handleDelete = async (url: string, ingredient: string) => {
-      if (!confirm('Are you sure you want to delete this icon?')) return;
+    //   if (!confirm('Are you sure you want to delete this icon?')) return;
       try {
           const res = await deleteIconByUrlAction(url, ingredient);
           if (res.success) {

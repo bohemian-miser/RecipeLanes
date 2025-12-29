@@ -15,7 +15,7 @@ export class RealAIService implements AIService {
   }
 
   async generateImage(prompt: string): Promise<string> {
-    console.log(`[RealAIService] generateImage called with prompt: "${prompt.substring(0, 30)}..."`);
+    console.log(`[RealAIService] generateImage called with prompt: "${prompt.substring(0, 30)}"...`);
     const response = await ai.generate({
       model: imageModelName,
       prompt: prompt,
@@ -38,9 +38,10 @@ export class MockAIService implements AIService {
         const extraIngredient = lower.includes("test eggs with ") ? lower.split("test eggs with ")[1].trim().slice(0, -1) : null;
         
         const nodes = [
-                { id: "1", laneId: "l1", text: "2 Eggs", type: "ingredient", visualDescription: "2 Eggs" },
+                { id: "1", laneId: "l1", text: "2 Eggs", type: "ingredient", visualDescription: "Eggs" },
                 { id: "2", laneId: "l1", text: "100g Flour", type: "ingredient", visualDescription: "Flour" },
-                { id: "3", laneId: "l1", text: "Mix", type: "action", inputs: ["1", "2"], visualDescription: "Mixing bowl" }
+                { id: "3", laneId: "l1", text: "Mix", type: "action", inputs: ["1", "2"], visualDescription: "Mixing bowl" },
+                { id: "5", laneId: "l1", text: "Fry", type: "action", inputs: ["3"], visualDescription: "Frying Pan" }
         ];
 
         if (extraIngredient) {
@@ -82,16 +83,23 @@ export class MockAIService implements AIService {
             ]
         });
     }
-    // Generic fallback for E2E tests
+    // Generic fallback for E2E tests - Try to extract ingredient from prompt
+    // Prompt usually contains: "convert the following cooking instructions... Input Recipe ... "
+    // Handle both quoted and unquoted inputs, and varying newlines
+    const match = prompt.match(/Input Recipe\s*\n\s*"?(.*?)"?\s*$/s);
+    const inputDerived = match ? match[1].trim() : "Mock Ingredient 1";
+    // Extract first noun-phrase-ish thing or just use the whole text if short
+    const displayText = inputDerived.length < 50 ? inputDerived : "Mock Ingredient";
+    
     return JSON.stringify({
             title: "Mock Recipe",
             lanes: [{ id: "l1", label: "Prep", type: "prep" }],
-            nodes: [{ id: "1", laneId: "l1", text: "Mock Ingredient 1", type: "ingredient", visualDescription: "Mock Ing 1" }]
+            nodes: [{ id: "1", laneId: "l1", text: displayText, type: "ingredient", visualDescription: displayText }]
         });
   }
 
   async generateImage(prompt: string): Promise<string> {
-    console.log(`[MockAIService] generateImage called for: "${prompt.substring(0, 30)}..."`);
+    console.log(`[MockAIService] generateImage called for: "${prompt.substring(0, 30)}"...`);
     // Append random UUID to ensure unique URL for each generation (simulate reroll)
     const uuid = Math.random().toString(36).substring(7);
     const url = `https://placehold.co/64x64/png?text=Mock+${encodeURIComponent(prompt.slice(0, 10))}&uuid=${uuid}`;

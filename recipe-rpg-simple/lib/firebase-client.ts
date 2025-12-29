@@ -1,5 +1,7 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth, User, connectAuthEmulator, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, Firestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -12,6 +14,8 @@ const firebaseConfig = {
 
 let app: FirebaseApp | undefined;
 let auth: Auth;
+let db: Firestore;
+let storage: FirebaseStorage;
 let googleProvider: GoogleAuthProvider;
 let isInitialized = false;
 
@@ -19,16 +23,21 @@ if (firebaseConfig.apiKey) {
   // Initialize Firebase (Client)
   app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
   auth = getAuth(app);
+  db = getFirestore(app);
+  storage = getStorage(app);
   
   if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
       connectAuthEmulator(auth, 'http://127.0.0.1:9099');
+      connectFirestoreEmulator(db, '127.0.0.1', 8080);
+      connectStorageEmulator(storage, '127.0.0.1', 9199);
   }
 
   googleProvider = new GoogleAuthProvider();
   isInitialized = true;
    // Expose for E2E testing                                                                                                                                                                                                                           
    if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {                                                                                                                                                                       
-       (window as any)._firebaseAuth = auth;                                                                                                                                                                                                           
+       (window as any)._firebaseAuth = auth;
+       (window as any)._firebaseDb = db;
        (window as any)._signInWithCustomToken = signInWithCustomToken;                                                                                                                                                                                 
    }
 } else {
@@ -45,7 +54,10 @@ if (firebaseConfig.apiKey) {
     currentUser: null,
   } as unknown as Auth;
   
+  db = {} as Firestore;
+  storage = {} as FirebaseStorage;
+  
   googleProvider = {} as GoogleAuthProvider;
 }
 
-export { auth, googleProvider, isInitialized };
+export { auth, db, storage, googleProvider, isInitialized };

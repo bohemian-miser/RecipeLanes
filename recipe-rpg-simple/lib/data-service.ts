@@ -309,6 +309,7 @@ export class FirebaseDataService implements DataService {
   }
 
   async getIngredientByName(name: string) {
+    console.log(`[FirebaseDataService] getIngredientByName: ${name}`);
     const snapshot = await db.collection('ingredients').get();
     const doc = snapshot.docs.find(d => d.data().name.toLowerCase() === name.toLowerCase());
     return doc ? { id: doc.id, data: doc.data() } : null;
@@ -324,6 +325,7 @@ export class FirebaseDataService implements DataService {
       await this.updateStorageMetadata(iconUrl, { impressions: newImpressions, lcb: newScore });
   }
   async getIconsForIngredient(ingredientId: string) {
+    console.log(`[FirebaseDataService] getIconsForIngredient: ${ingredientId}`);
     const snapshot = await db.collection('ingredients').doc(ingredientId).collection('icons').get();
     return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
   }
@@ -389,6 +391,23 @@ export class FirebaseDataService implements DataService {
             });
             await batch.commit();
         }
+    } else {
+        // Fallback: Iterate all ingredients to find the icon (Slow but works without index)
+        // Note: Ideally we should store icon ID or use a collection group index
+        const allIngredients = await db.collection('ingredients').get();
+        const batch = db.batch();
+        let found = false;
+        
+        // Parallelize icon lookups for speed
+        await Promise.all(allIngredients.docs.map(async (ingDoc) => {
+             const iconsSnapshot = await ingDoc.ref.collection('icons').where('url', '==', iconUrl).get();
+             iconsSnapshot.docs.forEach(doc => {
+                 batch.delete(doc.ref);
+                 found = true;
+             });
+        }));
+        
+        if (found) await batch.commit();
     }
     if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
         const matches = iconUrl.match(new RegExp('/o/([^?]+)'));

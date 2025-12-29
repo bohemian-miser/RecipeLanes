@@ -7,12 +7,14 @@ import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
-import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction, checkExistingCopiesAction, getOrCreateIconAction, debugLogAction, populateRecipeIconsAction } from '@/app/actions';
+import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, getRecipeAction, checkExistingCopiesAction, getOrCreateIconAction, debugLogAction } from '@/app/actions';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase-client';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -40,7 +42,7 @@ function RecipeLanesContent() {
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
   const [showOverrideWarning, setShowOverrideWarning] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[]>([]);
-  const [forgingProgress, setForgingProgress] = useState<{ completed: number, total: number } | null>(null);
+  // const [forgingProgress, setForgingProgress] = useState<{ completed: number, total: number } | null>(null); // Removed as it's now background
   const [guestBannerDismissed, setGuestBannerDismissed] = useState(false);
 
   const diagramRef = useRef<ReactFlowDiagramHandle>(null);
@@ -224,69 +226,64 @@ function RecipeLanesContent() {
       }
   }, [inputExpanded]);
 
+  // Listener for Recipe Updates
   useEffect(() => {
       const id = searchParams.get('id');
+      if (!id) return;
 
-    debugLogAction('loading recipe for id: ' + id);
-      if (id && !graph) {
-          
-          debugLogAction(`loading recipe for id ${id} and graph ${JSON.stringify(graph)}`);
-          setStatus('loading');
-          getRecipeAction(id).then(res => {
-              if (res.graph) {
-                  const currentGraph = res.graph;
-                  setGraph(currentGraph);
-                  if (res.ownerId) setOwnerId(res.ownerId);
-                  if (res.ownerName) setOwnerName(res.ownerName);
-                  setRecipeText(currentGraph.originalText || '');
-                  setRecipeTitle(currentGraph.title || '');
-                  debugLogAction(`checking icons for recipe id ${id}`);
-                  if (currentGraph.nodes.some(n => !n.iconUrl)) {
-                      setStatus('forging');
-                      populateRecipeIconsAction(id).then(popRes => {
-                          if (popRes.success && popRes.updates) {
-                              const newNodes = currentGraph.nodes.map((n: any) => {
-                                  const update = popRes.updates?.find(u => u.nodeId === n.id);
-                                  return update ? { ...n, iconUrl: update.iconUrl } : n;
-                              });
-                              setGraph({ ...currentGraph, nodes: newNodes });
-                              setStatus('complete');
-                          } else {
-                              setStatus('complete');
-                          }
-                      });
-                  } else {
-                      setStatus('complete');
-                  }
-              } else {
-                  setError('Recipe not found');
-                  setStatus('error');
-              }
-          });
-      }
+      debugLogAction('Setting up listener for recipe: ' + id);
+      setStatus('loading');
 
-    //   if (id && graph) {
-          
-    //       debugLogAction(`loading recipe for id ${id} and graph ${graph}`);
-    //       setStatus('loading');
-          
-    //           if (graph) {
-    //             //   setGraph(graph);
-    //             //   if (res.ownerId) setOwnerId(res.ownerId);
-    //               setRecipeText(graph.originalText || '');
-    //               setRecipeTitle(graph.title || '');
+      // Use Firestore Listener
+      const unsubscribe = onSnapshot(doc(db, 'recipes', id), (docSnapshot) => {
+          if (docSnapshot.exists()) {
+              const data = docSnapshot.data();
+              const currentGraph = data.graph as RecipeGraph;
+              
+              if (data.visibility) currentGraph.visibility = data.visibility as any;
+
+              // Merge logic: preserve local layout state if dragging? 
+              // For now, simpler: Just update graph. 
+              // Ideally check timestamp or just merge updated icons.
+              setGraph((prevGraph) => {
+                  if (!prevGraph) return currentGraph;
                   
-    //               if (graph.nodes.some(n => !n.iconUrl)) {
-    //                   populateIcons(graph, id);
-    //               }
+                  // Only update if content changed or icons populated
+                  // We specifically look for new iconUrls
+                  const newNodes = currentGraph.nodes.map(n => {
+                      const prevNode = prevGraph.nodes.find(p => p.id === n.id);
+                      if (prevNode) {
+                          // Preserve local position if live physics is off?
+                          // Actually, let's trust the DB if it updates
+                          // But mostly we care about icons popping in
+                          if (n.iconUrl && !prevNode.iconUrl) {
+                              return { ...prevNode, iconUrl: n.iconUrl, iconId: n.iconId };
+                          }
+                      }
+                      return n;
+                  });
+                  
+                  // If we are just populating icons, we don't want to reset the whole graph 
+                  // and lose selection/scroll state if possible.
+                  // But ReactFlow handles props updates well.
+                  return { ...currentGraph, nodes: newNodes };
+              });
 
-    //               setStatus('complete');
-    //           } else {
-    //               setError('Recipe not found');
-    //               setStatus('error');
-    //           }
-          
-    //   }
+              if (data.ownerId) setOwnerId(data.ownerId);
+              // if (data.ownerName) setOwnerName(data.ownerName); // not always in doc
+              setRecipeText(currentGraph.originalText || '');
+              setRecipeTitle(currentGraph.title || '');
+              setStatus('complete');
+          } else {
+              setError('Recipe not found');
+              setStatus('error');
+          }
+      }, (err) => {
+          console.error('Snapshot listener error:', err);
+          setError('Failed to sync recipe');
+      });
+
+      return () => unsubscribe();
   }, [searchParams]);
 
   useEffect(() => {
@@ -358,11 +355,6 @@ function RecipeLanesContent() {
       if (!graph) return;
       setStatus('loading');
       // Overwrite the existing copy with current graph
-      // Preserve the copy's ID, but update content.
-      // We might want to keep the copy's title? Or update it?
-      // Prompt says "override". Usually implies full replace.
-      // We'll keep current graph's title (Bob's title) or maybe Alice wants to keep her title?
-      // For simplicity, we save 'graph' to 'copyId'.
       const res = await saveRecipeAction(graph, copyId);
       if (res.id) {
           const url = new URL(window.location.href);
@@ -433,49 +425,6 @@ function RecipeLanesContent() {
       }
   };
 
-  const populateIcons = async (startGraph: RecipeGraph, recipeId?: string) => {
-        const nodesToProcess = startGraph.nodes.filter(n => !n.iconUrl && n.visualDescription);
-        const total = nodesToProcess.length;
-        console.log(`[populateIcons] Found ${total} nodes to process`);
-        if (total === 0) return;
-
-        setForgingProgress({ completed: 0, total });
-        let currentGraph = JSON.parse(JSON.stringify(startGraph)); 
-        
-        let completed = 0;
-        const chunkSize = 3;
-        
-        for (let i = 0; i < total; i += chunkSize) {
-            const batch = nodesToProcess.slice(i, i + chunkSize);
-            const results = await Promise.all(batch.map(async (node) => {
-                 const result = await getOrCreateIconAction(node.visualDescription!);
-                 if (result && 'error' in result) {
-                     console.error(`[populateIcons] Failed for ${node.text}:`, result.error);
-                 }
-                 return { nodeId: node.id, result };
-            }));
-            
-            let batchUpdates = 0;
-            results.forEach(item => {
-                if (item?.result && 'iconUrl' in item.result) {
-                    currentGraph.nodes = currentGraph.nodes.map((n: any) => n.id === item.nodeId ? { ...n, iconUrl: item.result.iconUrl } : n);
-                    batchUpdates++;
-                }
-                completed++;
-            });
-            console.log(`[populateIcons] Batch finished. Updates: ${batchUpdates}`);
-            
-            setGraph({ ...currentGraph });
-            setForgingProgress({ completed, total });
-        }
-        
-        const targetId = recipeId || searchParams.get('id');
-        if (targetId) {
-             await saveRecipeAction(currentGraph, targetId);
-        }
-        setForgingProgress(null);
-  };
-
 const handleVisualize = async () => {
     console.log('Starting visualization...');
     await debugLogAction('Starting visualization...');
@@ -483,16 +432,17 @@ const handleVisualize = async () => {
     
     setStatus('parsing');
     setError(null);
-    setForgingProgress(null);
     setGuestBannerDismissed(false);
     
     try {
-        const parseRes = await parseRecipeAction(recipeText);
-        if (parseRes.error || !parseRes.graph) {
-            throw new Error(parseRes.error || 'Failed to parse recipe structure.');
+        // Use New Fast Path Action
+        const res = await createVisualRecipeAction(recipeText);
+        
+        if (res.error || !res.graph) {
+            throw new Error(res.error || 'Failed to parse recipe structure.');
         }
         
-        let currentGraph = parseRes.graph;
+        let currentGraph = res.graph;
         
         if (!recipeTitle && currentGraph.title) {
             setRecipeTitle(currentGraph.title);
@@ -502,68 +452,23 @@ const handleVisualize = async () => {
         
         setGraph(currentGraph);
         
-        // Auto-save immediately (Structure only)
-        console.log('Auto-saving structure...');
-        let currentId = searchParams.get('id') || undefined;
-        
-        // Forking Logic: If we are not the owner, we fork on save
-        // This applies if:
-        // 1. We are logged in but not the owner (Alice/Bob)
-        // 2. We are a guest and the recipe has an owner (Guest/Alice)
-        const isNotOwner = (user && ownerId && user.uid !== ownerId) || (!user && ownerId);
-        
-        if (isNotOwner && currentId) {
-             console.log('Forking recipe because user is not owner (or guest)');
-             currentGraph.sourceId = currentId;
-             currentId = undefined; // Force new creation
-             // Smarter Copy Naming
-             let newTitle = currentGraph.title || 'Untitled';
-             if (newTitle.startsWith('Yet another copy of ')) {
-                 const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
-                 if (match) {
-                     newTitle = `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;
-                 } else {
-                     newTitle = `${newTitle} (1)`;
-                 }
-             } else if (newTitle.startsWith('Another copy of ')) {
-                 newTitle = newTitle.replace('Another copy of ', 'Yet another copy of ');
-             } else if (newTitle.startsWith('Copy of ')) {
-                 newTitle = newTitle.replace('Copy of ', 'Another copy of ');
-             } else {
-                 newTitle = `Copy of ${newTitle}`;
-             }
-             
-             currentGraph.title = newTitle;
-             setRecipeTitle(newTitle);
-        }
-        console.log('Saving parsed graph...');
-        await debugLogAction('Saving parsed graph...');
-        const saveRes = await saveRecipeAction(currentGraph, currentId);
-        console.log('Save result:', saveRes);
-        await debugLogAction(`Save result: ${JSON.stringify(saveRes)}`);
-        
-        // Update URL immediately using history API to avoid router remounts
-        if (saveRes.id) {
+        if (res.id) {
              const url = new URL(window.location.href);
              url.searchParams.delete('new');
-             url.searchParams.set('id', saveRes.id);
+             url.searchParams.set('id', res.id);
              
              window.history.pushState({}, '', url.pathname + url.search);
              
              if (user) setOwnerId(user.uid);
-             currentId = saveRes.id;
+             // The Snapshot Listener in useEffect will pick this up if we pushed URL?
+             // Actually pushState doesn't trigger useEffect on searchParams unless we use router.push or Next.js handles it.
+             // Next.js `useSearchParams` does update on pushState/replaceState in App Router usually.
+             // But to be safe, we can rely on router.push if we want the effect to run.
+             // Or better: we already have the graph. The listener will attach on next render/effect cycle.
         }
 
-        debugLogAction('Starting forging process...');
-        setStatus('forging');
-
-        // Use helper for icon generation
-        console.log('Calling populateIcons...');
-        await populateIcons(currentGraph, currentId);
-        
-        debugLogAction('Visualization complete');
         setStatus('complete');
-        setForgingProgress(null);
+        // No explicit populateIcons call. Background worker handles it.
         setShowOverrideWarning(false);
         localStorage.setItem('recipe_draft', recipeText);
 
@@ -571,7 +476,6 @@ const handleVisualize = async () => {
         console.error('Visualization failed:', e);
         setError(e.message);
         setStatus('error');
-        setForgingProgress(null);
     }
   };
 
@@ -784,9 +688,6 @@ const handleVisualize = async () => {
         <div className="flex-1 flex flex-col relative overflow-hidden bg-zinc-100">
             {/* Toolbar */}
             <div className="shrink-0 h-12 bg-white/90 backdrop-blur border-b border-zinc-200 flex items-center justify-between px-4 overflow-x-auto z-10 no-scrollbar relative">
-                {status === 'forging' && forgingProgress && (
-                    <div className="absolute bottom-0 left-0 h-0.5 bg-yellow-500 transition-all duration-300" style={{ width: `${(forgingProgress.completed / forgingProgress.total) * 100}%` }} />
-                )}
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setShowIngredients(!showIngredients)}

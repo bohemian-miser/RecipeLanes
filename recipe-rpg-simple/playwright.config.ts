@@ -19,7 +19,7 @@ export default defineConfig({
     command: 'npx next dev -p 8002',
     url: 'http://localhost:8002',
     reuseExistingServer: true,
-    timeout: 60 * 1000,
+    timeout: 120 * 1000,
     env: {
       MOCK_AI: 'true',
       DIST_DIR: '.next-test',

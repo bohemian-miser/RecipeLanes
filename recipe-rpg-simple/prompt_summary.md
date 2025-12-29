@@ -1,56 +1,58 @@
-# Project Summary: Recipe RPG / Icon Maker
+# Project Summary: Recipe Lanes (Recipe RPG)
 
 ## Overview
-This project is a Next.js application called "Icon Maker" (part of Recipe RPG). It allows users to generating 64x64 pixel art icons from text ingredients using Generative AI.
+**Recipe Lanes** (formerly Recipe RPG) is a comprehensive visual recipe platform. It consists of three integrated modules:
 
-**Core Loop:**
-1.  User enters an ingredient (e.g., "Spicy Burger").
-2.  System checks **Firestore** for existing cached icons.
-    *   **Guest/Unauthenticated:** Can only retrieve existing cached icons.
-    *   **Authenticated:** Can generate NEW icons if none exist or quality is low.
-3.  **Generation (Server-Side):**
-    *   **Text:** `gemini-2.5-flash` (via Vertex AI) enriches the prompt (e.g., "A burger with jalapenos...").
-    *   **Image:** `vertexai/imagen-4.0-generate-001` (via Vertex AI) creates the pixel art.
-4.  **Storage:** Images saved to **Firebase Storage**. Metadata saved to **Firestore**.
-5.  **Feedback:** Users can "Reroll" (reject) icons, lowering their Wilson Score (popularity). High-score items appear in the Shared Gallery.
+1.  **Icon Maker (/)**: A retro 8-bit style tool to "forge" ingredient icons using AI (Imagen 4). Acts as the asset factory.
+2.  **Lanes Editor (/lanes)**: A visual flowchart editor that converts text recipes into "Swimlane" diagrams using React Flow and Gemini 2.5.
+3.  **Gallery (/gallery)**: A hub for browsing, searching, and managing user-created recipe visualizations.
 
 ## Tech Stack
 *   **Framework:** Next.js 16 (App Router) with React 19 & TypeScript.
-*   **Styling:** Tailwind CSS v4.
-*   **Backend:** Firebase App Hosting (Cloud Run).
-*   **Data:** Cloud Firestore (`ingredients` collection -> `icons` subcollection).
-*   **Auth:** Firebase Auth (Google Provider) + Session Cookies (HTTP-only).
-*   **AI:** Genkit (`@genkit-ai/google-genai` with `vertexAI` plugin).
+*   **Styling:** Tailwind CSS v4, Lucide Icons.
+*   **Data:** Firebase Firestore & Storage.
+*   **Auth:** Firebase Auth (Google Provider) + Session Cookies.
+*   **AI:** Google Genkit
+    *   **Logic/Parsing:** `gemini-2.5-flash`
+    *   **Art:** `imagen-4.0-generate-001`
+    *   **Embeddings:** `text-embedding-004`
+*   **Graph:** React Flow, Dagre/Elk layout engines.
+*   **Testing:** Playwright (E2E), Vitest (Logic).
 
 ## Key Architecture & Patterns
-*   **Service Layer (`lib/`):**
-    *   `DataService`: Interface for DB operations. Implemented by `FirebaseDataService` (Prod) and `MemoryDataService` (Tests).
-    *   `AIService`: Interface for Generation. Implemented by `GenkitAIService` (Prod) and `MockAIService` (Tests).
-    *   `AuthService`: Interface for Identity. Implemented by `RealAuthService` (Prod - checks Headers/Cookies) and `MockAuthService` (Tests).
-*   **Dependency Injection:** Scripts like `scripts/test-lifecycle.ts` inject Mocks to run full integration tests without credentials.
-*   **Server Actions (`app/actions.ts`):** The only entry point for mutations. Enforces RBAC (Role-Based Access Control).
-*   **RBAC:** Admins are defined by `users/{uid}.isAdmin == true` in Firestore or `ADMIN_EMAILS` env var. Admins see the **Debug Gallery**.
+*   **Server Actions:** All mutations go through `app/actions.ts` for security.
+*   **Dual-Mode Storage:** Production uses Firebase; Local/Test uses In-Memory or Emulators.
+*   **Asset Reuse:** Icons generated in Module 1 are cached and reused in Module 2.
+*   **Forking System:**
+    *   Recipes can be copied/forked.
+    *   Smart naming ("Copy of...", "Yet another copy of...").
+    *   "Override" capability for personal copies.
+*   **Persistence:**
+    *   **Drafts:** `localStorage` for unsaved work.
+    *   **Cloud:** Firestore for saved recipes (User ID linked).
 
 ## Current Implementation State
-*   **Auth:** Fully functional. Guests are read-only (cache). Logged-in users can Forge.
-*   **AI Backend:** Migrated to **Vertex AI** via Genkit to use Application Default Credentials (ADC), removing reliance on API Keys in production.
-*   **Galleries:**
-    *   `IconDisplay`: User's current session/inventory.
-    *   `SharedGallery`: Top 4 icons per category (filtered for active items).
-    *   `DebugGallery`: Admin view of raw Storage files.
-*   **Testing:** `npm run verify` runs `build` and comprehensive lifecycle tests using Mocks.
+*   **Icon Maker:** Fully functional with "Reroll" feedback loop and Community Gallery.
+*   **Lanes Editor:**
+    *   Text-to-Graph parsing with Gemini.
+    *   Interactive Drag-and-Drop editor.
+    *   Chat-based adjustment ("Add a side of rice").
+    *   JSON export/import.
+*   **Gallery:**
+    *   Public, Mine, and Starred views.
+    *   Server-side full-text search.
+    *   Auth integration for personalized views.
 
 ## Environment & Secrets
-*   **Configuration:** `apphosting.yaml` manages Prod environment variables.
-*   **Secrets:** `GEMINI_API_KEY` (Secret Manager) - *Note: Vertex AI migration attempts to use ADC, but key might still be referenced in legacy paths.*
-*   **Local Dev:** Uses `gcloud auth application-default login` for credentials.
+*   **Configuration:** `apphosting.yaml` for Prod.
+*   **Credentials:** Uses Application Default Credentials (ADC) in Prod (Cloud Run), and `.env` keys for Local.
 
 ## Important Commands
-*   `npm run dev`: Start local server on port 8001.
-*   `npm run verify`: Build project and run all test scripts.
-*   `npx tsx scripts/make-admin.ts <email>`: Grant admin privileges to a user.
-*   `npx tsx scripts/verify-env.ts`: Check connectivity to Firebase/AI.
+*   `npm run dev`: Start local server (port 8001).
+*   `npm run test`: Run both Unit and E2E tests.
+*   `npm run test:unit`: Run fast logic tests.
+*   `npm run test:e2e`: Run Playwright tests (requires Emulators).
 
 ## Known Quirks
-*   **Strict Mocks:** Test scripts use strict URL matching (`===`) because `placehold.co` mock URLs differ only by query params.
-*   **Index Requirements:** `getSharedGalleryAction` requires a Firestore Composite Index (`collectionGroup: icons`, `marked_for_deletion ASC`, `popularity_score DESC`).
+*   **Auth Loading:** The `/lanes` route may block on auth loading; ensure `NEXT_PUBLIC_USE_FIREBASE_EMULATOR` is set correctly if using emulators.
+*   **Graph Layout:** Uses `dagre` by default but supports `elk` and `force` layouts.

@@ -69,7 +69,7 @@ async function resetAndSync() {
   console.log(`Deleted ${ingSnapshot.size} ingredient records.`);
 
   // 2. Rescan Storage
-  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app';
+  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
   console.log(`
 Rescanning bucket: ${bucketName}`);
   const bucket = storage.bucket(bucketName);

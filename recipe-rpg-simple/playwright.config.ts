@@ -25,7 +25,7 @@ export default defineConfig({
       DIST_DIR: '.next-test',
       NEXT_PUBLIC_USE_FIREBASE_EMULATOR: 'true',
       NEXT_PUBLIC_FIREBASE_API_KEY: 'demo-key',
-      NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'demo-project',
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'recipe-lanes',
       FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080',
       FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9099',
       STORAGE_EMULATOR_HOST: '127.0.0.1:9199',

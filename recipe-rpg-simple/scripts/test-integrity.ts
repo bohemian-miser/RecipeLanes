@@ -21,8 +21,7 @@ async function testIntegrity() {
     // 2. Sabotage: Create a Zombie Record
     // We will manually delete the file for the 1st icon from Storage, leaving the Firestore record.
     console.log("\n[2] Sabotage: Deleting file for Icon 1 to create a 'Zombie'...");
-    const zombieUrl = urls[0];
-    const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app');
+    const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app');
     const matches = zombieUrl.match(new RegExp("/o/([^?]+)"));
     if (matches && matches[1]) {
         const filePath = decodeURIComponent(matches[1]);
@@ -90,7 +89,7 @@ async function testIntegrity() {
 
 // Helper to scan for inconsistencies for a specific ingredient
 async function scanIntegrity(ingredientName: string) {
-    const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app');
+    const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app');
     
     // Get all records for this ingredient
     const ingSnapshot = await db.collection('ingredients').where('name', '==', ingredientName).get();

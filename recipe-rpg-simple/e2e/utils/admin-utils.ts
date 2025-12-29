@@ -5,10 +5,10 @@ import * as admin from 'firebase-admin';
 if (!admin.apps.length) {
   // 1. Force Admin SDK to talk to the Emulator
   process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099"; 
-  process.env.GCLOUD_PROJECT = "ropgcp"; 
+  process.env.GCLOUD_PROJECT = "recipe-lanes"; 
 
   admin.initializeApp({
-    projectId: "ropgcp",
+    projectId: "recipe-lanes",
   });
 }
 

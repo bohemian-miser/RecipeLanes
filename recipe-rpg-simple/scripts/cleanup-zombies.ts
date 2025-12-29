@@ -6,7 +6,7 @@ async function cleanupZombies() {
   
   try {
     // 1. Get all Storage Files
-    const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app');
+    const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app');
     const [files] = await bucket.getFiles({ prefix: 'icons/' });
     const storageUrls = new Set(files.map(f => f.name));
     

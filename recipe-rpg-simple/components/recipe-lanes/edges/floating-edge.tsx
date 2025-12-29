@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, memo } from 'react';
 import { useStore, getStraightPath, getBezierPath, getSmoothStepPath, EdgeProps, MarkerType } from 'reactflow';
 import { getEdgeParams } from '../../../lib/recipe-lanes/graph-utils';
 
@@ -45,4 +45,4 @@ function FloatingEdge({ id, source, target, markerEnd, style, data, sourceX, sou
   );
 }
 
-export default FloatingEdge;
+export default memo(FloatingEdge);

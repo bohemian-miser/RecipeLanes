@@ -1,12 +1,14 @@
-# Recipe RPG
+# Module: Icon Maker (Recipe RPG)
 
-A retro 8-bit style web application where users "forge" recipe ingredients into pixel art icons. The app combines generative AI with a feedback-driven ranking system to curate a high-quality library of game assets.
+**Note:** This document describes the "Icon Maker" module, which is the default landing page (`/`) of the **Recipe Lanes** application.
+
+A retro 8-bit style web application where users "forge" recipe ingredients into pixel art icons. The app combines generative AI with a feedback-driven ranking system to curate a high-quality library of game assets for use in the main Recipe Lanes editor.
 
 ## Tech Stack
 - **Framework:** Next.js (App Router) with Server Actions.
 - **Language:** TypeScript.
 - **Styling:** Tailwind CSS, `Press Start 2P` font, dark mode pixel-art aesthetic.
-- **AI Generation:** Genkit with Google AI (`googleai/imagen-4.0-fast-generate-001`).
+- **AI Generation:** Genkit with Google AI (`vertexai/imagen-4.0-generate-001`).
 - **Persistence:** Firebase Admin SDK (Firestore & Cloud Storage) with a robust in-memory fallback.
 
 ## Architecture & Data Flow
@@ -50,7 +52,7 @@ The application is designed to work in two environments seamlessly:
     -   **Optimization:** Uses a targeted deletion strategy (finding the parent ingredient doc first) to avoid requiring global Firestore indexes.
 
 ## File Structure
--   `app/page.tsx`: Main game UI.
+-   `app/page.tsx`: Main game UI (Icon Maker).
 -   `app/actions.ts`: Server Actions (Logic core).
 -   `lib/store.ts`: In-memory `MemoryStore` implementation.
 -   `lib/genkit.ts`: AI model configuration.

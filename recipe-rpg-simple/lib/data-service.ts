@@ -22,7 +22,7 @@ export interface DataService {
   ): Promise<string>;
   
   saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public'): Promise<string>;
-  getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, visibility?: string, stats?: any } | null>;
+  getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null>;
 
   voteRecipe(recipeId: string, userId: string, vote: 'like' | 'dislike' | 'none'): Promise<void>;
   toggleStar(recipeId: string, userId: string): Promise<boolean>;
@@ -193,11 +193,23 @@ export class FirebaseDataService implements DataService {
         if (!doc.exists) return null;
         const data = doc.data()!;
         const graph = data.graph as RecipeGraph;
-        if (data.visibility) graph.visibility = data.visibility as any; // Merge visibility
+        if (data.visibility) graph.visibility = data.visibility as any; 
   
+        let ownerName = undefined;
+        if (data.ownerId) {
+            try {
+                const userSnap = await db.collection('users').doc(data.ownerId).get();
+                if (userSnap.exists) {
+                    const userData = userSnap.data();
+                    ownerName = userData?.name || userData?.displayName;
+                }
+            } catch (e) { /* Ignore fetch error */ }
+        }
+
         return { 
             graph, 
             ownerId: data.ownerId, 
+            ownerName,
             visibility: data.visibility, 
             stats: { likes: data.likes || 0, dislikes: data.dislikes || 0 }
         };
@@ -334,7 +346,7 @@ export class FirebaseDataService implements DataService {
           return finalUrl;
       }
 
-      const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app';
+      const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
       const bucket = storage.bucket(bucketName);
       const fileName = `icons/${ingredientName.replace(/\s+/g, '-')}-${Date.now()}.png`;
       const file = bucket.file(fileName);
@@ -414,7 +426,7 @@ export class FirebaseDataService implements DataService {
       }
   }
   async listDebugFiles() {
-      const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app';
+      const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
       const bucket = storage.bucket(bucketName);
       const [files] = await bucket.getFiles({ prefix: 'icons/', maxResults: 1000 });
       return files.map(file => ({
@@ -616,15 +628,19 @@ export class MemoryDataService implements DataService {
         return id;
     }
     
-    async getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, visibility?: string, stats?: any } | null> { 
+    async getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null> { 
         const r = this.recipes.get(id);
         if (!r) return null;
         const graph = r.graph;
         if (r.visibility) graph.visibility = r.visibility as any;
 
+        // Mock lookup if needed, but for now just use ownerId as fallback or assume name is not stored in memory recipes unless we expand schema
+        const ownerName = r.ownerId ? `User ${r.ownerId}` : undefined;
+
         return { 
             graph, 
             ownerId: r.ownerId, 
+            ownerName,
             visibility: r.visibility, 
             stats: r.stats 
         }; 

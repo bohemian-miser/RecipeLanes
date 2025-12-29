@@ -500,7 +500,7 @@ export async function getRecipeAction(id: string) {
         await dataService.saveRecipe(recipeData.graph, id, undefined, 'unlisted');
     }
 
-    return { graph: recipeData?.graph, ownerId: recipeData?.ownerId };
+    return { graph: recipeData?.graph, ownerId: recipeData?.ownerId, ownerName: recipeData?.ownerName };
   } catch (e: any) {
     return { error: e.message };
   }

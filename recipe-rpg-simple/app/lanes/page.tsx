@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
+import { ReactFlowProvider } from 'reactflow';
 import { parseRecipeAction, generateGraphIconsAction, adjustRecipeAction, saveRecipeAction, getRecipeAction, checkExistingCopiesAction, getOrCreateIconAction, debugLogAction, populateRecipeIconsAction } from '@/app/actions';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
@@ -24,6 +25,7 @@ function RecipeLanesContent() {
   const [chatInput, setChatInput] = useState('');
   const [graph, setGraph] = useState<RecipeGraph | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [ownerName, setOwnerName] = useState<string | null>(null);
   
   useEffect(() => {
       console.log('[RecipeLanesPage] User:', user?.uid, 'Owner:', ownerId);
@@ -235,6 +237,7 @@ function RecipeLanesContent() {
                   const currentGraph = res.graph;
                   setGraph(currentGraph);
                   if (res.ownerId) setOwnerId(res.ownerId);
+                  if (res.ownerName) setOwnerName(res.ownerName);
                   setRecipeText(currentGraph.originalText || '');
                   setRecipeTitle(currentGraph.title || '');
                   debugLogAction(`checking icons for recipe id ${id}`);
@@ -464,11 +467,11 @@ function RecipeLanesContent() {
             
             setGraph({ ...currentGraph });
             setForgingProgress({ completed, total });
-            
-            const targetId = recipeId || searchParams.get('id');
-            if (targetId) {
-                 await saveRecipeAction(currentGraph, targetId);
-            }
+        }
+        
+        const targetId = recipeId || searchParams.get('id');
+        if (targetId) {
+             await saveRecipeAction(currentGraph, targetId);
         }
         setForgingProgress(null);
   };
@@ -644,7 +647,7 @@ const handleVisualize = async () => {
                     )}
                     {ownerId && (
                         <span className="text-[9px] text-zinc-600 font-mono ml-2">
-                           by {ownerId}
+                           by {ownerName || ownerId}
                         </span>
                     )}
                 </div>
@@ -1043,7 +1046,9 @@ const handleVisualize = async () => {
 export default function RecipeLanesPage() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-zinc-500 font-mono">Loading...</div>}>
-      <RecipeLanesContent />
+      <ReactFlowProvider>
+        <RecipeLanesContent />
+      </ReactFlowProvider>
     </Suspense>
   );
 }

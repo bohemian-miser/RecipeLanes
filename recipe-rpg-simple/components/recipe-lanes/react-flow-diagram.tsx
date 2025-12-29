@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, memo } from 'react';
 import ReactFlow, { 
     Background, 
     Controls, 
@@ -50,7 +50,17 @@ export interface ReactFlowDiagramHandle {
     getGraph: () => RecipeGraph;
 }
 
-const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false }, ref) => {
+const INITIAL_NODE_TYPES = {
+    minimal: MinimalNode,
+    lane: LaneNode,
+    micro: MicroNode
+};
+
+const INITIAL_EDGE_TYPES = {
+    floating: FloatingEdge
+};
+
+const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false }, ref) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const { fitView, getNodes, getEdges } = useReactFlow();
@@ -105,17 +115,7 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
         initialPositions?: Record<string, { x: number, y: number }>;
     }>({ active: false });
 
-    const nodeTypes = useMemo(() => ({
-        minimal: MinimalNode,
-        lane: LaneNode,
-        micro: MicroNode
-    }), []); // YOLO: Removed CardNode as requested
-
-    const edgeTypes = useMemo(() => ({
-        floating: FloatingEdge
-    }), []);
-    
-    // Undo/Redo History
+    // History
     const [past, setPast] = useState<{ nodes: Node[], edges: Edge[] }[]>([]);
     const [future, setFuture] = useState<{ nodes: Node[], edges: Edge[] }[]>([]);
 
@@ -667,8 +667,8 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
                 onNodeDragStop={onNodeDragStop}
                 onPaneClick={() => onInteraction?.()}
                 onMoveStart={() => onInteraction?.()}
-                nodeTypes={nodeTypes}
-                edgeTypes={edgeTypes}
+                nodeTypes={INITIAL_NODE_TYPES}
+                edgeTypes={INITIAL_EDGE_TYPES}
                 fitView
                 minZoom={0.1}
                 maxZoom={4}
@@ -726,13 +726,11 @@ const DiagramInner = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((
             </ReactFlow>
         </div>
     );
-});
+}));
 DiagramInner.displayName = "DiagramInner";
 
 const ReactFlowDiagram = forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>((props, ref) => (
-    <ReactFlowProvider>
-        <DiagramInner {...props} ref={ref} />
-    </ReactFlowProvider>
+    <DiagramInner {...props} ref={ref} />
 ));
 ReactFlowDiagram.displayName = "ReactFlowDiagram";
 

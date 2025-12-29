@@ -64,7 +64,7 @@ async function reprocessIcons() {
             }
             
             const filePath = decodeURIComponent(matches[1]);
-            const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ropgcp.firebasestorage.app';
+            const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
             const bucket = storage.bucket(bucketName);
             const file = bucket.file(filePath);
 

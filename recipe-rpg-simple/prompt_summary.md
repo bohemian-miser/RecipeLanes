@@ -10,7 +10,7 @@ This project is a Next.js application called "Icon Maker" (part of Recipe RPG). 
     *   **Authenticated:** Can generate NEW icons if none exist or quality is low.
 3.  **Generation (Server-Side):**
     *   **Text:** `gemini-2.5-flash` (via Vertex AI) enriches the prompt (e.g., "A burger with jalapenos...").
-    *   **Image:** `imagen-3.0-generate-001` (via Vertex AI) creates the pixel art.
+    *   **Image:** `vertexai/imagen-4.0-generate-001` (via Vertex AI) creates the pixel art.
 4.  **Storage:** Images saved to **Firebase Storage**. Metadata saved to **Firestore**.
 5.  **Feedback:** Users can "Reroll" (reject) icons, lowering their Wilson Score (popularity). High-score items appear in the Shared Gallery.
 
@@ -46,7 +46,7 @@ This project is a Next.js application called "Icon Maker" (part of Recipe RPG). 
 *   **Local Dev:** Uses `gcloud auth application-default login` for credentials.
 
 ## Important Commands
-*   `npm run dev`: Start local server.
+*   `npm run dev`: Start local server on port 8001.
 *   `npm run verify`: Build project and run all test scripts.
 *   `npx tsx scripts/make-admin.ts <email>`: Grant admin privileges to a user.
 *   `npx tsx scripts/verify-env.ts`: Check connectivity to Firebase/AI.

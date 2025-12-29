@@ -23,16 +23,16 @@ Browse and manage recipes.
 
 ## Features ✨
 
--   **AI Parsing & Generation:** Gemini 1.5/2.5 Flash for logic, Imagen 3/4 for art.
+-   **AI Parsing & Generation:** Gemini 2.5 Flash for logic, Imagen 4 for art.
 -   **Smart Icons:** Automatically generates icons for ingredients and steps (cached & reusable).
 -   **Mobile Friendly:** Optimized for use in the kitchen on phones and tablets.
 
 ## Tech Stack 🛠️
 
--   **Framework:** Next.js 15 (App Router)
+-   **Framework:** Next.js 16 (App Router)
 -   **UI:** Tailwind CSS, Lucide Icons
 -   **Graph:** React Flow
--   **AI:** Google Genkit (Gemini, Imagen)
+-   **AI:** Google Genkit (Gemini 2.5 Flash, Imagen 4)
 -   **Database:** Firebase Firestore
 -   **Storage:** Firebase Storage
 -   **Testing:** Playwright, Vitest
@@ -56,18 +56,21 @@ Browse and manage recipes.
     ```bash
     npm run dev
     ```
-    Open [http://localhost:3000](http://localhost:3000) (or port 8001 if configured).
+    Open [http://localhost:8001](http://localhost:8001).
 
 ## Testing 🧪
 
-We use a combination of Logic Tests (for complex graph algorithms) and E2E Tests (for UI flows).
+We use a combination of Logic Tests (Unit) and E2E Tests (Playwright).
 
 ```bash
 # Run all tests
 npm test
 
-# Run only logic tests
-npx tsx tests/undo-scrambled-logic.test.ts
+# Run only logic/unit tests
+npm run test:unit
+
+# Run only E2E tests (requires Firebase Emulators)
+npm run test:e2e
 ```
 
 ## Deployment 🌍

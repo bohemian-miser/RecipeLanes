@@ -8,12 +8,12 @@
 *   [DONE] **Sharing:** Shareable UUID links.
 
 ## 2. Public & Social
-* Re-enable auth.
-* Every recipe made by a logged in user is saved to their account, and they can choose to share it by url while being unlisted, or make it public (can then be found by searching the gallery). When viewing a recipe, don't show or associate the recipe with the account that created it. If you make edits, show a lil "Log in to save edits" and if they click that then they log in and their edits are saved.
+* [DONE] Re-enable auth.
+* [DONE] Every recipe made by a logged in user is saved to their account, and they can choose to share it by url while being unlisted, or make it public (can then be found by searching the gallery). When viewing a recipe, don't show or associate the recipe with the account that created it. If you make edits, show a lil "Log in to save edits" and if they click that then they log in and their edits are saved.
 * Save all the edits made to each of the layouts independently (people can reset at any time to the original for that layout)
 * All Recipies can be starred (Show a starred secion in gallery, these point to the orignal recipe), coppied, given a thumbs up / thumbs down (Store the id of recipies liked / disliked in each account and have a count saved of each stored with the recipe and prevent an account from liking/disliking recipies they have already liked/disliked).
-* Logged in users can copy a recipe they are looking at. (remember to prompt them in the ui with a banner when they start making changes)
-* Enable Searching the public database (Gallery) for "Spaghetti", "Cake", etc.
+* [DONE] Logged in users can copy a recipe they are looking at. (remember to prompt them in the ui with a banner when they start making changes)
+* [DONE] Enable Searching the public database (Gallery) for "Spaghetti", "Cake", etc.
 
 # UI
 * arrows are still broken. They should point to/from the centre of an icon and stop short at the radius from the centre to a corner of the icon.
@@ -37,7 +37,7 @@
 *   **Visuals:**
     *   [DONE] "Minimal" node style (No background, large icon, text halo).
     *   **Better Arrows:** Improve edge styling and markers.
-    *   Have a loading bar when forging icons.
+    *   [DONE] Have a loading bar when forging icons.
     *   add icons as they are generated/found. All the cached ones should show pretty quickly.
 
 ## 5. Interaction & Export

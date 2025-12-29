@@ -8,7 +8,7 @@
     "start": "next start -p 8001",
     "lint": "eslint",
     "test": "npm run test:unit && npm run test:e2e",
-    "test:unit": "npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx tsx tests/undo-scrambled-logic.test.ts && npx tsx tests/social-features.test.ts && npx tsx tests/gallery-view.test.ts",
+    "test:unit": "npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx tsx tests/undo-scrambled-logic.test.ts && npx tsx tests/social-features.test.ts && npx tsx tests/gallery-view.test.ts && npx tsx tests/optimistic-flow.test.ts && npx tsx tests/functions-metadata.test.ts",
     "test:e2e": "./scripts/test-e2e.sh",
     "mcp": "npx tsx scripts/mcp-server.ts",
     "emulators": "./scripts/start-emulators.sh",

@@ -124,7 +124,16 @@ export const processNewRecipe = onDocumentCreated("recipes/{recipeId}", async (e
                 const file = bucket.file(fileName);
                 
                 await file.save(Buffer.from(buffer), {
-                    metadata: { contentType: 'image/png' }
+                    metadata: { 
+                        contentType: 'image/png',
+                        metadata: {
+                            lcb: '1.0',
+                            impressions: '0',
+                            rejections: '0',
+                            fullPrompt: prompt,
+                            visualDescription: node.visualDescription
+                        }
+                    }
                 });
                 await file.makePublic();
                 // In emulator, makePublic() might not generate a usable publicUrl() for the browser context 

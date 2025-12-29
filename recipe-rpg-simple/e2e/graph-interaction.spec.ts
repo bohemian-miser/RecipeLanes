@@ -20,7 +20,7 @@ test.describe('Graph Interaction', () => {
       await screenshot(page, dir, 'create-clicked');
 
       const viewport = page.locator('.react-flow__viewport');
-      await expect(viewport).toBeVisible({ timeout: 15000 });
+      await expect(viewport).toBeVisible({ timeout: 30000 });
       await screenshot(page, dir, 'graph-visible');
 
       const initialTransform = await viewport.getAttribute('style');

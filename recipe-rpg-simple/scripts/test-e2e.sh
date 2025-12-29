@@ -12,6 +12,9 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export GOOGLE_APPLICATION_CREDENTIALS="$PROJECT_ROOT/service-account.json"
 export MOCK_AI=true
 
+# Ensure Functions picks up the env var (robust workaround for emulator env inheritance)
+echo "MOCK_AI=true" > "$PROJECT_ROOT/functions/.env"
+
 # 3. Build Functions (Ensure they are fresh for emulators)
 echo "Building Functions..."
 # Only run install if node_modules doesn't exist to save time, or always run it? 

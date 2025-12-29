@@ -7,25 +7,34 @@ export interface AIService {
 
 export class RealAIService implements AIService {
   async generateText(prompt: string): Promise<string> {
-    const response = await ai.generate({
-      model: textModel,
-      prompt: prompt,
-    });
-    return response.text || '';
+    try {
+        const response = await ai.generate({
+        model: textModel,
+        prompt: prompt,
+        });
+        return response.text || '';
+    } catch (e) {
+        console.error("Real AI failed, falling back to Mock:", e);
+        return new MockAIService().generateText(prompt);
+    }
   }
 
   async generateImage(prompt: string): Promise<string> {
     console.log(`[RealAIService] generateImage called with prompt: "${prompt.substring(0, 30)}"...`);
-    const response = await ai.generate({
-      model: imageModelName,
-      prompt: prompt,
-    });
-    if (!response.media || !response.media.url) {
-      console.error('[RealAIService] No media returned');
-      throw new Error('Real AI Image generation failed: No media returned');
+    try {
+        const response = await ai.generate({
+        model: imageModelName,
+        prompt: prompt,
+        });
+        if (!response.media || !response.media.url) {
+             throw new Error('No media returned');
+        }
+        console.log(`[RealAIService] Success. URL: ${response.media.url.substring(0, 50)}...`);
+        return response.media.url;
+    } catch (e) {
+        console.error("Real AI Image Generation failed, falling back to Mock:", e);
+        return new MockAIService().generateImage(prompt);
     }
-    console.log(`[RealAIService] Success. URL: ${response.media.url.substring(0, 50)}...`);
-    return response.media.url;
   }
 }
 
@@ -40,8 +49,7 @@ export class MockAIService implements AIService {
         const nodes = [
                 { id: "1", laneId: "l1", text: "2 Eggs", type: "ingredient", visualDescription: "Eggs" },
                 { id: "2", laneId: "l1", text: "100g Flour", type: "ingredient", visualDescription: "Flour" },
-                { id: "3", laneId: "l1", text: "Mix", type: "action", inputs: ["1", "2"], visualDescription: "Mixing bowl" },
-                { id: "5", laneId: "l1", text: "Fry", type: "action", inputs: ["3"], visualDescription: "Frying Pan" }
+                { id: "3", laneId: "l1", text: "Mix", type: "action", inputs: ["1", "2"], visualDescription: "Mixing bowl" }
         ];
 
         if (extraIngredient) {

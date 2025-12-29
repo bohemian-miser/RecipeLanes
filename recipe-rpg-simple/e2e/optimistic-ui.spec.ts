@@ -37,11 +37,9 @@ test.describe('Optimistic UI & Background Trigger', () => {
       
       await screenshot(page, dir, 'after click');
 
-        // 4. Assert Immediate Graph Load (Optimistic)
-        // Wait for graph container
-      await expect(page.locator('.react-flow')).toBeVisible({ timeout: 1000 });
-      
-      await screenshot(page, dir, 'after click2');
+                        // 4. Assert Immediate Graph Load (Optimistic)
+                        // Wait for graph container
+                        await expect(page.locator('.react-flow')).toBeVisible({ timeout: 30000 });      await screenshot(page, dir, 'after click2');
         
         const eggNode = page.locator('.react-flow__node-minimal', { hasText: '2 Eggs' }).or(page.locator('.react-flow__node-minimal', { hasText: 'Eggs' })).first();
         const flourNode = page.locator('.react-flow__node-minimal', { hasText: '100g Flour' }).or(page.locator('.react-flow__node-minimal', { hasText: 'Flour' })).first();

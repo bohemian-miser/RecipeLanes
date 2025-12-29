@@ -8,7 +8,7 @@ import { RerollMonitor } from '@/components/reroll-monitor';
 import { Login } from '@/components/login';
 import { LogoutButton } from '@/components/logout-button';
 import { useAuth } from '@/components/auth-provider';
-import { getOrCreateIconAction, recordRejectionAction, getAllIconsAction } from './actions';
+import { getOrCreateIconAction, recordRejectionAction, getAllIconsAction, deleteIconByUrlAction } from './actions';
 import { LogOut, ChefHat, Globe, User, Star, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { AUTH_DISABLED } from '@/lib/config';
@@ -139,7 +139,12 @@ export default function Home() {
     }
   };
 
-  const handleInventoryDelete = (iconId: string) => {
+  const handleInventoryDelete = async (iconId: string, ingredientName?: string) => {
+      const icon = icons.find(i => i.id === iconId);
+      if (icon && icon.iconUrl) {
+          // Call server action to delete from DB/Storage
+          deleteIconByUrlAction(icon.iconUrl, ingredientName || icon.ingredient).catch(console.error);
+      }
       setIcons(prev => prev.filter(i => i.id !== iconId));
   };
 

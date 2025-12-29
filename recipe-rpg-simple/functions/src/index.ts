@@ -36,8 +36,8 @@ const generateIcon = ai.defineFlow(
       
       if (isEmulator) {
           if (input.ingredient.toLowerCase().includes('ham')) {
-              console.log('Simulating slow generation for Ham...');
-              await new Promise(resolve => setTimeout(resolve, 6000));
+              console.log('Simulating slow generation for Ham (Test Mode)...');
+              await new Promise(resolve => setTimeout(resolve, 15000));
 
               console.log('finished slow generation for Ham...');
           }
@@ -130,7 +130,7 @@ export const processNewRecipe = onDocumentCreated("recipes/{recipeId}", async (e
                     metadata: { 
                         contentType: 'image/png',
                         metadata: {
-                            lcb: '1.0',
+                            popularity_score: '1.0',
                             impressions: '0',
                             rejections: '0',
                             fullPrompt: prompt,

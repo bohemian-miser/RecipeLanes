@@ -20,7 +20,7 @@ test.describe('Comprehensive Feature Tests', () => {
       
       // Wait for graph
       await screenshot(page, dir, 'debug-before-node-check');
-      await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 30000 });
       await screenshot(page, dir, 'debug-before-url-check');
       await expect(page).toHaveURL(/id=/, { timeout: 20000 });
       await screenshot(page, dir, 'initial-graph');

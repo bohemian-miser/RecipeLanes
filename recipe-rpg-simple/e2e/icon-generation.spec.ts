@@ -41,8 +41,9 @@ test.describe('Icon Generation Pipeline', () => {
       // Expect a valid URL (Mock or Real)
       expect(src).toBeTruthy();
       if (process.env.MOCK_AI === 'true') {
-          // If we are using placehold.co (Mock)
-          expect(src).toContain('placehold.co');
+          // Even in Mock mode, the Background Worker uploads the placeholder to Firebase Storage (Emulator)
+          // So we expect a firebasestorage URL (or localhost emulator URL), NOT placehold.co directly.
+          expect(src).toMatch(/firebasestorage|127\.0\.0\.1|localhost/);
       } else {
           // If we are using Real (or Emulator Storage)
           expect(src).toMatch(/^http|data:/);

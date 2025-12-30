@@ -8,11 +8,16 @@ const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 // Enable debug logging for visibility
 logger.setLogLevel('debug');
 
-// Only enable telemetry if we are NOT in a test environment and we have a project ID
-// This prevents "Unable to detect Project Id" log spam during CI/Tests
-if (process.env.NODE_ENV !== 'test' && (process.env.GCLOUD_PROJECT || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID)) {
-    enableFirebaseTelemetry();
+// Only enable telemetry if we are NOT in a test/mock environment and we have a project ID
+/*
+if (!isMock && !isEmulator && process.env.NODE_ENV !== 'test' && (process.env.GCLOUD_PROJECT || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID)) {
+    try {
+        enableFirebaseTelemetry();
+    } catch (e) {
+        console.warn("Failed to enable Firebase Telemetry:", e);
+    }
 }
+*/
 
 // Models defined as strings to avoid import issues
 // Using Vertex AI models which use ADC (no API Key required in Prod)

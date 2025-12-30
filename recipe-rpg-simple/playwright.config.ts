@@ -30,6 +30,7 @@ export default defineConfig({
       NEXT_PUBLIC_USE_FIREBASE_EMULATOR: 'true',
       NEXT_PUBLIC_FIREBASE_API_KEY: 'demo-key',
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'local-project-id',
+      GOOGLE_APPLICATION_CREDENTIALS: './mock-service-account.json',
     },
   },
 });

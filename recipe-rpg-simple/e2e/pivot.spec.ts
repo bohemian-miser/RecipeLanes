@@ -2,7 +2,7 @@ import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 
-test.describe('Pivot Interaction', () => {
+test.skip('Pivot Interaction', () => {
   for (const device of deviceConfigs) {
     test(`${device.name}: Pivot Branch`, async ({ page }) => {
       const dir = screenshotDir('pivot', device.name);

@@ -25,6 +25,12 @@ jobs:
       issues: 'write'
       pull-requests: 'write'
     steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: 'Mint identity token'
         id: 'mint_identity_token'
         if: |-
@@ -115,7 +121,12 @@ jobs:
                   "run_shell_command(echo)",
                   "run_shell_command(grep)",
                   "run_shell_command(head)",
-                  "run_shell_command(tail)"
+                  "run_shell_command(tail)",
+                  "run_shell_command(ls)",
+                  "run_shell_command(find)",
+                  "run_shell_command(npm)",
+                  "run_shell_command(npx)",
+                  "run_shell_command(git)"
                 ]
               }
             }

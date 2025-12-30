@@ -20,6 +20,7 @@ jobs:
         uses: google-github-actions/run-gemini-cli@main
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           # This Prompt configures the Agent's behavior in CI
           prompt: >
             You are a Senior Software & DevOps Engineer for a project with a strict "Staging-First" release pipeline.

@@ -14,8 +14,8 @@ export class RealAIService implements AIService {
         });
         return response.text || '';
     } catch (e) {
-        console.error("Real AI failed, falling back to Mock:", e);
-        return new MockAIService().generateText(prompt);
+        console.error("Real AI failed, NOT falling back to Mock:", e);
+        return "ai failed";
     }
   }
 
@@ -32,8 +32,8 @@ export class RealAIService implements AIService {
         console.log(`[RealAIService] Success. URL: ${response.media.url.substring(0, 50)}...`);
         return response.media.url;
     } catch (e) {
-        console.error("Real AI Image Generation failed, falling back to Mock:", e);
-        return new MockAIService().generateImage(prompt);
+        console.error("Real AI Image Generation failed, NOT falling back to Mock (well kinda not):", e);
+        return `https://placehold.co/64x64/png?text=Error+${encodeURIComponent(prompt.slice(0, 10))}`;
     }
   }
 }

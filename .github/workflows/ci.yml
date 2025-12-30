@@ -42,9 +42,9 @@ jobs:
         run: cd recipe-rpg-simple && npm run build
         env:
           NEXT_PUBLIC_FIREBASE_API_KEY: "demo-key"
-          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "demo-project.firebaseapp.com"
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: "demo-project"
-          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "demo-project.firebasestorage.app"
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "local-project-id.firebaseapp.com"
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: "local-project-id"
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "local-project-id.firebasestorage.app"
           NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "123456789"
           NEXT_PUBLIC_FIREBASE_APP_ID: "1:123456789:web:abcdef"
 
@@ -52,8 +52,8 @@ jobs:
         run: cd recipe-rpg-simple && npm test
         env:
           NEXT_PUBLIC_FIREBASE_API_KEY: "demo-key"
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: "demo-project"
-          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "demo-project.firebasestorage.app"
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: "local-project-id"
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "local-project-id.firebasestorage.app"
           NEXT_PUBLIC_USE_FIREBASE_EMULATOR: "true"
           # Emulator Hosts are set by firebase emulators:exec in test script
           # But we can set defaults if needed

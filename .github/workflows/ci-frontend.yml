@@ -39,13 +39,6 @@ jobs:
           npm install -g firebase-tools
           firebase experiments:enable webframeworks
 
-      - name: Start Emulators
-        run: |
-          # Start in background with demo project
-          firebase emulators:start --only auth,firestore,storage --project demo-project &
-          echo "Waiting for emulators..."
-          npx wait-on http://127.0.0.1:9099 --timeout 60000
-
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
@@ -53,9 +46,9 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_FIREBASE_API_KEY: "mock-key"
-          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "mock-project.firebaseapp.com"
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: "mock-project"
-          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "mock-project.firebasestorage.app"
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "local-project-id.firebaseapp.com"
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: "local-project-id"
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "local-project-id.firebasestorage.app"
           NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "123456789"
           NEXT_PUBLIC_FIREBASE_APP_ID: "1:123456789:web:abcdef"
 
@@ -63,9 +56,8 @@ jobs:
         run: npm test
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: "demo-project"
-          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "demo-project.firebasestorage.app"
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: "local-project-id"
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "local-project-id.firebasestorage.app"
           NEXT_PUBLIC_USE_FIREBASE_EMULATOR: "true"
-          FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099"
-          FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080"
-          STORAGE_EMULATOR_HOST: "127.0.0.1:9199"
+          # Emulator Hosts set by npm test script wrapper
+

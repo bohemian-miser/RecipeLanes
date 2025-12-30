@@ -39,4 +39,4 @@ echo "Starting Firebase Emulators and running: $CMD"
 echo "----------------------------------------------------------------"
 
 # We use 'npx firebase' to ensure we use the local project version
-npx firebase emulators:exec --only auth,firestore,storage,functions --project recipe-lanes "$CMD"
+npx firebase emulators:exec --only auth,firestore,storage,functions --project local-project-id "$CMD"

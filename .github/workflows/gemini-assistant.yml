@@ -39,3 +39,6 @@ jobs:
             - Stack: Next.js (App Router), Firebase App Hosting, Genkit.
             - Deployment: Merging to `staging` automatically deploys to the Staging Environment. App Hosting handles the frontend, GitHub Actions handles `functions/`.
             - Production: Only humans merge `staging` to `main`. Do not attempt this.
+
+            USER REQUEST:
+            ${{ github.event.comment.body }}

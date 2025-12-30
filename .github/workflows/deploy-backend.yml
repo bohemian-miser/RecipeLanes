@@ -34,17 +34,25 @@ jobs:
       - name: Install Firebase Tools
         run: npm install -g firebase-tools
 
-      - name: Set Staging Environment
+      - name: Authenticate to Google Cloud (Staging)
         if: github.ref == 'refs/heads/staging'
-        run: |
-          echo "FIREBASE_SERVICE_ACCOUNT_KEY=${{ secrets.FIREBASE_SERVICE_ACCOUNT_STAGING }}" >> $GITHUB_ENV
-          echo "DEPLOY_TARGET=staging" >> $GITHUB_ENV
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_STAGING }}
 
-      - name: Set Production Environment
+      - name: Authenticate to Google Cloud (Prod)
         if: github.ref == 'refs/heads/main'
-        run: |
-          echo "FIREBASE_SERVICE_ACCOUNT_KEY=${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROD }}" >> $GITHUB_ENV
-          echo "DEPLOY_TARGET=default" >> $GITHUB_ENV
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROD }}
+
+      - name: Set Deploy Target (Staging)
+        if: github.ref == 'refs/heads/staging'
+        run: echo "DEPLOY_TARGET=staging" >> $GITHUB_ENV
+
+      - name: Set Deploy Target (Prod)
+        if: github.ref == 'refs/heads/main'
+        run: echo "DEPLOY_TARGET=default" >> $GITHUB_ENV
 
       - name: Deploy
         run: |

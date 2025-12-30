@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "recipe-lanes"
+    "default": "recipe-lanes",
+    "staging": "recipe-lanes-staging"
   }
 }

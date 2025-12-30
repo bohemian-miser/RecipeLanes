@@ -33,7 +33,7 @@ const generateIcon = ai.defineFlow(
       if (isEmulator) {
           if (input.ingredient.toLowerCase().includes('ham')) {
               console.log('Simulating slow generation for Ham (Test Mode)...');
-              await new Promise(resolve => setTimeout(resolve, 15000));
+              await new Promise(resolve => setTimeout(resolve, 1000));
 
               console.log('finished slow generation for Ham...');
           }

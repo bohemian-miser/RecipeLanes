@@ -36,8 +36,12 @@ TEST_ARGS="${@:-}"
 CMD="npx playwright test $TEST_ARGS"
 
 # 5. Cleanup & Run
-echo "Cleaning up port 8002..."
+echo "Cleaning up ports..."
 fuser -k 8002/tcp || true
+fuser -k 9099/tcp || true
+fuser -k 8080/tcp || true
+fuser -k 9199/tcp || true
+fuser -k 5001/tcp || true
 
 echo "----------------------------------------------------------------"
 echo "Starting Firebase Emulators and running: $CMD"

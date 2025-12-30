@@ -47,3 +47,4 @@ e2e/test_screenshots/
 service-account.json
 service-account-staging.json
 firestore-debug.log
+*debug.log

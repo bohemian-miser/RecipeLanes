@@ -9,8 +9,8 @@ test.describe('Pivot Interaction', () => {
       await page.setViewportSize(device.viewport);
       
       await page.goto('/lanes?new=true');
-      await page.getByPlaceholder('Paste recipe here...').fill('1 Egg
-Mix');
+      await page.getByPlaceholder('Paste recipe here...').fill(`1 Egg
+Mix`);
       await page.locator('button:has(svg.lucide-arrow-right)').click();
       
       const viewport = page.locator('.react-flow__viewport');

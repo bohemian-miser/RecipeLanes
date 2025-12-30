@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth, User, connectAuthEmulator, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, Firestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
+import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -16,6 +17,7 @@ let app: FirebaseApp | undefined;
 let auth: Auth;
 let db: Firestore;
 let storage: FirebaseStorage;
+let functions: Functions;
 let googleProvider: GoogleAuthProvider;
 let isInitialized = false;
 
@@ -25,11 +27,13 @@ if (firebaseConfig.apiKey) {
   auth = getAuth(app);
   db = getFirestore(app);
   storage = getStorage(app);
+  functions = getFunctions(app, 'us-central1');
   
   if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
       connectAuthEmulator(auth, 'http://127.0.0.1:9099');
       connectFirestoreEmulator(db, '127.0.0.1', 8080);
       connectStorageEmulator(storage, '127.0.0.1', 9199);
+      connectFunctionsEmulator(functions, '127.0.0.1', 5001);
   }
 
   googleProvider = new GoogleAuthProvider();
@@ -56,8 +60,9 @@ if (firebaseConfig.apiKey) {
   
   db = {} as Firestore;
   storage = {} as FirebaseStorage;
+  functions = {} as Functions;
   
   googleProvider = {} as GoogleAuthProvider;
 }
 
-export { auth, db, storage, googleProvider, isInitialized };
+export { auth, db, storage, functions, googleProvider, isInitialized };

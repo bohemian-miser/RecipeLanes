@@ -79,12 +79,12 @@ test.describe('Banner Logic', () => {
       await page.getByPlaceholder('Paste recipe here...').fill('Modified Text');
       
       // Warning appears
-      const banner = page.locator('text=This will override');
+      const banner = page.locator('div').filter({ hasText: 'This will override' }).last();
       await expect(banner).toBeVisible();
       await screenshot(page, dir, 'banner-visible');
       
       // Click to Fork
-      await banner.click();
+      await banner.click({ force: true });
       
       // Warning gone
       await expect(banner).not.toBeVisible();

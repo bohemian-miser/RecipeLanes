@@ -1,10 +1,9 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { genkit, z } from 'genkit';
-
-// 1. CHANGE: Import vertexAI from the UNIFIED package
 import { vertexAI } from '@genkit-ai/google-genai';
 
 initializeApp();
@@ -12,8 +11,6 @@ const db = getFirestore();
 const storage = getStorage();
 
 const ai = genkit({
-    // 2. CHANGE: Configure vertexAI here. 
-    // This looks identical to the old way, but comes from the new package.
     plugins: [vertexAI({ location: 'us-central1' })], 
 });
 
@@ -31,7 +28,6 @@ const generateIcon = ai.defineFlow(
       }),
     },
     async (input) => {
-      // Prompt copied from lib/flows.ts
       const prompt = `Generate a high-quality 64x64 pixel art icon of ${input.ingredient}. The style should be distinct, colorful, and clearly recognizable, suitable for a game inventory or flowchart. Use clean outlines and bright colors. Ensure the background is white.`;
       
       if (isEmulator) {
@@ -41,9 +37,8 @@ const generateIcon = ai.defineFlow(
 
               console.log('finished slow generation for Ham...');
           }
-          // Direct mock return bypassing Genkit generate for robustness in tests
           return { 
-              url: `https://placehold.co/64x64/png?text=${encodeURIComponent(input.ingredient)}`, 
+              url: `https://placehold.co/64x64/png?text=${encodeURIComponent(input.ingredient)}&uuid=${Date.now()}`, 
               prompt 
           };
       }
@@ -59,31 +54,22 @@ const generateIcon = ai.defineFlow(
     }
   );
 
-export const processNewRecipe = onDocumentCreated("recipes/{recipeId}", async (event) => {
-    if (!event.data) return; 
-    
-    const newData = event.data.data(); // onDocumentCreated has .data() method on QueryDocumentSnapshot
-    
-    // Only proceed if graph exists and has nodes
-    if (!newData || !newData.graph || !newData.graph.nodes) return;
+// Shared Logic for Backfilling Icons
+async function backfillIcons(graph: any, recipeId: string) {
+    if (!graph || !graph.nodes) return null;
 
-    // Check if we actually need to process (avoid infinite loops)
-    // Process ANY node with visualDescription (Ingredients OR Actions)
-    const nodesToProcess = newData.graph.nodes.filter((n: any) => 
+    const nodesToProcess = graph.nodes.filter((n: any) => 
         n.visualDescription && 
         !n.iconId 
     );
 
-    if (nodesToProcess.length === 0) return;
+    if (nodesToProcess.length === 0) return null;
 
-    console.log(`Processing ${nodesToProcess.length} nodes for recipe ${event.params.recipeId}`);
-
+    console.log(`Processing ${nodesToProcess.length} nodes for recipe ${recipeId}`);
     const bucket = storage.bucket();
 
-    await Promise.all(nodesToProcess.map(async (node: any, index: number) => {
+    const results = await Promise.all(nodesToProcess.map(async (node: any) => {
         try {
-            // 1. Check Cache (Ingredients Collection)
-            // Normalize to Title Case consistently with the main app
             const rawName = node.visualDescription.trim();
             const name = rawName.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
             
@@ -91,18 +77,13 @@ export const processNewRecipe = onDocumentCreated("recipes/{recipeId}", async (e
             const q = await ingredientsRef.where('name', '==', name).limit(1).get();
             
             let ingredientDocId;
-
             if (!q.empty) {
                 ingredientDocId = q.docs[0].id;
             } else {
-                const newDoc = await ingredientsRef.add({ 
-                    name, 
-                    created_at: new Date() 
-                });
+                const newDoc = await ingredientsRef.add({ name, created_at: new Date() });
                 ingredientDocId = newDoc.id;
             }
 
-            // Check for existing icons
             const iconsRef = db.collection(`ingredients/${ingredientDocId}/icons`);
             const iconSnap = await iconsRef.orderBy('popularity_score', 'desc').limit(1).get();
 
@@ -114,13 +95,10 @@ export const processNewRecipe = onDocumentCreated("recipes/{recipeId}", async (e
                 finalIconId = iconDoc.id;
                 finalIconUrl = iconDoc.data().url;
             } else {
-                // Generate
                 console.log(`aaae Generating icon for ${name}...`);
-
                 const { url: tempUrl, prompt } = await generateIcon({ ingredient: name });
                 console.log(`Generated icon for ${name}...`);
-                // Upload to Storage
-                // If emulator/mock, tempUrl might be external (placehold.co), so we fetch it.
+                
                 const response = await fetch(tempUrl);
                 const buffer = await response.arrayBuffer();
                 const fileName = `icons/${name.replace(/\s+/g, '-')}-${Date.now()}.png`;
@@ -139,11 +117,8 @@ export const processNewRecipe = onDocumentCreated("recipes/{recipeId}", async (e
                     }
                 });
                 await file.makePublic();
-                // In emulator, makePublic() might not generate a usable publicUrl() for the browser context 
-                // without specific config, but standard Storage emulator url is fine.
                 finalIconUrl = file.publicUrl();
 
-                // Save Metadata
                 const newIconDoc = await iconsRef.add({
                     url: finalIconUrl,
                     fullPrompt: prompt,
@@ -161,30 +136,55 @@ export const processNewRecipe = onDocumentCreated("recipes/{recipeId}", async (e
             console.error(`Failed to process node ${node.id}:`, e);
             return null;
         }
-    })).then((results) => {
-        const successfulUpdates = results.filter(r => r !== null);
-        if (successfulUpdates.length === 0) return;
+    }));
 
-        const currentNodes = [...newData.graph.nodes];
-        let changed = false;
+    const successfulUpdates = results.filter(r => r !== null);
+    if (successfulUpdates.length === 0) return null;
 
-        successfulUpdates.forEach((update: any) => {
-            const nodeIndex = currentNodes.findIndex((n: any) => n.id === update.nodeId);
-            if (nodeIndex !== -1) {
-                currentNodes[nodeIndex] = {
-                    ...currentNodes[nodeIndex],
-                    iconId: update.iconId,
-                    iconUrl: update.iconUrl
-                };
-                changed = true;
-            }
-        });
+    const currentNodes = [...graph.nodes];
+    let changed = false;
 
-        if (changed) {
-            return event.data!.ref.update({
-                "graph.nodes": currentNodes
-            });
+    successfulUpdates.forEach((update: any) => {
+        const nodeIndex = currentNodes.findIndex((n: any) => n.id === update.nodeId);
+        if (nodeIndex !== -1) {
+            currentNodes[nodeIndex] = {
+                ...currentNodes[nodeIndex],
+                iconId: update.iconId,
+                iconUrl: update.iconUrl
+            };
+            changed = true;
         }
-        return null;
     });
+
+    return changed ? currentNodes : null;
+}
+
+// 1. Automatic Trigger on Creation
+export const processNewRecipe = onDocumentCreated("recipes/{recipeId}", async (event) => {
+    if (!event.data) return;
+    const newData = event.data.data();
+    const updatedNodes = await backfillIcons(newData.graph, event.params.recipeId);
+    if (updatedNodes) {
+        return event.data.ref.update({ "graph.nodes": updatedNodes });
+    }
+    return null;
+});
+
+// 2. Manual Callable Function (Debug / Retry)
+export const backfillRecipeIcons = onCall(async (request) => {
+    const recipeId = request.data.recipeId;
+    if (!recipeId) throw new HttpsError('invalid-argument', 'Missing recipeId');
+
+    const docRef = db.collection('recipes').doc(recipeId);
+    const docSnap = await docRef.get();
+    
+    if (!docSnap.exists) throw new HttpsError('not-found', 'Recipe not found');
+    
+    const updatedNodes = await backfillIcons(docSnap.data()?.graph, recipeId);
+    
+    if (updatedNodes) {
+        await docRef.update({ "graph.nodes": updatedNodes });
+        return { success: true, count: updatedNodes.length };
+    }
+    return { success: true, count: 0 };
 });

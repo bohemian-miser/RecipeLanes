@@ -11,10 +11,11 @@ import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, getReci
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, Bug } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase-client';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/lib/firebase-client';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -45,10 +46,25 @@ function RecipeLanesContent() {
   const [existingCopies, setExistingCopies] = useState<any[]>([]);
   // const [forgingProgress, setForgingProgress] = useState<{ completed: number, total: number } | null>(null); // Removed as it's now background
   const [guestBannerDismissed, setGuestBannerDismissed] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
 
   const diagramRef = useRef<ReactFlowDiagramHandle>(null);
 
   const isOwner = !ownerId || (!!user && user.uid === ownerId);
+
+  const handleForceRegenerate = async () => {
+        const id = searchParams.get('id');
+        if (!id) return;
+        
+        try {
+            const fn = httpsCallable(functions, 'backfillRecipeIcons');
+            await fn({ recipeId: id });
+            showNotification('Background generation triggered.');
+        } catch (e: any) {
+            console.error('Force regenerate failed:', e);
+            showNotification('Failed to trigger generation: ' + e.message);
+        }
+  };
 
   // ... (Restore Last Recipe, Save Last ID, Sync JSON, Warning, Persistence) ...
 
@@ -347,6 +363,7 @@ function RecipeLanesContent() {
           url.searchParams.set('id', res.id);
           router.push(url.pathname + url.search);
           if (user) setOwnerId(user.uid);
+          setWarningDismissed(true);
           setShowOverrideWarning(false);
           setStatus('complete');
           setRecipeTitle(newGraph.title!);
@@ -581,6 +598,9 @@ const handleVisualize = async () => {
                     <Plus className="w-4 h-4" />
                     <span className="hidden md:inline">New</span>
                 </button>
+                <button onClick={() => setShowDebug(!showDebug)} className={navItemClass} title="Debug">
+                    <Bug className="w-4 h-4 text-red-400" />
+                </button>
 
                 <div className="h-4 w-px bg-zinc-800 mx-2" />
 
@@ -601,6 +621,54 @@ const handleVisualize = async () => {
                 </div>
             </div>
         </header>
+        
+        {/* Debug Overlay */}
+        {showDebug && graph && (
+            <div className="absolute top-16 right-4 z-50 bg-zinc-900 border border-zinc-700 p-4 rounded-lg shadow-xl w-96 max-h-[80vh] overflow-y-auto text-xs font-mono text-zinc-300">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-white flex items-center gap-2">
+                        <Bug className="w-4 h-4" /> Debug Console
+                    </h3>
+                    <button onClick={() => setShowDebug(false)} className="text-zinc-500 hover:text-white">Close</button>
+                </div>
+                
+                <div className="space-y-2 mb-4">
+                    <div><span className="text-zinc-500">Recipe ID:</span> {searchParams.get('id')}</div>
+                    <div><span className="text-zinc-500">Owner ID:</span> {ownerId || 'None'}</div>
+                    <div><span className="text-zinc-500">Is Owner:</span> {String(isOwner)}</div>
+                    <div><span className="text-zinc-500">Visibility:</span> {graph.visibility}</div>
+                </div>
+
+                <div className="border-t border-zinc-800 pt-4 mb-4">
+                    <h4 className="font-bold text-zinc-400 mb-2">Actions</h4>
+                    <button 
+                        onClick={handleForceRegenerate}
+                        className="w-full bg-red-900/50 hover:bg-red-900 text-red-200 border border-red-800 rounded py-1.5 px-3 flex items-center justify-center gap-2 transition-colors"
+                    >
+                        <Wand2 className="w-3 h-3" /> Force Regenerate Icons (Cloud)
+                    </button>
+                </div>
+
+                <div className="border-t border-zinc-800 pt-4">
+                    <h4 className="font-bold text-zinc-400 mb-2">Nodes ({graph.nodes.length})</h4>
+                    <div className="space-y-1">
+                        {graph.nodes.map(n => (
+                            <div key={n.id} className="p-2 bg-zinc-950 rounded border border-zinc-800 flex flex-col gap-1">
+                                <div className="flex justify-between">
+                                    <span className="font-bold text-white">{n.text}</span>
+                                    <span className="text-[10px] text-zinc-600">{n.id}</span>
+                                </div>
+                                <div className="text-[10px] text-zinc-500 truncate">{n.visualDescription}</div>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <div className={`w-2 h-2 rounded-full ${n.iconUrl ? 'bg-green-500' : 'bg-red-500'}`} />
+                                    <span className="truncate flex-1 text-[10px] text-zinc-600">{n.iconUrl || 'Missing Icon'}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        )}
         
                 <div className="absolute top-16 left-0 right-0 z-50 flex flex-col items-center pointer-events-none gap-2">
         

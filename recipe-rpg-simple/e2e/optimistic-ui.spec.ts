@@ -44,14 +44,14 @@ test.describe('Optimistic UI & Background Trigger', () => {
         const eggNode = page.locator('.react-flow__node-minimal', { hasText: '2 Eggs' }).or(page.locator('.react-flow__node-minimal', { hasText: 'Eggs' })).first();
         const flourNode = page.locator('.react-flow__node-minimal', { hasText: '100g Flour' }).or(page.locator('.react-flow__node-minimal', { hasText: 'Flour' })).first();
         const hamNode = page.locator('.react-flow__node-minimal', { hasText: newIngredient }).first();
-        const fryNode = page.locator('.react-flow__node-minimal', { hasText: 'Fry' }).first();
+        const mixNode = page.locator('.react-flow__node-minimal', { hasText: 'Mix' }).first();
 
         // Check text presence first
         await expect(eggNode).toBeVisible();
         await expect(flourNode).toBeVisible();
         await expect(hamNode).toBeVisible();
-      await expect(fryNode).toBeVisible();
-      await screenshot(page, dir, 'before ham check');
+        await expect(mixNode).toBeVisible();
+        await screenshot(page, dir, 'before ham check');
         
         await screenshot(page, dir, 'graph-loaded');
 
@@ -59,6 +59,7 @@ test.describe('Optimistic UI & Background Trigger', () => {
         const eggImg = eggNode.locator('img');
         const flourImg = flourNode.locator('img');
         const hamImg = hamNode.locator('img');
+        const mixImg = mixNode.locator('img');
         
         // Wait for hydration if needed, but they should be there fast
         await expect(eggImg).toBeVisible();
@@ -68,10 +69,14 @@ test.describe('Optimistic UI & Background Trigger', () => {
         await expect(flourImg).toHaveAttribute('src', /firebasestorage|googleapis|placehold/);
         
         // 6. Assert New Icons are Missing Initially (Optimistic Cache Miss)
-        // Ham should be missing icon, so it should render the placeholder (Carrot Emoji)
-        await expect(hamNode).toContainText('🥕'); // Verify placeholder emoji presence
-        await expect(hamImg).not.toBeVisible(); // Verify NO image tag
-
+        // Ham and Mix should be missing icons, so they should render placeholders (Emojis)
+        // In our component, if iconUrl is null, it renders 🥕 for ingredients and 🍳 for actions
+        await expect(hamNode.locator('span.text-4xl')).toHaveText('🥕');
+        await expect(mixNode.locator('span.text-4xl')).toHaveText('🍳');
+        
+        // They should NOT have the img tag visible yet
+        await expect(hamImg).not.toBeVisible();
+        await expect(mixImg).not.toBeVisible();
 
         await screenshot(page, dir, 'icons-cached-only');
 
@@ -81,6 +86,9 @@ test.describe('Optimistic UI & Background Trigger', () => {
         // We expect both images to eventually appear with Storage URLs
         await expect(hamImg).toBeVisible({ timeout: 60000 }); 
         await expect(hamImg).toHaveAttribute('src', /firebasestorage|googleapis/, { timeout: 60000 });
+
+        await expect(mixImg).toBeVisible({ timeout: 60000 }); 
+        await expect(mixImg).toHaveAttribute('src', /firebasestorage|googleapis/, { timeout: 60000 });
         
         await screenshot(page, dir, 'icons-fully-populated');
         

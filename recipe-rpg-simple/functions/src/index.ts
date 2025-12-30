@@ -56,12 +56,17 @@ const generateIcon = ai.defineFlow(
 
 // Shared Logic for Backfilling Icons
 async function backfillIcons(graph: any, recipeId: string) {
-    if (!graph || !graph.nodes) return null;
+    console.log(`[backfillIcons] Checking recipe ${recipeId}...`);
+    if (!graph || !graph.nodes) {
+        console.log('[backfillIcons] No graph or nodes found.');
+        return null;
+    }
 
     const nodesToProcess = graph.nodes.filter((n: any) => 
         n.visualDescription && 
         !n.iconId 
     );
+    console.log(`[backfillIcons] Found ${nodesToProcess.length} nodes to process out of ${graph.nodes.length}.`);
 
     if (nodesToProcess.length === 0) return null;
 

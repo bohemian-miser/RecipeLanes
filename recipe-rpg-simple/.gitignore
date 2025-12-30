@@ -48,3 +48,5 @@ service-account.json
 service-account-staging.json
 firestore-debug.log
 *debug.log
+recipe-rpg-simple/functions/.env
+*service-account.json

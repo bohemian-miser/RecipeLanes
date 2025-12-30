@@ -11,7 +11,7 @@ fi
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT" || exit 1
 
-export GOOGLE_APPLICATION_CREDENTIALS="$PROJECT_ROOT/service-account.json"
+export GOOGLE_APPLICATION_CREDENTIALS="$PROJECT_ROOT/mock-service-account.json"
 export MOCK_AI=true
 
 # Ensure Functions picks up the env var (robust workaround for emulator env inheritance)

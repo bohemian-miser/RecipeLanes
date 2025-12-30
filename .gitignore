@@ -6,3 +6,6 @@ debug/
 # GitHub App credentials
 gha-creds-*.json
 test-results/
+*.env
+recipe-rpg-simple/functions/.env
+*service-account.json

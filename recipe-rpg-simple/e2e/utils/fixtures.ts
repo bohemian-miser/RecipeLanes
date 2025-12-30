@@ -1,22 +1,18 @@
 // e2e/utils/fixtures.ts
-import { test as base } from '@playwright/test';
-import { getTestUserToken } from './admin-utils';
+import { test as base, expect } from '@playwright/test';
+import { getTestUserToken, clearFirestore, clearStorage } from './admin-utils';
 
-// 1. Define options for better type safety
-type AuthOptions = {
-  claims?: object;
-  displayName?: string;
-};
-
-// 2. Define the interface for our fixture
 type AuthFixtures = {
   login: (uid?: string, options?: AuthOptions) => Promise<void>;
 };
 
-// 3. Extend the base test
+type AuthOptions = {
+    claims?: object;
+    displayName?: string;
+};
+
 export const test = base.extend<AuthFixtures>({
   login: async ({ page }, use) => {
-    
     // The Helper Function
     const loginFn = async (uid: string = 'test-user-default', options: AuthOptions = {}) => {
       const { claims, displayName } = options;
@@ -26,30 +22,26 @@ export const test = base.extend<AuthFixtures>({
       const { token } = await getTestUserToken(uid, claims, displayName);
 
       // B. Inject into Browser (Client context)
-      await page.evaluate(async (tokenString) => {
-        
-        // Helper to check if our exposed variables are ready
-        const isReady = () => (window as any)._firebaseAuth && (window as any)._signInWithCustomToken;
+      // Retry loop to handle "Execution context destroyed" if page reloads during hydration
+      for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+              // Wait for readiness
+              await page.waitForFunction(() => (window as any)._firebaseAuth && (window as any)._signInWithCustomToken, null, { timeout: 10000 });
 
-        // Wait loop: Playwright is sometimes faster than your app's hydration
-        if (!isReady()) {
-          await new Promise<void>((resolve) => {
-             const interval = setInterval(() => {
-                if (isReady()) {
-                   clearInterval(interval);
-                   resolve();
-                }
-             }, 50);
-          });
-        }
-
-        // Grab the exposed instances
-        const auth = (window as any)._firebaseAuth;
-        const signInWithCustomToken = (window as any)._signInWithCustomToken;
-
-        // Perform the login
-        await signInWithCustomToken(auth, tokenString);
-      }, token);
+              // Execute Login
+              await page.evaluate(async (tokenString) => {
+                const auth = (window as any)._firebaseAuth;
+                const signInWithCustomToken = (window as any)._signInWithCustomToken;
+                await signInWithCustomToken(auth, tokenString);
+              }, token);
+              
+              return; // Success
+          } catch (e: any) {
+              console.log(`Login attempt ${attempt + 1} failed: ${e.message}`);
+              if (attempt === 2) throw e;
+              await page.waitForTimeout(1000); // Wait for page to settle
+          }
+      }
     };
 
     // Pass the function to the test

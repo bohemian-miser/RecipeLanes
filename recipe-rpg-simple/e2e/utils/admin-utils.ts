@@ -76,3 +76,26 @@ export async function clearFirestore() {
       console.warn('Could not clear Firestore (Emulator might not be running or reachable):', e);
   }
 }
+
+/**
+ * Clears the Storage Emulator.
+ */
+export async function clearStorage() {
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "local-project-id";
+  const endpoint = `http://127.0.0.1:9199/v0/b/${projectId}.firebasestorage.app/o`;
+  
+  try {
+      const res = await fetch(endpoint);
+      if (res.ok) {
+          const data = await res.json();
+          if (data.items) {
+              await Promise.all(data.items.map(async (item: any) => {
+                  await fetch(`${endpoint}/${encodeURIComponent(item.name)}`, { method: 'DELETE' });
+              }));
+          }
+          console.log('Storage Emulator cleared.');
+      }
+  } catch (e) {
+      console.warn('Could not clear Storage:', e);
+  }
+}

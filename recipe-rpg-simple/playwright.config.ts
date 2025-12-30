@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'path';
 
 export default defineConfig({
   testDir: './e2e',
@@ -6,7 +7,8 @@ export default defineConfig({
   expect: {
     timeout: 30 * 1000,
   },
-  retries: 0,
+  retries: 1,
+  workers: 1,
   fullyParallel: false,
   use: {
     baseURL: 'http://localhost:8002',
@@ -30,7 +32,7 @@ export default defineConfig({
       NEXT_PUBLIC_USE_FIREBASE_EMULATOR: 'true',
       NEXT_PUBLIC_FIREBASE_API_KEY: 'demo-key',
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'local-project-id',
-      GOOGLE_APPLICATION_CREDENTIALS: './mock-service-account.json',
+      GOOGLE_APPLICATION_CREDENTIALS: path.join(process.cwd(), 'mock-service-account.json'),
     },
   },
 });

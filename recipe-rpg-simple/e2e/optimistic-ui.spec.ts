@@ -2,13 +2,14 @@ import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 import { seedCommonIngredients } from './utils/seed-data';
-import { clearFirestore } from './utils/admin-utils';
+import { clearFirestore, clearStorage } from './utils/admin-utils';
 
 test.describe('Optimistic UI & Background Trigger', () => {
   
   test.beforeAll(async () => {
-      // Clear DB to ensure fresh state (no cached icons for "Mix" etc.)
+      // Clear DB and Storage to ensure fresh state (no cached icons for "Mix" etc.)
       await clearFirestore();
+      await clearStorage();
       
       // Seed Eggs and Flour (Global Setup)
       await seedCommonIngredients();

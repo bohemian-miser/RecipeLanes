@@ -157,7 +157,7 @@ jobs:
       ${{ needs.dispatch.outputs.command == 'invoke' }}
     uses: './.github/workflows/gemini-invoke.yml'
     permissions:
-      contents: 'read'
+      contents: 'write'
       id-token: 'write'
       issues: 'write'
       pull-requests: 'write'

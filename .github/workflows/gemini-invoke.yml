@@ -43,6 +43,14 @@ jobs:
           permission-issues: 'write'
           permission-pull-requests: 'write'
 
+      - name: 'Debug Environment'
+        env:
+          TITLE: '${{ github.event.pull_request.title || github.event.issue.title }}'
+          REPOSITORY: '${{ github.repository }}'
+        run: |
+          echo "Title: $TITLE"
+          echo "Repository: $REPOSITORY"
+
       - name: 'Run Gemini CLI'
         id: 'run_gemini'
         uses: 'google-github-actions/run-gemini-cli@main' # ratchet:exclude

@@ -8,7 +8,7 @@
     "start": "next start -p 8001",
     "lint": "eslint",
     "test": "npm run test:unit && npm run test:e2e",
-    "test:unit": "npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx tsx tests/undo-scrambled-logic.test.ts && npx tsx tests/social-features.test.ts && npx tsx tests/gallery-view.test.ts && npx tsx tests/optimistic-flow.test.ts",
+    "test:unit": "export MOCK_AI=true && export NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true && npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx tsx tests/undo-scrambled-logic.test.ts && npx tsx tests/social-features.test.ts && npx tsx tests/gallery-view.test.ts && npx tsx tests/optimistic-flow.test.ts",
     "test:integration": "export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 && export PATH=$JAVA_HOME/bin:$PATH && export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/service-account.json && export MOCK_AI=true && npm install --prefix functions && npm run build --prefix functions && npx firebase emulators:exec --only auth,firestore,storage,functions 'npx tsx tests/functions-metadata.test.ts'",
     "test:e2e": "./scripts/test-e2e.sh",
     "mcp": "npx tsx scripts/mcp-server.ts",

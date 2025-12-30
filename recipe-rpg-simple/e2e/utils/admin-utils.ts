@@ -4,11 +4,12 @@ import * as admin from 'firebase-admin';
 // Ensure we only initialize the app once
 if (!admin.apps.length) {
   // 1. Force Admin SDK to talk to the Emulator
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "local-project-id";
   process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099"; 
-  process.env.GCLOUD_PROJECT = "recipe-lanes"; 
+  process.env.GCLOUD_PROJECT = projectId; 
 
   admin.initializeApp({
-    projectId: "recipe-lanes",
+    projectId: projectId,
   });
 }
 

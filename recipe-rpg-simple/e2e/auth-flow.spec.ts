@@ -13,14 +13,14 @@ test.describe('Authentication Flow', () => {
       await page.goto('/lanes');
       
       // Verify Guest UI
-      await screenshot(page, dir, '01-start');
+      await screenshot(page, dir, 'start');
       const loginBtn = page.getByRole('button', { name: 'Login' });
       await expect(loginBtn).toBeVisible();
       await expect(page.getByTitle('Logout')).not.toBeVisible();
 
       // 2. Log In Programmatically
       // We use Chef Ramsay to verify profile data propagation
-      await screenshot(page, dir, '02-before-login');
+      await screenshot(page, dir, 'before-login');
       await login('user-ramsay', { displayName: 'Chef Ramsay' });
       
       // Wait for auth update
@@ -28,7 +28,7 @@ test.describe('Authentication Flow', () => {
       await expect(logoutBtn).toBeVisible({ timeout: 15000 });
       
       // Name is hidden on mobile via CSS, so we check for attachment instead of visibility
-      await screenshot(page, dir, '03-after-login');
+      await screenshot(page, dir, 'after-login');
       if (device.isMobile) {
           await expect(page.getByText(/Chef Ramsay/)).toBeAttached();
       } else {
@@ -39,7 +39,7 @@ test.describe('Authentication Flow', () => {
       await logoutBtn.click();
 
       // 4. Verify Return to Guest UI
-      await screenshot(page, dir, '04-after-logout');
+      await screenshot(page, dir, 'after-logout');
       await expect(loginBtn).toBeVisible();
       await expect(logoutBtn).not.toBeVisible();
       cleanupScreenshots(dir);

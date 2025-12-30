@@ -1,0 +1,35 @@
+name: Gemini Assistant
+on:
+  workflow_dispatch:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  assistant:
+    if: contains(github.event.comment.body, '@gemini-cli')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Gemini CLI
+        uses: google-github-actions/run-gemini-cli@v1
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          # This Prompt configures the Agent's behavior in CI
+          prompt: >
+            You are a Senior Software Engineer working on a Next.js + Firebase project.
+            
+            YOUR MANDATE:
+            1. ACTION OVER TALK: You are running in a CI environment with write access. If asked to fix something, write the code and push the commit. Don't just explain it.
+            2. TEST DRIVEN: You must strictly adhere to TDD. If you write logic, you MUST write or update a corresponding `.test.ts` file.
+            3. STAGING FIRST: Ensure all work targets the current feature branch or 'staging'. Never push unfinished work directly to 'main'.
+            4. VERIFICATION: You are responsible for the quality of your own code.
+            
+            PROJECT CONTEXT:
+            - Stack: Next.js (App Router), Firebase App Hosting, Genkit.
+            - We use a "Hybrid" deploy: App Hosting handles the frontend, GitHub Actions handles `functions/`.

@@ -35,14 +35,6 @@ jobs:
           npm install -g firebase-tools
           firebase experiments:enable webframeworks
 
-      - name: Start Emulators
-        run: |
-          cd recipe-rpg-simple
-          # Start in background with demo project to avoid login requirement
-          firebase emulators:start --only auth,firestore,storage --project demo-project &
-          echo "Waiting for emulators..."
-          npx wait-on http://127.0.0.1:9099 --timeout 60000
-
       - name: Install Playwright Browsers
         run: cd recipe-rpg-simple && npx playwright install --with-deps
 

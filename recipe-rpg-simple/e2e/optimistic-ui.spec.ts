@@ -67,11 +67,11 @@ test.describe('Optimistic UI & Background Trigger', () => {
         // Wait for hydration if needed, but they should be there fast
         await expect(eggImg).toBeVisible();
         console.log('Egg image src:', await eggImg.getAttribute('src'));
-        await expect(eggImg).toHaveAttribute('src', /firebasestorage|googleapis|placehold/);
+        await expect(eggImg).toHaveAttribute('src', /icons%2Fseed-Eggs/);
         
         await expect(flourImg).toBeVisible();
         console.log('Flour image src:', await flourImg.getAttribute('src'));
-        await expect(flourImg).toHaveAttribute('src', /firebasestorage|googleapis|placehold/);
+        await expect(flourImg).toHaveAttribute('src', /icons%2Fseed-Flour/);
         
         await screenshot(page, dir, 'graph-loaded');
         // 6. Assert New Icons are Missing Initially (Optimistic Cache Miss)
@@ -90,13 +90,14 @@ test.describe('Optimistic UI & Background Trigger', () => {
         console.log('Waiting for background icon generation...');
         
         // We expect both images to eventually appear with Storage URLs to placeholders
-        await expect(hamImg).toBeVisible({ timeout: 60000 }); 
+        // It has a 1 second lag to make sure it doesn't load too quickly.
+        await expect(hamImg).toBeVisible({ timeout: 10000 }); 
         console.log('Ham image src:', await hamImg.getAttribute('src'));
-        await expect(hamImg).toHaveAttribute('src', /local-project-id\.appspot\.com\/icons%2FHam-/, { timeout: 60000 });
+        await expect(hamImg).toHaveAttribute('src', /icons%2FHam-/, { timeout: 1000 });
 
-        await expect(mixImg).toBeVisible({ timeout: 60000 }); 
+        await expect(mixImg).toBeVisible({ timeout: 1000 }); 
         console.log('Mix image src:', await mixImg.getAttribute('src'));
-        await expect(mixImg).toHaveAttribute('src', /local-project-id\.appspot\.com\/icons%2FMix-/, { timeout: 60000 });
+        await expect(mixImg).toHaveAttribute('src', /icons%2FMixing.Bowl/, { timeout: 1000 });
         
         await screenshot(page, dir, 'icons-fully-populated');
         

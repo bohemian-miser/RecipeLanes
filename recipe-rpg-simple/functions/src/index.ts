@@ -33,6 +33,8 @@ const generateIcon = ai.defineFlow(
       if (isEmulator) {
           if (input.ingredient.toLowerCase().includes('ham')) {
               console.log('Simulating slow generation for Ham (Test Mode)...');
+              // I tried making this shorter and the _Wrong_ test failed. I can't explain it.
+              // Too long, timeout, too short and the first half of the test is still fine but the second half fails somehow..??
               await new Promise(resolve => setTimeout(resolve, 1000));
 
               console.log('finished slow generation for Ham...');

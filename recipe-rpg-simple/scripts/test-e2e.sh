@@ -21,6 +21,9 @@ echo "MOCK_AI=true" > "$PROJECT_ROOT/functions/.env"
 
 # 3. Build Functions (Ensure they are fresh for emulators)
 echo "Building Functions..."
+# Clean previous build to force fresh load
+rm -rf "$PROJECT_ROOT/functions/lib"
+
 # Only run install if node_modules doesn't exist to save time, or always run it? 
 # For correctness in CI/Dev, running it is safer, but slow. 
 # We'll run it.

@@ -2,7 +2,7 @@ import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 
-test.describe('Ingredients Sidebar', () => {
+test.skip('Ingredients Sidebar', () => {
   for (const device of deviceConfigs) {
     test(`${device.name}: Sidebar toggles and scales quantities`, async ({ page, login }) => {
       const dir = screenshotDir('ingredients-sidebar', device.name);

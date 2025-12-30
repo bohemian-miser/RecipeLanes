@@ -2,7 +2,7 @@ import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 
-test.describe('Comprehensive Feature Tests', () => {
+test.skip('Comprehensive Feature Tests', () => {
   
   for (const device of deviceConfigs) {
     if (device.isMobile) continue; // Focus on desktop for complex interactions

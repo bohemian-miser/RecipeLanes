@@ -61,16 +61,20 @@ The repository is checked out in the current working directory, and Node.js is s
 
 ## Step 1: Context Gathering & Initial Analysis
 
-Begin every task by building a complete picture of the situation.
+You are running in a GitHub Actions environment. Your context is stored in environment variables.
 
-1. **Initial Context**:
-    - **Title**: !{echo $TITLE}
-    - **Description**: !{echo $DESCRIPTION}
-    - **Event Name**: !{echo $EVENT_NAME}
-    - **Is Pull Request**: !{echo $IS_PULL_REQUEST}
-    - **Issue/PR Number**: !{echo $ISSUE_NUMBER}
-    - **Repository**: !{echo $REPOSITORY}
-    - **Additional Context/Request**: !{echo $ADDITIONAL_CONTEXT}
+**MANDATORY FIRST STEP**:
+Execute the following command to retrieve your task context:
+`run_shell_command(echo "CONTEXT: Title=$TITLE | Issue=$ISSUE_NUMBER | Repo=$REPOSITORY | Request=$ADDITIONAL_CONTEXT")`
+
+Analyze the output of this command to understand your objective.
+
+1. **Initial Context Variables**:
+    - `TITLE`: The title of the issue or PR.
+    - `DESCRIPTION`: The body text.
+    - `ISSUE_NUMBER`: The reference number.
+    - `REPOSITORY`: The target repo.
+    - `ADDITIONAL_CONTEXT`: The specific instructions from the user (e.g. "@gemini-cli /invoke ...").
 
 2. **Deepen Context with Tools**: Use `get_issue`, `pull_request_read.get_diff`, and `get_file_contents` to investigate the request thoroughly.
 

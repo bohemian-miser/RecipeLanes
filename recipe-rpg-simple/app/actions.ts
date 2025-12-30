@@ -643,43 +643,7 @@ export async function getRecipeAction(id: string) {
   }
 }
 
-export async function generateGraphIconsAction(graph: RecipeGraph): Promise<{ graph: RecipeGraph; error?: string }> {
-    console.log(`[generateGraphIconsAction] 🚀 Starting for graph with ${graph.nodes.length} nodes.`);
-    try {
-        const newGraph: RecipeGraph = JSON.parse(JSON.stringify(graph));
-        
-        const nodesToProcess = newGraph.nodes.filter(n => n.visualDescription && !n.iconUrl);
-        console.log(`[generateGraphIconsAction] Found ${nodesToProcess.length} nodes needing icons.`);
 
-        const chunk = 3;
-        for (let i = 0; i < newGraph.nodes.length; i += chunk) {
-            const batch = newGraph.nodes.slice(i, i + chunk);
-            await Promise.all(batch.map(async (node) => {
-                if (node.visualDescription && !node.iconUrl) {
-                    console.log(`[generateGraphIconsAction] Processing node: ${node.text} (Visual: ${node.visualDescription})`);
-                    try {
-                        const result = await getOrCreateIconAction(node.visualDescription);
-                        if (result && 'iconUrl' in result && result.iconUrl) {
-                            console.log(`[generateGraphIconsAction] Icon assigned for "${node.text}": ${result.iconUrl.substring(0, 30)}...`);
-                            node.iconUrl = result.iconUrl;
-                        } else {
-                            console.warn(`[generateGraphIconsAction] No icon returned for "${node.text}"`);
-                        }
-                    } catch (e) {
-                        console.error(`[generateGraphIconsAction] Error processing node "${node.text}":`, e);
-                    }
-                }
-            }));
-        }
-
-        console.log(`[generateGraphIconsAction] 🏁 Finished.`);
-        return { graph: newGraph };
-
-    } catch (e: any) {
-        console.error('[generateGraphIconsAction] 🔴 Failed:', e);
-        return { graph, error: e.message };
-    }
-}
 
 export async function rerollIconAction(nodeId: string, ingredientName: string, currentIconUrl: string, seenUrls: string[] = [], recipeId?: string) {
     try {

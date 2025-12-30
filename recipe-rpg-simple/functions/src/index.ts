@@ -5,6 +5,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { genkit, z } from 'genkit';
 import { vertexAI } from '@genkit-ai/google-genai';
+import { randomUUID } from 'crypto';
 
 initializeApp();
 const db = getFirestore();
@@ -73,7 +74,10 @@ async function backfillIcons(graph: any, recipeId: string) {
     if (nodesToProcess.length === 0) return null;
 
     console.log(`Processing ${nodesToProcess.length} nodes for recipe ${recipeId}`);
-    const bucket = storage.bucket();
+    
+    // Explicitly use firebasestorage.app bucket to match client expectations
+    const bucketName = process.env.FIREBASE_STORAGE_BUCKET || `${process.env.GCLOUD_PROJECT}.firebasestorage.app`;
+    const bucket = storage.bucket(bucketName);
 
     const results = await Promise.all(nodesToProcess.map(async (node: any) => {
         try {
@@ -102,14 +106,14 @@ async function backfillIcons(graph: any, recipeId: string) {
                 finalIconId = iconDoc.id;
                 finalIconUrl = iconDoc.data().url;
             } else {
-                console.log(`aaae Generating icon for ${name}...`);
+                console.log(`-> Generating icon for ${name}...`);
                 const { url: tempUrl, prompt } = await generateIcon({ ingredient: name });
-                console.log(`Generated icon for ${name}...`);
                 
                 const response = await fetch(tempUrl);
                 const buffer = await response.arrayBuffer();
                 const fileName = `icons/${name.replace(/\s+/g, '-')}-${Date.now()}.png`;
                 const file = bucket.file(fileName);
+                const token = randomUUID();
                 
                 await file.save(Buffer.from(buffer), {
                     metadata: { 
@@ -119,12 +123,14 @@ async function backfillIcons(graph: any, recipeId: string) {
                             impressions: '0',
                             rejections: '0',
                             fullPrompt: prompt,
-                            visualDescription: node.visualDescription
+                            visualDescription: node.visualDescription,
+                            firebaseStorageDownloadTokens: token
                         }
                     }
                 });
-                await file.makePublic();
-                finalIconUrl = file.publicUrl();
+                
+                // Construct standard Firebase Storage URL compatible with frontend and emulators
+                finalIconUrl = `http://127.0.0.1:9199/v0/b/${bucketName}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
 
                 const newIconDoc = await iconsRef.add({
                     url: finalIconUrl,

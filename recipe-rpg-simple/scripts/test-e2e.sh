@@ -13,6 +13,8 @@ cd "$PROJECT_ROOT" || exit 1
 
 export GOOGLE_APPLICATION_CREDENTIALS="$PROJECT_ROOT/mock-service-account.json"
 export MOCK_AI=true
+export NEXT_PUBLIC_FIREBASE_PROJECT_ID="local-project-id"
+export NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="local-project-id.firebasestorage.app"
 
 # Ensure Functions picks up the env var (robust workaround for emulator env inheritance)
 echo "MOCK_AI=true" > "$PROJECT_ROOT/functions/.env"

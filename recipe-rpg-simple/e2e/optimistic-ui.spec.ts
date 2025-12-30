@@ -2,10 +2,14 @@ import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 import { seedCommonIngredients } from './utils/seed-data';
+import { clearFirestore } from './utils/admin-utils';
 
 test.describe('Optimistic UI & Background Trigger', () => {
   
   test.beforeAll(async () => {
+      // Clear DB to ensure fresh state (no cached icons for "Mix" etc.)
+      await clearFirestore();
+      
       // Seed Eggs and Flour (Global Setup)
       await seedCommonIngredients();
   });
@@ -33,14 +37,14 @@ test.describe('Optimistic UI & Background Trigger', () => {
         
         // 3. Click Visualize
         const visualizeBtn = page.locator('button:has-text("Visualise")').or(page.locator('button:has(.lucide-arrow-right)'));
-      await visualizeBtn.click();
-      
-      await screenshot(page, dir, 'after click');
-
-                        // 4. Assert Immediate Graph Load (Optimistic)
-                        // Wait for graph container
-                        await expect(page.locator('.react-flow')).toBeVisible({ timeout: 30000 });      await screenshot(page, dir, 'after click2');
+        await visualizeBtn.click();
         
+        await screenshot(page, dir, 'after click');
+
+        // 4. Assert Immediate Graph Load (Optimistic)
+        // Wait for graph container
+        await expect(page.locator('.react-flow')).toBeVisible({ timeout: 30000 });      await screenshot(page, dir, 'after click2');
+
         const eggNode = page.locator('.react-flow__node-minimal', { hasText: '2 Eggs' }).or(page.locator('.react-flow__node-minimal', { hasText: 'Eggs' })).first();
         const flourNode = page.locator('.react-flow__node-minimal', { hasText: '100g Flour' }).or(page.locator('.react-flow__node-minimal', { hasText: 'Flour' })).first();
         const hamNode = page.locator('.react-flow__node-minimal', { hasText: newIngredient }).first();
@@ -53,7 +57,6 @@ test.describe('Optimistic UI & Background Trigger', () => {
         await expect(mixNode).toBeVisible();
         await screenshot(page, dir, 'before ham check');
         
-        await screenshot(page, dir, 'graph-loaded');
 
         // 5. Assert Cached Icons are Present Immediately
         const eggImg = eggNode.locator('img');
@@ -68,6 +71,7 @@ test.describe('Optimistic UI & Background Trigger', () => {
         await expect(flourImg).toBeVisible();
         await expect(flourImg).toHaveAttribute('src', /firebasestorage|googleapis|placehold/);
         
+        await screenshot(page, dir, 'graph-loaded');
         // 6. Assert New Icons are Missing Initially (Optimistic Cache Miss)
         // Ham and Mix should be missing icons, so they should render placeholders (Emojis)
         // In our component, if iconUrl is null, it renders 🥕 for ingredients and 🍳 for actions

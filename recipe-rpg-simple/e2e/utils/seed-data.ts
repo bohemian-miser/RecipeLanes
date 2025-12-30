@@ -4,12 +4,12 @@ import * as admin from 'firebase-admin';
 import { randomUUID } from 'crypto';
 import 'dotenv/config';
 
-const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
+const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'local-project-id.firebasestorage.app';
 
 // Initialize Admin SDK if not already
 if (!admin.apps.length) {
     admin.initializeApp({
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'recipe-lanes',
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "local-project-id",
         storageBucket: bucketName
     });
 }

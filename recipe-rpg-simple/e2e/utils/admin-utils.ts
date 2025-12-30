@@ -56,3 +56,23 @@ export async function getTestUserToken(uid: string, claims?: object, displayName
   const token = await admin.auth().createCustomToken(uid, claims);
   return { token, displayName: finalDisplayName };
 }
+
+/**
+ * Clears the Firestore Emulator database.
+ * Useful for tests that require a clean state (e.g. checking initial generation).
+ */
+export async function clearFirestore() {
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "local-project-id";
+  const endpoint = `http://127.0.0.1:8080/emulator/v1/projects/${projectId}/databases/(default)/documents`;
+  
+  try {
+      const response = await fetch(endpoint, { method: 'DELETE' });
+      if (!response.ok) {
+          console.error(`Failed to clear Firestore: ${response.statusText}`);
+      } else {
+          console.log('Firestore Emulator cleared.');
+      }
+  } catch (e) {
+      console.warn('Could not clear Firestore (Emulator might not be running or reachable):', e);
+  }
+}

@@ -6,7 +6,7 @@ export default defineConfig({
   expect: {
     timeout: 30 * 1000,
   },
-  retries: 2,
+  retries: 0,
   fullyParallel: false,
   use: {
     baseURL: 'http://localhost:8002',

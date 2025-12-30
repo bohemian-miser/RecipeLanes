@@ -45,4 +45,5 @@ e2e/test_screenshots/
 .next-test
 .next-verify
 service-account.json
+service-account-staging.json
 firestore-debug.log

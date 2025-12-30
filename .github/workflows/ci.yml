@@ -41,13 +41,21 @@ jobs:
       - name: Build
         run: cd recipe-rpg-simple && npm run build
         env:
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
-          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_API_KEY: "demo-key"
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "demo-project.firebaseapp.com"
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: "demo-project"
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "demo-project.firebasestorage.app"
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "123456789"
+          NEXT_PUBLIC_FIREBASE_APP_ID: "1:123456789:web:abcdef"
 
       - name: Test
         run: cd recipe-rpg-simple && npm test
         env:
-          FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
-          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_API_KEY: "demo-key"
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: "demo-project"
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "demo-project.firebasestorage.app"
+          NEXT_PUBLIC_USE_FIREBASE_EMULATOR: "true"
+          # Emulator Hosts are set by firebase emulators:exec in test script
+          # But we can set defaults if needed
+          GEMINI_API_KEY: "mock-key" # MOCK_AI=true so this isn't used real
+

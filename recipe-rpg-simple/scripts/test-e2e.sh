@@ -9,6 +9,8 @@ fi
 
 # 2. Google Credentials
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$PROJECT_ROOT" || exit 1
+
 export GOOGLE_APPLICATION_CREDENTIALS="$PROJECT_ROOT/service-account.json"
 export MOCK_AI=true
 
@@ -28,7 +30,10 @@ npm run build --prefix "$PROJECT_ROOT/functions"
 TEST_ARGS="${@:-}" 
 CMD="npx playwright test $TEST_ARGS"
 
-# 5. Run Emulators & Tests
+# 5. Cleanup & Run
+echo "Cleaning up port 8002..."
+fuser -k 8002/tcp || true
+
 echo "----------------------------------------------------------------"
 echo "Starting Firebase Emulators and running: $CMD"
 echo "----------------------------------------------------------------"

@@ -1,12 +1,15 @@
-# Default Configuration (Skeleton)
-# Environment-specific overrides should be in apphosting.prod.yaml or apphosting.staging.yaml
-
 env:
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyB6VV9lqFoQ8L1bgZucrCnAKDSSqi0Jj1U
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: recipe-lanes-staging.firebaseapp.com
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: recipe-lanes-staging
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: recipe-lanes-staging.firebasestorage.app
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "580985798196"
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:580985798196:web:893cbbe80706ffd59c5461"
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY

@@ -5,3 +5,4 @@ debug/
 
 # GitHub App credentials
 gha-creds-*.json
+test-results/

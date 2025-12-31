@@ -27,7 +27,7 @@ class GraphManager {
         const incoming = this.edges.filter(e => e.target === nodeId);
         const outgoing = this.edges.filter(e => e.source === nodeId);
         
-        let newEdges = this.edges.filter(e => e.source !== nodeId && e.target !== nodeId);
+        const newEdges = this.edges.filter(e => e.source !== nodeId && e.target !== nodeId);
         
         incoming.forEach(inEdge => {
             outgoing.forEach(outEdge => {

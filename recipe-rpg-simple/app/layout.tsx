@@ -27,6 +27,11 @@ export default function RootLayout({
       <body
         className={`antialiased bg-zinc-900 text-white`}
       >
+        {process.env.NEXT_PUBLIC_ENV_NAME === 'staging' && (
+          <div className="bg-orange-600 text-white text-xs font-bold text-center py-1 fixed top-0 left-0 right-0 z-[100]">
+            STAGING ENVIRONMENT
+          </div>
+        )}
         <AuthProvider>
           {children}
         </AuthProvider>

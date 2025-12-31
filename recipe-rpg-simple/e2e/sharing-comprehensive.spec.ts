@@ -128,17 +128,16 @@ test.describe('Sharing & Forking Comprehensive', () => {
       await expect(page.getByPlaceholder('Paste recipe here...')).toHaveValue('Shared Recipe');
       await screenshot(page, dir, '01-anon-view');
 
-      // 4. Edit -> Auto Fork (Anon)
+      // 4. Edit -> Should NOT Auto Fork (Anon)
       await page.getByPlaceholder('Paste recipe here...').pressSequentially(' Edited');
       
-      // Expect URL change
-      await expect(page).toHaveURL(new RegExp(`id=(?!${sharedId})`));
-      const anonCopyId = new URL(page.url()).searchParams.get('id');
-      console.log('Anon Copy ID:', anonCopyId);
+      // Expect URL to remain the same (no fork)
+      await expect(page).toHaveURL(sharedUrl);
       
-      // 5. Expect "Not saved to account" banner
-      await expect(page.locator('text=Recipe not saved to account')).toBeVisible();
-      await screenshot(page, dir, '02-anon-forked');
+      // Expect "Log in to save" notification
+      await expect(page.getByText('Log in to save your changes')).toBeVisible();
+      
+      await screenshot(page, dir, '02-anon-no-fork');
 
       cleanupScreenshots(dir);
     });

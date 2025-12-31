@@ -36,6 +36,7 @@ interface ReactFlowDiagramProps {
   textPos?: 'bottom' | 'top' | 'left' | 'right';
   isLive?: boolean;
   onInteraction?: () => void;
+  onEdit?: () => void;
   onSave?: (newGraph: RecipeGraph) => void;
   isPublic?: boolean;
   onVisibilityChange?: (isPublic: boolean) => void;
@@ -60,7 +61,7 @@ const INITIAL_EDGE_TYPES = {
     floating: FloatingEdge
 };
 
-const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false }, ref) => {
+const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false }, ref) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const { fitView, getNodes, getEdges } = useReactFlow();
@@ -97,13 +98,19 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     // Wrap change handlers to track dirty state
     const onNodesChangeWrapped = useCallback((changes: any) => {
         onNodesChange(changes);
-        if (changes.some((c: any) => c.type !== 'select')) setIsDirty(true);
-    }, [onNodesChange]);
+        if (changes.some((c: any) => c.type !== 'select')) {
+            setIsDirty(true);
+            onEdit?.();
+        }
+    }, [onNodesChange, onEdit]);
 
     const onEdgesChangeWrapped = useCallback((changes: any) => {
         onEdgesChange(changes);
-        if (changes.some((c: any) => c.type !== 'select')) setIsDirty(true);
-    }, [onEdgesChange]);
+        if (changes.some((c: any) => c.type !== 'select')) {
+            setIsDirty(true);
+            onEdit?.();
+        }
+    }, [onEdgesChange, onEdit]);
     
     // Drag State for Branch Rotation
     const dragRef = useRef<{
@@ -658,7 +665,9 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         dragRef.current = { active: false };
         if (isOwner) {
             handleSave();
-        } 
+        } else {
+            onEdit?.();
+        }
     };
 
     return (

@@ -42,6 +42,7 @@ function RecipeLanesContent() {
   const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
   const [showOverrideWarning, setShowOverrideWarning] = useState(false);
+  const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[]>([]);
   // const [forgingProgress, setForgingProgress] = useState<{ completed: number, total: number } | null>(null); // Removed as it's now background
@@ -67,6 +68,12 @@ function RecipeLanesContent() {
   };
 
   // ... (Restore Last Recipe, Save Last ID, Sync JSON, Warning, Persistence) ...
+
+  const handleEditAttempt = () => {
+      if (!isOwner && !showForkPrompt) {
+          setShowForkPrompt(true);
+      }
+  };
 
   const handleUpdateServes = (newServes: number) => {
       if (!graph) return;
@@ -708,6 +715,21 @@ const handleVisualize = async () => {
                             This will override the current recipe
                         </Banner>
                     )}
+
+                    {/* Fork Prompt Banner (Destructive Action Intercept) */}
+                    {showForkPrompt && (
+                        <Banner color="blue" onDismiss={() => setShowForkPrompt(false)}>
+                            <span>You are editing a shared recipe. Create a copy to save changes?</span>
+                            <div className="flex gap-2">
+                                <button onClick={handleFork} className="underline font-bold hover:text-white">
+                                    Save as New Copy
+                                </button>
+                                <button onClick={() => setShowForkPrompt(false)} className="underline hover:text-white">
+                                    Dismiss
+                                </button>
+                            </div>
+                        </Banner>
+                    )}
                     
                     {/* Guest Banner */}
                     {!user && graph && !guestBannerDismissed && (
@@ -725,7 +747,10 @@ const handleVisualize = async () => {
                     className={`flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300 focus:ring-1 focus:ring-yellow-500/50 outline-none resize-y transition-all duration-300 ${inputExpanded ? 'h-[50vh]' : 'h-10'}`}
                     placeholder="Paste recipe here..."
                     value={recipeText}
-                    onChange={(e) => setRecipeText(e.target.value)}
+                    onChange={(e) => {
+                        setRecipeText(e.target.value);
+                        handleEditAttempt();
+                    }}
                     onFocus={() => setInputExpanded(true)}
                     onKeyDown={(e) => {
                         if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -908,6 +933,7 @@ const handleVisualize = async () => {
                         textPos={textPos} 
                         isLive={isLive} 
                         onInteraction={() => setInputExpanded(false)}
+                        onEdit={handleEditAttempt}
                         onSave={(newGraph) => {
                             setGraph(newGraph);
                             if (newGraph.title) setRecipeTitle(newGraph.title);

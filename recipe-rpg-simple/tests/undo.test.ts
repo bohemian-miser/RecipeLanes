@@ -31,7 +31,7 @@ function testDeletionUndo() {
     const incoming = edges.filter(e => e.target === nodeId);
     const outgoing = edges.filter(e => e.source === nodeId);
     
-    let newEdges = edges.filter(e => e.source !== nodeId && e.target !== nodeId);
+    const newEdges = edges.filter(e => e.source !== nodeId && e.target !== nodeId);
     
     // Bridge logic
     incoming.forEach(inEdge => {
@@ -67,15 +67,15 @@ function testDeletionUndo() {
 function testBridgeLogic() {
     console.log("Testing Bridge Logic (Parent -> Child)...");
     // 1 -> 2 -> 3
-    let nodes = [{id:'1'}, {id:'2'}, {id:'3'}];
-    let edges = [{id:'1-2', source:'1', target:'2'}, {id:'2-3', source:'2', target:'3'}];
+    const nodes = [{id:'1'}, {id:'2'}, {id:'3'}];
+    const edges = [{id:'1-2', source:'1', target:'2'}, {id:'2-3', source:'2', target:'3'}];
     
     // Delete 2
     const nodeId = '2';
     const incoming = edges.filter(e => e.target === nodeId); // 1-2
     const outgoing = edges.filter(e => e.source === nodeId); // 2-3
     
-    let newEdges = edges.filter(e => e.source !== nodeId && e.target !== nodeId);
+    const newEdges = edges.filter(e => e.source !== nodeId && e.target !== nodeId);
     
     incoming.forEach(inEdge => {
         outgoing.forEach(outEdge => {

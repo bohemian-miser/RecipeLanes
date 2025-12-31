@@ -37,9 +37,9 @@ async function testDeletionSync() {
     await new Promise(r => setTimeout(r, 2000)); // Wait for propagation
 
     // 3. Verify it is GONE from Storage List (Debug Gallery view)
-    let storageFiles = await getAllStorageFilesAction();
+    const storageFiles = await getAllStorageFilesAction();
     if (!storageFiles) throw new Error("Storage access denied!");
-    let existsInStorage = storageFiles.some((f: any) => urlsMatch(f.publicUrl, urlA));
+    const existsInStorage = storageFiles.some((f: any) => urlsMatch(f.publicUrl, urlA));
     if (existsInStorage) {
         console.error("FAILURE: Icon still exists in storage list!");
         throw new Error("Deletion failed verification");

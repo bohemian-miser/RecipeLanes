@@ -455,7 +455,7 @@ const handleVisualize = async () => {
             throw new Error(res.error || 'Failed to parse recipe structure.');
         }
         
-        let currentGraph = res.graph;
+        const currentGraph = res.graph;
         
         if (!recipeTitle && currentGraph.title) {
             setRecipeTitle(currentGraph.title);

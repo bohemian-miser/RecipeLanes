@@ -68,7 +68,7 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
           console.error('[generateAndStoreIcon] 🔴 Failed to download generated image:', e);
           throw new Error('Failed to download generated image');
       }
-      let finalBuffer: ArrayBuffer | Buffer = imageBuffer;
+      const finalBuffer: ArrayBuffer | Buffer = imageBuffer;
     //   // 3. Process Image (Remove Background)
     //   let finalBuffer: ArrayBuffer | Buffer = imageBuffer;
     //   try {
@@ -187,7 +187,7 @@ export async function getOrCreateIconAction(
         const seenUrls = new Set(seenParse.success ? seenParse.data : []);
 
         // 1. Search for Ingredient Group
-        let bestMatch = await getDataService().getIngredientByName(ingredient);
+        const bestMatch = await getDataService().getIngredientByName(ingredient);
         if (bestMatch) {
             ingredient = bestMatch.data.name; // Canonical name
             console.log(`[getOrCreateIconAction] Found existing group: ${ingredient}`);

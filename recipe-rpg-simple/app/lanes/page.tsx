@@ -313,16 +313,21 @@ function RecipeLanesContent() {
 
   useEffect(() => {
       const id = searchParams.get('id');
-      if (id && user && ownerId && user.uid !== ownerId) {
+      
+      // If we don't have a user or ownerId yet, we can't determine copies.
+      // Set to null to block auto-forking until we know for sure.
+      if (!id || !user || !ownerId) {
+          setExistingCopies(null);
+          return;
+      }
+
+      if (user.uid !== ownerId) {
+           setExistingCopies(null); // Reset to loading before fetch
            checkExistingCopiesAction(id).then(res => {
-               if (res.copies && res.copies.length > 0) {
-                   setExistingCopies(res.copies);
-               } else {
-                   setExistingCopies([]);
-               }
+               setExistingCopies(res.copies || []);
            });
       } else {
-           setExistingCopies([]); // Reset or N/A
+           setExistingCopies([]); // Owner doesn't need copy check
       }
   }, [searchParams, user, ownerId]);
 

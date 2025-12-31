@@ -135,6 +135,7 @@ jobs:
       pull-requests: 'write'
     with:
       additional_context: '${{ needs.dispatch.outputs.additional_context }}'
+      pr_number: '${{ needs.dispatch.outputs.issue_number }}'
     secrets: 'inherit'
 
   triage:

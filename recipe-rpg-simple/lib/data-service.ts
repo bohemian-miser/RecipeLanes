@@ -27,6 +27,7 @@ export interface DataService {
   voteRecipe(recipeId: string, userId: string, vote: 'like' | 'dislike' | 'none'): Promise<void>;
   toggleStar(recipeId: string, userId: string): Promise<boolean>;
   copyRecipe(recipeId: string, userId: string): Promise<string>;
+  deleteRecipe(recipeId: string, userId: string): Promise<void>;
 
   searchPublicRecipes(query: string): Promise<any[]>;
   getUserRecipes(userId: string): Promise<any[]>;
@@ -273,6 +274,15 @@ export class FirebaseDataService implements DataService {
       if (newGraph.title) newGraph.title = `${newGraph.title} (Copy)`;
       
       return this.saveRecipe(newGraph, undefined, userId, 'unlisted');
+  }
+
+  async deleteRecipe(recipeId: string, userId: string): Promise<void> {
+      const docRef = db.collection('recipes').doc(recipeId);
+      const doc = await docRef.get();
+      if (!doc.exists) throw new Error("Recipe not found");
+      const data = doc.data();
+      if (data?.ownerId !== userId) throw new Error("Unauthorized");
+      await docRef.delete();
   }
 
   private mapRecipes(snapshot: FirebaseFirestore.QuerySnapshot) {
@@ -629,6 +639,13 @@ export class MemoryDataService implements DataService {
         if (newGraph.title) newGraph.title = `${newGraph.title} (Copy)`;
         
         return this.saveRecipe(newGraph, undefined, userId, 'unlisted');
+    }
+
+    async deleteRecipe(recipeId: string, userId: string): Promise<void> {
+        const r = this.recipes.get(recipeId);
+        if (!r) throw new Error("Recipe not found");
+        if (r.ownerId !== userId) throw new Error("Unauthorized");
+        this.recipes.delete(recipeId);
     }
     
     async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted'): Promise<string> {

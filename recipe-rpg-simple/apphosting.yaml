@@ -3,10 +3,16 @@
 
 env:
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: 
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: 
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: 
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: 
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: 
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: 
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY

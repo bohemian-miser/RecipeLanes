@@ -41,7 +41,6 @@ function RecipeLanesContent() {
   const [showIngredients, setShowIngredients] = useState(false);
   const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
-  const [showOverrideWarning, setShowOverrideWarning] = useState(false);
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[]>([]);
@@ -69,8 +68,18 @@ function RecipeLanesContent() {
 
   // ... (Restore Last Recipe, Save Last ID, Sync JSON, Warning, Persistence) ...
 
-  const handleEditAttempt = () => {
-      if (!isOwner && !showForkPrompt) {
+  const handleEditAttempt = async () => {
+      if (isOwner) return;
+
+      // Auto-Fork if no copies exist (First time editing shared recipe)
+      if (existingCopies.length === 0) {
+          showNotification("Saving a local copy...");
+          await handleFork(); 
+          return;
+      }
+
+      // If copies exist, prompt the user
+      if (!showForkPrompt) {
           setShowForkPrompt(true);
       }
   };
@@ -124,15 +133,6 @@ function RecipeLanesContent() {
           setJsonText(JSON.stringify(safeGraph, null, 2));
       }
   }, [graph]);
-
-  // Warning logic
-  useEffect(() => {
-      if (!warningDismissed && graph && recipeText && graph.originalText && recipeText.trim() !== graph.originalText.trim()) {
-          setShowOverrideWarning(true);
-      } else {
-          setShowOverrideWarning(false);
-      }
-  }, [recipeText, graph, warningDismissed]);
 
   // Save Text Draft on Unload/Refresh (Persistence)
   useEffect(() => {
@@ -329,7 +329,6 @@ function RecipeLanesContent() {
       setOwnerId(null);
       setError(null);
       setStatus('idle');
-      setShowOverrideWarning(false);
       setWarningDismissed(false);
       setGuestBannerDismissed(false);
       localStorage.removeItem('recipe_draft'); 
@@ -371,26 +370,9 @@ function RecipeLanesContent() {
           router.push(url.pathname + url.search);
           if (user) setOwnerId(user.uid);
           setWarningDismissed(true);
-          setShowOverrideWarning(false);
           setStatus('complete');
           setRecipeTitle(newGraph.title!);
           showNotification("New version created.");
-      }
-  };
-
-  const handleOverrideCopy = async (copyId: string) => {
-      if (!graph) return;
-      setStatus('loading');
-      // Overwrite the existing copy with current graph
-      const res = await saveRecipeAction(graph, copyId);
-      if (res.id) {
-          const url = new URL(window.location.href);
-          url.searchParams.set('id', res.id);
-          router.push(url.pathname + url.search);
-          if (user) setOwnerId(user.uid);
-          setExistingCopies([]); // Clear banner
-          setStatus('complete');
-          showNotification("Existing copy updated.");
       }
   };
 
@@ -497,7 +479,6 @@ const handleVisualize = async () => {
 
         setStatus('complete');
         // No explicit populateIcons call. Background worker handles it.
-        setShowOverrideWarning(false);
         setWarningDismissed(false);
         localStorage.setItem('recipe_draft', recipeText);
 
@@ -677,61 +658,46 @@ const handleVisualize = async () => {
             </div>
         )}
         
-                <div className="absolute top-16 left-0 right-0 z-50 flex flex-col items-center pointer-events-none gap-2">
-        
-                    {/* Existing Copies Banner */}
-                    {existingCopies.length > 0 && (
-                        <Banner color="blue" onDismiss={() => setExistingCopies([])}>
-                            <span>You have {existingCopies.length} existing {existingCopies.length === 1 ? 'copy' : 'copies'} of this recipe.</span>
-                            <div className="flex flex-wrap justify-center gap-2">
-                                <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">
-                                    Open {existingCopies.length === 1 ? 'it' : 'latest'}
-                                </Link>
-                                <button onClick={() => handleOverrideCopy(existingCopies[0].id)} className="underline font-bold hover:text-white" title="Overwrite your existing copy with this version">
-                                    Override it
-                                </button>
-                                <button onClick={handleFork} className="underline font-bold hover:text-white">
-                                    Make another copy
-                                </button>
-                                {existingCopies.length > 1 && (
-                                    <Link href={`/gallery?filter=mine&search=${encodeURIComponent(recipeTitle)}`} className="underline font-bold hover:text-white">
-                                        See all
-                                    </Link>
-                                )}
-                            </div>
-                        </Banner>
-                    )}
+            <div className="absolute top-16 left-0 right-0 z-50 flex flex-col items-center pointer-events-none gap-2">
+    
+                {/* Existing Copies Banner */}
+                {existingCopies.length > 0 && (
+                    <Banner color="blue" onDismiss={() => setExistingCopies([])}>
+                        <span>You have an <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">existing copy</Link> of this recipe.</span>
+                        <div className="flex flex-wrap justify-center gap-2">
+                            <button onClick={handleFork} className="underline font-bold hover:text-white">
+                                Save another copy?
+                            </button>
+                        </div>
+                    </Banner>
+                )}
 
-                    {/* Notification Banner */}
-                    {notification && (
-                        <Banner color="green" onDismiss={() => setNotification(null)}>
-                            {notification}
-                        </Banner>
-                    )}
+                {/* Notification Banner */}
+                {notification && (
+                    <Banner color="green" onDismiss={() => setNotification(null)}>
+                        {notification}
+                    </Banner>
+                )}
 
-                    {/* Warning Banner */}
-                    {showOverrideWarning && (
-                        <Banner color="orange" onClick={() => setWarningDismissed(true)}>
-                            This will override the current recipe
-                        </Banner>
-                    )}
-
-                    {/* Fork Prompt Banner (Destructive Action Intercept) */}
-                    {showForkPrompt && (
-                        <Banner color="blue" onDismiss={() => setShowForkPrompt(false)}>
-                            <span>You are editing a shared recipe. Create a copy to save changes?</span>
-                            <div className="flex gap-2">
-                                <button onClick={handleFork} className="underline font-bold hover:text-white">
-                                    Save as New Copy
-                                </button>
-                                <button onClick={() => setShowForkPrompt(false)} className="underline hover:text-white">
-                                    Dismiss
-                                </button>
-                            </div>
-                        </Banner>
-                    )}
-                    
-                    {/* Guest Banner */}
+                {/* Fork Prompt Banner (Destructive Action Intercept) */}
+                {showForkPrompt && (
+                    <Banner color="blue" onDismiss={() => setShowForkPrompt(false)}>
+                        <span>You have an existing copy. Switch to it or save a new one?</span>
+                        <div className="flex gap-2">
+                            <Link href={`/lanes?id=${existingCopies[0]?.id}`} className="underline font-bold hover:text-white">
+                                Go to Copy
+                            </Link>
+                            <button onClick={handleFork} className="underline font-bold hover:text-white">
+                                Save New
+                            </button>
+                            <button onClick={() => setShowForkPrompt(false)} className="underline hover:text-white">
+                                Cancel
+                            </button>
+                        </div>
+                    </Banner>
+                )}
+                
+                {/* Guest Banner */}
                     {!user && graph && !guestBannerDismissed && (
                         <Banner color="yellow" onDismiss={() => setGuestBannerDismissed(true)}>
                             Recipe not saved to account. <button onClick={(e) => { e.stopPropagation(); signIn(); }} className="underline font-bold hover:text-zinc-800">Log in</button> to save edits permanently.

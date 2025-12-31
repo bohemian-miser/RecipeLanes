@@ -61,14 +61,13 @@ test.describe('Forking Workflow', () => {
       
       // 8. Verify Banner
       await screenshot(page, dir, 'debug-before-banner');
-      const banner = page.locator('text=You have 1 existing copy');
+      const banner = page.locator('text=You have an existing copy');
       await expect(banner).toBeVisible();
       
       // Check buttons
       await screenshot(page, dir, 'debug-before-banner-buttons');
-      await expect(page.getByRole('link', { name: 'Open it' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Override it' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Make another copy' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'existing copy' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Save another copy?' })).toBeVisible();
       await screenshot(page, dir, '04-bob-banner');
       cleanupScreenshots(dir);
     });

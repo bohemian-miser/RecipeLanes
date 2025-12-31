@@ -119,13 +119,13 @@ test.describe('Banner Logic', () => {
         // Bob visits Alice's recipe AGAIN.
         await page.goto(aliceUrl);
         
-        const banner = page.locator('text=You have 1 existing');
+        const banner = page.locator('text=You have an existing copy');
         await expect(banner).toBeVisible();
         await screenshot(page, dir, 'banner-visible');
         
         // Dismiss
         // Click the container background (careful not to click links)
-        const bannerDiv = page.locator('div').filter({ hasText: 'You have 1 existing' }).last();
+        const bannerDiv = page.locator('div').filter({ hasText: 'You have an existing copy' }).last();
         await bannerDiv.click({ position: { x: 5, y: 5 } });
         
         await expect(banner).not.toBeVisible();

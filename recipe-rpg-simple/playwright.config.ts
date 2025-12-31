@@ -5,11 +5,11 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 60 * 1000,
   expect: {
-    timeout: 30 * 1000,
+    timeout: 10 * 1000,
   },
   retries: 1,
   workers: 1,
-  fullyParallel: false,
+  fullyParallel: true,
   use: {
     baseURL: 'http://localhost:8002',
     trace: 'on-first-retry',

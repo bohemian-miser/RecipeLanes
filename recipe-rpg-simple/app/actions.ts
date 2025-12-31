@@ -613,14 +613,11 @@ export async function saveRecipeAction(graph: RecipeGraph, existingId?: string, 
   try {
     const session = await getAuthService().verifyAuth();
     const userId = session?.uid; 
-    console.log(`[saveRecipeAction] User: ${userId}, ExistingId: ${existingId}, Visibility: ${visibility}`);
     
     const dataService = getDataService();
     const id = await dataService.saveRecipe(graph, existingId, userId, visibility);
-    console.log(`[saveRecipeAction] Success. ID: ${id}`);
     return { id };
   } catch (e: any) {
-    console.error('[saveRecipeAction] Failed:', e);
     return { error: e.message };
   }
 }

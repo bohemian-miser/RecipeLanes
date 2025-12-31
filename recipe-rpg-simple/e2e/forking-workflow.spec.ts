@@ -66,8 +66,8 @@ test.describe('Forking Workflow', () => {
       
       // Check buttons
       await screenshot(page, dir, 'debug-before-banner-buttons');
-      await expect(page.getByRole('link', { name: 'existing copy' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Save another copy?' })).toBeVisible();
+      await expect(page.getByRole('link', { name: /existing cop/ })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Save another copy' })).toBeVisible();
       await screenshot(page, dir, '04-bob-banner');
       cleanupScreenshots(dir);
     });

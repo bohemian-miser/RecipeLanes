@@ -3,7 +3,7 @@ import { AuthProvider } from "@/components/auth-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Recipe Lanes",
+  title: "Recipe Lanes - AI Powered",
   description: "Visual Recipe Editor",
 };
 

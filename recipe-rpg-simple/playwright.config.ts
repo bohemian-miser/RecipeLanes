@@ -3,11 +3,11 @@ import path from 'path';
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 60 * 1000,
+  timeout: 30 * 1000,
   expect: {
-    timeout: 10 * 1000,
+    timeout: 1 * 1000,
   },
-  retries: 1,
+  retries: 0,
   workers: 1,
   fullyParallel: true,
   use: {

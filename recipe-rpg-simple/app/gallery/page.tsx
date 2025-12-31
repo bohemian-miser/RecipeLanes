@@ -126,7 +126,7 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {recipes.map((recipe: any) => (
                 <div key={recipe.id} className="h-full">
-                    <RecipeCard recipe={recipe} />
+                    <RecipeCard recipe={recipe} userId={session?.uid} />
                 </div>
             ))}
             

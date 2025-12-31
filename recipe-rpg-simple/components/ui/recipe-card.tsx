@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { ChefHat, Calendar, GitGraph, Copy, Star, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ChefHat, Calendar, GitGraph, Copy, Star, ThumbsUp, ThumbsDown, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { toggleStarAction, voteRecipeAction, copyRecipeAction } from '@/app/actions';
+import { toggleStarAction, voteRecipeAction, copyRecipeAction, deleteRecipeAction } from '@/app/actions';
 import { useRouter } from 'next/navigation';
 
 interface RecipeCardProps {
@@ -20,11 +20,30 @@ interface RecipeCardProps {
   userId?: string; // Optional: Current user ID for optimistic updates
 }
 
-export function RecipeCard({ recipe }: RecipeCardProps) {
+export function RecipeCard({ recipe, userId }: RecipeCardProps) {
   const router = useRouter();
   const [likes, setLikes] = useState(recipe.likes);
   const [isStarred, setIsStarred] = useState(false); // Optimistic default
   const [isCopying, setIsCopying] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleted, setIsDeleted] = useState(false);
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this recipe?')) return;
+    
+    setIsDeleting(true);
+    const res = await deleteRecipeAction(recipe.id);
+    if (res.success) {
+        setIsDeleted(true);
+    } else {
+        alert(res.error || 'Failed to delete');
+        setIsDeleting(false);
+    }
+  };
+
+  if (isDeleted) return null;
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -75,6 +94,16 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
             >
                 <Star className={`w-4 h-4 ${isStarred ? 'fill-yellow-500' : ''}`} />
             </button>
+            {userId && recipe.ownerId === userId && (
+                <button 
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="p-2 bg-black/50 hover:bg-red-900/50 text-zinc-300 hover:text-red-400 rounded-full backdrop-blur-sm transition-colors"
+                    title="Delete Recipe"
+                >
+                    <Trash2 className="w-4 h-4" />
+                </button>
+            )}
         </div>
 
         {/* Preview Image */}

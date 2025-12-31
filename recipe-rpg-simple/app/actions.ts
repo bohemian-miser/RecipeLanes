@@ -749,6 +749,18 @@ export async function checkExistingCopiesAction(originalId: string): Promise<{ c
     }
 }
 
+export async function deleteRecipeAction(recipeId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await getAuthService().verifyAuth();
+        if (!session) return { success: false, error: 'Login required' };
+        
+        await getDataService().deleteRecipe(recipeId, session.uid);
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 export async function debugLogAction(message: string) {
     console.log(`[CLIENT-LOG] ${message}`);
 }

@@ -1,6 +1,3 @@
-Here is the concise summary of the **Remote-First Feature Branch Workflow**, formatted for an AI agent's context window.
-
----
 
 # Protocol: Remote-First Feature Branching
 
@@ -36,12 +33,14 @@ git push origin HEAD:staging --force
 ### 3. Integration (Merge to Main)
 
 * **Context:** Feature is verified and ready for production.
-* **Action:** Open a Pull Request targeting `main`. Do not merge locally.
+* **Action:** Upload the feature branch to GitHub and open a Pull Request.
 * **Command:**
 ```bash
+# 1. Push the branch itself (Required for PR)
+git push origin <feature-branch-name>
+
+# 2. Create the PR
 gh pr create --base main --fill
-# OR for interactive mode:
-# gh pr create --base main --web
 
 ```
 

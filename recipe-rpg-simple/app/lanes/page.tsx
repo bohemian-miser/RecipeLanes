@@ -363,7 +363,10 @@ function RecipeLanesContent() {
       
       // Smarter Naming
       let newTitle = recipeTitle;
-      if (newTitle.startsWith('Yet another copy of ')) {
+      
+      if (existingCopies && existingCopies.length > 0 && !recipeTitle.startsWith('Copy of') && !recipeTitle.startsWith('Another copy of') && !recipeTitle.startsWith('Yet another copy of')) {
+         newTitle = `Another copy of ${recipeTitle}`;
+      } else if (newTitle.startsWith('Yet another copy of ')) {
          const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
          if (match) {
              newTitle = `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;

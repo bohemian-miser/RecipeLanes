@@ -61,7 +61,7 @@ test.describe('Forking Workflow', () => {
       
       // 8. Verify Banner
       await screenshot(page, dir, 'debug-before-banner');
-      const banner = page.locator('text=You have an existing copy');
+      const banner = page.getByText(/You have \d+ existing cop/);
       await expect(banner).toBeVisible();
       
       // Check buttons

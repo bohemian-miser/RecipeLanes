@@ -14,32 +14,32 @@ test.describe('Sharing & Forking Comprehensive', () => {
       await page.goto('/lanes?new=true');
       await login('mock-alice-comprehensive');
       await page.getByPlaceholder('Paste recipe here...').fill('Alice Original Recipe');
+      await screenshot(page, dir, 'alice-filled');
       await page.locator('button:has(svg.lucide-arrow-right)').click();
       await expect(page).toHaveURL(/id=/);
       const aliceUrl = page.url();
       const aliceId = new URL(aliceUrl).searchParams.get('id');
       console.log('Alice ID:', aliceId);
-      await screenshot(page, dir, '01-alice-created');
+      await screenshot(page, dir, 'alice-created');
 
       // 2. Bob logs in and visits
       await login('mock-bob-comprehensive');
       await page.goto(aliceUrl);
       await expect(page.getByPlaceholder('Paste recipe here...')).toHaveValue('Alice Original Recipe');
-      await screenshot(page, dir, '02-bob-visits');
+      await screenshot(page, dir, 'bob-visits');
 
       // 3. Bob edits -> Should Auto-Fork
       // Trigger edit by typing
+      await page.waitForTimeout(500); // Wait for existingCopies check
       await page.getByPlaceholder('Paste recipe here...').pressSequentially(' - Modified');
+      await screenshot(page, dir, '02a-bob-typing');
       
       // Expect immediate redirection (URL change)
       await expect(page).toHaveURL(new RegExp(`id=(?!${aliceId})`));
       const bobId = new URL(page.url()).searchParams.get('id');
       console.log('Bob Fork ID:', bobId);
       
-      // Verify toast or visual indicator if possible, but URL change is the hard proof
-      // await expect(page.locator('text=Saving a local copy...')).toBeVisible();
-      
-      await screenshot(page, dir, '03-bob-auto-forked');
+      await screenshot(page, dir, 'bob-auto-forked');
       
       cleanupScreenshots(dir);
     });
@@ -49,41 +49,41 @@ test.describe('Sharing & Forking Comprehensive', () => {
       await page.setViewportSize(device.viewport);
 
       // 1. Setup: Alice creates, Bob forks once.
-      // We can manually seed this state or just run through the flow. Running flow is safer E2E.
-      
       // Alice Create
       await page.goto('/lanes?new=true');
       await login('mock-alice-comprehensive-2');
       await page.getByPlaceholder('Paste recipe here...').fill('Alice Recipe 2');
+      await screenshot(page, dir, 'alice-filling');
       await page.locator('button:has(svg.lucide-arrow-right)').click();
       await expect(page).toHaveURL(/id=/);
       const aliceUrl = page.url();
       const aliceId = new URL(aliceUrl).searchParams.get('id');
+      await screenshot(page, dir, 'alice-saved');
 
       // Bob Fork (Method: Edit text)
       await login('mock-bob-comprehensive-2');
       await page.goto(aliceUrl);
+      await page.waitForTimeout(2000); // Wait for checkExistingCopies to settle
+      await screenshot(page, dir, 'bob-visiting-first');
       await page.getByPlaceholder('Paste recipe here...').pressSequentially(' '); // Trigger fork
       await expect(page).toHaveURL(new RegExp(`id=(?!${aliceId})`));
       const bobFirstCopyId = new URL(page.url()).searchParams.get('id');
       console.log('Bob Copy 1:', bobFirstCopyId);
+      await screenshot(page, dir, 'bob-forked-once');
 
       // 2. Bob visits Alice's recipe AGAIN
       await page.goto(aliceUrl);
-      await screenshot(page, dir, '01-bob-revisits');
 
       // 3. Expect Banner: "You have an existing copy"
-      const banner = page.locator('text=You have an existing copy');
+      const banner = page.getByText(/You have \d+ existing cop/);
       await expect(banner).toBeVisible();
 
+      await screenshot(page, dir, 'bob-revisits');
+
       // 4. Test "Go to Copy" link
-      // We won't click it yet, we want to test "Save another" first? 
-      // Actually clicking the link navigates away. Let's test "Save another copy" first?
-      // No, let's stick to the banner logic.
-      
       // Verify buttons present
-      await expect(page.getByRole('link', { name: 'existing copy' })).toBeVisible();
-      const saveNewBtn = page.getByRole('button', { name: 'Save another copy?' });
+      await expect(page.getByRole('link', { name: /existing cop/ })).toBeVisible();
+      const saveNewBtn = page.getByRole('button', { name: 'Save another copy' });
       await expect(saveNewBtn).toBeVisible();
 
       // 5. Action: Save Another Copy
@@ -96,7 +96,72 @@ test.describe('Sharing & Forking Comprehensive', () => {
       console.log('Bob Copy 2:', bobSecondCopyId);
       
       await expect(page.locator('text=New version created')).toBeVisible();
-      await screenshot(page, dir, '02-bob-made-second-copy');
+      await screenshot(page, dir, 'bob-made-second-copy');
+
+      // Verify Title of Second Copy
+      // Note: Title is displayed in an H1 by default, not an input (unless editing)
+      const titleElement = page.locator('h1').first();
+      await expect(titleElement).toBeVisible();
+      const titleText = await titleElement.textContent();
+      console.log('Actual Title of Copy 2:', titleText);
+      
+      await expect(titleElement).toHaveText(/^Another copy of/);
+
+      // 6. Bob visits Alice's recipe A THIRD TIME (now has 2 copies)
+      await page.goto(aliceUrl);
+      await page.waitForTimeout(2000); // Wait for checkExistingCopies
+      
+      // Expect Banner: "You have 2 existing copies..."
+      await expect(page.getByText('You have 2 existing copies')).toBeVisible();
+      await screenshot(page, dir, 'bob-banner-two-copies');
+      
+      // Verify Link
+      await expect(page.getByRole('link', { name: /2 existing copies/ })).toBeVisible();
+      
+      // Verify "Save another copy" button
+      await expect(page.getByRole('button', { name: 'Save another copy' })).toBeVisible();
+      
+      // 7. Bob makes a 3rd copy
+      await page.getByRole('button', { name: 'Save another copy' }).click();
+      await expect(page).toHaveURL(new RegExp(`id=(?!${aliceId})`));
+      await expect(page.locator('h1').first()).toHaveText(/^Another copy of/);
+      await screenshot(page, dir, 'bob-third-copy');
+
+      // 8. Bob visits Alice's recipe A FOURTH TIME (now has 3 copies)
+      await page.goto(aliceUrl);
+      await page.waitForTimeout(2000); 
+      await expect(page.getByText('You have 3 existing copies')).toBeVisible();
+      await screenshot(page, dir, 'bob-banner-three-copies');
+      
+      // 9. Bob makes a 4th copy
+      await page.getByRole('button', { name: 'Save another copy' }).click();
+      await expect(page).toHaveURL(new RegExp(`id=(?!${aliceId})`));
+      const bobLatestUrl = page.url();
+      await expect(page.locator('h1').first()).toHaveText(/^Another copy of/);
+      await screenshot(page, dir, 'bob-fourth-copy');
+
+      // 10. Alice loads Bob's latest copy
+      await login('mock-alice-comprehensive-2'); // Switch back to Alice
+      await page.goto(bobLatestUrl);
+      await screenshot(page, dir, 'alice-viewing-bob-copy');
+      
+      // Alice is NOT the owner of Bob's copy, so she should just see it (no banners initially unless she has a copy of THIS copy, which she doesnt)
+      // She should see the title "Another copy of..."
+      await expect(page.locator('h1').first()).toHaveText(/^Another copy of/);
+      
+      // 11. Alice edits Bob's copy -> Auto Fork
+      await page.waitForTimeout(2000);
+      await page.getByPlaceholder('Paste recipe here...').pressSequentially(' - Alice Edit');
+      await screenshot(page, dir, 'alice-editing');
+      
+      // Expect URL change (Alice's Fork of Bob's Copy)
+      const bobLatestId = new URL(bobLatestUrl).searchParams.get('id');
+      await expect(page).toHaveURL(new RegExp(`id=(?!${bobLatestId})`));
+      
+      // Title logic might vary (Copy of Another copy...), verify it exists
+      await expect(page.locator('h1').first()).toBeVisible();
+      
+      await screenshot(page, dir, '12-alice-forked-bob');
 
       cleanupScreenshots(dir);
     });
@@ -110,14 +175,17 @@ test.describe('Sharing & Forking Comprehensive', () => {
       await page.goto('/lanes?new=true');
       await login('mock-alice-comprehensive-3');
       await page.getByPlaceholder('Paste recipe here...').fill('Shared Recipe');
+      await screenshot(page, dir, 'alice-filling');
       await page.locator('button:has(svg.lucide-arrow-right)').click();
       await expect(page).toHaveURL(/id=/); // Critical wait
       const sharedUrl = page.url();
       const sharedId = new URL(sharedUrl).searchParams.get('id');
+      await screenshot(page, dir, 'alice-saved');
 
       // 2. Logout (become Anon)
       // Use UI button to ensure both Client SDK and Server Cookie are cleared
       await page.getByRole('button', { name: 'Logout' }).click();
+      await screenshot(page, dir, 'logged-out');
       
       // Verify logout
       await expect(page.getByText('Login')).toBeVisible();
@@ -126,10 +194,11 @@ test.describe('Sharing & Forking Comprehensive', () => {
       await page.goto(sharedUrl);
       // Wait for load
       await expect(page.getByPlaceholder('Paste recipe here...')).toHaveValue('Shared Recipe');
-      await screenshot(page, dir, '01-anon-view');
+      await screenshot(page, dir, 'anon-view');
 
       // 4. Edit -> Should NOT Auto Fork (Anon)
       await page.getByPlaceholder('Paste recipe here...').pressSequentially(' Edited');
+      await screenshot(page, dir, 'anon-edited');
       
       // Expect URL to remain the same (no fork)
       await expect(page).toHaveURL(sharedUrl);
@@ -137,7 +206,7 @@ test.describe('Sharing & Forking Comprehensive', () => {
       // Expect "Log in to save" notification
       await expect(page.getByText('Log in to save your changes')).toBeVisible();
       
-      await screenshot(page, dir, '02-anon-no-fork');
+      await screenshot(page, dir, 'anon-notification');
 
       cleanupScreenshots(dir);
     });

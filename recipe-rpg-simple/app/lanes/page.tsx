@@ -373,6 +373,10 @@ function RecipeLanesContent() {
           setStatus('complete');
           setRecipeTitle(newGraph.title!);
           showNotification("New version created.");
+      } else {
+          console.error("Fork failed:", res.error);
+          showNotification("Fork failed: " + res.error);
+          setStatus('error');
       }
   };
 

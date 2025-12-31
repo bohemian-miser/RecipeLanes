@@ -5,7 +5,6 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { genkit, z } from 'genkit';
 import { vertexAI } from '@genkit-ai/google-genai';
-import { randomUUID } from 'crypto';
 
 initializeApp();
 const db = getFirestore();
@@ -113,8 +112,6 @@ async function backfillIcons(graph: any, recipeId: string) {
                 const buffer = await response.arrayBuffer();
                 const fileName = `icons/${name.replace(/\s+/g, '-')}-${Date.now()}.png`;
                 const file = bucket.file(fileName);
-                const token = randomUUID();
-                
                 await file.save(Buffer.from(buffer), {
                     metadata: { 
                         contentType: 'image/png',
@@ -123,14 +120,13 @@ async function backfillIcons(graph: any, recipeId: string) {
                             impressions: '0',
                             rejections: '0',
                             fullPrompt: prompt,
-                            visualDescription: node.visualDescription,
-                            firebaseStorageDownloadTokens: token
+                            visualDescription: node.visualDescription
                         }
                     }
                 });
                 
-                // Construct standard Firebase Storage URL compatible with frontend and emulators
-                finalIconUrl = `http://127.0.0.1:9199/v0/b/${bucketName}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
+                await file.makePublic();
+                finalIconUrl = file.publicUrl();
 
                 const newIconDoc = await iconsRef.add({
                     url: finalIconUrl,

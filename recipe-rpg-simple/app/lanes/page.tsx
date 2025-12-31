@@ -43,8 +43,7 @@ function RecipeLanesContent() {
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
-  const [existingCopies, setExistingCopies] = useState<any[]>([]);
-  // const [forgingProgress, setForgingProgress] = useState<{ completed: number, total: number } | null>(null); // Removed as it's now background
+  const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
   const [guestBannerDismissed, setGuestBannerDismissed] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
 
@@ -70,6 +69,7 @@ function RecipeLanesContent() {
 
   const handleEditAttempt = async () => {
       if (isOwner) return;
+      if (existingCopies === null) return; // Wait for check to complete
 
       // Auto-Fork if no copies exist (First time editing shared recipe)
       if (existingCopies.length === 0) {
@@ -317,8 +317,12 @@ function RecipeLanesContent() {
            checkExistingCopiesAction(id).then(res => {
                if (res.copies && res.copies.length > 0) {
                    setExistingCopies(res.copies);
+               } else {
+                   setExistingCopies([]);
                }
            });
+      } else {
+           setExistingCopies([]); // Reset or N/A
       }
   }, [searchParams, user, ownerId]);
 
@@ -663,10 +667,10 @@ const handleVisualize = async () => {
         
             <div className="absolute top-16 left-0 right-0 z-50 flex flex-col items-center pointer-events-none gap-2">
     
-                {/* Existing Copies Banner */}
-                {existingCopies.length > 0 && (
+                {/* Existing Copies Banner - Hide if Fork Prompt is active */}
+                {existingCopies && existingCopies.length > 0 && !showForkPrompt && (
                     <Banner color="blue" onDismiss={() => setExistingCopies([])}>
-                        <span>You have an <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">existing copy</Link> of this recipe.</span>
+                        <span>You have {existingCopies.length > 1 ? `${existingCopies.length} existing copies` : 'an existing copy'} of this recipe. <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">Go to latest?</Link></span>
                         <div className="flex flex-wrap justify-center gap-2">
                             <button onClick={handleFork} className="underline font-bold hover:text-white">
                                 Save another copy?
@@ -683,11 +687,11 @@ const handleVisualize = async () => {
                 )}
 
                 {/* Fork Prompt Banner (Destructive Action Intercept) */}
-                {showForkPrompt && (
+                {showForkPrompt && existingCopies && existingCopies.length > 0 && (
                     <Banner color="blue" onDismiss={() => setShowForkPrompt(false)}>
                         <span>You have an existing copy. Switch to it or save a new one?</span>
                         <div className="flex gap-2">
-                            <Link href={`/lanes?id=${existingCopies[0]?.id}`} className="underline font-bold hover:text-white">
+                            <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">
                                 Go to Copy
                             </Link>
                             <button onClick={handleFork} className="underline font-bold hover:text-white">

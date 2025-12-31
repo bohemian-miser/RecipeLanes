@@ -100,14 +100,15 @@ test.describe('Banner Logic', () => {
         await page.setViewportSize(device.viewport);
         
         await page.goto('/lanes?new=true');
-        await login('mock-alice');
+        await login('mock-alice-banners');
         await page.getByPlaceholder('Paste recipe here...').fill('Alice Shared');
         await page.locator('button:has(svg.lucide-arrow-right)').click();
         await expect(page).toHaveURL(/id=/);
         const aliceUrl = page.url();
         const aliceId = new URL(aliceUrl).searchParams.get('id');
         
-        await login('mock-bob');
+        await page.getByRole('button', { name: 'Logout' }).click();
+        await login('mock-bob-banners');
         
         // Bob creates a copy of Alice's recipe
         await page.goto(aliceUrl);

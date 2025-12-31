@@ -44,10 +44,12 @@ function RecipeLanesContent() {
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
+  const [existingCopiesDismissed, setExistingCopiesDismissed] = useState(false);
   const [guestBannerDismissed, setGuestBannerDismissed] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
 
   const diagramRef = useRef<ReactFlowDiagramHandle>(null);
+  const isForking = useRef(false);
 
   const isOwner = !ownerId || (!!user && user.uid === ownerId);
 
@@ -68,8 +70,13 @@ function RecipeLanesContent() {
   // ... (Restore Last Recipe, Save Last ID, Sync JSON, Warning, Persistence) ...
 
   const handleEditAttempt = async () => {
+      if (!user) {
+          showNotification("Log in to save your changes.");
+          return;
+      }
       if (isOwner) return;
       if (existingCopies === null) return; // Wait for check to complete
+      if (isForking.current) return;
 
       // Auto-Fork if no copies exist (First time editing shared recipe)
       if (existingCopies.length === 0) {
@@ -313,6 +320,7 @@ function RecipeLanesContent() {
 
   useEffect(() => {
       const id = searchParams.get('id');
+      setExistingCopiesDismissed(false);
       
       // If we don't have a user or ownerId yet, we can't determine copies.
       // Set to null to block auto-forking until we know for sure.
@@ -346,6 +354,9 @@ function RecipeLanesContent() {
 
   const handleFork = async () => {
       if (!graph) return;
+      if (isForking.current) return;
+      
+      isForking.current = true;
       setStatus('forging');
       // Create copy
       const currentId = searchParams.get('id');
@@ -386,6 +397,7 @@ function RecipeLanesContent() {
           showNotification("Fork failed: " + res.error);
           setStatus('error');
       }
+      isForking.current = false;
   };
 
   const handleTitleChange = async (newTitle: string) => {
@@ -673,8 +685,8 @@ const handleVisualize = async () => {
             <div className="absolute top-16 left-0 right-0 z-50 flex flex-col items-center pointer-events-none gap-2">
     
                 {/* Existing Copies Banner - Hide if Fork Prompt is active */}
-                {existingCopies && existingCopies.length > 0 && !showForkPrompt && (
-                    <Banner color="blue" onDismiss={() => setExistingCopies([])}>
+                {existingCopies && existingCopies.length > 0 && !showForkPrompt && !existingCopiesDismissed && (
+                    <Banner color="blue" onDismiss={() => setExistingCopiesDismissed(true)}>
                         {/* TODO: Filter by sourceId when implemented */}
                         <span>You have <Link href="/gallery?filter=mine" className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length > 1 ? 'copies' : 'copy'}</Link> of this recipe. <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">Go to latest?</Link></span>
                         <div className="flex flex-wrap justify-center gap-2">

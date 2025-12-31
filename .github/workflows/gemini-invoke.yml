@@ -138,4 +138,12 @@ jobs:
                 ]
               }
             }
-          prompt: '/gemini-invoke'
+          prompt: |-
+            /gemini-invoke
+            
+            Request Context:
+            Title: ${{ github.event.pull_request.title || github.event.issue.title }}
+            Description: ${{ github.event.pull_request.body || github.event.issue.body }}
+            
+            User Instruction:
+            ${{ inputs.additional_context }}

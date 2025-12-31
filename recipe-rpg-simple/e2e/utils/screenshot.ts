@@ -41,12 +41,14 @@ export const screenshot = async (page: Page, dir: string, name: string) => {
 };
 
 export const cleanupScreenshots = (dir: string) => {
+  if (!process.env.NO_CLEANUP) {
     if (fs.existsSync(dir)) {
-        fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(dir, { recursive: true, force: true });
     }
     try {
-        fs.rmdirSync(path.dirname(dir));
+      fs.rmdirSync(path.dirname(path.dirname(dir)));
     } catch (e) {
-        // Ignore if not empty (other device tests running or failed)
+      // Ignore if not empty (other device tests running or failed)
     }
+  }
 };

@@ -14,7 +14,7 @@ const ai = genkit({
     plugins: [vertexAI({ location: 'us-central1' })], 
 });
 
-const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true' || process.env.MOCK_AI === 'true';
+const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
 
 const generateIcon = ai.defineFlow(
     {

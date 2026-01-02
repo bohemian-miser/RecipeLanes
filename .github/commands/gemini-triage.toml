@@ -51,4 +51,10 @@ You are an issue triage assistant. Analyze the current GitHub issue and identify
     ```
     echo "SELECTED_LABELS=bug,enhancement" >> "/tmp/runner/env"
     ```
+
+5. Return a JSON object containing the selected labels as the final response:
+
+    ```json
+    { "selected_labels": ["bug", "enhancement"] }
+    ```
 """

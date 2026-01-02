@@ -12,6 +12,11 @@ on:
         description: 'The Pull Request Number'
         required: true
 
+permissions:
+  contents: write      # Allows pushing code
+  pull-requests: write # Allows creating PRs
+  issues: write        # Allows commenting on issues
+
 concurrency:
   group: '${{ github.workflow }}-review-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number }}'
   cancel-in-progress: true

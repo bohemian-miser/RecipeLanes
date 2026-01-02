@@ -13,6 +13,7 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
   const [isRerolling, setIsRerolling] = useState(false);
   const [isPivotMode, setIsPivotMode] = useState(false);
   const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
+  const touchStartPos = React.useRef<{x: number, y: number} | null>(null);
   const { setNodes } = useReactFlow();
   const searchParams = useSearchParams();
   const recipeId = searchParams.get('id');
@@ -29,7 +30,8 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
       left: 'flex-row-reverse'
   }[textPos];
 
-  const handleTouchStart = () => {
+  const handleTouchStart = (e: React.TouchEvent) => {
+      touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       longPressTimer.current = setTimeout(() => {
           setIsPivotMode(true);
           if (data.onSetLongPress) data.onSetLongPress(true);
@@ -38,7 +40,20 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
       }, 300); // 300ms hold
   };
 
+  const handleTouchMove = (e: React.TouchEvent) => {
+      if (touchStartPos.current && longPressTimer.current) {
+          const dx = e.touches[0].clientX - touchStartPos.current.x;
+          const dy = e.touches[0].clientY - touchStartPos.current.y;
+          // 10px threshold (squared = 100) to cancel long press
+          if (dx * dx + dy * dy > 100) {
+              clearTimeout(longPressTimer.current);
+              longPressTimer.current = null;
+          }
+      }
+  };
+
   const handleTouchEnd = () => {
+      touchStartPos.current = null;
       if (longPressTimer.current) {
           clearTimeout(longPressTimer.current);
           longPressTimer.current = null;
@@ -109,6 +124,7 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
             title={data.visualDescription || data.text}
             
             onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
   
         >

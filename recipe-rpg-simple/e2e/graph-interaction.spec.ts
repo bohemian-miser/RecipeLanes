@@ -25,11 +25,14 @@ test.describe('Graph Interaction', () => {
 
       const initialTransform = await viewport.getAttribute('style');
 
-      await page.mouse.move(200, 400);
+      await page.waitForTimeout(500); // Wait for layout to settle
+
+      // Pan from left side (background) to avoid dragging nodes
+      await page.mouse.move(50, 200);
       await page.mouse.down();
       await screenshot(page, dir, 'pan-started');
 
-      await page.mouse.move(200, 200);
+      await page.mouse.move(50, 100); // Move up 100px
       await page.mouse.up();
       await page.waitForTimeout(2000);
       await screenshot(page, dir, 'pan-completed');

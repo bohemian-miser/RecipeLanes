@@ -3,13 +3,31 @@ import sharp from 'sharp';
 import fetch from 'node-fetch';
 
 async function reprocessIcons() {
-    console.log('Starting icon reprocessing...');
+    const args = process.argv.slice(2);
+    const nIndex = args.indexOf('-n');
+    let limit = 0;
+    if (nIndex !== -1 && args[nIndex + 1]) {
+        limit = parseInt(args[nIndex + 1], 10);
+    }
+
+    console.log(`Starting icon reprocessing... ${limit > 0 ? `(Limit: ${limit} random)` : '(All)'}`);
     
     // 1. Get all icons
     const snapshot = await db.collectionGroup('icons').get();
-    console.log(`Found ${snapshot.size} icons.`);
+    let docs = snapshot.docs;
+    console.log(`Found ${docs.length} total icons.`);
 
-    for (const doc of snapshot.docs) {
+    if (limit > 0) {
+        // Shuffle
+        for (let i = docs.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [docs[i], docs[j]] = [docs[j], docs[i]];
+        }
+        docs = docs.slice(0, limit);
+        console.log(`Selected ${docs.length} random icons.`);
+    }
+
+    for (const doc of docs) {
         const data = doc.data();
         const url = data.url;
         

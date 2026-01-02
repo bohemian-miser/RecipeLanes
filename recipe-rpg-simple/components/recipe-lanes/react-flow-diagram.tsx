@@ -70,6 +70,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
     const [copied, setCopied] = useState(false);
+    const [saved, setSaved] = useState(false);
     
     // Initialize from graph.visibility (injected by service)
     // If prop is provided, use it, otherwise fallback to internal state logic (though moving to prop driven is better)
@@ -495,6 +496,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             url.searchParams.set('id', res.id);
             router.push(url.pathname + url.search);
             setIsDirty(false);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
             onNotify?.("Saved changes.");
         } else {
             console.error('Failed to save.');
@@ -521,7 +524,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         
         if (onVisibilityChange) {
             onVisibilityChange(newPublic);
-        } else {
+        }
+        else {
             setInternalIsPublic(newPublic);
         }
         
@@ -718,11 +722,11 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
                      <button 
                         onClick={handleSave} 
-                        disabled={!isDirty}
-                        className={`p-2 rounded shadow-md border border-zinc-200 transition-colors ${isDirty ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
-                        title={isDirty ? "Save Changes" : "No Changes"}
+                        disabled={!isDirty && !saved}
+                        className={`p-2 rounded shadow-md border border-zinc-200 transition-colors ${saved ? 'bg-green-50 text-green-600 border-green-200' : isDirty ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
+                        title={saved ? "Saved!" : isDirty ? "Save Changes" : "No Changes"}
                     >
-                        {copied && !isDirty ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                        {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
                     </button>
 
                      <button 

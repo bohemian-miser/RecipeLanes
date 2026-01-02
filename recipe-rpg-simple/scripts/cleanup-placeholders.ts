@@ -21,7 +21,7 @@ async function run() {
         '127.0.0.1',
         'localhost',
         // 'firebasestorage.app/o/icons%2Fseed', // Also clean seeded data if it leaked,
-        // 'https://storage.googleapis.com/recipe-lanes.firebasestorage.app/icons%2F'
+        // 'https://storage.googleapis.com/recipe-lanes-staging.firebasestorage.app/icons%2F'
     ];
 
     // 1. Clean Icons

@@ -115,6 +115,7 @@ These are cached, so simplicity and consistency is key.
      - "A pinch of Salt" -> "Salt"
      - "Bottle of Olive Oil" -> "Olive Oil"
      - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+     - "Salt and Pepper" -> "Salt" AND "Black Pepper Shaker" (Avoid "Bell Pepper" unless specified)
 
 2. **ACTION Nodes (The "State"):
 

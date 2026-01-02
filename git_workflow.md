@@ -40,9 +40,14 @@ git push origin HEAD:staging --force
 # 1. Upload your specific branch
 git push origin HEAD
 
-# 2. Create PR with auto-filled title/desc
-gh pr create --base main --fill
+# 2. Create PR with a detailed description
+# Write description to a temporary file (recommended for multi-line context)
+echo -e "Summary:\n- Change A\n- Change B\n\nFixes #123" > .pr_body.txt
+gh pr create --base main --title "<Descriptive Title>" --body-file .pr_body.txt
+rm .pr_body.txt
 
+# OR use --fill if the commit messages are sufficient
+# gh pr create --base main --fill
 ```
 
 

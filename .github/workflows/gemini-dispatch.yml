@@ -18,6 +18,11 @@ on:
     types:
       - 'created'
 
+permissions:
+  contents: write      # Allows pushing code
+  pull-requests: write # Allows creating PRs
+  issues: write        # Allows commenting on issues
+
 defaults:
   run:
     shell: 'bash'

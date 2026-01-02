@@ -35,7 +35,6 @@
     "firebase": "^12.6.0",
     "genkit": "^1.26.0",
     "html-to-image": "^1.11.13",
-    "jimp": "^1.6.0",
     "lucide-react": "^0.559.0",
     "next": "^16.1.0",
     "react": "19.2.1",
@@ -61,6 +60,7 @@
     "jsdom": "^27.3.0",
     "node-fetch": "^3.3.2",
     "playwright": "^1.57.0",
+    "pngjs": "^7.0.0",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"

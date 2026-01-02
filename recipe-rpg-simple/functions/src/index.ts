@@ -5,6 +5,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { genkit, z } from 'genkit';
 import { vertexAI } from '@genkit-ai/google-genai';
+import { processIcon } from './image-processing';
 
 initializeApp();
 const db = getFirestore();
@@ -78,7 +79,8 @@ async function backfillIcons(graph: any, recipeId: string) {
     const bucketName = process.env.FIREBASE_STORAGE_BUCKET || `${process.env.GCLOUD_PROJECT}.firebasestorage.app`;
     const bucket = storage.bucket(bucketName);
 
-    const results = await Promise.all(nodesToProcess.map(async (node: any) => {
+    const results = [];
+    for (const node of nodesToProcess) {
         try {
             const rawName = node.visualDescription.trim();
             const name = rawName.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
@@ -110,9 +112,20 @@ async function backfillIcons(graph: any, recipeId: string) {
                 
                 const response = await fetch(tempUrl);
                 const buffer = await response.arrayBuffer();
+                
+                // Process Icon (Background Removal)
+                let processedBuffer: Buffer;
+                try {
+                    console.log(`-> Removing background for ${name}...`);
+                    processedBuffer = await processIcon(buffer);
+                } catch (err) {
+                    console.warn(`-> Background removal failed for ${name}, using original.`, err);
+                    processedBuffer = Buffer.from(buffer);
+                }
+
                 const fileName = `icons/${name.replace(/\s+/g, '-')}-${Date.now()}.png`;
                 const file = bucket.file(fileName);
-                await file.save(Buffer.from(buffer), {
+                await file.save(processedBuffer, {
                     metadata: { 
                         contentType: 'image/png',
                         metadata: {
@@ -139,13 +152,13 @@ async function backfillIcons(graph: any, recipeId: string) {
                 finalIconId = newIconDoc.id;
             }
 
-            return { nodeId: node.id, iconId: finalIconId, iconUrl: finalIconUrl };
+            results.push({ nodeId: node.id, iconId: finalIconId, iconUrl: finalIconUrl });
 
         } catch (e) {
             console.error(`Failed to process node ${node.id}:`, e);
-            return null;
+            results.push(null);
         }
-    }));
+    }
 
     const successfulUpdates = results.filter(r => r !== null);
     if (successfulUpdates.length === 0) return null;
@@ -169,7 +182,7 @@ async function backfillIcons(graph: any, recipeId: string) {
 }
 
 // 1. Automatic Trigger on Creation
-export const processNewRecipe = onDocumentCreated("recipes/{recipeId}", async (event) => {
+export const processNewRecipe = onDocumentCreated({ document: "recipes/{recipeId}", timeoutSeconds: 300, memory: "1GiB" }, async (event) => {
     if (!event.data) return;
     const newData = event.data.data();
     const updatedNodes = await backfillIcons(newData.graph, event.params.recipeId);
@@ -189,7 +202,7 @@ export const processNewRecipe = onDocumentCreated("recipes/{recipeId}", async (e
 });
 
 // 2. Manual Callable Function (Debug / Retry)
-export const backfillRecipeIcons = onCall(async (request) => {
+export const backfillRecipeIcons = onCall({ timeoutSeconds: 300, memory: "1GiB" }, async (request) => {
     const recipeId = request.data.recipeId;
     if (!recipeId) throw new HttpsError('invalid-argument', 'Missing recipeId');
 

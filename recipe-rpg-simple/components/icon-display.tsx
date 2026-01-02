@@ -87,14 +87,14 @@ export function IconDisplay({ icons, onReroll, onDelete, rerollingIds, error, hi
                       const isRerolling = rerollingIds.has(icon.id);
                       const isPending = icon.isPending;
                       return (
-                      <div 
-                        key={icon.id} 
-                        className={`group relative bg-zinc-800 border-4 border-zinc-700 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] transition-all duration-100 
-                          ${highlightedIconId === icon.id ? 'border-yellow-500 scale-105' : 'hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,0.5)]'}
-                          ${isPending ? 'opacity-75 pointer-events-none' : ''}
-                        `}
-                      >
-                        <div className="p-3 flex flex-col items-center space-y-3">
+                      <div key={icon.id} className="group relative">
+                        <div 
+                          className={`bg-zinc-800 border-4 border-zinc-700 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] transition-all duration-100 
+                            ${highlightedIconId === icon.id ? 'border-yellow-500 scale-105' : 'group-hover:-translate-y-1 group-hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,0.5)]'}
+                            ${isPending ? 'opacity-75 pointer-events-none' : ''}
+                          `}
+                        >
+                          <div className="p-3 flex flex-col items-center space-y-3">
                           <div className="relative aspect-square w-full bg-zinc-900 border-2 border-zinc-950 flex items-center justify-center overflow-hidden">
                              {icon.popularityScore !== undefined && !isPending && (
                                 <div className="absolute top-1 right-1 z-10 bg-black/50 px-1 py-0.5 text-[8px] font-mono text-green-400 pointer-events-none">
@@ -141,6 +141,7 @@ export function IconDisplay({ icons, onReroll, onDelete, rerollingIds, error, hi
                             </div>
                           </div>
                         </div>
+                      </div>
                       </div>
                     );
                     })}

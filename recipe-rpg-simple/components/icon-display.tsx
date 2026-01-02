@@ -50,7 +50,7 @@ export function IconDisplay({ icons, onReroll, onDelete, rerollingIds, error, hi
   };
 
   return (
-    <div className="flex w-full flex-col items-center space-y-6">
+    <div className="flex w-full flex-col items-center space-y-6" data-testid="inventory-display">
       {error && (
         <div className="w-full bg-red-900/50 p-4 text-xs text-red-300 border-2 border-red-700 font-mono">
           [ERROR]: {error}

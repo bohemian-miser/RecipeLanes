@@ -35,7 +35,7 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
           if (data.onSetLongPress) data.onSetLongPress(true);
           // Optional: Vibrate
           if (navigator.vibrate) navigator.vibrate(50);
-      }, 600); // 600ms hold
+      }, 300); // 300ms hold
   };
 
   const handleTouchEnd = () => {

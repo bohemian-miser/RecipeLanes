@@ -3,7 +3,6 @@ import { processIcon } from '../functions/src/image-processing';
 import fetch from 'node-fetch';
 import fs from 'fs/promises';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 
 async function reprocessIcons() {
     const args = process.argv.slice(2);
@@ -112,20 +111,14 @@ async function reprocessIcons() {
                 const bucket = storage.bucket(bucketName);
                 const file = bucket.file(filePath);
 
-                // Generate new token
-                const token = uuidv4();
-
                 await file.save(newBuffer, {
                     metadata: { 
-                        contentType: 'image/png',
-                        metadata: {
-                            firebaseStorageDownloadTokens: token
-                        }
+                        contentType: 'image/png'
                     }
                 });
                 
-                // Construct new Firebase Client URL
-                const newUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(filePath)}?alt=media&token=${token}`;
+                await file.makePublic();
+                const newUrl = file.publicUrl();
 
                 // Update Icon Doc
                 await doc.ref.update({ 

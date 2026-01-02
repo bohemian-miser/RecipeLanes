@@ -181,7 +181,7 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
   
                     alt="" 
   
-                    className={`w-14 h-14 object-contain drop-shadow-md mix-blend-multiply ${isRerolling ? 'opacity-50' : ''}`}
+                    className={`w-full h-full p-0.5 object-contain drop-shadow-md mix-blend-multiply ${isRerolling ? 'opacity-50' : ''}`}
   
                     style={{ imageRendering: 'pixelated' }}
   

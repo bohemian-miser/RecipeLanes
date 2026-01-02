@@ -1,20 +1,13 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config();
 
 async function run() {
   const args = process.argv.slice(2);
   const stagingIndex = args.indexOf('--staging');
   
   if (stagingIndex !== -1) {
-      console.log('✨ Switching to STAGING environment...');
-      if (process.env.FIREBASE_SERVICE_ACCOUNT_STAGING) {
-          process.env.FIREBASE_SERVICE_ACCOUNT_KEY = process.env.FIREBASE_SERVICE_ACCOUNT_STAGING;
-      }
-      if (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID_STAGING) {
-           process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID_STAGING;
-      }
-      if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET_STAGING) {
-           process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET_STAGING;
-      }
+      console.log('✨ Switching to STAGING environment (.env.staging)...');
+      dotenv.config({ path: '.env.staging', override: true });
   }
 
   // Dynamic import
@@ -27,8 +20,8 @@ async function run() {
         'placehold.co',
         '127.0.0.1',
         'localhost',
-        'firebasestorage.app/o/icons%2Fseed', // Also clean seeded data if it leaked,
-        'https://storage.googleapis.com/recipe-lanes.firebasestorage.app/icons%2F'
+        // 'firebasestorage.app/o/icons%2Fseed', // Also clean seeded data if it leaked,
+        // 'https://storage.googleapis.com/recipe-lanes-staging.firebasestorage.app/icons%2F'
     ];
 
     // 1. Clean Icons
@@ -45,7 +38,7 @@ async function run() {
         for (const iconDoc of icons.docs) {
             const data = iconDoc.data();
             const url = data.url || '';
-          //   console.log(`Checking icon: ${url}`);   
+            console.log(`Checking icon: ${url}`);   
             if (badPatterns.some(p => url.includes(p))) {
                 console.log(`Deleting bad icon: ${url}`);
                 batch.delete(iconDoc.ref);

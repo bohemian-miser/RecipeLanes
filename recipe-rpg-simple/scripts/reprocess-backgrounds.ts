@@ -1,6 +1,8 @@
 import { db, storage } from '../lib/firebase-admin';
-import sharp from 'sharp';
+import { processIcon } from '../functions/src/image-processing';
 import fetch from 'node-fetch';
+import fs from 'fs/promises';
+import path from 'path';
 
 async function reprocessIcons() {
     const args = process.argv.slice(2);
@@ -9,9 +11,15 @@ async function reprocessIcons() {
     if (nIndex !== -1 && args[nIndex + 1]) {
         limit = parseInt(args[nIndex + 1], 10);
     }
+    const isDryRun = args.includes('--dry-run');
 
-    console.log(`Starting icon reprocessing... ${limit > 0 ? `(Limit: ${limit} random)` : '(All)'}`);
+    console.log(`Starting icon reprocessing... ${limit > 0 ? `(Limit: ${limit} random)` : '(All)'} ${isDryRun ? '(Dry Run)' : ''}`);
     
+    // Create debug directory
+    const debugDir = path.join(process.cwd(), 'debug', 'reprocess-examples');
+    await fs.mkdir(debugDir, { recursive: true });
+    console.log(`Saving examples to: ${debugDir}`);
+
     // 1. Get all icons
     const snapshot = await db.collectionGroup('icons').get();
     let docs = snapshot.docs;
@@ -31,68 +39,57 @@ async function reprocessIcons() {
         const data = doc.data();
         const url = data.url;
         
-        if (!url || data.processed_transparent) {
-            console.log(`Skipping ${doc.id} (already processed or no url)`);
+        if (!url) {
+            console.log(`Skipping ${doc.id} (no url)`);
             continue;
         }
+
+        // Optional: Skip if already processed, unless force checking
+        // if (data.processed_transparent) { ... }
         
-        console.log(`Processing ${doc.id} (${data.ingredient_name})...`);
+        console.log(`Processing ${doc.id} (${data.ingredient_name || 'unknown'})...`);
 
         try {
             // 2. Download
             const response = await fetch(url);
-            const buffer = await response.arrayBuffer();
+            const arrayBuffer = await response.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
             
-            // 3. Process with Sharp
-            const { data: rawData, info } = await sharp(Buffer.from(buffer))
-                .ensureAlpha()
-                .raw()
-                .toBuffer({ resolveWithObject: true });
+            // Save Original
+            await fs.writeFile(path.join(debugDir, `${doc.id}_original.png`), buffer);
 
-            // Replace white with transparent
-            // Threshold for "White": > 240
-            for (let i = 0; i < rawData.length; i += 4) {
-                const r = rawData[i];
-                const g = rawData[i + 1];
-                const b = rawData[i + 2];
-                
-                if (r > 240 && g > 240 && b > 240) {
-                    rawData[i + 3] = 0; // Alpha
+            // 3. Process with Shared Logic
+            // Note: processIcon expects ArrayBuffer, Buffer is compatible-ish or we convert
+            const newBuffer = await processIcon(buffer);
+
+            // Save Processed
+            await fs.writeFile(path.join(debugDir, `${doc.id}_processed.png`), newBuffer);
+
+            // 4. Upload (Overwrite)
+            if (!isDryRun) {
+                // Extract path from URL
+                // https://firebasestorage.googleapis.com/v0/b/BUCKET/o/PATH?alt=media&token=TOKEN
+                const matches = url.match(/\/o\/([^?]+)/);
+                if (!matches) {
+                    console.warn('Could not parse path from URL', url);
+                    continue;
                 }
-            }
-            
-            const newBuffer = await sharp(rawData, { 
-                raw: { width: info.width, height: info.height, channels: 4 } 
-            })
-            .png()
-            .toBuffer();
+                
+                const filePath = decodeURIComponent(matches[1]);
+                const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
+                const bucket = storage.bucket(bucketName);
+                const file = bucket.file(filePath);
 
-            // 4. Upload (Overwrite or New?)
-            // We overwrite to keep URL valid if token allows, otherwise we update URL.
-            // Firebase Storage URLs are persistent if we don't change the token, but upload usually resets it?
-            // Actually, if we upload to the same path, the "downloadURL" might change token if we don't manage it.
-            // But we can get a new signed URL or public URL.
-            
-            // Extract path from URL
-            // https://firebasestorage.googleapis.com/v0/b/BUCKET/o/PATH?alt=media&token=TOKEN
-            const matches = url.match(/\/o\/([^?]+)/);
-            if (!matches) {
-                console.warn('Could not parse path from URL', url);
-                continue;
+                await file.save(newBuffer, {
+                    metadata: { contentType: 'image/png' }
+                });
+                
+                // Mark as processed
+                await doc.ref.update({ processed_transparent: true });
+                console.log(`Done ${doc.id} (Uploaded)`);
+            } else {
+                console.log(`Done ${doc.id} (Saved local only)`);
             }
-            
-            const filePath = decodeURIComponent(matches[1]);
-            const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
-            const bucket = storage.bucket(bucketName);
-            const file = bucket.file(filePath);
-
-            await file.save(newBuffer, {
-                metadata: { contentType: 'image/png' }
-            });
-            
-            // Mark as processed
-            await doc.ref.update({ processed_transparent: true });
-            console.log(`Done ${doc.id}`);
 
         } catch (e) {
             console.error(`Failed to process ${doc.id}:`, e);

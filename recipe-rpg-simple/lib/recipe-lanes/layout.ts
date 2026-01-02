@@ -197,6 +197,25 @@ const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'standard' | 'compact
 
   const { ranks, consumerMap } = analyzeGraph(graph);
 
+  // Group Ingredients by Action for Clustering
+  const actionIngredients = new Map<string, string[]>();
+  const clusteredIngredients = new Set<string>();
+
+  graph.nodes.forEach(node => {
+      if (node.type === 'ingredient') {
+          // Identify consumers within the same lane
+          const consumers = consumerMap.get(node.id) || [];
+          const localConsumers = consumers.map(id => graph.nodes.find(n => n.id === id)).filter(n => n && n.laneId === node.laneId);
+          
+          if (localConsumers.length === 1 && localConsumers[0]) {
+              const actionId = localConsumers[0].id;
+              if (!actionIngredients.has(actionId)) actionIngredients.set(actionId, []);
+              actionIngredients.get(actionId)!.push(node.id);
+              clusteredIngredients.add(node.id);
+          }
+      }
+  });
+
   // Sort nodes
   const sortedNodes = [...graph.nodes].sort((a, b) => {
     const rA = ranks.get(a.id) || 0;
@@ -213,10 +232,46 @@ const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'standard' | 'compact
   const laneYCursors = new Array(graph.lanes.length).fill(C.PADDING_TOP);
 
   sortedNodes.forEach(node => {
+    // Skip if clustered ingredient (will be handled by action)
+    if (clusteredIngredients.has(node.id)) return;
+
     const laneIdx = laneMap.get(node.laneId) || 0;
-    const width = C.NODE_WIDTH;
-    const height = node.type === 'ingredient' ? C.INGREDIENT_HEIGHT : C.ACTION_HEIGHT;
+    let width = C.NODE_WIDTH;
+    let height = node.type === 'ingredient' ? C.INGREDIENT_HEIGHT : C.ACTION_HEIGHT;
     
+    // If Action, check for clustered ingredients to place FIRST
+    if (node.type === 'action' && actionIngredients.has(node.id)) {
+        const ingredients = actionIngredients.get(node.id)!;
+        
+        // Ensure dependencies of these ingredients are met?
+        // Ingredients usually are roots (no inputs), so we assume safe.
+        // If they had inputs, we might have an issue if those weren't placed.
+        // But in recipe graphs, ingredients are inputs.
+        
+        const clusterY = laneYCursors[laneIdx];
+        const ingH = C.INGREDIENT_HEIGHT;
+        const ingW = 90; // Slightly compact width for clustered items
+        const gapX = 10;
+        
+        const count = ingredients.length;
+        const totalGroupWidth = count * ingW + (count - 1) * gapX;
+        // Center in lane
+        const startX = C.PADDING_LEFT + laneIdx * C.LANE_WIDTH + (C.LANE_WIDTH - totalGroupWidth) / 2;
+        
+        ingredients.forEach((ingId, idx) => {
+            const ingNode = graph.nodes.find(n => n.id === ingId)!;
+            const ingX = startX + idx * (ingW + gapX);
+            const ingY = clusterY;
+            
+            nodePosMap.set(ingId, { x: ingX, y: ingY, width: ingW, height: ingH });
+            nodes.push({ id: ingId, type: ingNode.type, x: ingX, y: ingY, width: ingW, height: ingH, data: ingNode });
+        });
+        
+        // Advance cursor
+        laneYCursors[laneIdx] += ingH + C.GAP_Y * 0.8; // Tighter gap to step
+    }
+
+    // Check dependencies for main node
     let minDepY = 0;
     if (node.inputs) {
         node.inputs.forEach(inputId => {

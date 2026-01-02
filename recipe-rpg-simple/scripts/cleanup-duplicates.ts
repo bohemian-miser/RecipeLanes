@@ -1,20 +1,13 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config();
 
 async function run() {
   const args = process.argv.slice(2);
   const stagingIndex = args.indexOf('--staging');
   
   if (stagingIndex !== -1) {
-      console.log('✨ Switching to STAGING environment...');
-      if (process.env.FIREBASE_SERVICE_ACCOUNT_STAGING) {
-          process.env.FIREBASE_SERVICE_ACCOUNT_KEY = process.env.FIREBASE_SERVICE_ACCOUNT_STAGING;
-      }
-      if (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID_STAGING) {
-           process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID_STAGING;
-      }
-      if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET_STAGING) {
-           process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET_STAGING;
-      }
+      console.log('✨ Switching to STAGING environment (.env.staging)...');
+      dotenv.config({ path: '.env.staging', override: true });
       // Remove flag
       args.splice(stagingIndex, 1);
   }

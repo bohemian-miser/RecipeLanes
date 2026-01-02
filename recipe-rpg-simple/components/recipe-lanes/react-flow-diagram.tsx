@@ -693,7 +693,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                 fitView
                 minZoom={0.1}
                 maxZoom={4}
-                nodeDragThreshold={5} // Prevent accidental drags
+                nodeDragThreshold={10} // Prevent accidental drags, allow long press jitter
                 defaultEdgeOptions={{ type: 'floating' }}
                 onlyRenderVisibleElements={false}
                 multiSelectionKeyCode={['Shift']}

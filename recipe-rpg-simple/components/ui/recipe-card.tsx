@@ -77,8 +77,8 @@ export function RecipeCard({ recipe, userId }: RecipeCardProps) {
     <Link href={`/lanes?id=${recipe.id}`} className="block group h-full">
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-yellow-500/50 hover:shadow-xl hover:shadow-yellow-500/5 transition-all duration-300 h-full flex flex-col relative">
         
-        {/* Actions Overlay (Visible on Hover) */}
-        <div className="absolute top-2 right-2 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Actions Overlay (Visible on Hover for Desktop, Always for Touch) */}
+        <div className="absolute top-2 right-2 z-10 flex gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             <button 
                 onClick={handleCopy} 
                 disabled={isCopying}

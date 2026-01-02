@@ -6,7 +6,7 @@ import { clearFirestore, clearStorage } from './utils/admin-utils';
 
 test.describe('Optimistic UI & Background Trigger', () => {
   
-  test.beforeAll(async () => {
+  test.beforeEach(async () => {
       // Clear DB and Storage to ensure fresh state (no cached icons for "Mix" etc.)
       await clearFirestore();
       await clearStorage();

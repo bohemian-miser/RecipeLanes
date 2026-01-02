@@ -30,7 +30,7 @@ test.describe('Sharing & Forking Comprehensive', () => {
 
       // 3. Bob edits -> Should Auto-Fork
       // Trigger edit by typing
-      await page.waitForTimeout(500); // Wait for existingCopies check
+      await page.waitForTimeout(2000); // Wait for existingCopies check
       await page.getByPlaceholder('Paste recipe here...').pressSequentially(' - Modified');
       await screenshot(page, dir, '02a-bob-typing');
       

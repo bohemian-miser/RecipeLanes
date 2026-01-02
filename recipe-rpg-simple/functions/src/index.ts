@@ -174,7 +174,16 @@ export const processNewRecipe = onDocumentCreated("recipes/{recipeId}", async (e
     const newData = event.data.data();
     const updatedNodes = await backfillIcons(newData.graph, event.params.recipeId);
     if (updatedNodes) {
-        return event.data.ref.update({ "graph.nodes": updatedNodes });
+        try {
+            return await event.data.ref.update({ "graph.nodes": updatedNodes });
+        } catch (e: any) {
+            // Ignore NOT_FOUND errors if the recipe was deleted while processing
+            if (e.code === 5 || e.message?.includes('NOT_FOUND')) {
+                console.log(`[processNewRecipe] Recipe ${event.params.recipeId} deleted before update.`);
+                return null;
+            }
+            throw e;
+        }
     }
     return null;
 });

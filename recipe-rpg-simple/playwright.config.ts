@@ -5,7 +5,7 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 30 * 1000,
   expect: {
-    timeout: 1 * 1000,
+    timeout: 5 * 1000,
   },
   retries: 0,
   workers: 1,

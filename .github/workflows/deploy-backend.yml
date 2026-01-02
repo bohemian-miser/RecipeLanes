@@ -9,6 +9,7 @@ on:
       - 'recipe-rpg-simple/functions/**'
       - 'recipe-rpg-simple/firestore.rules'
       - 'recipe-rpg-simple/firestore.indexes.json'
+      - 'recipe-rpg-simple/storage.rules'
 
 jobs:
   deploy:
@@ -57,4 +58,4 @@ jobs:
       - name: Deploy
         run: |
           firebase use $DEPLOY_TARGET
-          firebase deploy --only functions,firestore
+          firebase deploy --only functions,firestore:rules,firestore:indexes,storage

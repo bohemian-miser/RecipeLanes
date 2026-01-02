@@ -887,7 +887,7 @@ const handleVisualize = async () => {
                             step="0.1" 
                             value={spacing} 
                             onChange={(e) => setSpacing(parseFloat(e.target.value))}
-                            className="w-20 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer"
+                            className="w-20 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer touch-none"
                         />
                     </div>
 

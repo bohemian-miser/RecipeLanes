@@ -757,7 +757,15 @@ const handleVisualize = async () => {
                     disabled={status === 'parsing' || status === 'forging' || !recipeText}
                     className="shrink-0 w-10 h-10 flex items-center justify-center bg-yellow-500 hover:bg-yellow-400 text-black rounded-lg transition-colors disabled:opacity-50"
                 >
-                    {status === 'parsing' ? <span className="animate-pulse">...</span> : <ArrowRight className="w-5 h-5" />}
+                    {status === 'parsing' || status === 'forging' ? (
+                        <div className="flex space-x-1">
+                            <div className="w-1 h-1 bg-black rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                            <div className="w-1 h-1 bg-black rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                            <div className="w-1 h-1 bg-black rounded-full animate-bounce"></div>
+                        </div>
+                    ) : (
+                        <ArrowRight className="w-5 h-5" />
+                    )}
                 </button>
                 {inputExpanded && (
                     <button 

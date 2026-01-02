@@ -601,14 +601,18 @@ const handleVisualize = async () => {
                     <Globe className="w-4 h-4" />
                     <span className="hidden md:inline">Public</span>
                 </Link>
-                <Link href="/gallery?filter=mine" className={navItemClass} title="My Recipes">
-                    <User className="w-4 h-4" />
-                    <span className="hidden md:inline">Mine</span>
-                </Link>
-                <Link href="/gallery?filter=starred" className={navItemClass} title="Starred">
-                    <Star className="w-4 h-4" />
-                    <span className="hidden md:inline">Starred</span>
-                </Link>
+                {user && (
+                    <>
+                        <Link href="/gallery?filter=mine" className={navItemClass} title="My Recipes">
+                            <User className="w-4 h-4" />
+                            <span className="hidden md:inline">Mine</span>
+                        </Link>
+                        <Link href="/gallery?filter=starred" className={navItemClass} title="Starred">
+                            <Star className="w-4 h-4" />
+                            <span className="hidden md:inline">Starred</span>
+                        </Link>
+                    </>
+                )}
                 <button onClick={handleNew} className={navItemClass} title="Create New">
                     <Plus className="w-4 h-4" />
                     <span className="hidden md:inline">New</span>

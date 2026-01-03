@@ -108,11 +108,13 @@ These are cached, so simplicity and consistency is key.
 
 1. **INGREDIENT Nodes (The "Item"):**
    - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+   - **Clarify Ambiguity:** If a word has multiple meanings (e.g. "Pepper"), add a qualifier (e.g. "Black Pepper" or "Bell Pepper").
    - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
    - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
    - **Examples:**
      - "3 Eggs" -> "egg"
      - "A pinch of Salt" -> "Salt"
+     - "Pepper" -> "Black Pepper"
      - "Bottle of Olive Oil" -> "Olive Oil"
      - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
 

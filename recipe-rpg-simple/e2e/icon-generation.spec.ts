@@ -43,11 +43,34 @@ test.describe('Icon Generation Pipeline', () => {
       if (process.env.MOCK_AI === 'true') {
           // In Mock mode for Icon Maker (Synchronous Action), it returns the placeholder directly.
           // Note: The /lanes flow (Cloud Function) might upload to storage, but this test covers the direct action.
-          expect(src).toMatch(/placehold\.co|firebasestorage|127\.0\.0\.1|localhost/);
+          expect(src).toMatch(/placehold\.co|firebasestorage|127\.0.0.1|localhost/);
       } else {
           // If we are using Real (or Emulator Storage)
           expect(src).toMatch(/^http|data:/);
       }
+
+      // Verify that the icon has a transparent background
+      const isTransparent = await page.evaluate(async (imageUrl) => {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = imageUrl;
+        });
+
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        
+        const pixelData = ctx.getImageData(0, 0, 1, 1).data;
+        return pixelData[3] === 0; // Check alpha channel of the top-left pixel
+      }, src);
+
+      expect(isTransparent).toBe(true);
 
       await screenshot(page, dir, '03-generated');
       cleanupScreenshots(dir);

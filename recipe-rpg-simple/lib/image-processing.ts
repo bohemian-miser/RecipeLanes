@@ -121,10 +121,11 @@ export async function processIcon(imageBuffer: ArrayBuffer): Promise<Buffer> {
         }
     }
 
-    return new Promise((resolve, reject) => {
-        image.getBuffer('image/png', (err: any, buffer: Buffer) => {
-            if (err) reject(err);
-            else resolve(buffer);
-        });
-    });
+    // @ts-ignore
+    if (image.getBufferAsync) {
+         // @ts-ignore
+         return image.getBufferAsync('image/png');
+    }
+    // @ts-ignore
+    return image.getBuffer('image/png');
 }

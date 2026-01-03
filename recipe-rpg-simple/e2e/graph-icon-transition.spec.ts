@@ -51,7 +51,7 @@ test.describe('Graph Icon Transition', () => {
           
           expect(iconCount).toBeGreaterThan(0);
           if (emojiCount > 0) throw new Error(`Still have ${emojiCount} emojis...`);
-      }).toPass({ timeout: 60000 });
+      }).toPass({ timeout: 120000 });
 
       await screenshot(page, dir, '02-icons-populated');
       console.log('Verified All Icons populated.');

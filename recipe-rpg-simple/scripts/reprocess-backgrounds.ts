@@ -1,80 +1,156 @@
 import { db, storage } from '../lib/firebase-admin';
-import sharp from 'sharp';
+import { processIcon } from '../functions/src/image-processing';
 import fetch from 'node-fetch';
+import fs from 'fs/promises';
+import path from 'path';
 
 async function reprocessIcons() {
-    console.log('Starting icon reprocessing...');
+    const args = process.argv.slice(2);
+    const nIndex = args.indexOf('-n');
+    let limit = 0;
+    if (nIndex !== -1 && args[nIndex + 1]) {
+        limit = parseInt(args[nIndex + 1], 10);
+    }
+    const isDryRun = args.includes('--dry-run');
+
+    console.log(`Starting icon reprocessing... ${limit > 0 ? `(Limit: ${limit} random)` : '(All)'} ${isDryRun ? '(Dry Run)' : ''}`);
     
+    // Create debug directory
+    const debugDir = path.join(process.cwd(), 'debug', 'reprocess-examples');
+    await fs.mkdir(debugDir, { recursive: true });
+    console.log(`Saving examples to: ${debugDir}`);
+
+    // 0. Pre-fetch Recipes to build an index (IconID -> RecipeIDs)
+    console.log('Fetching recipes to build index...');
+    const recipesSnap = await db.collection('recipes').get();
+    const iconToRecipesMap = new Map<string, FirebaseFirestore.DocumentSnapshot[]>();
+    
+    let recipeCount = 0;
+    recipesSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.graph && data.graph.nodes) {
+            data.graph.nodes.forEach((node: any) => {
+                if (node.iconId) {
+                    if (!iconToRecipesMap.has(node.iconId)) {
+                        iconToRecipesMap.set(node.iconId, []);
+                    }
+                    // Avoid duplicates if multiple nodes use same icon
+                    const list = iconToRecipesMap.get(node.iconId)!;
+                    if (!list.find(r => r.id === doc.id)) {
+                        list.push(doc);
+                    }
+                }
+            });
+        }
+        recipeCount++;
+    });
+    console.log(`Indexed ${recipeCount} recipes. Found references for ${iconToRecipesMap.size} unique icons.`);
+
     // 1. Get all icons
     const snapshot = await db.collectionGroup('icons').get();
-    console.log(`Found ${snapshot.size} icons.`);
+    let docs = snapshot.docs;
+    console.log(`Found ${docs.length} total icons.`);
 
-    for (const doc of snapshot.docs) {
+    if (limit > 0) {
+        // Shuffle
+        for (let i = docs.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [docs[i], docs[j]] = [docs[j], docs[i]];
+        }
+        docs = docs.slice(0, limit);
+        console.log(`Selected ${docs.length} random icons.`);
+    }
+
+    for (const doc of docs) {
         const data = doc.data();
         const url = data.url;
         
-        if (!url || data.processed_transparent) {
-            console.log(`Skipping ${doc.id} (already processed or no url)`);
+        if (!url) {
+            console.log(`Skipping ${doc.id} (no url)`);
             continue;
         }
+
+        // Skip if already processed? Maybe we want to force re-tokenization if the URL is broken.
+        // if (data.processed_transparent) { ... }
         
-        console.log(`Processing ${doc.id} (${data.ingredient_name})...`);
+        console.log(`Processing ${doc.id} (${data.ingredient_name || 'unknown'})...`);
 
         try {
             // 2. Download
-            const response = await fetch(url);
-            const buffer = await response.arrayBuffer();
-            
-            // 3. Process with Sharp
-            const { data: rawData, info } = await sharp(Buffer.from(buffer))
-                .ensureAlpha()
-                .raw()
-                .toBuffer({ resolveWithObject: true });
-
-            // Replace white with transparent
-            // Threshold for "White": > 240
-            for (let i = 0; i < rawData.length; i += 4) {
-                const r = rawData[i];
-                const g = rawData[i + 1];
-                const b = rawData[i + 2];
-                
-                if (r > 240 && g > 240 && b > 240) {
-                    rawData[i + 3] = 0; // Alpha
-                }
-            }
-            
-            const newBuffer = await sharp(rawData, { 
-                raw: { width: info.width, height: info.height, channels: 4 } 
-            })
-            .png()
-            .toBuffer();
-
-            // 4. Upload (Overwrite or New?)
-            // We overwrite to keep URL valid if token allows, otherwise we update URL.
-            // Firebase Storage URLs are persistent if we don't change the token, but upload usually resets it?
-            // Actually, if we upload to the same path, the "downloadURL" might change token if we don't manage it.
-            // But we can get a new signed URL or public URL.
-            
-            // Extract path from URL
-            // https://firebasestorage.googleapis.com/v0/b/BUCKET/o/PATH?alt=media&token=TOKEN
-            const matches = url.match(/\/o\/([^?]+)/);
-            if (!matches) {
-                console.warn('Could not parse path from URL', url);
+            let buffer: Buffer;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
+                const arrayBuffer = await response.arrayBuffer();
+                buffer = Buffer.from(arrayBuffer);
+            } catch (e) {
+                console.error(`Failed to download ${url}:`, e);
                 continue;
             }
             
-            const filePath = decodeURIComponent(matches[1]);
-            const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
-            const bucket = storage.bucket(bucketName);
-            const file = bucket.file(filePath);
+            // Save Original
+            await fs.writeFile(path.join(debugDir, `${doc.id}_original.png`), buffer);
 
-            await file.save(newBuffer, {
-                metadata: { contentType: 'image/png' }
-            });
-            
-            // Mark as processed
-            await doc.ref.update({ processed_transparent: true });
-            console.log(`Done ${doc.id}`);
+            // 3. Process with Shared Logic
+            const newBuffer = await processIcon(buffer);
+
+            // Save Processed
+            await fs.writeFile(path.join(debugDir, `${doc.id}_processed.png`), newBuffer);
+
+            // 4. Upload & Update
+            if (!isDryRun) {
+                // Extract path from URL
+                const matches = url.match(/\/o\/([^?]+)/);
+                if (!matches) {
+                    console.warn('Could not parse path from URL', url);
+                    continue;
+                }
+                
+                const filePath = decodeURIComponent(matches[1]);
+                const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
+                const bucket = storage.bucket(bucketName);
+                const file = bucket.file(filePath);
+
+                await file.save(newBuffer, {
+                    metadata: { 
+                        contentType: 'image/png'
+                    }
+                });
+                
+                await file.makePublic();
+                const newUrl = file.publicUrl();
+
+                // Update Icon Doc
+                await doc.ref.update({ 
+                    url: newUrl,
+                    processed_transparent: true 
+                });
+                console.log(`Updated Icon ${doc.id}`);
+
+                // Update Recipes
+                const recipesToUpdate = iconToRecipesMap.get(doc.id);
+                if (recipesToUpdate) {
+                    console.log(`Updating ${recipesToUpdate.length} affected recipes...`);
+                    for (const recipeDoc of recipesToUpdate) {
+                        const recipeData = recipeDoc.data();
+                        let changed = false;
+                        const newNodes = recipeData.graph.nodes.map((n: any) => {
+                            if (n.iconId === doc.id && n.iconUrl !== newUrl) {
+                                changed = true;
+                                return { ...n, iconUrl: newUrl };
+                            }
+                            return n;
+                        });
+
+                        if (changed) {
+                            await recipeDoc.ref.update({ 'graph.nodes': newNodes });
+                            console.log(` -> Updated Recipe ${recipeDoc.id}`);
+                        }
+                    }
+                }
+            } else {
+                console.log(`Done ${doc.id} (Saved local only)`);
+            }
 
         } catch (e) {
             console.error(`Failed to process ${doc.id}:`, e);

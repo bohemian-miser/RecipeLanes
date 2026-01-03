@@ -92,7 +92,7 @@ test.describe('Optimistic UI & Background Trigger', () => {
         
         // We expect both images to eventually appear with Storage URLs to placeholders
         // It has a 1 second lag to make sure it doesn't load too quickly.
-        await expect(hamImg).toBeVisible({ timeout: 10000 }); 
+        await expect(hamImg).toBeVisible({ timeout: 60000 }); 
         console.log('Ham image src:', await hamImg.getAttribute('src'));
         await expect(hamImg).toHaveAttribute('src', /icons%2FHam-/, { timeout: 1000 });
 

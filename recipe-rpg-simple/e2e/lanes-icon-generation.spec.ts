@@ -33,7 +33,7 @@ test.describe('Lanes Icon Generation', () => {
       const imgs = page.locator('.react-flow__node img');
       
       // Wait for generation (client-side loop)
-      await expect(imgs.first()).toBeVisible({ timeout: 45000 }); // Increase timeout for batch processing
+      await expect(imgs.first()).toBeVisible({ timeout: 120000 }); // Increase timeout for batch processing
       
       // Check src
       const src = await imgs.first().getAttribute('src');

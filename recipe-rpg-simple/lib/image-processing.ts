@@ -121,6 +121,10 @@ export async function processIcon(imageBuffer: ArrayBuffer): Promise<Buffer> {
         }
     }
 
+    // 4. Autocrop
+    // @ts-ignore
+    if (image.autocrop) image.autocrop();
+
     // @ts-ignore
     if (image.getBufferAsync) {
          // @ts-ignore

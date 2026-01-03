@@ -136,6 +136,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const takeSnapshot = useCallback(() => {
         const n = getNodes();
         const e = getEdges();
+        console.log('[Snapshot] Capturing:', n.length, 'nodes. Node A pos:', n.find(x => x.data.text === 'Ingredient A')?.position);
         setPast(p => [...p, { 
             nodes: JSON.parse(JSON.stringify(n)), 
             edges: JSON.parse(JSON.stringify(e)) 
@@ -639,6 +640,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     };
 
     const onNodeDragStart = (event: React.MouseEvent, node: Node) => {
+        console.log('[ReactFlow] onNodeDragStart:', node.id);
         onInteraction?.();
         takeSnapshot(); 
         if (event.shiftKey || longPressTriggered.current) {

@@ -635,7 +635,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                     pivot: { x: child.position.x, y: child.position.y },
                     startAngle: Math.atan2(dy, dx),
                     startDist: Math.sqrt(dx*dx + dy*dy),
-                    ancestors,
+                    ancestors: [node.id, ...ancestors],
                     initialPositions
                 };
             }

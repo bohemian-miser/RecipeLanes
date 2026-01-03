@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { generateRecipePrompt, parseRecipeGraph, extractServes } from '@/lib/recipe-lanes/parser';
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import { generateIconFlow } from '@/lib/flows';
-// import { processIcon } from '@/lib/image-processing';
+import { processIcon } from '@/lib/image-processing';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 
 // Constants for Generation Gating
@@ -68,16 +68,16 @@ async function generateAndStoreIcon(ingredient: string, ingredientDocId: string)
           console.error('[generateAndStoreIcon] 🔴 Failed to download generated image:', e);
           throw new Error('Failed to download generated image');
       }
-      const finalBuffer: ArrayBuffer | Buffer = imageBuffer;
-    //   // 3. Process Image (Remove Background)
-    //   let finalBuffer: ArrayBuffer | Buffer = imageBuffer;
-    //   try {
-    //       console.log(`[generateAndStoreIcon] Processing image (background removal)...`);
-    //       finalBuffer = await processIcon(imageBuffer);
-    //       console.log(`[generateAndStoreIcon] Processed image size: ${finalBuffer.byteLength} bytes.`);
-    //   } catch (e) {
-    //       console.warn('[generateAndStoreIcon] ⚠️ Background removal failed, using original image:', e);
-    //   }
+      
+      // 3. Process Image (Remove Background)
+      let finalBuffer: ArrayBuffer | Buffer = imageBuffer;
+      try {
+          console.log(`[generateAndStoreIcon] Processing image (background removal)...`);
+          finalBuffer = await processIcon(imageBuffer);
+          console.log(`[generateAndStoreIcon] Processed image size: ${finalBuffer.byteLength} bytes.`);
+      } catch (e) {
+          console.warn('[generateAndStoreIcon] ⚠️ Background removal failed, using original image:', e);
+      }
 
       const initialImpressions = 1;
       const initialRejections = 0;
@@ -610,7 +610,7 @@ export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: stri
 }
 
 export async function saveRecipeAction(graph: RecipeGraph, existingId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted') {
-  try {
+  try {.
     const session = await getAuthService().verifyAuth();
     const userId = session?.uid; 
     

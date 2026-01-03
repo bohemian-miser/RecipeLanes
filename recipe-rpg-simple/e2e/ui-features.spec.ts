@@ -23,15 +23,11 @@ test.describe('UI Features', () => {
       
       const node1 = nodes.first();
       
-      // Tap (Click)
+      // Tap (Click) -> Should select branch immediately
       await node1.click();
       await expect(node1).toHaveClass(/selected/);
-      await screenshot(page, dir, '02-node-selected');
-      
-      // Tap Again -> Should select branch (if any)
-      await node1.click();
-      await expect(node1).toHaveClass(/selected/);
-      await screenshot(page, dir, '03-branch-selected-logic');
+      await screenshot(page, dir, '02-branch-selected');
+      // No need to tap again
       cleanupScreenshots(dir);
     });
   }

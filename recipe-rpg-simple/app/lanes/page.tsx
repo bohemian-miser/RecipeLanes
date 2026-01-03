@@ -1015,7 +1015,8 @@ const handleVisualize = async () => {
                         {/* Legend (Left Half) */}
                         <div className="w-1/2 p-2 text-[10px] text-zinc-600 border-r border-zinc-100 flex flex-col justify-center gap-1">
                             {!hasIcons && <div className="truncate">🥕 Ingredients  🍳 Actions</div>}
-                            <div className="font-bold text-zinc-800">Tap & Hold: Select Branch</div>
+                            <div className="font-bold text-zinc-800">Tap: Select Branch</div>
+                            <div className="font-bold text-zinc-800">Hold: Pivot</div>
                         </div>
                         
                         {/* Chat (Right Half) */}

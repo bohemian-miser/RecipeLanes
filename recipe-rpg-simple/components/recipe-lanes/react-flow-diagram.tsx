@@ -98,7 +98,14 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     // Wrap change handlers to track dirty state
     const onNodesChangeWrapped = useCallback((changes: any) => {
-        onNodesChange(changes);
+        if (dragRef.current.active) {
+            // Block position updates from ReactFlow during custom pivot drag
+            const nonPositionChanges = changes.filter((c: any) => c.type !== 'position');
+            onNodesChange(nonPositionChanges);
+        } else {
+            onNodesChange(changes);
+        }
+
         if (changes.some((c: any) => c.type !== 'select')) {
             setIsDirty(true);
             onEdit?.();
@@ -582,11 +589,10 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         // Shift+Click handled by ReactFlow for multi-selection
         if (event.shiftKey) {
             takeSnapshot();
+            return;
         }
-        // Mobile/Click-again logic: If already selected, select branch
-        if (node.selected) {
-             selectBranch(node.id);
-        }
+        // Default behavior: Select Branch (Ancestors)
+        selectBranch(node.id);
     };
 
     const onNodeContextMenu = (event: React.MouseEvent, node: Node) => {

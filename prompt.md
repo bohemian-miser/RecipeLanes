@@ -9,7 +9,8 @@ main pushes to https://skipping-down--recipe-lanes.asia-southeast1.hosted.app/
 Use playwright MCP tools to view staging and confirm fixes for things.
 
 Your Main job: 
-for each open issue in github (use 'gh' cli), read the comments and what's happened and if you think you can fix it then work to reproduce using playwright mcp and make a test that reproduces the issue and fails, make a commit at this point (use --no-verify here and only here to bypass the test check which will obviously fail) with prefix 'Test: ..'. Then implement the fix with a commit starting with 'Fix:..'. Then make a pr according to git_workflow.md (read this before starting). If you can't fully reproduce or fix an issue, that's totally okay, leave a comment on the bug saying where you got up to for the next person/agent to help them. Make sure your fix has e2e tests.
+Read _all_ open issues using gh (the cli tool) and decide on one to tackle. You might read further comments and relataed PR's to help you decide.
+Work to reproduce using playwright mcp and make a test that reproduces the issue and fails, make a commit at this point (use --no-verify here and only here to bypass the test check which will obviously fail) with prefix 'Test: ..'. Then implement the fix with a commit starting with 'Fix:..'. Then make a pr according to git_workflow.md (read this before starting). If you can't fully reproduce or fix an issue, that's totally okay, leave a comment on the bug saying where you got up to for the next person/agent to help them. Make sure your fix has e2e tests.
 
  make a staging branch that has a merge of all of your features, push it to staging and verify that it works before you finish, never assume something will work.
 

@@ -161,34 +161,50 @@ async function backfillIcons(graph: any, recipeId: string) {
     }
 
     const successfulUpdates = results.filter(r => r !== null);
-    if (successfulUpdates.length === 0) return null;
-
-    const currentNodes = [...graph.nodes];
-    let changed = false;
-
-    successfulUpdates.forEach((update: any) => {
-        const nodeIndex = currentNodes.findIndex((n: any) => n.id === update.nodeId);
-        if (nodeIndex !== -1) {
-            currentNodes[nodeIndex] = {
-                ...currentNodes[nodeIndex],
-                iconId: update.iconId,
-                iconUrl: update.iconUrl
-            };
-            changed = true;
-        }
-    });
-
-    return changed ? currentNodes : null;
+    return successfulUpdates.length > 0 ? successfulUpdates : null;
 }
 
 // 1. Automatic Trigger on Creation
 export const processNewRecipe = onDocumentCreated({ document: "recipes/{recipeId}", timeoutSeconds: 300, memory: "1GiB" }, async (event) => {
     if (!event.data) return;
     const newData = event.data.data();
-    const updatedNodes = await backfillIcons(newData.graph, event.params.recipeId);
-    if (updatedNodes) {
+    
+    // 1. Calculate Updates based on initial data (Slow)
+    const updates = await backfillIcons(newData.graph, event.params.recipeId);
+    
+    if (updates) {
         try {
-            return await event.data.ref.update({ "graph.nodes": updatedNodes });
+            // 2. Transactional Update: Fetch LATEST data to preserve position changes
+            return await db.runTransaction(async (t) => {
+                const ref = event.data!.ref;
+                const freshDoc = await t.get(ref);
+                if (!freshDoc.exists) return;
+                
+                const freshData = freshDoc.data();
+                if (!freshData || !freshData.graph || !freshData.graph.nodes) return;
+
+                const currentNodes = [...freshData.graph.nodes];
+                let changed = false;
+
+                updates.forEach((u: any) => {
+                    const idx = currentNodes.findIndex((n: any) => n.id === u.nodeId);
+                    if (idx !== -1) {
+                        // Only update if not already set (idempotency) or if we are filling a gap
+                        if (!currentNodes[idx].iconId) {
+                            currentNodes[idx] = {
+                                ...currentNodes[idx],
+                                iconId: u.iconId,
+                                iconUrl: u.iconUrl
+                            };
+                            changed = true;
+                        }
+                    }
+                });
+
+                if (changed) {
+                    t.update(ref, { "graph.nodes": currentNodes });
+                }
+            });
         } catch (e: any) {
             // Ignore NOT_FOUND errors if the recipe was deleted while processing
             if (e.code === 5 || e.message?.includes('NOT_FOUND')) {
@@ -207,15 +223,32 @@ export const backfillRecipeIcons = onCall({ timeoutSeconds: 300, memory: "1GiB" 
     if (!recipeId) throw new HttpsError('invalid-argument', 'Missing recipeId');
 
     const docRef = db.collection('recipes').doc(recipeId);
-    const docSnap = await docRef.get();
     
+    // Fetch 1
+    const docSnap = await docRef.get();
     if (!docSnap.exists) throw new HttpsError('not-found', 'Recipe not found');
     
-    const updatedNodes = await backfillIcons(docSnap.data()?.graph, recipeId);
+    // Calculate
+    const updates = await backfillIcons(docSnap.data()?.graph, recipeId);
     
-    if (updatedNodes) {
-        await docRef.update({ "graph.nodes": updatedNodes });
-        return { success: true, count: updatedNodes.length };
+    if (updates) {
+        // Transactional Update
+        await db.runTransaction(async (t) => {
+            const freshDoc = await t.get(docRef);
+            if (!freshDoc.exists) return;
+            const freshData = freshDoc.data();
+            const currentNodes = [...freshData?.graph.nodes];
+            
+            updates.forEach((u: any) => {
+                const idx = currentNodes.findIndex((n: any) => n.id === u.nodeId);
+                if (idx !== -1) {
+                    currentNodes[idx] = { ...currentNodes[idx], iconId: u.iconId, iconUrl: u.iconUrl };
+                }
+            });
+            
+            t.update(docRef, { "graph.nodes": currentNodes });
+        });
+        return { success: true, count: updates.length };
     }
     return { success: true, count: 0 };
 });

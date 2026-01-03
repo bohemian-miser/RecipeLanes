@@ -170,6 +170,34 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         setNodes(nds => nds.filter(n => n.id !== nodeId));
     }, [takeSnapshot, getEdges, setEdges, setNodes, edgeStyle]);
 
+    const composeGraphFromState = useCallback((nodes: Node[], edges: Edge[]): RecipeGraph => {
+        const currentNodes = nodes.filter(n => n.type !== 'lane');
+        
+        const nodesWithPos = currentNodes.map(n => {
+             // Reconstruct inputs from edges
+             const inputs = edges
+                   .filter(e => e.target === n.id)
+                   .map(e => e.source);
+
+             return { 
+                 ...n.data,
+                 id: n.id,
+                 x: n.position.x, 
+                 y: n.position.y,
+                 inputs: inputs.length > 0 ? inputs : undefined,
+                 // Clean up internal flags
+                 onDelete: undefined,
+                 onSetLongPress: undefined,
+                 depth: undefined,
+                 textPos: undefined,
+                 label: undefined,
+                 color: undefined
+             };
+        });
+            
+        return { ...graph, nodes: nodesWithPos, layoutMode: mode };
+    }, [graph, mode]);
+
     const undo = useCallback(() => {
         if (past.length === 0) return;
         const newPast = [...past];
@@ -191,8 +219,13 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             }));
             setNodes(restoredNodes);
             setEdges(previous.edges);
+            
+            if (onSave) {
+                const restoredGraph = composeGraphFromState(restoredNodes, previous.edges);
+                onSave(restoredGraph);
+            }
         }
-    }, [past, getNodes, getEdges, setNodes, setEdges, handleDeleteNode]);
+    }, [past, getNodes, getEdges, setNodes, setEdges, handleDeleteNode, composeGraphFromState, onSave]);
 
     const redo = useCallback(() => {
         if (future.length === 0) return;
@@ -215,8 +248,13 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             }));
             setNodes(restoredNodes);
             setEdges(next.edges);
+            
+            if (onSave) {
+                const restoredGraph = composeGraphFromState(restoredNodes, next.edges);
+                onSave(restoredGraph);
+            }
         }
-    }, [future, getNodes, getEdges, setNodes, setEdges, handleDeleteNode]);
+    }, [future, getNodes, getEdges, setNodes, setEdges, handleDeleteNode, composeGraphFromState, onSave]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -428,6 +466,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     const getGraph = useCallback((): RecipeGraph => {
         const currentNodes = getNodes().filter(n => n.type !== 'lane');
+        const currentEdges = getEdges();
         const layouts = graph.layouts || {};
         layouts[mode as string] = currentNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
         
@@ -436,11 +475,22 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             .filter(n => currentNodes.some(rn => rn.id === n.id))
             .map(n => {
                const rfn = currentNodes.find(rn => rn.id === n.id)!;
-               return { ...n, x: rfn.position.x, y: rfn.position.y };
+               
+               // Reconstruct inputs from edges
+               const inputs = currentEdges
+                   .filter(e => e.target === n.id)
+                   .map(e => e.source);
+
+               return { 
+                   ...n, 
+                   x: rfn.position.x, 
+                   y: rfn.position.y,
+                   inputs: inputs.length > 0 ? inputs : undefined
+               };
             });
             
         return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
-    }, [graph, mode, getNodes]);
+    }, [graph, mode, getNodes, getEdges]);
 
     const performSave = async () => {
         const graphToSave = getGraph();

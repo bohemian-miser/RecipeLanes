@@ -71,6 +71,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const simulationRef = useRef<any>(null);
     const [copied, setCopied] = useState(false);
     const [saved, setSaved] = useState(false);
+    const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
     
     // Initialize from graph.visibility (injected by service)
     // If prop is provided, use it, otherwise fallback to internal state logic (though moving to prop driven is better)
@@ -133,10 +134,15 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const [past, setPast] = useState<{ nodes: Node[], edges: Edge[] }[]>([]);
     const [future, setFuture] = useState<{ nodes: Node[], edges: Edge[] }[]>([]);
 
-    const takeSnapshot = useCallback(() => {
-        const n = getNodes();
+    const takeSnapshot = useCallback((overrideNode?: Node) => {
+        const n = getNodes().map(existing => {
+            if (overrideNode && existing.id === overrideNode.id) {
+                // Use the override (start pos) for the dragged node to ensure true undo
+                return { ...existing, position: { ...overrideNode.position }, data: { ...overrideNode.data } };
+            }
+            return existing;
+        });
         const e = getEdges();
-        console.log('[Snapshot] Capturing:', n.length, 'nodes. Node A pos:', n.find(x => x.data.text === 'Ingredient A')?.position);
         setPast(p => [...p, { 
             nodes: JSON.parse(JSON.stringify(n)), 
             edges: JSON.parse(JSON.stringify(e)) 
@@ -200,6 +206,13 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     }, [graph, mode]);
 
     const undo = useCallback(() => {
+        // Cancel any pending auto-save to prevent race conditions
+        if (saveTimerRef.current) {
+             console.log('[Undo] Cancelling pending auto-save');
+             clearTimeout(saveTimerRef.current);
+             saveTimerRef.current = null;
+        }
+
         if (past.length === 0) return;
         const newPast = [...past];
         const previous = newPast.pop();
@@ -229,6 +242,12 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     }, [past, getNodes, getEdges, setNodes, setEdges, handleDeleteNode, composeGraphFromState, onSave]);
 
     const redo = useCallback(() => {
+         // Cancel any pending auto-save
+        if (saveTimerRef.current) {
+             clearTimeout(saveTimerRef.current);
+             saveTimerRef.current = null;
+        }
+
         if (future.length === 0) return;
         const newFuture = [...future];
         const next = newFuture.shift();
@@ -369,10 +388,70 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     }, [graph, mode, spacing, setNodes, setEdges, fitView, handleDeleteNode, edgeStyle]); 
 
-    // Layout Effect
+    // Layout Effect with Circuit Breaker
     useEffect(() => {
-        runLayout(true); 
-    }, [graph, mode, spacing, runLayout]);
+        // Optimization: Prevent infinite loops and position resets by checking if update is needed
+        const currentNodes = getNodes();
+        const isLayoutChange = graph.layoutMode !== mode;
+        const isStructureChange = graph.nodes.length !== currentNodes.filter(n => n.type !== 'lane').length;
+        
+        // Detailed check: Did any position change significantly?
+        const isPositionChange = graph.nodes.some(gn => {
+            const cn = currentNodes.find(n => n.id === gn.id);
+            if (!cn) return false; // Handled by structure change
+            // Tolerance of 1px avoids float jitter loops
+            return Math.abs(cn.position.x - gn.x!) > 1 || Math.abs(cn.position.y - gn.y!) > 1;
+        });
+
+        // 1. If Layout Mode Changed or Nodes Added/Removed -> Full Re-Layout
+        if (isLayoutChange || isStructureChange) {
+            runLayout(true);
+            return;
+        }
+
+        // 2. If Positions Changed (e.g. Remote Drag or Undo) -> Full Re-Layout
+        // This handles the Undo case where `graph` updates to Old Pos, which differs from Current Pos (Moved).
+        // Wait, if Undo set nodes locally, Current is Old. Graph is Old. isPositionChange is False.
+        // So we SKIP runLayout. This is CORRECT! We don't want runLayout to re-set nodes.
+        if (isPositionChange) {
+            runLayout(true);
+            return;
+        }
+
+        // 3. If Only Data Changed (Icons/Text) -> Merge In Place
+        // This handles "Background Icon Load". Position didn't change.
+        const hasDataUpdates = graph.nodes.some(gn => {
+             const cn = currentNodes.find(n => n.id === gn.id);
+             // Check relevant data fields
+             return cn && (
+                 cn.data.iconUrl !== gn.iconUrl || 
+                 cn.data.text !== gn.text ||
+                 cn.data.visualDescription !== gn.visualDescription
+             );
+        });
+
+        if (hasDataUpdates) {
+             console.log('[ReactFlow] Merging data updates only (preserving positions)');
+             setNodes(nds => nds.map(n => {
+                 const gn = graph.nodes.find(g => g.id === n.id);
+                 if (gn) {
+                     // Merge specific fields to avoid overwriting internal state
+                     return { 
+                         ...n, 
+                         data: { 
+                             ...n.data, 
+                             iconUrl: gn.iconUrl, 
+                             text: gn.text,
+                             visualDescription: gn.visualDescription,
+                             iconId: gn.iconId
+                         } 
+                     };
+                 }
+                 return n;
+             }));
+        }
+        
+    }, [graph, mode, spacing, runLayout, getNodes, setNodes]);
 
     // Text Position Update Effect
     useEffect(() => {
@@ -537,6 +616,12 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     };
 
     const handleSave = async () => {
+        // Clear timer if triggered manually
+        if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = null;
+        }
+
         if (!isLoggedIn) {
             onNotify?.('Log in to save recipe');
             return;
@@ -555,6 +640,18 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             onNotify?.("Failed to save.");
         }
     };
+
+    // Auto-Save Trigger (Debounced)
+    const handleAutoSave = useCallback(() => {
+        if (!isOwner) return; // Only owner
+        
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        
+        saveTimerRef.current = setTimeout(() => {
+             console.log('[ReactFlow] Auto-saving...');
+             handleSave();
+        }, 2000); // 2 seconds delay to allow Undo
+    }, [isOwner, handleSave]);
 
     const handleShare = async () => {
         const res = await performSave();
@@ -640,9 +737,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     };
 
     const onNodeDragStart = (event: React.MouseEvent, node: Node) => {
-        console.log('[ReactFlow] onNodeDragStart:', node.id);
         onInteraction?.();
-        takeSnapshot(); 
+        takeSnapshot(node); 
         if (event.shiftKey || longPressTriggered.current) {
             longPressTriggered.current = false; // Reset immediately
             const allNodes = getNodes();
@@ -720,7 +816,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const onNodeDragStop = () => {
         dragRef.current = { active: false };
         if (isOwner) {
-            handleSave();
+            // DEBOUNCE AUTO SAVE to allow Undo
+            handleAutoSave();
         } else {
             onEdit?.();
         }

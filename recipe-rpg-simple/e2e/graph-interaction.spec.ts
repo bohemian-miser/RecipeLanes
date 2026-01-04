@@ -1,7 +1,7 @@
 import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots} from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
-import { get_node, delete_node } from './utils/actions';
+import { get_node, delete_node, create_recipe, wait_for_graph } from './utils/actions';
 
 test.describe('Graph Interaction', () => {
   test.slow();
@@ -14,16 +14,11 @@ test.describe('Graph Interaction', () => {
       await page.goto('/lanes');
       await screenshot(page, dir, 'initial-page');
 
-      await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
-      await screenshot(page, dir, 'recipe-entered');
+      await create_recipe(page, 'test eggs', dir);
 
-      await page.locator('button:has(svg.lucide-arrow-right)').click();
-      await screenshot(page, dir, 'create-clicked');
+      await wait_for_graph(page, dir);
 
       const viewport = page.locator('.react-flow__viewport');
-      await expect(viewport).toBeVisible({ timeout: 30000 });
-      await screenshot(page, dir, 'graph-visible');
-
       const initialTransform = await viewport.getAttribute('style');
 
       await page.waitForTimeout(500); // Wait for layout to settle
@@ -54,13 +49,9 @@ test.describe('Graph Interaction', () => {
       await page.goto('/lanes');
       await screenshot(page, dir, 'initial-page');
 
-      await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
-      await page.locator('button:has(svg.lucide-arrow-right)').click();
-      await screenshot(page, dir, 'recipe-created');
+      await create_recipe(page, 'test eggs', dir);
 
-      const viewport = page.locator('.react-flow__viewport');
-      await expect(viewport).toBeVisible({ timeout: 30000 });
-      await screenshot(page, dir, 'graph-visible');
+      await wait_for_graph(page, dir);
 
       await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 10000 });
       await expect(page.locator('.react-flow__edge').first()).toBeAttached({ timeout: 10000 });
@@ -102,13 +93,9 @@ test.describe('Graph Interaction', () => {
       await screenshot(page, dir, 'initial-page');
 
       // Create complex graph with diamond pattern
-      await page.getByPlaceholder('Paste recipe here...').fill('test complex');
-      await page.locator('button:has(svg.lucide-arrow-right)').click();
-      await screenshot(page, dir, 'recipe-created');
+      await create_recipe(page, 'test complex', dir);
 
-      const viewport = page.locator('.react-flow__viewport');
-      await expect(viewport).toBeVisible({ timeout: 30000 });
-      await screenshot(page, dir, 'graph-visible');
+      await wait_for_graph(page, dir);
 
       await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 10000 });
       await expect(page.locator('.react-flow__edge').first()).toBeAttached({ timeout: 10000 });

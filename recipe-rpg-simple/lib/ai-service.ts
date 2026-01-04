@@ -1,4 +1,5 @@
 import { ai, textModel, imageModelName } from './genkit';
+import { processIcon } from './image-processing';
 
 export interface AIService {
   generateText(prompt: string): Promise<string>;
@@ -30,7 +31,19 @@ export class RealAIService implements AIService {
              throw new Error('No media returned');
         }
         console.log(`[RealAIService] Success. URL: ${response.media.url.substring(0, 50)}...`);
-        return response.media.url;
+        
+        // Fetch the image
+        const imageResponse = await fetch(response.media.url);
+        const imageBuffer = await imageResponse.arrayBuffer();
+
+        // Process the image to remove the background
+        const processedBuffer = await processIcon(imageBuffer);
+
+        // Convert the processed buffer to a data URL
+        const base64 = processedBuffer.toString('base64');
+        const dataUrl = `data:image/png;base64,${base64}`;
+
+        return dataUrl;
     } catch (e) {
         console.error("Real AI Image Generation failed, NOT falling back to Mock (well kinda not):", e);
         return `https://placehold.co/64x64/png?text=Error+${encodeURIComponent(prompt.slice(0, 10))}`;

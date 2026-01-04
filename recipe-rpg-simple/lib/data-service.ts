@@ -354,10 +354,12 @@ export class FirebaseDataService implements DataService {
      } catch (e: any) { return []; }
   }
   async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any) {
-      // Optimisation: In Mock AI mode (e.g. tests), skip Storage upload to avoid emulator issues.
-      // The publicUrl is likely a Data URI or placeholder which fits in Firestore.
-      if (process.env.MOCK_AI === 'true') {
-          console.log('[saveIcon] Mock AI detected, skipping Storage upload.');
+      // Optimisation: In Mock AI mode (e.g. tests), skip Storage upload to avoid emulator issues UNLESS we are explicitly using the emulator.
+      // If we are using the emulator, we want to test the full flow including storage triggers/processing.
+      const isEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
+      
+      if (process.env.MOCK_AI === 'true' && !isEmulator) {
+          console.log('[saveIcon] Mock AI detected (no emulator), skipping Storage upload.');
           const finalUrl = publicUrl;
           const doc = await db.collection('ingredients').doc(ingredientId).collection('icons').add({
               url: finalUrl, ...meta, ingredient_name: ingredientName, created_at: FieldValue.serverTimestamp(), marked_for_deletion: false, visualDescription: visualDescription, fullPrompt: fullPrompt
@@ -374,7 +376,18 @@ export class FirebaseDataService implements DataService {
       await file.save(bufferToSave, {
           metadata: { contentType: 'image/png', metadata: { firebaseStorageDownloadTokens: token, ...meta } }
       });
-      const finalUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
+      
+      let finalUrl;
+      const emulatorHost = process.env.STORAGE_EMULATOR_HOST || process.env.NEXT_PUBLIC_STORAGE_EMULATOR_HOST;
+      if (emulatorHost) {
+          // Construct Emulator URL: http://<host>/v0/b/<bucket>/o/<path>?alt=media&token=<token>
+          // Ensure protocol is http
+          const host = emulatorHost.startsWith('http') ? emulatorHost : `http://${emulatorHost}`;
+          finalUrl = `${host}/v0/b/${bucketName}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
+      } else {
+          finalUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
+      }
+
       const doc = await db.collection('ingredients').doc(ingredientId).collection('icons').add({
           url: finalUrl, ...meta, ingredient_name: ingredientName, created_at: FieldValue.serverTimestamp(), marked_for_deletion: false, visualDescription: visualDescription, fullPrompt: fullPrompt
       });

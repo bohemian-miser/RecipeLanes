@@ -43,6 +43,13 @@ fuser -k 8080/tcp || true
 fuser -k 9199/tcp || true
 fuser -k 5001/tcp || true
 
+# Cleanup .env on exit
+cleanup() {
+  echo "Removing test env file..."
+  rm -f "$PROJECT_ROOT/functions/.env"
+}
+trap cleanup EXIT
+
 echo "----------------------------------------------------------------"
 echo "Starting Firebase Emulators and running: $CMD"
 echo "----------------------------------------------------------------"

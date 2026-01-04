@@ -11,7 +11,7 @@
       ".env"
     ],
     "predeploy": [
-      "npm --prefix \"$RESOURCE_DIR\" run build"
+      "cd \"$RESOURCE_DIR\" && npm run build"
     ]
   },
   "hosting": {

@@ -51,7 +51,7 @@ export function SharedGallery() {
   const totalPages = Math.ceil(total / limit);
 
   return (
-    <div className="w-full space-y-6 pt-8 border-t border-zinc-800">
+    <div className="w-full space-y-6 pt-8 border-t border-zinc-800" data-testid="shared-gallery">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <h2 className="text-xl text-yellow-500 font-mono uppercase tracking-widest text-center">Community Collection</h2>
           

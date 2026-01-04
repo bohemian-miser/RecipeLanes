@@ -71,6 +71,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const simulationRef = useRef<any>(null);
     const [copied, setCopied] = useState(false);
     const [saved, setSaved] = useState(false);
+    const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
     
     // Initialize from graph.visibility (injected by service)
     // If prop is provided, use it, otherwise fallback to internal state logic (though moving to prop driven is better)
@@ -143,8 +144,16 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         setFuture([]);
     }, [getNodes, getEdges]);
 
-    const handleDeleteNode = useCallback((nodeId: string) => {
+    const handleDeleteNode = useCallback(async (nodeId: string) => {
         console.log(`[DiagramInner] handleDeleteNode called for ${nodeId}`);
+        
+        // Flush pending save to ensure moves are persisted before deletion
+        if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = null;
+            await performSave();
+        }
+
         takeSnapshot();
         const currentEdges = getEdges();
         const incoming = currentEdges.filter(ed => ed.target === nodeId);
@@ -170,7 +179,192 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         setNodes(nds => nds.filter(n => n.id !== nodeId));
     }, [takeSnapshot, getEdges, setEdges, setNodes, edgeStyle]);
 
+    const downloadImage = async () => {
+        if (!flowWrapper.current) return;
+        
+        const download = (dataUrl: string) => {
+            const link = document.createElement('a');
+            link.download = `recipe-lanes-${mode}.png`;
+            link.href = dataUrl;
+            link.click();
+        };
+
+        try {
+            const dataUrl = await toPng(flowWrapper.current, {
+                backgroundColor: '#ffffff',
+                style: { width: 'auto', height: 'auto', transform: 'none' },
+                cacheBust: true, 
+                pixelRatio: 2 
+            });
+            download(dataUrl);
+        } catch (err) {
+            console.warn("Download failed (CORS?), retrying without font embedding...", err);
+            try {
+                const dataUrl = await toPng(flowWrapper.current, {
+                    backgroundColor: '#ffffff',
+                    style: { width: 'auto', height: 'auto', transform: 'none' },
+                    pixelRatio: 2,
+                    fontEmbedCSS: '' // Disable font embedding
+                });
+                download(dataUrl);
+            } catch (e2) {
+                console.error("Download failed again:", e2);
+                onNotify?.("Download failed. Check console/CORS.");
+            }
+        }
+    };
+
+    const getGraph = useCallback((): RecipeGraph => {
+        const currentNodes = getNodes().filter(n => n.type !== 'lane');
+        const layouts = graph.layouts || {};
+        layouts[mode as string] = currentNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
+        
+        // Filter out nodes that are no longer in the ReactFlow state (deleted)
+        const nodesWithPos = graph.nodes
+            .filter(n => currentNodes.some(rn => rn.id === n.id))
+            .map(n => {
+               const rfn = currentNodes.find(rn => rn.id === n.id)!;
+               return { ...n, x: rfn.position.x, y: rfn.position.y };
+            });
+            
+        return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
+    }, [graph, mode, getNodes]);
+
+    const performSave = async () => {
+        const graphToSave = getGraph();
+        
+        let currentId = searchParams.get('id') || undefined;
+        // Use ref for latest value (important for toggleVisibility which is async)
+        const visibility = visibilityRef.current ? 'public' : 'unlisted';
+        
+        // Forking Logic for Non-Owners (Alice Copy)
+        if (isLoggedIn && !isOwner && currentId) {
+             console.log('[ReactFlow] Forking on Save (Non-Owner)');
+             const sourceId = currentId;
+             currentId = undefined; // Force new creation
+             graphToSave.sourceId = sourceId;
+
+             // Smarter Copy Naming
+             let newTitle = graphToSave.title || 'Untitled';
+             if (newTitle.startsWith('Yet another copy of ')) {
+                 const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
+                 if (match) {
+                     newTitle = `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;
+                 } else {
+                     newTitle = `${newTitle} (1)`;
+                 }
+             } else if (newTitle.startsWith('Another copy of ')) {
+                 newTitle = newTitle.replace('Another copy of ', 'Yet another copy of ');
+             } else if (newTitle.startsWith('Copy of ')) {
+                 newTitle = newTitle.replace('Copy of ', 'Another copy of ');
+             } else {
+                 newTitle = `Copy of ${newTitle}`;
+             }
+             graphToSave.title = newTitle;
+             onNotify?.("Saving a copy...");
+        }
+        
+        // Ensure visibility is part of the graph object passed back
+        graphToSave.visibility = visibility;
+
+        const result = await saveRecipeAction(graphToSave, currentId, visibility);
+        
+        if (onSave) onSave(graphToSave);
+        return result;
+    };
+
+    const handleSave = async (immediate = true) => {
+        if (!isLoggedIn) {
+            onNotify?.('Log in to save recipe');
+            return;
+        }
+
+        if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = null;
+        }
+
+        const executeSave = async () => {
+            const res = await performSave();
+            if (res.id) {
+                const url = new URL(window.location.href);
+                url.searchParams.set('id', res.id);
+                router.push(url.pathname + url.search);
+                setIsDirty(false);
+                setSaved(true);
+                setTimeout(() => setSaved(false), 2000);
+                onNotify?.("Saved changes.");
+            } else {
+                console.error('Failed to save.');
+                onNotify?.("Failed to save.");
+            }
+        };
+
+        if (immediate) {
+            await executeSave();
+        } else {
+            setIsDirty(true);
+            setSaved(false);
+            saveTimerRef.current = setTimeout(() => {
+                saveTimerRef.current = null;
+                executeSave();
+            }, 2000);
+        }
+    };
+
+    const handleShare = async () => {
+        const res = await performSave();
+        if (res.id) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('id', res.id);
+            router.push(url.pathname + url.search);
+            navigator.clipboard.writeText(url.toString());
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+            setIsDirty(false);
+            onNotify?.("Link copied to clipboard");
+        }
+    };
+
+    const toggleVisibility = async () => {
+        const newPublic = !visibilityRef.current;
+        
+        if (onVisibilityChange) {
+            onVisibilityChange(newPublic);
+        }
+        else {
+            setInternalIsPublic(newPublic);
+        }
+        
+        visibilityRef.current = newPublic;
+        setIsDirty(true);
+        // Save immediately
+        await handleSave(true);
+    };
+
+    const handleReset = () => {
+        setIsDirty(true);
+        takeSnapshot();
+        runLayout(false); 
+    };
+
+    useImperativeHandle(ref, () => ({
+        resetLayout: handleReset,
+        toggleVisibility: toggleVisibility,
+        getGraph: getGraph
+    }));
+
     const undo = useCallback(() => {
+        let pendingSave = false;
+        // Cancel any pending save to prevent race conditions
+        if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = null;
+            pendingSave = true;
+            console.log("Cancelled pending save due to Undo");
+            setIsDirty(false); 
+        }
+
         if (past.length === 0) return;
         const newPast = [...past];
         const previous = newPast.pop();
@@ -191,8 +385,15 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             }));
             setNodes(restoredNodes);
             setEdges(previous.edges);
+
+            // If we didn't cancel a pending save, we might be reverting a SAVED state.
+            // So we must persist the restoration to DB.
+            if (!pendingSave && isOwner && isLoggedIn) {
+                // Wait for state update to settle then save
+                setTimeout(() => handleSave(true), 50);
+            }
         }
-    }, [past, getNodes, getEdges, setNodes, setEdges, handleDeleteNode]);
+    }, [past, getNodes, getEdges, setNodes, setEdges, handleDeleteNode, isOwner, isLoggedIn, handleSave]);
 
     const redo = useCallback(() => {
         if (future.length === 0) return;
@@ -391,161 +592,6 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         return () => { sim.stop(); };
     }, [isLive, spacing, graph]); 
 
-    const downloadImage = async () => {
-        if (!flowWrapper.current) return;
-        
-        const download = (dataUrl: string) => {
-            const link = document.createElement('a');
-            link.download = `recipe-lanes-${mode}.png`;
-            link.href = dataUrl;
-            link.click();
-        };
-
-        try {
-            const dataUrl = await toPng(flowWrapper.current, {
-                backgroundColor: '#ffffff',
-                style: { width: 'auto', height: 'auto', transform: 'none' },
-                cacheBust: true, 
-                pixelRatio: 2 
-            });
-            download(dataUrl);
-        } catch (err) {
-            console.warn("Download failed (CORS?), retrying without font embedding...", err);
-            try {
-                const dataUrl = await toPng(flowWrapper.current, {
-                    backgroundColor: '#ffffff',
-                    style: { width: 'auto', height: 'auto', transform: 'none' },
-                    pixelRatio: 2,
-                    fontEmbedCSS: '' // Disable font embedding
-                });
-                download(dataUrl);
-            } catch (e2) {
-                console.error("Download failed again:", e2);
-                onNotify?.("Download failed. Check console/CORS.");
-            }
-        }
-    };
-
-    const getGraph = useCallback((): RecipeGraph => {
-        const currentNodes = getNodes().filter(n => n.type !== 'lane');
-        const layouts = graph.layouts || {};
-        layouts[mode as string] = currentNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
-        
-        // Filter out nodes that are no longer in the ReactFlow state (deleted)
-        const nodesWithPos = graph.nodes
-            .filter(n => currentNodes.some(rn => rn.id === n.id))
-            .map(n => {
-               const rfn = currentNodes.find(rn => rn.id === n.id)!;
-               return { ...n, x: rfn.position.x, y: rfn.position.y };
-            });
-            
-        return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
-    }, [graph, mode, getNodes]);
-
-    const performSave = async () => {
-        const graphToSave = getGraph();
-        
-        let currentId = searchParams.get('id') || undefined;
-        // Use ref for latest value (important for toggleVisibility which is async)
-        const visibility = visibilityRef.current ? 'public' : 'unlisted';
-        
-        // Forking Logic for Non-Owners (Alice Copy)
-        if (isLoggedIn && !isOwner && currentId) {
-             console.log('[ReactFlow] Forking on Save (Non-Owner)');
-             const sourceId = currentId;
-             currentId = undefined; // Force new creation
-             graphToSave.sourceId = sourceId;
-
-             // Smarter Copy Naming
-             let newTitle = graphToSave.title || 'Untitled';
-             if (newTitle.startsWith('Yet another copy of ')) {
-                 const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
-                 if (match) {
-                     newTitle = `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;
-                 } else {
-                     newTitle = `${newTitle} (1)`;
-                 }
-             } else if (newTitle.startsWith('Another copy of ')) {
-                 newTitle = newTitle.replace('Another copy of ', 'Yet another copy of ');
-             } else if (newTitle.startsWith('Copy of ')) {
-                 newTitle = newTitle.replace('Copy of ', 'Another copy of ');
-             } else {
-                 newTitle = `Copy of ${newTitle}`;
-             }
-             graphToSave.title = newTitle;
-             onNotify?.("Saving a copy...");
-        }
-        
-        // Ensure visibility is part of the graph object passed back
-        graphToSave.visibility = visibility;
-
-        const result = await saveRecipeAction(graphToSave, currentId, visibility);
-        
-        if (onSave) onSave(graphToSave);
-        return result;
-    };
-
-    const handleSave = async () => {
-        if (!isLoggedIn) {
-            onNotify?.('Log in to save recipe');
-            return;
-        }
-        const res = await performSave();
-        if (res.id) {
-            const url = new URL(window.location.href);
-            url.searchParams.set('id', res.id);
-            router.push(url.pathname + url.search);
-            setIsDirty(false);
-            setSaved(true);
-            setTimeout(() => setSaved(false), 2000);
-            onNotify?.("Saved changes.");
-        } else {
-            console.error('Failed to save.');
-            onNotify?.("Failed to save.");
-        }
-    };
-
-    const handleShare = async () => {
-        const res = await performSave();
-        if (res.id) {
-            const url = new URL(window.location.href);
-            url.searchParams.set('id', res.id);
-            router.push(url.pathname + url.search);
-            navigator.clipboard.writeText(url.toString());
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-            setIsDirty(false);
-            onNotify?.("Link copied to clipboard");
-        }
-    };
-
-    const toggleVisibility = async () => {
-        const newPublic = !visibilityRef.current;
-        
-        if (onVisibilityChange) {
-            onVisibilityChange(newPublic);
-        }
-        else {
-            setInternalIsPublic(newPublic);
-        }
-        
-        visibilityRef.current = newPublic;
-        setIsDirty(true);
-        // Save immediately
-        await handleSave();
-    };
-
-    const handleReset = () => {
-        setIsDirty(true);
-        takeSnapshot();
-        runLayout(false); 
-    };
-
-    useImperativeHandle(ref, () => ({
-        resetLayout: handleReset,
-        toggleVisibility: toggleVisibility,
-        getGraph: getGraph
-    }));
 
     const selectBranch = (nodeId: string) => {
         const getAncestors = (id: string, visited = new Set<string>()): string[] => {
@@ -668,7 +714,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const onNodeDragStop = () => {
         dragRef.current = { active: false };
         if (isOwner) {
-            handleSave();
+            handleSave(false); // Delayed save to avoid overwriting undo
         } else {
             onEdit?.();
         }
@@ -721,7 +767,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                     </div>
 
                      <button 
-                        onClick={handleSave} 
+                        onClick={() => handleSave(true)} 
                         disabled={!isDirty && !saved}
                         className={`p-2 rounded shadow-md border border-zinc-200 transition-colors ${saved ? 'bg-green-50 text-green-600 border-green-200' : isDirty ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
                         title={saved ? "Saved!" : isDirty ? "Save Changes" : "No Changes"}

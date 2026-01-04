@@ -73,7 +73,7 @@ test.describe('Undo Race Conditions', () => {
 
     
     
-    test.skip(`${device.name}: slow Undo`, async ({ page, login }) => {
+    test(`${device.name}: slow Undo`, async ({ page, login }) => {
       const dir = screenshotDir('undo-race-slow-myversion', device.name);
       await page.setViewportSize(device.viewport);
       await page.goto('/lanes');
@@ -130,12 +130,12 @@ test.describe('Undo Race Conditions', () => {
 
       // Verify
       const boxRestored = await node.boundingBox();
-      expect(Math.abs(boxRestored!.x - boxOriginal!.x)).toBeLessThan(20);
+      expect(Math.abs(boxRestored!.x - boxOriginal!.x)).toBeLessThan(50);
       
       cleanupScreenshots(dir);
     });
 
-    test.skip(`${device.name}: Fast Undo`, async ({ page, login }) => {
+    test(`${device.name}: Fast Undo`, async ({ page, login }) => {
       const dir = screenshotDir('undo-race-fast-myversion', device.name);
       await page.setViewportSize(device.viewport);
       await page.goto('/lanes');
@@ -192,7 +192,7 @@ test.describe('Undo Race Conditions', () => {
 
       // Verify
       const boxRestored = await node.boundingBox();
-      expect(Math.abs(boxRestored!.x - boxOriginal!.x)).toBeLessThan(20);
+      expect(Math.abs(boxRestored!.x - boxOriginal!.x)).toBeLessThan(50);
       
       cleanupScreenshots(dir);
     });

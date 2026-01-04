@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { screenshot, screenshotDir } from './utils/screenshot';
+import { get_node } from './utils/actions';
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
@@ -16,8 +17,8 @@ Mix`);
   await page.locator('button:has(svg.lucide-arrow-right)').click();
   await screenshot(page, dir, '03-after-visualize-click');
   
-  const eggNode = page.locator('.react-flow__node').filter({ hasText: 'Egg' }).first();
-  const mixNode = page.locator('.react-flow__node').filter({ hasText: 'Mix' }).first();
+  const eggNode = get_node(page, 'Egg');
+  const mixNode = get_node(page, 'Mix');
   
   await screenshot(page, dir, '04-before-expect-egg-visible');
   await expect(eggNode).toBeVisible({ timeout: 15000 });

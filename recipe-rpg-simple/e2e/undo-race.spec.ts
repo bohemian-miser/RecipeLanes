@@ -1,11 +1,11 @@
 import { test, expect, } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots} from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
-import { move_node, click_undo } from './utils/actions';
+import { move_node, click_undo, get_node } from './utils/actions';
 import { Page } from '@playwright/test';
 
 export async function move_node_fast(page: Page, text: string, dx: number, dy: number, dir: string) {
-    const node = page.locator('.react-flow__node').filter({ hasText: text }).first();
+    const node = get_node(page, text);
     await expect(node).toBeVisible({ timeout: 10000 });
     const box = await node.boundingBox();
     expect(box).toBeTruthy();
@@ -86,7 +86,7 @@ test.describe('Undo Race Conditions', () => {
       await expect(page.locator('.react-flow__viewport')).toBeVisible();
       await expect(page.locator('.react-flow__node').first()).toBeVisible();
       
-      const node = page.locator('.react-flow__node').filter({ hasText: 'Eggs' }).first();
+      const node = get_node(page, 'Eggs');
       const boxOriginal = await node.boundingBox();
       const undoBtn = page.locator('button[title="Undo (Ctrl+Z)"]');
 
@@ -148,7 +148,7 @@ test.describe('Undo Race Conditions', () => {
       await expect(page.locator('.react-flow__viewport')).toBeVisible();
       await expect(page.locator('.react-flow__node').first()).toBeVisible();
       
-      const node = page.locator('.react-flow__node').filter({ hasText: 'Eggs' }).first();
+      const node = get_node(page, 'Eggs');
       const boxOriginal = await node.boundingBox();
       const undoBtn = page.locator('button[title="Undo (Ctrl+Z)"]');
 

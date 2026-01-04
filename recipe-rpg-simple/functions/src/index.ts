@@ -6,10 +6,17 @@ import { genkit, z } from 'genkit';
 import { vertexAI } from '@genkit-ai/google-genai';
 // import { processIcon } from './image-processing'; // Using lib now
 import { generateAndStoreIcon } from '../../lib/icon-generator';
+import { setAIService, MockAIService } from '../../lib/ai-service';
 
 // initializeApp(); // Lib handles this now
 const db = getFirestore();
 const storage = getStorage();
+
+
+if (process.env.FUNCTIONS_EMULATOR === 'true') {
+    console.log('Enforcing Mock AI Service in Emulator');
+    setAIService(new MockAIService());
+}
 
 const ai = genkit({
     plugins: [vertexAI({ location: 'us-central1' })], 

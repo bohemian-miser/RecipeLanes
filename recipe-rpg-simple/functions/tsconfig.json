@@ -21,6 +21,6 @@
   "compileOnSave": true,
   "include": [
     "src",
-    "../lib"
+    // "../lib" Don't include this, path automatically brings in what's needed.
   ]
 }

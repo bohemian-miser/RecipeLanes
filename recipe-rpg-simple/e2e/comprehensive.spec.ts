@@ -1,6 +1,7 @@
 import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
+import { create_recipe, wait_for_graph } from './utils/actions';
 
 test.skip('Comprehensive Feature Tests', () => {
   
@@ -15,13 +16,10 @@ test.skip('Comprehensive Feature Tests', () => {
       // Login as Owner
       await login('owner-user');
 
-      await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
-      await page.locator('button:has(svg.lucide-arrow-right)').click();
+      await create_recipe(page, 'test eggs', dir);
       
       // Wait for graph
-      await screenshot(page, dir, 'debug-before-node-check');
-      await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 30000 });
-      await screenshot(page, dir, 'debug-before-url-check');
+      await wait_for_graph(page, dir);
       await expect(page).toHaveURL(/id=/, { timeout: 20000 });
       await screenshot(page, dir, 'initial-graph');
 
@@ -52,10 +50,8 @@ test.skip('Comprehensive Feature Tests', () => {
       await page.goto('/lanes?new=true');
       await login('json-tester');
 
-      await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
-      await page.locator('button:has(svg.lucide-arrow-right)').click();
-      await screenshot(page, dir, 'debug-before-node-visible');
-      await expect(page.locator('.react-flow__node').first()).toBeVisible();
+      await create_recipe(page, 'test eggs', dir);
+      await wait_for_graph(page, dir);
 
       // Toggle JSON
       await page.getByTitle('Toggle JSON View').click();
@@ -97,8 +93,8 @@ test.skip('Comprehensive Feature Tests', () => {
       await page.goto('/lanes?new=true');
       await login('select-tester');
 
-      await page.getByPlaceholder('Paste recipe here...').fill('complex test');
-      await page.locator('button:has(svg.lucide-arrow-right)').click();
+      await create_recipe(page, 'complex test', dir);
+      await wait_for_graph(page, dir);
       
       const nodes = page.locator('.react-flow__node');
       await screenshot(page, dir, 'debug-before-nodes-count');

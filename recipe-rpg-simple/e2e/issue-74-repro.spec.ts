@@ -1,6 +1,7 @@
 import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
+import { create_recipe, wait_for_graph, get_node, move_node } from './utils/actions';
 
 test.describe('Issue 74 Repro: Delete and Move', () => {
   for (const device of deviceConfigs) {
@@ -16,8 +17,7 @@ test.describe('Issue 74 Repro: Delete and Move', () => {
       await page.goto('/lanes?new=true');
 
       // Create Chain: Egg + Sugar -> Whisk -> Cook
-      await page.getByPlaceholder('Paste recipe here...').fill('1 Egg\n1 Sugar\nWhisk egg and sugar\nCook mixture');
-      await page.locator('button:has(svg.lucide-arrow-right)').click();
+      await create_recipe(page, '1 Egg\n1 Sugar\nWhisk egg and sugar\nCook mixture', dir);
       
       await expect(page).toHaveURL(/id=/);
       const url = page.url();
@@ -27,14 +27,15 @@ test.describe('Issue 74 Repro: Delete and Move', () => {
       await page.goto(url);
       
       // We expect 4 nodes: Egg, Sugar, Whisk, Cook
+      await wait_for_graph(page, dir);
       await expect(page.locator('.react-flow__node')).toHaveCount(4);
       await screenshot(page, dir, '01-initial');
 
       // Identify nodes
-      const egg = page.locator('.react-flow__node').filter({ hasText: 'Egg' }).first();
-      const sugar = page.locator('.react-flow__node').filter({ hasText: 'Sugar' }).first();
-      const whisk = page.locator('.react-flow__node').filter({ hasText: 'Whisk' }).first();
-      const cook = page.locator('.react-flow__node').filter({ hasText: 'Cook' }).first();
+      const egg = get_node(page, 'Egg');
+      const sugar = get_node(page, 'Sugar');
+      const whisk = get_node(page, 'Whisk');
+      const cook = get_node(page, 'Cook');
 
       await expect(egg).toBeVisible();
       await expect(sugar).toBeVisible();
@@ -64,16 +65,7 @@ test.describe('Issue 74 Repro: Delete and Move', () => {
       await expect(page.locator('.react-flow__edge')).toHaveCount(2);
       
       // Move "Cook" node (Trigger Auto-Save/Layout Update)
-      const cookBox = await cook.boundingBox();
-      if (!cookBox) throw new Error("No box for cook");
-      
-      const startX = cookBox.x + cookBox.width / 2;
-      const startY = cookBox.y + cookBox.height / 2;
-      
-      await page.mouse.move(startX, startY);
-      await page.mouse.down();
-      await page.mouse.move(startX + 100, startY + 100, { steps: 10 });
-      await page.mouse.up();
+      await move_node(page, 'Cook', 100, 100, dir);
       
       await page.waitForTimeout(1000); // Wait for React state & Save
       await screenshot(page, dir, '03-moved');

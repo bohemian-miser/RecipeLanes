@@ -1,7 +1,7 @@
 import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots} from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
-import { move_node, delete_node, click_undo } from './utils/actions';
+import { move_node, delete_node, click_undo, create_recipe, wait_for_graph, get_node } from './utils/actions';
 
 test.describe('Undo Persistence Interaction', () => {
   test.slow();
@@ -18,13 +18,8 @@ test.describe('Undo Persistence Interaction', () => {
       await login('user-owner', { displayName: 'Recipe Owner' });
       await expect(page.getByTitle('Logout')).toBeVisible({ timeout: 15000 });
 
-      await page.getByPlaceholder('Paste recipe here...').fill('test complex');
-      await page.locator('button:has(svg.lucide-arrow-right)').click();
-      await screenshot(page, dir, '01-recipe-created');
-
-      const viewport = page.locator('.react-flow__viewport');
-      await expect(viewport).toBeVisible({ timeout: 30000 });
-      await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 10000 });
+      await create_recipe(page, 'test complex', dir);
+      await wait_for_graph(page, dir);
       
       // Wait for icons to populate
       await expect(page.locator('img[alt=""]').first()).toBeVisible({ timeout: 15000 });
@@ -42,13 +37,13 @@ test.describe('Undo Persistence Interaction', () => {
       expect(await getNodeCount()).toBe(9);
 
       // 3. Move Restored Node (Common)
-      const commonNode = page.locator('.react-flow__node').filter({ hasText: 'Combine (Common)' }).first();
+      const commonNode = get_node(page, 'Combine (Common)');
       const boxCommon = await commonNode.boundingBox();
       const moveCommonX = 200;
       await move_node(page, 'Combine (Common)', moveCommonX, 0, dir);
 
       // 4. Move Another Node (Ing A)
-      const nodeA = page.locator('.react-flow__node').filter({ hasText: 'Ingredient A' }).first();
+      const nodeA = get_node(page, 'Ingredient A');
       const boxA = await nodeA.boundingBox();
       const moveAX = -100;
       await move_node(page, 'Ingredient A', moveAX, 0, dir);

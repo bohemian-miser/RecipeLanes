@@ -1,6 +1,7 @@
 import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
+import { create_recipe } from './utils/actions';
 
 test.describe('Mobile Recipe Deletion', () => {
   for (const device of deviceConfigs) {
@@ -16,11 +17,7 @@ test.describe('Mobile Recipe Deletion', () => {
       await expect(page.getByTitle('Logout')).toBeVisible();
 
       // 2. Create Recipe
-      await page.getByPlaceholder('Paste recipe here...').fill('Ingredients for deletion');
-      
-      const generateBtn = page.locator('button:has(svg.lucide-arrow-right)');
-      await expect(generateBtn).toBeEnabled();
-      await generateBtn.click();
+      await create_recipe(page, 'Ingredients for deletion', dir);
 
       // Wait for URL change or Graph element
       await Promise.race([

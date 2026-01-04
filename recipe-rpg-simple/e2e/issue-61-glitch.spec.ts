@@ -1,5 +1,6 @@
 import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
+import { create_recipe, wait_for_graph, get_node, move_node } from './utils/actions';
 
 test.describe('Issue 61: Glitchy Edits', () => {
   test.skip('Local node move persists against background update', async ({ page, browser, login }) => {
@@ -8,26 +9,22 @@ test.describe('Issue 61: Glitchy Edits', () => {
     // 1. Create Recipe as User A
     await page.goto('/lanes?new=true');
     await login('user-a');
-    await page.getByPlaceholder('Paste recipe here...').fill('test eggs with ham');
-    await page.locator('button:has(svg.lucide-arrow-right)').click();
+    await create_recipe(page, 'test eggs with ham', dir);
     await expect(page).toHaveURL(/id=/);
     
     const recipeId = new URL(page.url()).searchParams.get('id');
     console.log('Recipe ID:', recipeId);
     
     // Wait for graph
-    await expect(page.locator('.react-flow__node').first()).toBeVisible();
+    await wait_for_graph(page, dir);
     
     // 2. Move Node "Egg" locally (User A)
     // We drag the node.
-    const node = page.locator('.react-flow__node').filter({ hasText: '1 Egg' });
+    const node = get_node(page, '1 Egg');
     const box = await node.boundingBox();
     if (!box) throw new Error('Node not found');
     
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(box.x + 300, box.y + 300); // Move significant distance
-    await page.mouse.up();
+    await move_node(page, '1 Egg', 300, 300, dir);
     
     await screenshot(page, dir, '01-moved-locally');
     
@@ -84,7 +81,7 @@ test.describe('Issue 61: Glitchy Edits', () => {
     // AND User A should STILL have the node at the new position (300, 300 offset)
     // If glitch occurs, it snapped back to original.
     
-    const nodeAfter = page.locator('.react-flow__node').filter({ hasText: '1 Egg' });
+    const nodeAfter = get_node(page, '1 Egg');
     const boxAfter = await nodeAfter.boundingBox();
     
     // Original was roughly at box.x. Moved +300.

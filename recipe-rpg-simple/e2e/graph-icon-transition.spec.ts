@@ -13,8 +13,9 @@ test.describe('Graph Icon Transition', () => {
       // Guest flow is fine for generation
       await page.goto('/lanes?new=true');
       
-      // 1. Create Recipe
-      await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
+      // 1. Create Recipe with Unique Ingredient to force generation (avoid cache)
+      const uniqueId = Date.now();
+      await page.getByPlaceholder('Paste recipe here...').fill(`test eggs with Mystery Ingredient ${uniqueId}`);
       await page.locator('button:has(svg.lucide-arrow-right)').click();
       
       // 2. Wait for Graph to Appear

@@ -9,6 +9,7 @@ import { generateRecipePrompt, parseRecipeGraph, extractServes } from '@/lib/rec
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import { generateIconFlow } from '@/lib/flows';
 // import { processIcon } from '@/lib/image-processing';
+import { generateAndStoreIcon } from '@/lib/icon-generator';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 
 // Constants for Generation Gating
@@ -44,77 +45,6 @@ function toTitleCase(str: string) {
     .split(' ')
     .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ');
-}
-
-async function generateAndStoreIcon(ingredient: string, ingredientDocId: string): Promise<{ id: string, url: string, lcb: number, fullPrompt: string, visualDescription: string }> {
-  console.log(`[generateAndStoreIcon] 🟢 START for: "${ingredient}" (DocID: ${ingredientDocId})`);
-  
-  try {
-      // 1. Run Genkit Flow (Image generation)
-      console.log(`[generateAndStoreIcon] Calling generateIconFlow...`);
-      const { url: downloadURL, imagePrompt: fullPrompt } = await generateIconFlow({ ingredient });
-      const visualDescription = ingredient;
-      console.log(`[generateAndStoreIcon] 🎨 Generated URL: ${downloadURL?.substring(0, 50)}...`);
-      
-      // 2. Download Buffer for Storage
-      let imageBuffer: ArrayBuffer;
-      try {
-          console.log(`[generateAndStoreIcon] Downloading image...`);
-          const response = await fetch(downloadURL);
-          if (!response.ok) throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
-          imageBuffer = await response.arrayBuffer();
-          console.log(`[generateAndStoreIcon] Downloaded ${imageBuffer.byteLength} bytes.`);
-      } catch (e) {
-          console.error('[generateAndStoreIcon] 🔴 Failed to download generated image:', e);
-          throw new Error('Failed to download generated image');
-      }
-      const finalBuffer: ArrayBuffer | Buffer = imageBuffer;
-    //   // 3. Process Image (Remove Background)
-    //   let finalBuffer: ArrayBuffer | Buffer = imageBuffer;
-    //   try {
-    //       console.log(`[generateAndStoreIcon] Processing image (background removal)...`);
-    //       finalBuffer = await processIcon(imageBuffer);
-    //       console.log(`[generateAndStoreIcon] Processed image size: ${finalBuffer.byteLength} bytes.`);
-    //   } catch (e) {
-    //       console.warn('[generateAndStoreIcon] ⚠️ Background removal failed, using original image:', e);
-    //   }
-
-      const initialImpressions = 1;
-      const initialRejections = 0;
-      const lcb = calculateWilsonLCB(initialImpressions, initialRejections);
-
-      // 4. Save via Service
-      let finalUrl = downloadURL;
-      let finalId = '';
-      try {
-          console.log(`[generateAndStoreIcon] Saving to DataService...`);
-          const savedResult = await getDataService().saveIcon(
-              ingredientDocId,
-              ingredient,
-              visualDescription,
-              fullPrompt,
-              downloadURL,
-              finalBuffer,
-              {
-                  lcb,
-                  impressions: initialImpressions,
-                  rejections: initialRejections,
-                  textModel,
-                  imageModel: imageModelName
-              }
-          );
-          finalUrl = savedResult.url;
-          finalId = savedResult.id;
-          console.log(`[generateAndStoreIcon] ✅ Saved successfully. Final URL: ${finalUrl}`);
-      } catch (e) {
-          console.error('[generateAndStoreIcon] 🔴 DataService save failed:', e);
-      }
-
-      return { id: finalId, url: finalUrl, lcb, fullPrompt, visualDescription };
-  } catch (e) {
-      console.error(`[generateAndStoreIcon] 🔴 Fatal error for "${ingredient}":`, e);
-      throw e;
-  }
 }
 
 export async function getAllIconsAction() {
@@ -282,7 +212,7 @@ export async function getOrCreateIconAction(
             }
           
                       console.log(`[getOrCreateIconAction] Calling generateAndStoreIcon for ${ingredient}...`);
-                      const result = await generateAndStoreIcon(ingredient, bestMatch.id);
+                      const result = await generateAndStoreIcon({ ingredientName: ingredient });
                       console.log(`[getOrCreateIconAction] Generation success for ${ingredient}: ${result.url}`);
                       return { 
                           ...result,
@@ -303,8 +233,8 @@ export async function getOrCreateIconAction(
                 //   }
             
                   console.log(`[getOrCreateIconAction] Creating new ingredient group for ${ingredient}...`);
-                  const newDocId = await getDataService().createIngredient(ingredient);
-                  const result = await generateAndStoreIcon(ingredient, newDocId);
+                  // const newDocId = await getDataService().createIngredient(ingredient); // Handled inside generateAndStoreIcon
+                  const result = await generateAndStoreIcon({ ingredientName: ingredient });
                   console.log(`[getOrCreateIconAction] Initial generation success for ${ingredient}: ${result.url}`);
                   return { 
                       ...result,

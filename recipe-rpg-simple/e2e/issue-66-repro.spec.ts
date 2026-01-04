@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { screenshot, screenshotDir, cleanupScreenshots} from './utils/screenshot';
 
 test('issue 66: shared gallery icon label appears on hover', async ({ page }) => {
-  const dir = screenshotDir('issue-66-repro');
+  const dir = screenshotDir('auth-flow', 'desktop');
   const uniqueName = `TestHoverItem-${Date.now()}`;
 
   // 1. Go to homepage
@@ -14,15 +14,21 @@ test('issue 66: shared gallery icon label appears on hover', async ({ page }) =>
   await page.getByRole('button', { name: 'Generate Icon' }).click();
 
   // Wait for the icon to be generated and appear in the user's inventory
-  await expect(page.getByAltText(new RegExp(uniqueName, 'i')).first()).toBeVisible({ timeout: 30000 });
   await screenshot(page, dir, '02-icon-generated');
+  await expect(page.getByAltText(new RegExp(uniqueName, 'i')).first()).toBeVisible({ timeout: 30000 });
 
   // 3. Look for the item in the Shared Gallery (Community Collection)
-  await page.reload();
-  await screenshot(page, dir, '03-page-reloaded');
+  // await page.reload();
+  // await screenshot(page, dir, '03-page-reloaded');
   
   // We need to wait for the gallery to load.
-  const gallerySection = page.locator('div', { hasText: 'Community Collection' }).locator('..');
+  const gallerySection = page.locator('div', { hasText: 'Community Collection' }).last().locator('..');
+  
+  // 3. Search and Delete from SHARED GALLERY (bottom permanent storage)
+  // const gallery = page.getByTestId('shared-gallery');
+  // await gallery.scrollIntoViewIfNeeded();
+  await gallerySection.scrollIntoViewIfNeeded();
+  await screenshot(page, dir, '04b-gallery-scrolled');
   
   // Search to filter down to our item
   await page.getByPlaceholder('Search ingredients...').fill(uniqueName);
@@ -59,5 +65,6 @@ test('issue 66: shared gallery icon label appears on hover', async ({ page }) =>
   // We check if it is visible (not occluded)
   await expect(label).toBeVisible();
   
+  await screenshot(page, dir, '05-label visible');
   cleanupScreenshots(dir);
 });

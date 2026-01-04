@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { getPagedIconsAction, deleteIconByUrlAction } from '@/app/actions';
-import { Search, ChevronLeft, ChevronRight, Loader2, Trash2 } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, Trash2, Sparkles } from 'lucide-react';
+import { db } from '@/lib/firebase-client';
+import { collectionGroup, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 
 export function SharedGallery() {
   const [icons, setIcons] = useState<any[]>([]);
@@ -10,13 +12,14 @@ export function SharedGallery() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
-  const limit = 20;
+  const [newArrivalIds, setNewArrivalIds] = useState<Set<string>>(new Set());
+  const limitCount = 20;
 
   useEffect(() => {
     const fetchIcons = async () => {
       setLoading(true);
       try {
-        const res = await getPagedIconsAction(page, limit, search);
+        const res = await getPagedIconsAction(page, limitCount, search);
         setIcons(res.icons);
         setTotal(res.total);
       } catch (err) {
@@ -33,6 +36,42 @@ export function SharedGallery() {
     return () => clearTimeout(timer);
   }, [page, search]);
 
+  // Real-time listener for new arrivals
+  useEffect(() => {
+    if (!db || Object.keys(db).length === 0 || search || page > 1) return;
+
+    const q = query(
+      collectionGroup(db, 'icons'),
+      where('marked_for_deletion', '==', false),
+      orderBy('created_at', 'desc'),
+      limit(5)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          const newIcon = { 
+            id: change.doc.id, 
+            ...data,
+            created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at || null,
+          } as any;
+          
+          setIcons(prev => {
+            const exists = prev.some(i => i.id === newIcon.id || i.url === newIcon.url);
+            if (exists) return prev;
+            
+            // Mark as new arrival for visual flair
+            setNewArrivalIds(ids => new Set(ids).add(newIcon.id));
+            return [newIcon, ...prev].slice(0, 50);
+          });
+        }
+      });
+    });
+
+    return () => unsubscribe();
+  }, [search, page]);
+
   const handleDelete = async (url: string, ingredient: string) => {
     //   if (!confirm('Are you sure you want to delete this icon?')) return;
       try {
@@ -48,7 +87,7 @@ export function SharedGallery() {
       }
   };
 
-  const totalPages = Math.ceil(total / limit);
+  const totalPages = Math.ceil(total / limitCount);
 
   return (
     <div className="w-full space-y-6 pt-8 border-t border-zinc-800" data-testid="shared-gallery">
@@ -83,6 +122,13 @@ export function SharedGallery() {
                    <div className="absolute top-1 left-1 z-10 bg-black/60 px-1.5 py-0.5 text-[8px] font-mono text-zinc-400 pointer-events-none rounded backdrop-blur-sm">
                       {icon.impressions || 0} / {icon.rejections || 0}
                    </div>
+                   
+                   {newArrivalIds.has(icon.id) && (
+                      <div className="absolute top-1 left-1/2 -translate-x-1/2 z-10 bg-yellow-500/90 px-2 py-0.5 text-[8px] font-bold text-black pointer-events-none rounded-full shadow-[0_0_10px_rgba(234,179,8,0.5)] flex items-center gap-1 animate-pulse">
+                          <Sparkles className="w-2 h-2" />
+                          NEW
+                      </div>
+                   )}
                    
                    <button 
                        onClick={(e) => { e.stopPropagation(); handleDelete(icon.url, icon.ingredient_name); }}

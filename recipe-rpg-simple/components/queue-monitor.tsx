@@ -54,7 +54,7 @@ export function QueueMonitor() {
       <div className="bg-zinc-900 px-4 py-2 border-b border-zinc-800 flex items-center justify-between">
         <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
           <Clock className="w-3 h-3" />
-          Background Forge Queue
+          Forge Backlog
         </h3>
         <span className="text-[10px] font-mono text-zinc-600 bg-zinc-800 px-1.5 rounded">
           {items.length} ACTIVE
@@ -68,7 +68,7 @@ export function QueueMonitor() {
                 {item.ingredientName}
               </span>
               <span className="text-[10px] text-zinc-500 font-mono">
-                {item.recipes?.length || 0} recipes waiting
+                {item.recipes?.length || 0} Pending Recipes
               </span>
             </div>
             

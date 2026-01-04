@@ -41,11 +41,26 @@ export interface DataService {
   listDebugFiles(): Promise<any[]>;
   checkExistingCopies(originalId: string, userId: string): Promise<any[]>;
   getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }>;
+  retryIconGeneration(ingredientName: string): Promise<void>;
 }
 
 // --- Firebase Implementation ---
 export class FirebaseDataService implements DataService { 
   
+  async retryIconGeneration(ingredientName: string): Promise<void> {
+      try {
+          // Reset to pending to re-trigger the cloud function
+          await db.collection('icon_queue').doc(ingredientName).update({
+              status: 'pending',
+              error: FieldValue.delete(),
+              created_at: FieldValue.serverTimestamp() // Bump timestamp to process sooner? Or keep original? Bump to top of queue maybe.
+          });
+      } catch (e: any) {
+          console.warn('retryIconGeneration failed:', e.message);
+          throw e;
+      }
+  }
+
   async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
       try {
           // Robust implementation: Fetch recent 500 and filter in-memory to avoid complex index requirements
@@ -775,6 +790,10 @@ export class MemoryDataService implements DataService {
 
     async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number) {
         memoryStore.updateIcon(iconId, { impressions: newImpressions, popularity_score: newScore });
+    }
+
+    async retryIconGeneration(ingredientName: string) {
+        console.log(`[MemoryDataService] Retry requested for ${ingredientName} (No-op in memory mode)`);
     }
 
     async listDebugFiles(): Promise<any[]> {

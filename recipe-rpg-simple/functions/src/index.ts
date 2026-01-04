@@ -12,7 +12,7 @@ import { setAIService, MockAIService } from '../../lib/ai-service';
 const db = getFirestore();
 const storage = getStorage();
 
-console.log(`[Functions] Initializing. MOCK_AI: ${process.env.MOCK_AI}, FUNCTIONS_EMULATOR: ${process.env.FUNCTIONS_EMULATOR}`);
+console.log(`[Functions] Initializing. MOCK_AI: ${process.env.MOCK_AI}, FUNCTIONS_EMULATOR: ${process.env.FUNCTIONS_EMULATOR}, BUCKET: ${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}, PROJECT: ${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}`);
 
 if (process.env.FUNCTIONS_EMULATOR === 'true') {
     console.log('Enforcing Mock AI Service in Emulator');

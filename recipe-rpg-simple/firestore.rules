@@ -30,7 +30,7 @@ service cloud.firestore {
 
     // Icon Generation Queue: Public Read (for monitor)
     match /icon_queue/{ingredient} {
-      allow read: if true;
+      allow read, write: if true;
     }
   }
 }

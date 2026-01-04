@@ -694,3 +694,12 @@ export async function deleteRecipeAction(recipeId: string): Promise<{ success: b
 export async function debugLogAction(message: string) {
     console.log(`[CLIENT-LOG] ${message}`);
 }
+
+export async function retryIconGenerationAction(ingredientName: string) {
+    try {
+        await getDataService().retryIconGeneration(ingredientName);
+        return { success: true };
+    } catch (e: any) {
+        return { error: e.message };
+    }
+}

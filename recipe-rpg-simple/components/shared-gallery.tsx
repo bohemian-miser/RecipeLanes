@@ -115,7 +115,12 @@ export function SharedGallery() {
       ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
               {icons.map((icon) => (
-                <div key={icon.id} className="relative aspect-square bg-zinc-800 border-2 border-zinc-700 shadow-md group overflow-hidden rounded-lg">
+                <div 
+                    key={icon.id} 
+                    className="relative aspect-square bg-zinc-800 border-2 border-zinc-700 shadow-md group overflow-hidden rounded-lg"
+                    data-testid="gallery-item"
+                    data-ingredient={icon.ingredient_name || icon.ingredient}
+                >
                    <div className="absolute top-1 right-1 z-10 bg-black/60 px-1.5 py-0.5 text-[8px] font-mono text-green-400 pointer-events-none rounded backdrop-blur-sm">
                       {Number(icon.popularity_score || 0).toFixed(1)}
                    </div>

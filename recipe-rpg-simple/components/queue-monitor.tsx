@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase-client';
 import { collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
-import { Loader2, XCircle, Clock } from 'lucide-react';
+import { Loader2, XCircle, Clock, RotateCw } from 'lucide-react';
+import { retryIconGenerationAction } from '@/app/actions';
 
 interface QueueItem {
   id: string;
@@ -47,6 +48,14 @@ export function QueueMonitor() {
     }
   }, []);
 
+  const handleRetry = async (ingredientName: string) => {
+      try {
+          await retryIconGenerationAction(ingredientName);
+      } catch (e) {
+          console.error('Retry failed', e);
+      }
+  };
+
   if (items.length === 0) return null;
 
   return (
@@ -62,7 +71,12 @@ export function QueueMonitor() {
       </div>
       <div className="divide-y divide-zinc-900 max-h-48 overflow-y-auto">
         {items.map((item) => (
-          <div key={item.id} className="px-4 py-2 flex items-center justify-between hover:bg-zinc-900/50 transition-colors">
+          <div 
+            key={item.id} 
+            className="px-4 py-2 flex items-center justify-between hover:bg-zinc-900/50 transition-colors"
+            data-testid="backlog-item"
+            data-ingredient={item.ingredientName}
+          >
             <div className="flex flex-col">
               <span className="text-sm font-medium text-zinc-200 truncate max-w-[200px]">
                 {item.ingredientName}
@@ -86,9 +100,19 @@ export function QueueMonitor() {
                 </div>
               )}
               {item.status === 'failed' && (
-                <div className="flex items-center gap-2 text-red-500" title={item.error}>
-                  <XCircle className="w-3 h-3" />
-                  <span className="text-[10px] font-bold uppercase">Failed</span>
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 text-red-500" title={item.error}>
+                      <XCircle className="w-3 h-3" />
+                      <span className="text-[10px] font-bold uppercase">Failed</span>
+                    </div>
+                    <button 
+                        onClick={() => handleRetry(item.ingredientName)}
+                        className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-colors"
+                        title="Retry"
+                        aria-label="Retry"
+                    >
+                        <RotateCw className="w-3 h-3" />
+                    </button>
                 </div>
               )}
             </div>

@@ -97,6 +97,10 @@ test.describe('Graph Interaction', () => {
 
       await wait_for_graph(page, dir);
 
+      // Wait for all icons to settle (complex graph has 9 nodes, all should get icons)
+      // This prevents background updates from clobbering local deletions later in the test
+      await expect(page.locator('.react-flow__node img')).toHaveCount(9, { timeout: 30000 });
+
       await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 10000 });
       await expect(page.locator('.react-flow__edge').first()).toBeAttached({ timeout: 10000 });
       await screenshot(page, dir, 'nodes-and-edges-loaded');

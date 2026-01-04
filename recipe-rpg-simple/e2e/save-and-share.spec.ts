@@ -1,6 +1,7 @@
 import { test, expect, Page } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
+import { create_recipe, wait_for_graph } from './utils/actions';
 
 test.describe('Save and Share Functionality', () => {
   test.slow();
@@ -11,12 +12,10 @@ test.describe('Save and Share Functionality', () => {
       
       // Create a recipe
       await page.goto('/lanes?new=true');
-      await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
-      await page.locator('button.bg-yellow-500').click();
+      await create_recipe(page, 'test eggs', dir);
       
       // Wait for graph
-      const viewport = page.locator('.react-flow__viewport');
-      await expect(viewport).toBeVisible({ timeout: 15000 });
+      await wait_for_graph(page, dir);
       
       // Auto-save check: URL should have ID immediately after generation
       await expect(page).toHaveURL(/id=/, { timeout: 20000 });
@@ -59,8 +58,7 @@ test.describe('Save and Share Functionality', () => {
         const dir = screenshotDir('auth-save', device.name);
         await page.goto('/lanes?new=true');
         await login('save-tester');
-        await page.getByPlaceholder('Paste recipe here...').fill('test eggs');
-        await page.locator('button.bg-yellow-500').click();
+        await create_recipe(page, 'test eggs', dir);
         
         await expect(page).toHaveURL(/id=/, { timeout: 20000 });
         await screenshot(page, dir, 'auth-graph-created');

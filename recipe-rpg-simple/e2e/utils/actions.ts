@@ -70,6 +70,22 @@ export async function delete_node(page: Page, text: string, dir: string) {
     await screenshot(page, dir, `after-delete-${text}`);
 }
 
+export async function create_recipe(page: Page, text: string, dir: string) {
+    await page.getByPlaceholder('Paste recipe here...').fill(text);
+    await screenshot(page, dir, 'recipe-entered');
+    await page.locator('button:has(svg.lucide-arrow-right)').click();
+    await screenshot(page, dir, 'create-clicked');
+}
+
+export async function wait_for_graph(page: Page, dir?: string) {
+    const viewport = page.locator('.react-flow__viewport');
+    await expect(viewport).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 10000 });
+    if (dir) {
+        await screenshot(page, dir, 'graph-visible');
+    }
+}
+
 export async function click_undo(page: Page, dir: string) {
     const undoBtn = page.locator('button[title="Undo (Ctrl+Z)"]');
     await expect(undoBtn).toBeEnabled();

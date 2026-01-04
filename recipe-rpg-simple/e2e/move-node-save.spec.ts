@@ -1,6 +1,7 @@
 import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots} from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
+import { create_recipe, wait_for_graph, get_node } from './utils/actions';
 
 test.describe('Graph Persistence', () => {
   test.slow();
@@ -21,17 +22,11 @@ test.describe('Graph Persistence', () => {
       await expect(page.getByTitle('Logout')).toBeVisible({ timeout: 15000 });
 
       // Create complex graph
-      await page.getByPlaceholder('Paste recipe here...').fill('test complex');
-      await page.locator('button:has(svg.lucide-arrow-right)').click();
-      await screenshot(page, dir, 'recipe-created');
-
+      await create_recipe(page, 'test complex', dir);
+      
       const viewport = page.locator('.react-flow__viewport');
       await screenshot(page, dir, 'graph-visible-check');
-      await expect(viewport).toBeVisible({ timeout: 30000 });
-
-      // Wait for load
-      await screenshot(page, dir, 'waiting-for-nodes');
-      await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 10000 });
+      await wait_for_graph(page, dir);
       
       // Wait for icons to populate (indicates background process finished)
       // This prevents race conditions where background updates revert user edits during the test
@@ -44,7 +39,7 @@ test.describe('Graph Persistence', () => {
       expect(initialEdgeCount).toBe(9);
 
       // 1. Delete "Combine (Common)"
-      const commonNode = page.locator('.react-flow__node').filter({ hasText: 'Combine (Common)' }).first();
+      const commonNode = get_node(page, 'Combine (Common)');
       await screenshot(page, dir, 'common-node-before-delete');
       await expect(commonNode).toBeVisible();
       
@@ -64,7 +59,7 @@ test.describe('Graph Persistence', () => {
       expect(edgesAfterDelete).toBe(9); 
 
       // 2. Move "Ingredient A"
-      const nodeA = page.locator('.react-flow__node').filter({ hasText: 'Ingredient A' }).first();
+      const nodeA = get_node(page, 'Ingredient A');
       const boxA = await nodeA.boundingBox();
       const moveAX = 150;
       const moveAY = 100;
@@ -87,7 +82,7 @@ test.describe('Graph Persistence', () => {
       expect(edgesAfterMoveA).toBe(9);
 
       // 3. Move "Process B"
-      const nodeB = page.locator('.react-flow__node').filter({ hasText: 'Process B' }).first();
+      const nodeB = get_node(page, 'Process B');
       const boxB = await nodeB.boundingBox();
       const moveBX = -150;
       const moveBY = 50;
@@ -131,20 +126,17 @@ test.describe('Graph Persistence', () => {
       // 6. Reload
       await page.reload();
       await screenshot(page, dir, 'after-reload');
-      await expect(viewport).toBeVisible({ timeout: 30000 });
-      await screenshot(page, dir, 'after-reload');
-      await expect(page.locator('.react-flow__node').first()).toBeVisible();
-      await screenshot(page, dir, 'after-reload');
+      await wait_for_graph(page, dir);
 
       // 7. Verify positions AFTER reload
-      const nodeA_Reload = page.locator('.react-flow__node').filter({ hasText: 'Ingredient A' }).first();
+      const nodeA_Reload = get_node(page, 'Ingredient A');
       const boxA_Reload = await nodeA_Reload.boundingBox();
       
       // Expect it to be where it was moved to.
       expect(Math.abs(boxA_Reload!.x - (boxA!.x + moveAX))).toBeLessThan(tolerance);
       expect(Math.abs(boxA_Reload!.y - (boxA!.y + moveAY))).toBeLessThan(tolerance);
 
-      const nodeB_Reload = page.locator('.react-flow__node').filter({ hasText: 'Process B' }).first();
+      const nodeB_Reload = get_node(page, 'Process B');
       const boxB_Reload = await nodeB_Reload.boundingBox();
       
       expect(Math.abs(boxB_Reload!.x - (boxB!.x + moveBX))).toBeLessThan(tolerance);

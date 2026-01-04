@@ -1,6 +1,7 @@
 import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
+import { create_recipe } from './utils/actions';
 
 test.skip('Recipe Deletion', () => {
   for (const device of deviceConfigs) {
@@ -16,11 +17,7 @@ test.skip('Recipe Deletion', () => {
       
       // 2. Create Recipe
       const recipeTitle = 'Recipe to Delete ' + Date.now();
-      await page.getByPlaceholder('Paste recipe here...').pressSequentially('Ingredients for deletion');
-      await screenshot(page, dir, 'loaded');
-      // await page.locator('header input').press('Enter');
-      await page.locator('button:has(svg.lucide-arrow-right)').click();
-      await screenshot(page, dir, 'created');
+      await create_recipe(page, 'Ingredients for deletion', dir);
 
       
       // await expect(page).toHaveURL(/id=/);

@@ -60,6 +60,28 @@ async function enqueueIcons(graph: any, recipeId: string) {
         const rawName = node.visualDescription.trim();
         const name = rawName.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
         
+        // 1. Check existing in DB first (Optimization & Cleanup Support)
+        const ingredientsRef = db.collection('ingredients');
+        const q = await ingredientsRef.where('name', '==', name).limit(1).get();
+        
+        let foundInDb = false;
+        if (!q.empty) {
+            const ingredientDocId = q.docs[0].id;
+            const iconsRef = db.collection(`ingredients/${ingredientDocId}/icons`);
+            const iconSnap = await iconsRef.orderBy('popularity_score', 'desc').limit(1).get();
+            if (!iconSnap.empty) {
+                const iconDoc = iconSnap.docs[0];
+                console.log(`[enqueueIcons] Found existing icon in DB for "${name}", updating immediately.`);
+                immediateUpdates.push({ 
+                    nodeId: node.id, 
+                    iconId: iconDoc.id, 
+                    iconUrl: iconDoc.data().url 
+                });
+                foundInDb = true;
+            }
+        }
+        if (foundInDb) continue;
+
         const docRef = db.collection('icon_queue').doc(name);
         const docSnap = await docRef.get();
         const existingData = docSnap.data();

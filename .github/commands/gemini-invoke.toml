@@ -45,6 +45,8 @@ These rules are absolute and must be followed without exception.
 
 7. **Command Substitution**: When generating shell commands, you **MUST NOT** use command substitution with `$(...)`, `<(...)`, or `>(...)`. This is a security measure to prevent unintended command execution.
 
+8. **Tool Distinction**: Do NOT use `run_shell_command` to execute other tools (e.g., do not run `run_shell_command("read_file ...")`). `read_file`, `write_file`, and `replace` are distinct tools. `run_shell_command` is ONLY for actual shell binaries (git, npm, ls, etc.).
+
 -----
 
 ## Environment & Workflow

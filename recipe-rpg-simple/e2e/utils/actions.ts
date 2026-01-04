@@ -1,8 +1,12 @@
-import { Page, expect } from '@playwright/test';
+import { Page, expect, Locator } from '@playwright/test';
 import { screenshot } from './screenshot';
 
+export function get_node(page: Page, text: string): Locator {
+    return page.locator('.react-flow__node').filter({ hasText: text }).first();
+}
+
 export async function click_on_node(page: Page, text: string, dir: string) {
-    const node = page.locator('.react-flow__node').filter({ hasText: text }).first();
+    const node = get_node(page, text);
     await expect(node).toBeVisible({ timeout: 10000 });
     
     await screenshot(page, dir, `before-click-${text}`);
@@ -12,7 +16,7 @@ export async function click_on_node(page: Page, text: string, dir: string) {
 }
 
 export async function move_node(page: Page, text: string, dx: number, dy: number, dir: string) {
-    const node = page.locator('.react-flow__node').filter({ hasText: text }).first();
+    const node = get_node(page, text);
     await expect(node).toBeVisible({ timeout: 10000 });
     const box = await node.boundingBox();
     expect(box).toBeTruthy();

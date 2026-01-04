@@ -5,6 +5,7 @@ import { IngredientForm } from '@/components/ingredient-form';
 import { IconDisplay, Icon } from '@/components/icon-display';
 import { SharedGallery } from '@/components/shared-gallery';
 import { RerollMonitor } from '@/components/reroll-monitor';
+import { QueueMonitor } from '@/components/queue-monitor';
 import { Login } from '@/components/login';
 import { LogoutButton } from '@/components/logout-button';
 import { useAuth } from '@/components/auth-provider';
@@ -213,6 +214,8 @@ export default function Home() {
             onSubmit={handleSubmit}
             isLoading={false}
           />
+
+          <QueueMonitor />
           
           <RerollMonitor debugInfo={lastDebugInfo} />
 

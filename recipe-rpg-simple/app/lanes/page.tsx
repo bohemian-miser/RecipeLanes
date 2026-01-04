@@ -756,6 +756,7 @@ const handleVisualize = async () => {
                     onClick={() => { handleVisualize(); setInputExpanded(false); }}
                     disabled={status === 'parsing' || status === 'forging' || !recipeText}
                     className="shrink-0 w-10 h-10 flex items-center justify-center bg-yellow-500 hover:bg-yellow-400 text-black rounded-lg transition-colors disabled:opacity-50"
+                    aria-label="Visualize"
                 >
                     {status === 'parsing' || status === 'forging' ? (
                         <div className="flex space-x-1">

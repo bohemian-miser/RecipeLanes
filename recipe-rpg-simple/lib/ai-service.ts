@@ -56,8 +56,14 @@ export class MockAIService implements AIService {
     const lower = prompt.toLowerCase();
     console.log("[MockAIService] generateText received prompt:", prompt);
     if (lower.includes("test eggs")) {
-        // .slice(0, -1); is to remove trailing '"'
-        const extraIngredient = lower.includes("test eggs with ") ? lower.split("test eggs with ")[1].trim().slice(0, -1) : null;
+        let extraIngredient = lower.includes("test eggs with ") ? lower.split("test eggs with ")[1].trim() : null;
+        
+        // Clean up extracted ingredient
+        if (extraIngredient) {
+            if (extraIngredient.startsWith('"')) extraIngredient = extraIngredient.slice(1);
+            if (extraIngredient.endsWith('"')) extraIngredient = extraIngredient.slice(0, -1);
+            if (extraIngredient.endsWith('.')) extraIngredient = extraIngredient.slice(0, -1);
+        }
         
         const nodes = [
                 { id: "1", laneId: "l1", text: "2 Eggs", type: "ingredient", visualDescription: "Eggs" },

@@ -165,8 +165,55 @@ function processRawData(width: number, height: number, buffer: Buffer): Buffer {
         }
     }
 
+    // 4. Find bounding box of non-transparent pixels
+    let minX = width, maxX = 0, minY = height, maxY = 0;
+    
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) << 2;
+            if (buffer[idx + 3] !== 0) { // Non-transparent
+                minX = Math.min(minX, x);
+                maxX = Math.max(maxX, x);
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+            }
+        }
+    }
+    
+    // If all transparent, return empty square
+    if (minX > maxX) {
+        const png = new PNG({ width: 1, height: 1 });
+        png.data = Buffer.alloc(4);
+        return PNG.sync.write(png);
+    }
+    
+    // 5. Calculate bounding box dimensions and create square
+    const boxWidth = maxX - minX + 1;
+    const boxHeight = maxY - minY + 1;
+    const squareSize = Math.max(boxWidth, boxHeight);
+    
+    // Create new square buffer (all transparent)
+    const newBuffer = Buffer.alloc(squareSize * squareSize * 4);
+    
+    // 6. Calculate position: centered horizontally, bottom aligned
+    const offsetX = Math.floor((squareSize - boxWidth) / 2);
+    const offsetY = squareSize - boxHeight;
+    
+    // 7. Copy pixels from bounding box to new position
+    for (let y = 0; y < boxHeight; y++) {
+        for (let x = 0; x < boxWidth; x++) {
+            const srcIdx = ((minY + y) * width + (minX + x)) << 2;
+            const dstIdx = ((offsetY + y) * squareSize + (offsetX + x)) << 2;
+            
+            newBuffer[dstIdx] = buffer[srcIdx];
+            newBuffer[dstIdx + 1] = buffer[srcIdx + 1];
+            newBuffer[dstIdx + 2] = buffer[srcIdx + 2];
+            newBuffer[dstIdx + 3] = buffer[srcIdx + 3];
+        }
+    }
+    
     // Pack
-    const png = new PNG({ width, height });
-    png.data = buffer;
+    const png = new PNG({ width: squareSize, height: squareSize });
+    png.data = newBuffer;
     return PNG.sync.write(png);
 }

@@ -4,11 +4,118 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { genkit, z } from 'genkit';
 import { vertexAI } from '@genkit-ai/google-genai';
-// import { processIcon } from './image-processing'; // Using lib now
 import { generateAndStoreIcon } from '../../lib/icon-generator';
 import { setAIService, MockAIService } from '../../lib/ai-service';
 
-// ... (skipping unchanged code until processIconQueue) ...
+// initializeApp() is called in lib usually, but we need db here.
+// In Firebase Functions, admin is already initialized or we should do it.
+const db = getFirestore();
+const storage = getStorage();
+
+console.log(`[Functions] Initializing. MOCK_AI: ${process.env.MOCK_AI}, FUNCTIONS_EMULATOR: ${process.env.FUNCTIONS_EMULATOR}`);
+
+if (process.env.FUNCTIONS_EMULATOR === 'true') {
+    console.log('Enforcing Mock AI Service in Emulator');
+    setAIService(new MockAIService());
+}
+
+const ai = genkit({
+    plugins: [vertexAI({ location: 'us-central1' })], 
+});
+
+// Flow wrapper for consistency if needed
+export const generateIcon = ai.defineFlow(
+    {
+      name: 'generateIcon',
+      inputSchema: z.object({
+        ingredient: z.string(),
+      }),
+      outputSchema: z.object({
+        url: z.string(),
+        prompt: z.string(),
+      }),
+    },
+    async (input) => {
+      const result = await generateAndStoreIcon({ ingredientName: input.ingredient });
+      return { url: result.url, prompt: result.prompt };
+    }
+  );
+
+// Helper to Queue Icons
+async function enqueueIcons(graph: any, recipeId: string) {
+    if (!graph || !graph.nodes) return;
+
+    const nodesToProcess = graph.nodes.filter((n: any) => n.visualDescription && !n.iconId);
+    if (nodesToProcess.length === 0) return;
+
+    console.log(`[enqueueIcons] Found ${nodesToProcess.length} nodes to process for recipe ${recipeId}`);
+
+    const batch = db.batch();
+    let queuedCount = 0;
+    
+    // Track immediate updates for already completed items
+    const immediateUpdates: { nodeId: string, iconId: string, iconUrl: string }[] = [];
+
+    for (const node of nodesToProcess) {
+        const rawName = node.visualDescription.trim();
+        const name = rawName.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        
+        const docRef = db.collection('icon_queue').doc(name);
+        const docSnap = await docRef.get();
+        const existingData = docSnap.data();
+
+        if (existingData?.status === 'completed' && existingData.iconId && existingData.iconUrl) {
+            console.log(`[enqueueIcons] Icon for "${name}" already completed, checking if recipe needs update.`);
+            // We need to update the recipe because the frontend might not have it yet 
+            // (e.g. cache miss in createVisualRecipeAction but queue has it).
+            immediateUpdates.push({ 
+                nodeId: node.id, 
+                iconId: existingData.iconId, 
+                iconUrl: existingData.iconUrl 
+            });
+            continue;
+        }
+        
+        batch.set(docRef, {
+            status: 'pending', 
+            created_at: existingData?.created_at || FieldValue.serverTimestamp(),
+            recipes: FieldValue.arrayUnion(recipeId) 
+        }, { merge: true });
+        queuedCount++;
+    }
+    
+    if (immediateUpdates.length > 0) {
+        console.log(`[enqueueIcons] Applying ${immediateUpdates.length} immediate updates to recipe ${recipeId}`);
+        await db.runTransaction(async (t) => {
+            const recipeRef = db.collection('recipes').doc(recipeId);
+            const doc = await t.get(recipeRef);
+            if (!doc.exists) return;
+            const data = doc.data();
+            if (!data?.graph?.nodes) return;
+            
+            const nodes = data.graph.nodes;
+            let changed = false;
+            
+            immediateUpdates.forEach(update => {
+                const nodeIndex = nodes.findIndex((n: any) => n.id === update.nodeId);
+                if (nodeIndex !== -1 && !nodes[nodeIndex].iconId) {
+                    nodes[nodeIndex].iconId = update.iconId;
+                    nodes[nodeIndex].iconUrl = update.iconUrl;
+                    changed = true;
+                }
+            });
+            
+            if (changed) {
+                t.update(recipeRef, { "graph.nodes": nodes });
+            }
+        });
+    }
+
+    if (queuedCount > 0) {
+        await batch.commit();
+        console.log(`[enqueueIcons] Enqueued ${queuedCount} icons.`);
+    }
+}
 
 // Worker Function (Queue Processor)
 // Max Instances = 1 to throttle rate
@@ -25,16 +132,15 @@ export const processIconQueue = onDocumentWritten({
     if (!data || data.status !== 'pending') return;
 
     const ingredientName = event.params.ingredientName;
-
     const recipeIds: string[] = data.recipes || [];
 
     console.log(`[Queue] Processing: "${ingredientName}" for recipes: ${recipeIds.join(', ')}`);
 
-    try {
+        try {
         await event.data.after.ref.update({ status: 'processing' });
 
-        // 1. Check Existing Cache first (Optimization)
-        let iconId, iconUrl;
+        // 1. Check Existing Cache first
+        let iconId: string | undefined, iconUrl: string | undefined;
         
         const ingredientsRef = db.collection('ingredients');
         const q = await ingredientsRef.where('name', '==', ingredientName).limit(1).get();
@@ -74,7 +180,6 @@ export const processIconQueue = onDocumentWritten({
                 
                 nodes.forEach((n: any) => {
                     if (n.visualDescription && !n.iconId) {
-                         // Loose match on name (normalized)
                          const nName = n.visualDescription.trim().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
                          if (nName === ingredientName) {
                              n.iconId = iconId;
@@ -91,14 +196,21 @@ export const processIconQueue = onDocumentWritten({
         }
 
         // 4. Mark Queue Done
-        await event.data.after.ref.update({ status: 'completed', iconId, iconUrl, updated_at: FieldValue.serverTimestamp() });
+        await event.data.after.ref.update({ 
+            status: 'completed', 
+            iconId, 
+            iconUrl, 
+            updated_at: FieldValue.serverTimestamp() 
+        });
         console.log(`[Queue] Completed "${ingredientName}"`);
 
     } catch (e: any) {
         console.error(`[Queue] Failed "${ingredientName}":`, e);
-        // We log error but don't throw to avoid infinite retry loops on fatal errors.
-        // Status 'failed' allows manual retry/inspection.
-        await event.data.after.ref.update({ status: 'failed', error: e.message, updated_at: FieldValue.serverTimestamp() });
+        await event.data.after.ref.update({ 
+            status: 'failed', 
+            error: e.message, 
+            updated_at: FieldValue.serverTimestamp() 
+        });
     }
 });
 
@@ -106,7 +218,6 @@ export const processIconQueue = onDocumentWritten({
 export const processNewRecipe = onDocumentCreated({ document: "recipes/{recipeId}", timeoutSeconds: 60, memory: "256MiB" }, async (event) => {
     if (!event.data) return;
     const newData = event.data.data();
-    // Use Queue instead of direct processing
     await enqueueIcons(newData.graph, event.params.recipeId);
 });
 
@@ -120,7 +231,6 @@ export const backfillRecipeIcons = onCall({ timeoutSeconds: 60, memory: "256MiB"
     
     if (!docSnap.exists) throw new HttpsError('not-found', 'Recipe not found');
     
-    // Trigger Queue
     await enqueueIcons(docSnap.data()?.graph, recipeId);
     
     return { success: true, message: "Queued icon generation." };

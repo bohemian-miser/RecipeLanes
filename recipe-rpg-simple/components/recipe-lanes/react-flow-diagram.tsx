@@ -144,41 +144,6 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         setFuture([]);
     }, [getNodes, getEdges]);
 
-    const handleDeleteNode = useCallback(async (nodeId: string) => {
-        console.log(`[DiagramInner] handleDeleteNode called for ${nodeId}`);
-        
-        // Flush pending save to ensure moves are persisted before deletion
-        if (saveTimerRef.current) {
-            clearTimeout(saveTimerRef.current);
-            saveTimerRef.current = null;
-            await performSave();
-        }
-
-        takeSnapshot();
-        const currentEdges = getEdges();
-        const incoming = currentEdges.filter(ed => ed.target === nodeId);
-        const outgoing = currentEdges.filter(ed => ed.source === nodeId);
-        
-        const newEdgesList = currentEdges.filter(ed => ed.source !== nodeId && ed.target !== nodeId);
-        
-        incoming.forEach(inEdge => {
-            outgoing.forEach(outEdge => {
-                newEdgesList.push({
-                    id: `${inEdge.source}-${outEdge.target}`,
-                    source: inEdge.source,
-                    target: outEdge.target,
-                    type: 'floating',
-                    data: { variant: edgeStyle },
-                    style: { stroke: '#9ca3af', strokeWidth: 1.5 },
-                    markerEnd: { type: MarkerType.ArrowClosed, color: '#9ca3af', width: 20, height: 20 }
-                });
-            });
-        });
-        
-        setEdges(newEdgesList);
-        setNodes(nds => nds.filter(n => n.id !== nodeId));
-    }, [takeSnapshot, getEdges, setEdges, setNodes, edgeStyle]);
-
     const downloadImage = async () => {
         if (!flowWrapper.current) return;
         
@@ -353,6 +318,45 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         toggleVisibility: toggleVisibility,
         getGraph: getGraph
     }));
+
+    const handleDeleteNode = useCallback(async (nodeId: string) => {
+        console.log(`[DiagramInner] handleDeleteNode called for ${nodeId}`);
+        
+        // Flush pending save to ensure moves are persisted before deletion
+        if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = null;
+            await performSave();
+        }
+
+        takeSnapshot();
+        const currentEdges = getEdges();
+        const incoming = currentEdges.filter(ed => ed.target === nodeId);
+        const outgoing = currentEdges.filter(ed => ed.source === nodeId);
+        
+        const newEdgesList = currentEdges.filter(ed => ed.source !== nodeId && ed.target !== nodeId);
+        
+        incoming.forEach(inEdge => {
+            outgoing.forEach(outEdge => {
+                newEdgesList.push({
+                    id: `${inEdge.source}-${outEdge.target}`,
+                    source: inEdge.source,
+                    target: outEdge.target,
+                    type: 'floating',
+                    data: { variant: edgeStyle },
+                    style: { stroke: '#9ca3af', strokeWidth: 1.5 },
+                    markerEnd: { type: MarkerType.ArrowClosed, color: '#9ca3af', width: 20, height: 20 }
+                });
+            });
+        });
+        
+        setEdges(newEdgesList);
+        setNodes(nds => nds.filter(n => n.id !== nodeId));
+        
+        if (isOwner) {
+            setTimeout(() => handleSave(true), 50);
+        }
+    }, [takeSnapshot, getEdges, setEdges, setNodes, edgeStyle, isOwner, handleSave, performSave]);
 
     const undo = useCallback(() => {
         let pendingSave = false;

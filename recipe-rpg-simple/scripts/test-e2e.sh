@@ -17,7 +17,7 @@ export NEXT_PUBLIC_FIREBASE_PROJECT_ID="local-project-id"
 export NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="local-project-id.firebasestorage.app"
 
 # Ensure Functions picks up the env var (robust workaround for emulator env inheritance)
-echo "MOCK_AI=true" > "$PROJECT_ROOT/functions/.env"
+# echo "MOCK_AI=true" > "$PROJECT_ROOT/functions/.env"
 
 # 3. Build Functions (Ensure they are fresh for emulators)
 echo "Building Functions..."

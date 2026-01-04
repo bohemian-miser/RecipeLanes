@@ -29,6 +29,7 @@ jobs:
 
       - name: Install Function Dependencies
         run: |
+          npm install --no-save @types/pngjs    # In parent dir for shared lib
           cd functions
           npm ci
 

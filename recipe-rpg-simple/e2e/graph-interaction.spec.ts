@@ -1,6 +1,7 @@
 import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots} from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
+import { get_node, delete_node } from './utils/actions';
 
 test.describe('Graph Interaction', () => {
   test.slow();
@@ -69,45 +70,12 @@ test.describe('Graph Interaction', () => {
       const initialEdges = await getEdgeCount();
       expect(initialEdges).toBeGreaterThan(0);
 
-      const node = page.locator('.react-flow__node').filter({ hasText: 'Flour' }).first();
+      const node = get_node(page, 'Flour');
       await expect(node).toBeVisible({ timeout: 30000 });
       await screenshot(page, dir, 'target-node-found');
 
-      // Click and hover to reveal delete button
-      await node.click();
-      await screenshot(page, dir, 'node-selected');
-
-      await node.hover();
-      await screenshot(page, dir, 'node-hovered');
-
-      const deleteBtn = node.getByRole('button', { name: /Delete Step/i });
-      await expect(deleteBtn).toBeVisible();
-      await screenshot(page, dir, 'delete-button-visible');
-
-      // More robust delete: wait for button to be ready, then click with retries
-      await deleteBtn.waitFor({ state: 'visible' });
-      await expect(deleteBtn).toBeEnabled();
-      
-      // Try clicking and verify it worked
-      let deleted = false;
-      for (let attempt = 0; attempt < 3 && !deleted; attempt++) {
-        await screenshot(page, dir, `delete-attempt-${attempt + 1}`);
-        
-        // Re-hover to ensure button is still visible (especially on mobile)
-        await node.hover();
-        await page.waitForTimeout(200);
-        
-        await deleteBtn.click({ force: true });
-        await page.waitForTimeout(1000);
-        
-        // Check if node is gone
-        deleted = !(await node.isVisible());
-      }
-      
-      await screenshot(page, dir, 'after-delete-attempts');
-
-      await expect(node).not.toBeVisible({ timeout: 10000 });
-      await screenshot(page, dir, 'node-deleted');
+      // Use helper
+      await delete_node(page, 'Flour', dir);
 
       const deletedEdges = await getEdgeCount();
       expect(deletedEdges).toBeLessThan(initialEdges);
@@ -158,33 +126,12 @@ test.describe('Graph Interaction', () => {
       await screenshot(page, dir, 'initial-counts-verified');
 
       // Find the common node "Combine (Common)"
-      const commonNode = page.locator('.react-flow__node').filter({ hasText: 'Combine (Common)' }).first();
+      const commonNode = get_node(page, 'Combine (Common)');
       await expect(commonNode).toBeVisible({ timeout: 30000 });
       await screenshot(page, dir, 'common-node-found');
 
-      // Helper function to delete node with retry logic
-      const deleteNode = async (node: typeof commonNode, attemptPrefix: string) => {
-        await node.click();
-        await node.hover();
-
-        const deleteBtn = node.getByRole('button', { name: /Delete Step/i });
-        await expect(deleteBtn).toBeVisible();
-        await deleteBtn.waitFor({ state: 'visible' });
-        await expect(deleteBtn).toBeEnabled();
-
-        let deleted = false;
-        for (let attempt = 0; attempt < 3 && !deleted; attempt++) {
-          await screenshot(page, dir, `${attemptPrefix}-attempt-${attempt + 1}`);
-          await node.hover();
-          await page.waitForTimeout(200);
-          await deleteBtn.click({ force: true });
-          await page.waitForTimeout(1000);
-          deleted = !(await node.isVisible());
-        }
-      };
-
-      // Delete the common node
-      await deleteNode(commonNode, 'delete');
+      // Delete the common node using helper
+      await delete_node(page, 'Combine (Common)', dir);
       await screenshot(page, dir, 'after-delete');
 
       // Verify common node is gone
@@ -218,14 +165,14 @@ test.describe('Graph Interaction', () => {
 
       // Verify specific edges are back by checking connections
       // The common node should have edges from "Process A" and "Process B"
-      const processANode = page.locator('.react-flow__node').filter({ hasText: 'Process A' }).first();
-      const processBNode = page.locator('.react-flow__node').filter({ hasText: 'Process B' }).first();
+      const processANode = get_node(page, 'Process A');
+      const processBNode = get_node(page, 'Process B');
       await expect(processANode).toBeVisible();
       await expect(processBNode).toBeVisible();
 
       // Check downstream nodes are connected
-      const finalFNode = page.locator('.react-flow__node').filter({ hasText: 'Final Step F' }).first();
-      const finalGNode = page.locator('.react-flow__node').filter({ hasText: 'Final Step G' }).first();
+      const finalFNode = get_node(page, 'Final Step F');
+      const finalGNode = get_node(page, 'Final Step G');
       await expect(finalFNode).toBeVisible();
       await expect(finalGNode).toBeVisible();
       await screenshot(page, dir, 'all-nodes-verified');

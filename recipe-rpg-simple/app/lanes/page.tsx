@@ -281,19 +281,25 @@ function RecipeLanesContent() {
                   if (!prevGraph) return currentGraph;
                   
                   // Only update if content changed or icons populated
-                  // We specifically look for new iconUrls
-                  const newNodes = currentGraph.nodes.map(n => {
-                      const prevNode = prevGraph.nodes.find(p => p.id === n.id);
-                      if (prevNode) {
-                          // Preserve local position if live physics is off?
-                          // Actually, let's trust the DB if it updates
-                          // But mostly we care about icons popping in
-                          if (n.iconUrl && !prevNode.iconUrl) {
-                              return { ...prevNode, iconUrl: n.iconUrl, iconId: n.iconId };
-                          }
+                  // Local-First Merge Strategy:
+                  // Iterate LOCAL nodes. Update them with REMOTE icons.
+                  // Do NOT add new nodes from Remote (prevents resurrection).
+                  // Do NOT remove nodes missing in Remote (prevents remote deletion sync, but avoids race conditions).
+                  
+                  const newNodes = prevGraph.nodes.map(localNode => {
+                      const remoteNode = currentGraph.nodes.find(r => r.id === localNode.id);
+                      if (remoteNode) {
+                          // Only merge icons. Keep local position, text, and structure (inputs) authoritative.
+                          return { 
+                              ...localNode,
+                              iconUrl: remoteNode.iconUrl || localNode.iconUrl,
+                              iconId: remoteNode.iconId || localNode.iconId
+                          };
                       }
-                      return n;
+                      return localNode; // Keep local node even if remote doesn't have it
                   });
+                  
+                  return { ...currentGraph, nodes: newNodes };
                   
                   // If we are just populating icons, we don't want to reset the whole graph 
                   // and lose selection/scroll state if possible.

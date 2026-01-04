@@ -4,7 +4,7 @@
     "esModuleInterop": true,
     "moduleResolution": "nodenext",
     "noImplicitReturns": true,
-    "noUnusedLocals": true,
+    "noUnusedLocals": false,
     "outDir": "lib",
     "sourceMap": true,
     "strict": true,
@@ -12,10 +12,15 @@
     "skipLibCheck": true,
     "typeRoots": [
       "./node_modules/@types"
-    ]
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../*"]
+    }
   },
   "compileOnSave": true,
   "include": [
-    "src"
+    "src",
+    "../lib"
   ]
 }

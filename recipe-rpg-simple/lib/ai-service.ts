@@ -138,7 +138,12 @@ export class MockAIService implements AIService {
 
 // Default to Real or Mock based on env.
 // Tests can swap this out using setAIService.
-let currentService: AIService = process.env.MOCK_AI === 'true' ? new MockAIService() : new RealAIService();
+const isMockMode = 
+  process.env.MOCK_AI === 'true' || 
+  process.env.FUNCTIONS_EMULATOR === 'true' || 
+  process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true';
+
+let currentService: AIService = isMockMode ? new MockAIService() : new RealAIService();
 
 export function getAIService(): AIService {
   return currentService;

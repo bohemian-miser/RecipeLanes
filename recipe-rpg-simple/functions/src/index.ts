@@ -9,8 +9,15 @@ import { generateAndStoreIcon } from '../../lib/icon-generator';
 import { setAIService, MockAIService } from '../../lib/ai-service';
 
 // initializeApp(); // Lib handles this now
+
 const db = getFirestore();
+
 const storage = getStorage();
+
+
+
+console.log(`[Functions] Initializing. MOCK_AI: ${process.env.MOCK_AI}, FUNCTIONS_EMULATOR: ${process.env.FUNCTIONS_EMULATOR}`);
+
 
 
 if (process.env.FUNCTIONS_EMULATOR === 'true') {

@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionGroup": "icons",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "marked_for_deletion",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "recipes",
       "queryScope": "COLLECTION",
       "fields": [

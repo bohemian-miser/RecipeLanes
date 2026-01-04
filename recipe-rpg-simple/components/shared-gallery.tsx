@@ -92,7 +92,7 @@ export function SharedGallery() {
                        <Trash2 className="w-3 h-3" />
                    </button>
 
-                   <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-1 text-[9px] text-zinc-300 text-center truncate backdrop-blur-sm translate-y-full group-hover:translate-y-0 transition-transform">
+                   <div className="absolute bottom-0 left-0 right-0 z-10 bg-black/70 p-1 text-[9px] text-zinc-300 text-center truncate backdrop-blur-sm translate-y-full group-hover:translate-y-0 transition-transform">
                        {icon.ingredient_name || icon.ingredient}
                    </div>
                    <img 

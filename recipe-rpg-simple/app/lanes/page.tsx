@@ -715,7 +715,7 @@ const handleVisualize = async () => {
                 {showForkPrompt && existingCopies && existingCopies.length > 0 && (
                     <Banner color="blue" onDismiss={() => setShowForkPrompt(false)}>
                         {/* TODO: Filter by sourceId when implemented */}
-                        <span>You have <Link href="/gallery?filter=mine" className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length === 1 ? 'copy' : 'copies'}</Link> of this recipe, to make changes, open one of these. Any further changes won't be saved.</span>
+                        <span>You have <Link href="/gallery?filter=mine" className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length === 1 ? 'copy' : 'copies'}</Link> of this recipe, to make changes, open one of these. Any further changes won&apos;t be saved.</span>
                         <div className="flex gap-2">
                             <button onClick={handleFork} className="underline font-bold hover:text-white">
                                 Save another copy

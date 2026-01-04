@@ -27,5 +27,10 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
+
+    // Icon Generation Queue: Public Read (for monitor)
+    match /icon_queue/{ingredient} {
+      allow read: if true;
+    }
   }
 }

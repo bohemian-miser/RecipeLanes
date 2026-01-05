@@ -43,6 +43,7 @@ export interface DataService {
   getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }>;
   retryIconGeneration(ingredientName: string): Promise<void>;
   queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, { iconId: string, iconUrl: string }>>;
+  waitForQueue(ingredientName: string, timeoutMs?: number): Promise<{ iconId: string, iconUrl: string } | null>;
 }
 
 // --- Firebase Implementation ---
@@ -50,6 +51,28 @@ export class FirebaseDataService implements DataService {
   
   private standardizeIngredientName(name: string): string {
       return name.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  }
+
+  async waitForQueue(ingredientName: string, timeoutMs: number = 15000): Promise<{ iconId: string, iconUrl: string } | null> {
+      const stdName = this.standardizeIngredientName(ingredientName);
+      const docRef = db.collection('icon_queue').doc(stdName);
+      
+      const start = Date.now();
+      
+      while (Date.now() - start < timeoutMs) {
+          const snap = await docRef.get();
+          if (snap.exists) {
+              const data = snap.data();
+              if (data?.status === 'completed' && data.iconId && data.iconUrl) {
+                  return { iconId: data.iconId, iconUrl: data.iconUrl };
+              }
+              if (data?.status === 'failed') {
+                  throw new Error(data.error || 'Generation failed');
+              }
+          }
+          await new Promise(r => setTimeout(r, 1000));
+      }
+      return null;
   }
 
   async retryIconGeneration(ingredientName: string): Promise<void> {
@@ -599,9 +622,12 @@ export class FirebaseDataService implements DataService {
               
               if (!foundIcon) {
                   const update: any = {
-                      created_at: existingData?.created_at || FieldValue.serverTimestamp(),
-                      recipes: item.recipeId ? FieldValue.arrayUnion(item.recipeId) : undefined
+                      created_at: existingData?.created_at || FieldValue.serverTimestamp()
                   };
+                  
+                  if (item.recipeId) {
+                      update.recipes = FieldValue.arrayUnion(item.recipeId);
+                  }
                   
                   if (!existingData || existingData.status === 'completed' || existingData.status === 'failed') {
                        update.status = 'pending';
@@ -705,9 +731,33 @@ export class MemoryDataService implements DataService {
     private userVotes = new Map<string, { liked: Set<string>; disliked: Set<string> }>();
     private userStars = new Map<string, Set<string>>();
 
-    async queueIcons(items: any[]): Promise<Map<string, { iconId: string, iconUrl: string }>> {
-        console.log(`[MemoryDataService] Queuing icons (No-op)`);
-        return new Map();
+    async queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, { iconId: string, iconUrl: string }>> {
+        console.log(`[MemoryDataService] Queuing icons (Synchronous Mock)`);
+        const hits = new Map<string, { iconId: string, iconUrl: string }>();
+        
+        for (const item of items) {
+            const stdName = this.standardizeIngredientName(item.ingredientName);
+            const mockUrl = `https://placehold.co/64x64/png?text=${encodeURIComponent(stdName)}&uuid=${randomUUID().substring(0, 6)}`;
+            const iconId = memoryStore.addIcon({
+                url: mockUrl,
+                ingredient: stdName,
+                ingredientId: stdName,
+                created_at: Date.now(),
+                marked_for_deletion: false,
+                popularity_score: 0
+            });
+            
+            hits.set(stdName, { iconId, iconUrl: mockUrl });
+        }
+        return hits;
+    }
+
+    private standardizeIngredientName(name: string): string {
+        return name.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    }
+
+    async waitForQueue(ingredientName: string, timeoutMs?: number): Promise<{ iconId: string, iconUrl: string } | null> {
+        return null;
     }
 
     async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {

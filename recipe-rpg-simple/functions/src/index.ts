@@ -151,6 +151,18 @@ export const processIconQueue = onDocumentWritten({
             });
         }
 
+        // 3. Standalone / Fallback Generation
+        // If no recipes were provided (Main Page) or if we iterated recipes but didn't generate (maybe race condition?), 
+        // we should ensure an icon is available. 
+        // Specifically for Standalone (recipeIds.length === 0), queueIcons only triggers if cache was rejected/empty.
+        // So we MUST generate.
+        if (!generatedIcon && recipeIds.length === 0) {
+             console.log(`[Queue] Standalone request for "${ingredientName}". Generating new icon...`);
+             const result = await generateAndStoreIcon({ ingredientName });
+             generatedIcon = { id: result.id, url: result.url, path: result.path || '' };
+             cache.unshift(generatedIcon);
+        }
+
         // 4. Mark Queue Done
         // We use the ID of the *last generated* or *best available* icon as the global result
         // But mainly we care that processing is done.

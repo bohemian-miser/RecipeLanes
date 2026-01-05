@@ -168,7 +168,9 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         
         setEdges(newEdgesList);
         setNodes(nds => nds.filter(n => n.id !== nodeId));
-    }, [takeSnapshot, getEdges, setEdges, setNodes, edgeStyle]);
+        setIsDirty(true);
+        setTimeout(() => onEdit?.(), 0);
+    }, [takeSnapshot, getEdges, setEdges, setNodes, edgeStyle, onEdit]);
 
     const undo = useCallback(() => {
         if (past.length === 0) return;

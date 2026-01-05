@@ -50,8 +50,10 @@ test.describe('Pending Creations & Gallery', () => {
 
     await page.goto('/');
     
-    const failItem = `FailItem-${Date.now()}`;
+    // Generate a unique name that is already Title Cased to match backend standardization
+    const failItem = `Fail Item ${Date.now()}`;
 
+    // 1. Manually inject a failed item into Firestore via exposed client tools
     await page.evaluate(async ({ name }) => {
         const { _firebaseDb, _firebaseFirestore } = window as any;
         if (!_firebaseDb || !_firebaseFirestore) throw new Error("Firebase not exposed");

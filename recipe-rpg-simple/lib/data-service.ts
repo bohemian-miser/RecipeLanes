@@ -19,7 +19,7 @@ export interface DataService {
       publicUrl: string, 
       imageBuffer: ArrayBuffer | Buffer, 
       meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string }
-  ): Promise<{ id: string, url: string }>;
+  ): Promise<{ id: string, url: string, path?: string }>;
   
   saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public'): Promise<string>;
   getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null>;
@@ -42,18 +42,23 @@ export interface DataService {
   checkExistingCopies(originalId: string, userId: string): Promise<any[]>;
   getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }>;
   retryIconGeneration(ingredientName: string): Promise<void>;
+  queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, { iconId: string, iconUrl: string }>>;
 }
 
 // --- Firebase Implementation ---
 export class FirebaseDataService implements DataService { 
   
+  private standardizeIngredientName(name: string): string {
+      return name.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  }
+
   async retryIconGeneration(ingredientName: string): Promise<void> {
       try {
-          // Reset to pending to re-trigger the cloud function
-          await db.collection('icon_queue').doc(ingredientName).update({
+          const stdName = this.standardizeIngredientName(ingredientName);
+          await db.collection('icon_queue').doc(stdName).update({
               status: 'pending',
               error: FieldValue.delete(),
-              created_at: FieldValue.serverTimestamp() // Bump timestamp to process sooner? Or keep original? Bump to top of queue maybe.
+              created_at: FieldValue.serverTimestamp()
           });
       } catch (e: any) {
           console.warn('retryIconGeneration failed:', e.message);
@@ -63,18 +68,26 @@ export class FirebaseDataService implements DataService {
 
   async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
       try {
-          // Robust implementation: Fetch recent 500 and filter in-memory to avoid complex index requirements
-          const snapshot = await db.collectionGroup('icons')
-              .where('marked_for_deletion', '==', false)
-              .orderBy('created_at', 'desc')
-              .limit(500)
-              .get();
+          let q: FirebaseFirestore.Query = db.collection('feed_icons')
+              .orderBy('created_at', 'desc');
           
-          let icons: any[] = snapshot.docs.map(doc => this.mapIconDoc(doc));
+          // Note: Firestore doesn't support full-text search natively.
+          // For now, we fetch recent and filter in memory if query exists, 
+          // or if query exists we might need a separate approach.
+          // Given the "Gallery" use case, showing recent is primary.
           
+          if (!query) {
+              q = q.limit(500); // Optimization
+          } else {
+              q = q.limit(1000); // Fetch more to filter
+          }
+
+          const snapshot = await q.get();
+          let icons = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
           if (query && query.trim()) {
               const term = query.toLowerCase().trim();
-              icons = icons.filter(i => i.ingredient_name?.toLowerCase().includes(term));
+              icons = icons.filter((i: any) => i.visualDescription?.toLowerCase().includes(term));
           }
 
           const total = icons.length;
@@ -85,16 +98,6 @@ export class FirebaseDataService implements DataService {
           console.warn('getPagedIcons failed:', e.message);
           return { icons: [], total: 0 };
       }
-  }
-
-  private mapIconDoc(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) {
-      const data = doc.data()!;
-      return {
-          id: doc.id,
-          path: doc.ref.path,
-          ...data,
-          created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at || null,
-      };
   }
 
   async checkExistingCopies(originalId: string, userId: string): Promise<any[]> {
@@ -181,7 +184,6 @@ export class FirebaseDataService implements DataService {
       if (graph.sourceId) data.sourceId = graph.sourceId;
 
       if (existingId) {
-          // Enforce ownership check
           const existingDoc = await db.collection('recipes').doc(existingId).get();
           if (existingDoc.exists) {
               const existingData = existingDoc.data();
@@ -331,165 +333,209 @@ export class FirebaseDataService implements DataService {
   }
 
   async getIngredientByName(name: string) {
-    console.log(`[FirebaseDataService] getIngredientByName: ${name}`);
-    // Normalize to Title Case for consistent lookup
-    const normalized = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-    const snapshot = await db.collection('ingredients').where('name', '==', normalized).limit(1).get();
+    const stdName = this.standardizeIngredientName(name);
+    console.log(`[FirebaseDataService] getIngredientByName: ${stdName}`);
     
-    if (!snapshot.empty) {
-        return { id: snapshot.docs[0].id, data: snapshot.docs[0].data() };
+    const doc = await db.collection('ingredients_new').doc(stdName).get();
+    
+    if (doc.exists) {
+        return { id: doc.id, data: doc.data() };
     }
+    return null;
+  }
 
-    // Fallback: Full scan for legacy or mis-cased data (one-time cost until next save)
-    const allSnapshot = await db.collection('ingredients').get();
-    const doc = allSnapshot.docs.find(d => d.data().name.toLowerCase() === name.toLowerCase());
-    return doc ? { id: doc.id, data: doc.data() } : null;
-  }
   async createIngredient(name: string) {
-    const normalized = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-    const doc = await db.collection('ingredients').add({ name: normalized, created_at: FieldValue.serverTimestamp() });
-    return doc.id;
+    const stdName = this.standardizeIngredientName(name);
+    const docRef = db.collection('ingredients_new').doc(stdName);
+    // Initialize if needed
+    await docRef.set({ name: stdName, created_at: FieldValue.serverTimestamp(), icons: [] }, { merge: true });
+    return stdName;
   }
+
   async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number) {
-      await db.collection('ingredients').doc(ingredientId).collection('icons').doc(iconId).update({
-          impressions: FieldValue.increment(1), popularity_score: newScore
+      // ingredientId is StdName
+      const docRef = db.collection('ingredients_new').doc(ingredientId);
+      
+      await db.runTransaction(async (t) => {
+          const doc = await t.get(docRef);
+          if (!doc.exists) return;
+          const data = doc.data() || {};
+          const icons = data.icons || [];
+          
+          const index = icons.findIndex((i: any) => i.id === iconId);
+          if (index !== -1) {
+              icons[index].impressions = newImpressions;
+              icons[index].score = newScore;
+              // Keep sorted
+              icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+              t.update(docRef, { icons });
+          }
       });
-      await this.updateStorageMetadata(iconUrl, { impressions: newImpressions, lcb: newScore });
   }
+
   async getIconsForIngredient(ingredientId: string) {
-    console.log(`[FirebaseDataService] getIconsForIngredient: ${ingredientId}`);
-    const snapshot = await db.collection('ingredients').doc(ingredientId).collection('icons').get();
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    // ingredientId is StdName
+    const doc = await db.collection('ingredients_new').doc(ingredientId).get();
+    if (!doc.exists) return [];
+    return doc.data()?.icons || [];
   }
+
   async getAllIcons() {
      try {
-         const snapshot = await db.collectionGroup('icons').where('marked_for_deletion', '==', false).limit(1000).get();
-         // @ts-ignore
-         return snapshot.docs.map(doc => ({ id: doc.id, path: doc.ref.path, ...doc.data() })).sort((a: any, b: any) => (b.popularity_score || 0) - (a.popularity_score || 0));
+         const snapshot = await db.collection('ingredients_new').limit(100).get();
+         let all: any[] = [];
+         snapshot.forEach(doc => {
+             const data = doc.data();
+             if (data.icons) all.push(...data.icons);
+         });
+         return all;
      } catch (e: any) { return []; }
   }
+
   async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any) {
-      // Optimisation: In Mock AI mode (e.g. tests), skip Storage upload to avoid emulator issues UNLESS we are explicitly using the emulator.
-      // If we are using the emulator, we want to test the full flow including storage triggers/processing.
+      // ingredientId is StdName
       const isEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
       
-      if (process.env.MOCK_AI === 'true' && !isEmulator) {
-          console.log('[saveIcon] Mock AI detected (no emulator), skipping Storage upload.');
-          const finalUrl = publicUrl;
-          const doc = await db.collection('ingredients').doc(ingredientId).collection('icons').add({
-              url: finalUrl, ...meta, ingredient_name: ingredientName, created_at: FieldValue.serverTimestamp(), marked_for_deletion: false, visualDescription: visualDescription, fullPrompt: fullPrompt
-          });
-          return { id: doc.id, url: finalUrl };
-      }
-
-      const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
-      const bucket = storage.bucket(bucketName);
-      const fileName = `icons/${ingredientName.replace(/\s+/g, '-')}-${Date.now()}.png`;
-      const file = bucket.file(fileName);
-      const token = randomUUID();
-      const bufferToSave = Buffer.isBuffer(imageBuffer) ? imageBuffer : Buffer.from(imageBuffer as ArrayBuffer);
-      await file.save(bufferToSave, {
-          metadata: { contentType: 'image/png', metadata: { firebaseStorageDownloadTokens: token, ...meta } }
-      });
+      // Filename: icons/Kebab-ShortID.png
+      const iconId = randomUUID();
+      const shortId = iconId.substring(0, 8);
+      const kebabName = ingredientName.trim().replace(/\s+/g, '-');
+      const fileName = `icons/${kebabName}-${shortId}.png`;
       
-      let finalUrl;
-      const emulatorHost = process.env.STORAGE_EMULATOR_HOST || process.env.NEXT_PUBLIC_STORAGE_EMULATOR_HOST;
-      if (emulatorHost) {
-          // Construct Emulator URL: http://<host>/v0/b/<bucket>/o/<path>?alt=media&token=<token>
-          // Ensure protocol is http
-          const host = emulatorHost.startsWith('http') ? emulatorHost : `http://${emulatorHost}`;
-          finalUrl = `${host}/v0/b/${bucketName}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
-      } else {
-          finalUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
+      let finalUrl = publicUrl;
+
+      if (!(process.env.MOCK_AI === 'true' && !isEmulator)) {
+          const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
+          const bucket = storage.bucket(bucketName);
+          const file = bucket.file(fileName);
+          const bufferToSave = Buffer.isBuffer(imageBuffer) ? imageBuffer : Buffer.from(imageBuffer as ArrayBuffer);
+          
+          await file.save(bufferToSave, {
+              metadata: { contentType: 'image/png', metadata: { ...meta, iconId } }
+          });
+          
+          await file.makePublic();
+          finalUrl = file.publicUrl();
       }
 
-      const doc = await db.collection('ingredients').doc(ingredientId).collection('icons').add({
-          url: finalUrl, ...meta, ingredient_name: ingredientName, created_at: FieldValue.serverTimestamp(), marked_for_deletion: false, visualDescription: visualDescription, fullPrompt: fullPrompt
+      // Transactional Update
+      const docRef = db.collection('ingredients_new').doc(ingredientId);
+      await db.runTransaction(async (t) => {
+          const doc = await t.get(docRef);
+          let icons = [];
+          if (doc.exists) {
+              icons = doc.data()?.icons || [];
+          } else {
+              t.set(docRef, { name: ingredientName, created_at: FieldValue.serverTimestamp() });
+          }
+          
+          const newIcon = {
+              id: iconId,
+              path: fileName,
+              url: finalUrl,
+              score: meta.lcb || 0,
+              impressions: meta.impressions || 0,
+              rejections: meta.rejections || 0,
+              visualDescription,
+              fullPrompt,
+              created_at: new Date().toISOString()
+          };
+          
+          icons.push(newIcon);
+          icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+          if (icons.length > 50) icons = icons.slice(0, 50);
+          
+          t.update(docRef, { icons, updated_at: FieldValue.serverTimestamp() });
+          
+          // Write to flat feed for real-time gallery
+          const feedRef = db.collection('feed_icons').doc(iconId);
+          t.set(feedRef, {
+              ...newIcon,
+              ingredientId // Link back
+          });
       });
-      return { id: doc.id, url: finalUrl };
+
+      return { id: iconId, url: finalUrl, path: fileName };
   }
+
   async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
-    const iconsRef = db.collection('ingredients').doc(ingredientId).collection('icons');
-    const snapshot = await iconsRef.where('url', '==', iconUrl).get();
-    const batch = db.batch();
-    for (const doc of snapshot.docs) {
-        const data = doc.data();
-        const n = (data.impressions || 0);
-        const r = (data.rejections || 0) + 1;
-        const newLcb = this.calculateWilsonLCB(n, r);
-        batch.update(doc.ref, { rejections: FieldValue.increment(1), popularity_score: newLcb });
-    }
-    await batch.commit();
+    const docRef = db.collection('ingredients_new').doc(ingredientId);
+    
+    await db.runTransaction(async (t) => {
+        const doc = await t.get(docRef);
+        if (!doc.exists) return;
+        const icons = doc.data()?.icons || [];
+        
+        // Find by URL or Path. 
+        const index = icons.findIndex((i: any) => i.url === iconUrl || i.path === iconUrl);
+        if (index !== -1) {
+            const icon = icons[index];
+            icon.rejections = (icon.rejections || 0) + 1;
+            icon.score = this.calculateWilsonLCB(icon.impressions || 0, icon.rejections);
+            
+            icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+            t.update(docRef, { icons });
+        }
+    });
   }
+
   async deleteIcon(iconUrl: string, ingredientName?: string) {
-    if (ingredientName) {
-        const ingSnapshot = await db.collection('ingredients').get();
-        const ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === ingredientName.toLowerCase());
-        
-        if (ingDoc) {
-            const iconsSnapshot = await ingDoc.ref.collection('icons').get();
-            const batch = db.batch();
-            iconsSnapshot.docs.forEach(doc => {
-                if (this.urlsMatch(doc.data().url, iconUrl)) {
-                    batch.delete(doc.ref);
-                }
-            });
-            await batch.commit();
-        }
-    } else {
-        // Fallback: Iterate all ingredients to find the icon (Slow but works without index)
-        // Note: Ideally we should store icon ID or use a collection group index
-        const allIngredients = await db.collection('ingredients').get();
-        const batch = db.batch();
-        let found = false;
-        
-        // Parallelize icon lookups for speed
-        await Promise.all(allIngredients.docs.map(async (ingDoc) => {
-             const iconsSnapshot = await ingDoc.ref.collection('icons').where('url', '==', iconUrl).get();
-             iconsSnapshot.docs.forEach(doc => {
-                 batch.delete(doc.ref);
-                 found = true;
-             });
-        }));
-        
-        if (found) await batch.commit();
-    }
-    if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
-        const matches = iconUrl.match(new RegExp('/o/([^?]+)'));
-        if (matches && matches[1]) {
-            const filePath = decodeURIComponent(matches[1]);
-            const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
-            await bucket.file(filePath).delete().catch(() => {}); 
-        }
-    }
-  }
-  async deleteIngredientCategory(ingredientName: string) {
-      const ingSnapshot = await db.collection('ingredients').get();
-      const ingDoc = ingSnapshot.docs.find(d => d.data().name.toLowerCase() === ingredientName.toLowerCase());
+      if (!ingredientName) return; 
+      const stdName = this.standardizeIngredientName(ingredientName);
+      const docRef = db.collection('ingredients_new').doc(stdName);
+      
+      let deletedId: string | null = null;
 
-      if (ingDoc) {
-          const iconsSnapshot = await ingDoc.ref.collection('icons').get();
-          const batch = db.batch();
-          const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ? storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) : null;
-          const deletes: Promise<any>[] = [];
-
-          for (const iconDoc of iconsSnapshot.docs) {
-              const data = iconDoc.data();
-              batch.delete(iconDoc.ref);
-              if (bucket && data.url) {
-                  const matches = data.url.match(new RegExp('/o/([^?]+)'));
-                  if (matches && matches[1]) {
-                      const filePath = decodeURIComponent(matches[1]);
-                      deletes.push(bucket.file(filePath).delete().catch(() => {}));
-                  }
+      await db.runTransaction(async (t) => {
+          const doc = await t.get(docRef);
+          if (!doc.exists) return;
+          const icons = doc.data()?.icons || [];
+          const iconToDelete = icons.find((i: any) => i.url === iconUrl || i.path === iconUrl);
+          
+          if (iconToDelete) {
+              deletedId = iconToDelete.id;
+              const newIcons = icons.filter((i: any) => i.id !== deletedId);
+              t.update(docRef, { icons: newIcons });
+              
+              if (deletedId) {
+                  const feedRef = db.collection('feed_icons').doc(deletedId);
+                  t.delete(feedRef);
               }
           }
-          batch.delete(ingDoc.ref);
-          await Promise.all(deletes);
-          await batch.commit();
+      });
+      
+      if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
+          let path = iconUrl;
+          if (iconUrl.includes('/o/')) {
+              const match = iconUrl.match(new RegExp('/o/([^?]+)'));
+              if (match) path = decodeURIComponent(match[1]);
+          }
+          if (path) {
+              const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
+              await bucket.file(path).delete().catch(() => {});
+          }
       }
   }
-  async listDebugFiles() {
+
+  async deleteIngredientCategory(ingredientName: string) {
+      const stdName = this.standardizeIngredientName(ingredientName);
+      const docRef = db.collection('ingredients_new').doc(stdName);
+      
+      const doc = await docRef.get();
+      if (doc.exists) {
+          const icons = doc.data()?.icons || [];
+          const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!);
+          
+          icons.forEach((i: any) => {
+              const path = i.path || (i.url && i.url.match(new RegExp('/o/([^?]+)'))?.[1] ? decodeURIComponent(i.url.match(new RegExp('/o/([^?]+)'))![1]) : null);
+              if (path) bucket.file(path).delete().catch(() => {});
+          });
+          
+          await docRef.delete();
+      }
+  }
+
+  async listDebugFiles(): Promise<any[]> {
       const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
       const bucket = storage.bucket(bucketName);
       const [files] = await bucket.getFiles({ prefix: 'icons/', maxResults: 1000 });
@@ -504,6 +550,117 @@ export class FirebaseDataService implements DataService {
           mediaLink: file.metadata.mediaLink || null,
           publicUrl: `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(file.name)}?alt=media`
       }));
+  }
+
+  async queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, { iconId: string, iconUrl: string }>> {
+      const immediateHits = new Map<string, { iconId: string, iconUrl: string }>();
+      if (items.length === 0) return immediateHits;
+      
+      const batch = db.batch();
+      let queuedCount = 0;
+      
+      const uniqueNames = Array.from(new Set(items.map(i => this.standardizeIngredientName(i.ingredientName))));
+      const refs = uniqueNames.map(name => db.collection('ingredients_new').doc(name));
+      const snapshots = await db.getAll(...refs);
+      
+      const cacheMap = new Map<string, any>();
+      snapshots.forEach(snap => {
+          if (snap.exists) cacheMap.set(snap.id, snap.data());
+      });
+
+      const updatesByRecipe = new Map<string, Map<string, { iconId: string, iconUrl: string }>>();
+
+      for (const item of items) {
+          const name = this.standardizeIngredientName(item.ingredientName);
+          const rejected = new Set(item.rejectedIds || []);
+          
+          let foundIcon: { id: string, url: string } | null = null;
+
+          const ingData = cacheMap.get(name);
+          if (ingData && ingData.icons && Array.isArray(ingData.icons)) {
+              for (const icon of ingData.icons) {
+                  if (!rejected.has(icon.id)) {
+                      foundIcon = { id: icon.id, url: icon.url };
+                      break;
+                  }
+              }
+          }
+
+          if (!foundIcon) {
+              const docRef = db.collection('icon_queue').doc(name);
+              const docSnap = await docRef.get();
+              const existingData = docSnap.data();
+
+              if (existingData?.status === 'completed' && existingData.iconId) {
+                  if (!rejected.has(existingData.iconId)) {
+                      foundIcon = { id: existingData.iconId, url: existingData.iconUrl };
+                  }
+              }
+              
+              if (!foundIcon) {
+                  const update: any = {
+                      created_at: existingData?.created_at || FieldValue.serverTimestamp(),
+                      recipes: item.recipeId ? FieldValue.arrayUnion(item.recipeId) : undefined
+                  };
+                  
+                  if (!existingData || existingData.status === 'completed' || existingData.status === 'failed') {
+                       update.status = 'pending';
+                       update.error = FieldValue.delete();
+                  }
+                  
+                  batch.set(docRef, update, { merge: true });
+                  queuedCount++;
+              }
+          }
+
+          if (foundIcon) {
+              immediateHits.set(name, { iconId: foundIcon.id, iconUrl: foundIcon.url });
+              if (item.recipeId) {
+                  if (!updatesByRecipe.has(item.recipeId)) {
+                      updatesByRecipe.set(item.recipeId, new Map());
+                  }
+                  updatesByRecipe.get(item.recipeId)!.set(name, { iconId: foundIcon.id, iconUrl: foundIcon.url });
+              }
+          }
+      }
+
+      for (const [recipeId, updates] of updatesByRecipe.entries()) {
+          await db.runTransaction(async (t) => {
+              const recipeRef = db.collection('recipes').doc(recipeId);
+              const doc = await t.get(recipeRef);
+              if (!doc.exists) return;
+              const data = doc.data();
+              if (!data?.graph?.nodes) return;
+              
+              const nodes = data.graph.nodes;
+              let changed = false;
+              
+              nodes.forEach((n: any) => {
+                  if (n.visualDescription) {
+                      const nName = this.standardizeIngredientName(n.visualDescription);
+                      if (updates.has(nName)) {
+                          const update = updates.get(nName)!;
+                          if (n.iconId !== update.iconId) {
+                              n.iconId = update.iconId;
+                              n.iconUrl = update.iconUrl;
+                              changed = true;
+                          }
+                      }
+                  }
+              });
+              
+              if (changed) {
+                  t.update(recipeRef, { "graph.nodes": nodes });
+              }
+          });
+      }
+
+      if (queuedCount > 0) {
+          await batch.commit();
+          console.log(`[DataService] Enqueued ${queuedCount} icons.`);
+      }
+      
+      return immediateHits;
   }
 
   private calculateWilsonLCB(n: number, r: number): number {
@@ -547,6 +704,11 @@ export class MemoryDataService implements DataService {
     
     private userVotes = new Map<string, { liked: Set<string>; disliked: Set<string> }>();
     private userStars = new Map<string, Set<string>>();
+
+    async queueIcons(items: any[]): Promise<Map<string, { iconId: string, iconUrl: string }>> {
+        console.log(`[MemoryDataService] Queuing icons (No-op)`);
+        return new Map();
+    }
 
     async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
         let icons = memoryStore.getAllIcons().filter(i => !i.marked_for_deletion);
@@ -752,7 +914,7 @@ export class MemoryDataService implements DataService {
         return memoryStore.getAllIcons().sort((a, b) => b.popularity_score - a.popularity_score);
     }
 
-    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any): Promise<{ id: string, url: string }> {
+    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any): Promise<{ id: string, url: string, path?: string }> {
         const id = memoryStore.addIcon({
             url: publicUrl,
             ingredient: ingredientName,
@@ -767,7 +929,7 @@ export class MemoryDataService implements DataService {
             textModel: meta.textModel,
             imageModel: meta.imageModel
         });
-        return { id, url: publicUrl };
+        return { id, url: publicUrl, path: `icons/${id}.png` };
     }
 
     async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {

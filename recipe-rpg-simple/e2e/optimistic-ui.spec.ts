@@ -68,11 +68,11 @@ test.describe('Optimistic UI & Background Trigger', () => {
         // Wait for hydration if needed, but they should be there fast
         await expect(eggImg).toBeVisible();
         console.log('Egg image src:', await eggImg.getAttribute('src'));
-        await expect(eggImg).toHaveAttribute('src', /icons%2Fseed-Eggs/);
+        await expect(eggImg).toHaveAttribute('src', /icons%2FEggs-/);
         
         await expect(flourImg).toBeVisible();
         console.log('Flour image src:', await flourImg.getAttribute('src'));
-        await expect(flourImg).toHaveAttribute('src', /icons%2Fseed-Flour/);
+        await expect(flourImg).toHaveAttribute('src', /icons%2FFlour-/);
         
         await screenshot(page, dir, 'graph-loaded');
         // 6. Assert New Icons are Missing Initially (Optimistic Cache Miss) OR already arrived (Fast Forge)

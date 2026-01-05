@@ -341,67 +341,17 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
             graph.serves = 1;
         }
 
-        // 2. Optimistic Cache Lookup (Fast Path)
-        // We look for existing icons to populate immediately.
-        // Missing icons are left as null (triggering the Background Worker).
-        console.log('[createVisualRecipeAction] 🔍 Checking cache for icons...');
-        const nodesWithIcons = await Promise.all(graph.nodes.map(async (node) => {
-            if (node.visualDescription) {
-                try {
-                    // Title Case Normalization for lookup
-                    const name = toTitleCase(node.visualDescription);
-                    const match = await getDataService().getIngredientByName(name);
-                    
-                    console.log(`[createVisualRecipeAction] Lookup '${name}' -> Match: ${match ? match.id : 'null'}`);
+        // 2. Optimistic Cache Lookup & Queuing (Unified)
+        console.log('[createVisualRecipeAction] 🔍 Checking cache & queuing...');
+        
+        // Prepare Queue Requests
+        const queueItems = graph.nodes
+            .filter(n => n.visualDescription)
+            .map(n => ({
+                ingredientName: n.visualDescription
+            }));
 
-                    if (match) {
-                        const icons = await getDataService().getIconsForIngredient(match.id);
-                        console.log(`[createVisualRecipeAction] '${name}' has ${icons.length} icons.`);
-                        
-                        // Pick best icon (Simple highest score)
-                        const bestIcon = icons
-                            .filter((i: any) => !i.marked_for_deletion)
-                            .sort((a: any, b: any) => (b.popularity_score || 0) - (a.popularity_score || 0))[0];
-                        
-                        if (bestIcon) {
-                            // Quality Check: If proven bad, treat as missing to trigger regeneration
-                            const n = bestIcon.impressions || 0;
-                            const score = bestIcon.popularity_score || 0;
-                            
-                            // IF the best icon is very bad, skip it and make a new one.
-                            if (n >= PROVEN_SAMPLE_SIZE && score < QUALITY_FLOOR_LCB) {
-                                console.log(`[createVisualRecipeAction] Skipping '${name}' icon (Score ${score.toFixed(2)} below floor).`);
-                                return node; // Return without iconId -> Trigger Background
-                            }
-
-                            console.log(`[createVisualRecipeAction] Selected icon for '${name}': ${bestIcon.url}`);
-                            
-                            // Increment Impressions for the selected icon
-                            const newImpressions = (bestIcon.impressions || 0) + 1;
-                            const newLCB = calculateWilsonLCB(newImpressions, bestIcon.rejections || 0);
-                            await getDataService().incrementImpressions(match.id, bestIcon.id, bestIcon.url, newLCB, newImpressions);
-
-                            return { 
-                                ...node, 
-                                iconId: bestIcon.id, 
-                                iconUrl: bestIcon.url // Keep URL for immediate display
-                            };
-                        }
-                    }else {
-                        console.log(`[createVisualRecipeAction] CACHE MISS for '${name}'.`);
-
-                    }
-                } catch (e) {
-                    console.warn(`[createVisualRecipeAction] Cache lookup failed for ${node.text}`, e);
-                }
-            }
-            // Return node as is (iconId undefined/null)
-            return node;
-        }));
-
-        graph.nodes = nodesWithIcons;
-
-        // 3. Save to Firestore (Triggers Cloud Function)
+        // 3. Save to Firestore (Initial)
         const session = await getAuthService().verifyAuth();
         const userId = session?.uid;
         
@@ -412,17 +362,12 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
             const original = await getDataService().getRecipe(currentId);
             if (original) {
                 if (original.ownerId === userId) {
-                    // Owner -> Update existing
-                    console.log('[createVisualRecipeAction] Updating existing recipe:', currentId);
                     targetId = currentId;
                     visibility = (original.visibility as any) || 'unlisted';
-                    if (original.graph.title) graph.title = original.graph.title; // Preserve title if not parsed
+                    if (original.graph.title) graph.title = original.graph.title;
                 } else {
-                    // Not Owner -> Fork
-                    console.log('[createVisualRecipeAction] Forking from', currentId);
                     graph.sourceId = currentId;
-                    
-                    // Smart Naming
+                    // ... naming logic ...
                     let newTitle = graph.title || original.graph.title || 'Untitled';
                     if (newTitle.startsWith('Yet another copy of ')) {
                         const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
@@ -443,8 +388,34 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
             }
         }
         
-        console.log('[createVisualRecipeAction] 💾 Saving recipe...');
+        console.log('[createVisualRecipeAction] 💾 Saving initial recipe...');
         const id = await getDataService().saveRecipe(graph, targetId, userId, visibility);
+        
+        // 4. Queue Icons (Now we have an ID)
+        // We pass the ID so the Queue (and DataService immediate updates) can link/update the doc.
+        const itemsWithId = queueItems.map(i => ({ ...i, recipeId: id }));
+        
+        const immediateHits = await getDataService().queueIcons(itemsWithId);
+        
+        // 5. Apply Immediate Hits & Re-Save (if any) to ensure the returned graph is populated
+        let localUpdate = false;
+        graph.nodes = graph.nodes.map(n => {
+            if (n.visualDescription) {
+                const stdName = toTitleCase(n.visualDescription); // Match DataService logic
+                if (immediateHits.has(stdName)) {
+                    localUpdate = true;
+                    return { 
+                        ...n, 
+                        iconId: immediateHits.get(stdName)!.iconId,
+                        iconUrl: immediateHits.get(stdName)!.iconUrl 
+                    };
+                }
+            }
+            return n;
+        });
+
+        // The DB is already updated by queueIcons transactionally for hits.
+        // We return the populated graph for instant UI feedback.
         
         console.log(`[createVisualRecipeAction] ✅ Complete. ID: ${id}`);
         return { graph, id };
@@ -574,44 +545,63 @@ export async function getRecipeAction(id: string) {
 
 
 
-export async function rerollIconAction(nodeId: string, ingredientName: string, currentIconUrl: string, seenUrls: string[] = [], recipeId?: string) {
+export async function rerollIconAction(
+    nodeId: string, 
+    ingredientName: string, 
+    currentIconUrl: string, 
+    seenUrls: string[] = [], 
+    recipeId?: string,
+    currentIconId?: string
+) {
     try {
-        // Record Rejection if possible
-        if (currentIconUrl) {
-             const ingMatch = await getDataService().getIngredientByName(ingredientName);
-             if (ingMatch) {
-                 await getDataService().recordRejection(currentIconUrl, ingredientName, ingMatch.id);
-             }
-        }
-
-        // Get New Icon
-        // Combine current bad one with history of bad ones
-        const allSeen = Array.from(new Set([...seenUrls, currentIconUrl]));
-        const result = await getOrCreateIconAction(ingredientName, 0, allSeen);
+        console.log(`[rerollIconAction] Rerolling ${ingredientName} (Node ${nodeId})`);
         
-        if ('error' in result) return { error: result.error };
-
-        // Update Stored Recipe if recipeId is provided
+        let rejectedIds: string[] = [];
+        // 1. Persist Rejection to Recipe
         if (recipeId) {
             const recipeData = await getDataService().getRecipe(recipeId);
             if (recipeData) {
                 const graph = recipeData.graph;
-                const nodeIndex = graph.nodes.findIndex(n => n.id === nodeId);
-                if (nodeIndex !== -1) {
-                    graph.nodes[nodeIndex] = {
-                        ...graph.nodes[nodeIndex],
-                        iconId: result.iconId,
-                        iconUrl: result.iconUrl
-                    };
-                    await getDataService().saveRecipe(graph, recipeId, recipeData.ownerId, recipeData.visibility as any);
-                    console.log(`[rerollIconAction] Updated recipe ${recipeId} node ${nodeId} with new icon.`);
+                if (!graph.rejections) graph.rejections = {};
+                if (!graph.rejections[ingredientName]) graph.rejections[ingredientName] = [];
+                
+                // Add current to rejections
+                const idToReject = currentIconId || (currentIconUrl ? 'url:' + currentIconUrl : null);
+                if (idToReject && !graph.rejections[ingredientName].includes(idToReject)) {
+                    graph.rejections[ingredientName].push(idToReject);
                 }
+                
+                // Save persistent rejections
+                await getDataService().saveRecipe(graph, recipeId, recipeData.ownerId, recipeData.visibility as any);
+                rejectedIds = graph.rejections[ingredientName];
             }
         }
+
+        // 2. Queue for New Icon
+        // We pass the full history of rejections for this recipe
+        const result = await getDataService().queueIcons([{ 
+            ingredientName, 
+            recipeId, 
+            rejectedIds 
+        }]);
         
+        // 3. Return Immediate Result (if any)
+        const stdName = toTitleCase(ingredientName);
+        if (result.has(stdName)) {
+            const hit = result.get(stdName)!;
+            // Immediate Update Recipe (Queue already did it? Yes.)
+            // But we return to UI to update state immediately
+            return { 
+                iconId: hit.iconId,
+                iconUrl: hit.iconUrl,
+                nodeId 
+            };
+        }
+
+        // 4. Return Pending
+        // UI should show spinner until subscription updates
         return { 
-            iconId: result.iconId,
-            iconUrl: result.iconUrl,
+            status: 'pending',
             nodeId 
         };
 

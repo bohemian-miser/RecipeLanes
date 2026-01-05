@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { getPagedIconsAction, deleteIconByUrlAction } from '@/app/actions';
 import { Search, ChevronLeft, ChevronRight, Loader2, Trash2, Sparkles } from 'lucide-react';
 import { db } from '@/lib/firebase-client';
-import { collectionGroup, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 
 export function SharedGallery() {
   const [icons, setIcons] = useState<any[]>([]);
@@ -41,7 +41,7 @@ export function SharedGallery() {
     if (!db || Object.keys(db).length === 0 || search || page > 1) return;
 
     const q = query(
-      collectionGroup(db, 'icons'),
+      collection(db, 'feed_icons'),
       where('marked_for_deletion', '==', false),
       orderBy('created_at', 'desc'),
       limit(5)
@@ -119,10 +119,10 @@ export function SharedGallery() {
                     key={icon.id} 
                     className="relative aspect-square bg-zinc-800 border-2 border-zinc-700 shadow-md group overflow-hidden rounded-lg"
                     data-testid="gallery-item"
-                    data-ingredient={icon.ingredient_name || icon.ingredient}
+                    data-ingredient={icon.ingredient_name || icon.ingredient || icon.visualDescription}
                 >
                    <div className="absolute top-1 right-1 z-10 bg-black/60 px-1.5 py-0.5 text-[8px] font-mono text-green-400 pointer-events-none rounded backdrop-blur-sm">
-                      {Number(icon.popularity_score || 0).toFixed(1)}
+                      {Number(icon.popularity_score || icon.score || 0).toFixed(1)}
                    </div>
                    <div className="absolute top-1 left-1 z-10 bg-black/60 px-1.5 py-0.5 text-[8px] font-mono text-zinc-400 pointer-events-none rounded backdrop-blur-sm">
                       {icon.impressions || 0} / {icon.rejections || 0}
@@ -136,7 +136,7 @@ export function SharedGallery() {
                    )}
                    
                    <button 
-                       onClick={(e) => { e.stopPropagation(); handleDelete(icon.url, icon.ingredient_name); }}
+                       onClick={(e) => { e.stopPropagation(); handleDelete(icon.url, icon.ingredient_name || icon.visualDescription); }}
                        className="absolute top-7 right-1 z-20 p-1 bg-red-900/80 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
                        title="Delete Icon"
                    >
@@ -144,11 +144,11 @@ export function SharedGallery() {
                    </button>
 
                    <div className="absolute bottom-0 left-0 right-0 z-10 bg-black/70 p-1 text-[9px] text-zinc-300 text-center truncate backdrop-blur-sm translate-y-full group-hover:translate-y-0 transition-transform">
-                       {icon.ingredient_name || icon.ingredient}
+                       {icon.ingredient_name || icon.ingredient || icon.visualDescription}
                    </div>
                    <img 
                      src={icon.url} 
-                     alt={icon.ingredient_name}
+                     alt={icon.ingredient_name || icon.visualDescription}
                      title={icon.visualDescription || icon.ingredient_name}
                      className="w-full h-full object-contain rendering-pixelated transition-transform group-hover:scale-110"
                      style={{ imageRendering: 'pixelated' }}

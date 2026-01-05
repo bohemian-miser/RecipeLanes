@@ -52,6 +52,9 @@ export interface RecipeGraph {
   lanes: Lane[];
   nodes: RecipeNode[];
   layouts?: Record<string, NodeLayout[]>;
+  
+  // Persistent user preferences for this recipe
+  rejections?: Record<string, string[]>; // Map<VisualDescription, RejectedIconIDs[]>
 }
 
 // --- Output Layout (For Rendering) ---

@@ -10,6 +10,12 @@ service cloud.firestore {
         allow read: if true;
       }
     }
+    match /ingredients_new/{ingredientId} {
+      allow read: if true;
+    }
+    match /feed_icons/{iconId} {
+      allow read: if true;
+    }
 
     // Recipes
     match /recipes/{recipeId} {

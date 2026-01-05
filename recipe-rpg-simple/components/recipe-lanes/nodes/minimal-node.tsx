@@ -72,16 +72,26 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
       }
 
       try {
-        const res = await rerollIconAction(id, ingredientName, currentUrl, Array.from(sessionRejectedUrls), recipeId || undefined);
-        if (res && res.iconUrl) {
+        const res = await rerollIconAction(
+            id, 
+            ingredientName, 
+            currentUrl, 
+            Array.from(sessionRejectedUrls), 
+            recipeId || undefined,
+            data.iconId || undefined // Pass current ID for persistent rejection
+        );
+        
+        if (res && 'iconUrl' in res && res.iconUrl) {
             setNodes((nodes) => nodes.map(n => {
-                // Update all nodes that share the same visual description/text
                 const nName = n.data.visualDescription || n.data.text;
                 if (nName === ingredientName) {
                     return { ...n, data: { ...n.data, iconUrl: res.iconUrl, iconId: res.iconId } };
                 }
                 return n;
             }));
+        } else if (res && res.status === 'pending') {
+            console.log("Reroll queued pending");
+            // Optionally clear local icon to show it's working, or just wait for DB update
         }
       } catch (err) {
           console.error("Reroll failed", err);

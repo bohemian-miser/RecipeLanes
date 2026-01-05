@@ -1,11 +1,29 @@
-import { db, storage } from '../lib/firebase-admin';
-import { processIcon } from '../functions/src/image-processing';
+import { processIcon } from '../lib/image-processing';
 import fetch from 'node-fetch';
 import fs from 'fs/promises';
 import path from 'path';
+import dotenv from 'dotenv';
 
 async function reprocessIcons() {
     const args = process.argv.slice(2);
+    const stagingIndex = args.indexOf('--staging');
+    
+    if (stagingIndex !== -1) {
+        console.log('✨ Switching to STAGING environment (.env.staging)...');
+        dotenv.config({ path: '.env.staging', override: true });
+    } else {
+        dotenv.config();
+    }
+
+    console.log('[DEBUG] Environment State:');
+    console.log(`  - Project ID: ${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}`);
+    console.log(`  - Service Account Key Present: ${!!process.env.FIREBASE_SERVICE_ACCOUNT_KEY}`);
+    console.log(`  - GOOGLE_APPLICATION_CREDENTIALS: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
+    console.log(`  - Emulator Host: ${process.env.FIRESTORE_EMULATOR_HOST}`);
+
+    // Dynamic import
+    const { db, storage } = await import('../lib/firebase-admin');
+
     const nIndex = args.indexOf('-n');
     let limit = 0;
     if (nIndex !== -1 && args[nIndex + 1]) {

@@ -7,7 +7,7 @@ test.describe('Issue 74 Repro: Delete and Move', () => {
   for (const device of deviceConfigs) {
     if (device.isMobile) continue;
 
-    test.skip(`${device.name}: Bridge persists after move`, async ({ page, login }) => {
+    test(`${device.name}: Bridge persists after move`, async ({ page, login }) => {
       const dir = screenshotDir('issue-74', device.name);
       await page.setViewportSize(device.viewport);
       

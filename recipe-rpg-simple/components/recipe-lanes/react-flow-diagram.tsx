@@ -428,6 +428,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     const getGraph = useCallback((): RecipeGraph => {
         const currentNodes = getNodes().filter(n => n.type !== 'lane');
+        const currentEdges = getEdges();
         const layouts = graph.layouts || {};
         layouts[mode as string] = currentNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
         
@@ -436,11 +437,17 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             .filter(n => currentNodes.some(rn => rn.id === n.id))
             .map(n => {
                const rfn = currentNodes.find(rn => rn.id === n.id)!;
-               return { ...n, x: rfn.position.x, y: rfn.position.y };
+               
+               // Reconstruct inputs from current edges to capture bridging/changes
+               const inputs = currentEdges
+                   .filter(e => e.target === n.id)
+                   .map(e => e.source);
+
+               return { ...n, x: rfn.position.x, y: rfn.position.y, inputs };
             });
             
         return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
-    }, [graph, mode, getNodes]);
+    }, [graph, mode, getNodes, getEdges]);
 
     const performSave = async () => {
         const graphToSave = getGraph();

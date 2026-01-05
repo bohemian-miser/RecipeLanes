@@ -353,7 +353,8 @@ function RecipeLanesContent() {
   };
 
   const handleFork = async () => {
-      if (!graph) return;
+      const currentGraph = diagramRef.current ? diagramRef.current.getGraph() : graph;
+      if (!currentGraph) return;
       if (isForking.current) return;
       
       isForking.current = true;
@@ -382,7 +383,7 @@ function RecipeLanesContent() {
       }
 
       const newGraph = { 
-          ...graph, 
+          ...currentGraph, 
           title: newTitle,
           sourceId: currentId || undefined
       };

@@ -473,17 +473,15 @@ export async function rerollIconAction(
         }
 
         // 2. Resolve Icons (Using Orchestrator)
-        // Even for single reroll, this ensures we check cache/queue correctly
-        // If we didn't fetch graph (no recipeId), we construct a minimal one?
-        // rerollIconAction is mostly called with recipeId in Lanes.
-        // For Main Page, recipeId is undefined.
-        
         if (!graph) {
-             // Mock graph for standalone reroll (Main Page usage, though Main Page uses getOrCreateIconAction usually?)
-             // Main Page calls handleReroll -> recordRejectionAction -> getOrCreateIconAction.
-             // Lanes calls rerollIconAction.
-             // So this is Lanes specific.
              return { error: 'Recipe Context required for reroll' };
+        }
+
+        // Force the specific node to be re-evaluated by clearing its icon
+        const nodeIndex = graph.nodes.findIndex(n => n.id === nodeId);
+        if (nodeIndex !== -1) {
+            graph.nodes[nodeIndex].iconUrl = undefined;
+            graph.nodes[nodeIndex].iconId = undefined;
         }
 
         const { hits } = await resolveIconsForGraph(graph, recipeId);

@@ -169,15 +169,11 @@ test.describe('Undo Race Conditions', () => {
     await page.mouse.move(box!.x + box!.width / 2 + -400, box!.y + box!.height / 2 , { steps: 2 });
     await page.mouse.up();
     
-      // screenshot(page, dir, `after-move-Eggs`);
-      
     await screenshot(page, dir, `after-move-Eggs-before-undo`);
       
-    
     // Undo
-    // await click_undo_fast(page, dir);
-    // await expect(undoBtn).toBeEnabled();
-    // screenshot(page, dir, `before-undo`);
+    // Ensure the action is registered in history stack
+    await expect(undoBtn).toBeEnabled();
     await undoBtn.click();
     await page.waitForTimeout(500); // Wait for animation
     await screenshot(page, dir, `after-undo`);

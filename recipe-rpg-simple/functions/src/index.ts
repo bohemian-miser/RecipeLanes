@@ -46,6 +46,7 @@ function standardizeName(name: string): string {
     return name.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 }
 
+// count parameter allows batch recording of impressions when a single icon is assigned to multiple waiting recipes simultaneously.
 async function recordImpression(ingredientId: string, iconId: string, count: number = 1) {
     const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
     try {
@@ -93,7 +94,6 @@ export const processIconQueue = onDocumentWritten({
     const hasRecipes = recipeIds.length > 0;
 
     // If status is 'processing', assume active runner handles it.
-    // If active runner misses new IDs, it will write 'completed' later, triggering us again.
     if (data.status === 'processing') return;
 
     // If pending, OR (completed/failed AND has new recipes to process)
@@ -102,23 +102,23 @@ export const processIconQueue = onDocumentWritten({
     console.log(`[Queue] Processing: "${ingredientName}" for recipes: ${recipeIds.join(', ')}`);
 
     try {
-        // Lock it. Note: If we crash here, it stays 'processing'. Cloud Functions retry should handle it if enabled, 
-        // but 'onDocumentWritten' retry policy needs config. For now, assume reliability.
+        // Lock it
         await event.data.after.ref.update({ status: 'processing' });
 
-        // 1. Load Cache (ingredients_new)
-        const ingDoc = await db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientName).get();
-        let cache = ingDoc.exists ? (ingDoc.data()?.icons || []) : [];
+        // 1. GENERATE NEW ICON (Batch Mode)
+        // Contract: If requests are in the queue, they have exhausted the cache.
+        // We generate ONE new icon for the entire waiting batch.
+        console.log(`[Queue] Generating new icon for "${ingredientName}" (Batch size: ${recipeIds.length})...`);
+        const result = await generateAndStoreIcon({ ingredientName });
         
-        // Ensure cache is sorted by score
-        cache.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+        const newIconId = result.id;
+        const newIconUrl = result.url;
 
-        let generatedIcon: any = null;
-        const impressions = new Map<string, number>();
-
-        // 2. Process Each Recipe
-        console.log(`[Queue] Checking ${recipeIds.length} recipes for updates...`);
+        // 2. FAN-OUT UPDATES
+        console.log(`[Queue] Assigning new icon ${newIconId} to ${recipeIds.length} recipes...`);
         
+        let successCount = 0;
+
         for (const rId of recipeIds) {
             await db.runTransaction(async (t) => {
                 const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(rId);
@@ -129,62 +129,17 @@ export const processIconQueue = onDocumentWritten({
                 if (!recipeData?.graph?.nodes) return;
                 
                 const nodes = recipeData.graph.nodes;
-                const rejections = recipeData.graph.rejections?.[ingredientName] || [];
-                const rejectedSet = new Set(rejections); // IDs or URLs
-
-                // Find Best Icon for this Recipe
-                let selectedIcon = null;
-                
-                // Try from Cache
-                for (const icon of cache) {
-                    if (!rejectedSet.has(icon.id) && !rejectedSet.has(icon.url) && !rejectedSet.has(icon.path)) {
-                        selectedIcon = icon;
-                        break;
-                    }
-                }
-
-                // Try from recently generated (in this run)
-                if (!selectedIcon && generatedIcon) {
-                    if (!rejectedSet.has(generatedIcon.id)) {
-                        selectedIcon = generatedIcon;
-                    }
-                }
-
-                // If still no icon, GENERATE NEW
-                if (!selectedIcon) {
-                    // Only generate ONE new icon per batch run to avoid spamming if multiple recipes reject everything.
-                    // Subsequent recipes will use this new one.
-                    if (!generatedIcon) {
-                        console.log(`[Queue] Generating new icon for "${ingredientName}" (Reason: Cache empty or all rejected by ${rId})...`);
-                        const result = await generateAndStoreIcon({ ingredientName });
-                        
-                        generatedIcon = {
-                            id: result.id,
-                            url: result.url,
-                            path: result.path || '', 
-                            score: 0
-                        };
-                        
-                        // Add to local cache for subsequent recipes
-                        cache.unshift(generatedIcon);
-                    }
-                    selectedIcon = generatedIcon;
-                }
-
-                // Update Nodes
                 let changed = false;
+
                 nodes.forEach((n: any) => {
                     if (n.visualDescription) {
                          const nName = standardizeName(n.visualDescription);
                          if (nName === ingredientName) {
-                             if (selectedIcon && n.iconId !== selectedIcon.id) {
-                                 n.iconId = selectedIcon.id;
-                                 n.iconUrl = selectedIcon.url;
+                             // Blindly update. They queued for a new icon, they get it.
+                             if (n.iconId !== newIconId) {
+                                 n.iconId = newIconId;
+                                 n.iconUrl = newIconUrl;
                                  changed = true;
-                                 
-                                 // Track impression locally
-                                 const count = impressions.get(selectedIcon.id) || 0;
-                                 impressions.set(selectedIcon.id, count + 1);
                              }
                          }
                     }
@@ -192,34 +147,21 @@ export const processIconQueue = onDocumentWritten({
                 
                 if (changed) {
                     t.update(recipeRef, { "graph.nodes": nodes });
+                    successCount++;
                 }
             });
         }
 
-        // Record Collected Impressions
-        for (const [iconId, count] of impressions.entries()) {
-            await recordImpression(ingredientName, iconId, count);
+        // 3. RECORD IMPRESSIONS
+        if (successCount > 0) {
+            await recordImpression(ingredientName, newIconId, successCount);
         }
 
-        // 3. Standalone / Fallback Generation
-        if (!generatedIcon && recipeIds.length === 0) {
-             // Only force generation if we are in 'pending' state (explicit request)
-             // OR if we are re-running for some reason?
-             // If status was 'completed' and recipes=[], we returned early above.
-             // So here status MUST be 'pending' (or we passed guard).
-             console.log(`[Queue] Standalone request for "${ingredientName}". Generating new icon...`);
-             const result = await generateAndStoreIcon({ ingredientName });
-             generatedIcon = { id: result.id, url: result.url, path: result.path || '' };
-             cache.unshift(generatedIcon);
-        }
-
-        // 4. Mark Queue Done & CLEAR processed recipes
-        const finalIcon = generatedIcon || cache[0] || null;
-        
+        // 4. CLEANUP
         const update: any = { 
             status: 'completed', 
-            iconId: finalIcon?.id || null, 
-            iconUrl: finalIcon?.url || null, 
+            iconId: newIconId, 
+            iconUrl: newIconUrl, 
             updated_at: FieldValue.serverTimestamp() 
         };
 

@@ -54,15 +54,25 @@ export const processIconQueue = onDocumentWritten({
     if (!event.data || !event.data.after) return;
     const data = event.data.after.data();
     
-    if (!data || data.status !== 'pending') return;
+    if (!data) return;
 
     const rawIngredientName = event.params.ingredientName;
     const ingredientName = standardizeName(rawIngredientName);
     const recipeIds: string[] = data.recipes || [];
+    const hasRecipes = recipeIds.length > 0;
+
+    // If status is 'processing', assume active runner handles it.
+    // If active runner misses new IDs, it will write 'completed' later, triggering us again.
+    if (data.status === 'processing') return;
+
+    // If pending, OR (completed/failed AND has new recipes to process)
+    if (data.status !== 'pending' && !hasRecipes) return;
 
     console.log(`[Queue] Processing: "${ingredientName}" for recipes: ${recipeIds.join(', ')}`);
 
     try {
+        // Lock it. Note: If we crash here, it stays 'processing'. Cloud Functions retry should handle it if enabled, 
+        // but 'onDocumentWritten' retry policy needs config. For now, assume reliability.
         await event.data.after.ref.update({ status: 'processing' });
 
         // 1. Load Cache (ingredients_new)
@@ -110,15 +120,16 @@ export const processIconQueue = onDocumentWritten({
 
                 // If still no icon, GENERATE NEW
                 if (!selectedIcon) {
+                    // Only generate ONE new icon per batch run to avoid spamming if multiple recipes reject everything.
+                    // Subsequent recipes will use this new one.
                     if (!generatedIcon) {
                         console.log(`[Queue] Generating new icon for "${ingredientName}" (Reason: Cache empty or all rejected by ${rId})...`);
-                        // This generates and saves to DB (updating ingredients_new)
                         const result = await generateAndStoreIcon({ ingredientName });
                         
                         generatedIcon = {
                             id: result.id,
                             url: result.url,
-                            path: result.path || '', // Ensure generateAndStoreIcon returns path if possible, or we derive it
+                            path: result.path || '', 
                             score: 0
                         };
                         
@@ -134,10 +145,7 @@ export const processIconQueue = onDocumentWritten({
                     if (n.visualDescription) {
                          const nName = standardizeName(n.visualDescription);
                          if (nName === ingredientName) {
-                             // Only update if missing or if this is an explicit reroll (which implies we want *something* new)
-                             // Actually, if we are in the queue, we want an update.
-                             // But check if current icon is already the selected one?
-                             if (n.iconId !== selectedIcon.id) {
+                             if (selectedIcon && n.iconId !== selectedIcon.id) {
                                  n.iconId = selectedIcon.id;
                                  n.iconUrl = selectedIcon.url;
                                  changed = true;
@@ -153,28 +161,32 @@ export const processIconQueue = onDocumentWritten({
         }
 
         // 3. Standalone / Fallback Generation
-        // If no recipes were provided (Main Page) or if we iterated recipes but didn't generate (maybe race condition?), 
-        // we should ensure an icon is available. 
-        // Specifically for Standalone (recipeIds.length === 0), queueIcons only triggers if cache was rejected/empty.
-        // So we MUST generate.
         if (!generatedIcon && recipeIds.length === 0) {
+             // Only force generation if we are in 'pending' state (explicit request)
+             // OR if we are re-running for some reason?
+             // If status was 'completed' and recipes=[], we returned early above.
+             // So here status MUST be 'pending' (or we passed guard).
              console.log(`[Queue] Standalone request for "${ingredientName}". Generating new icon...`);
              const result = await generateAndStoreIcon({ ingredientName });
              generatedIcon = { id: result.id, url: result.url, path: result.path || '' };
              cache.unshift(generatedIcon);
         }
 
-        // 4. Mark Queue Done
-        // We use the ID of the *last generated* or *best available* icon as the global result
-        // But mainly we care that processing is done.
+        // 4. Mark Queue Done & CLEAR processed recipes
         const finalIcon = generatedIcon || cache[0] || null;
         
-        await event.data.after.ref.update({ 
+        const update: any = { 
             status: 'completed', 
             iconId: finalIcon?.id || null, 
             iconUrl: finalIcon?.url || null, 
             updated_at: FieldValue.serverTimestamp() 
-        });
+        };
+
+        if (recipeIds.length > 0) {
+            update.recipes = FieldValue.arrayRemove(...recipeIds);
+        }
+        
+        await event.data.after.ref.update(update);
         console.log(`[Queue] Completed "${ingredientName}"`);
 
     } catch (e: any) {

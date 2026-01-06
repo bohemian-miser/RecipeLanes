@@ -63,7 +63,7 @@ test.describe('Pending Creations & Gallery', () => {
             status: 'failed',
             error: 'Simulated E2E Failure',
             created_at: new Date(),
-            recipes: ['e2e-recipe']
+            recipes: [] // Empty recipes prevents worker from auto-completing it immediately
         });
     }, { name: failItem });
 

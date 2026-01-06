@@ -118,8 +118,11 @@ async function migrateIngredients() {
             
             if (finalScore < 0) finalScore = 0;
 
+            const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(destPath)}?alt=media`;
+
             cache.push({
                 id: i.id,
+                url: publicUrl,
                 path: destPath, // Storing path allows reconstruction
                 shortId: shortId, // Explicitly store shortId if needed
                 score: finalScore,

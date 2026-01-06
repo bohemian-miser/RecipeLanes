@@ -55,6 +55,7 @@ const app = getApps().length > 0 ? getApp() : initializeApp({
 
 // 1. Initialize App
 const db = getFirestore(app);
+db.settings({ ignoreUndefinedProperties: true });
 const storage = getStorage(app);
 const auth = getAuth(app);
 

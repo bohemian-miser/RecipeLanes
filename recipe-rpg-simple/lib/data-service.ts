@@ -130,7 +130,12 @@ export class FirebaseDataService implements DataService {
           snapshot.forEach(doc => {
               const data = doc.data();
               if (data.icons && Array.isArray(data.icons)) {
-                  allIcons.push(...data.icons);
+                  // Ensure created_at is serialized
+                  const safeIcons = data.icons.map((icon: any) => ({
+                      ...icon,
+                      created_at: icon.created_at?.toDate ? icon.created_at.toDate().toISOString() : (icon.created_at || null)
+                  }));
+                  allIcons.push(...safeIcons);
               }
           });
 
@@ -634,7 +639,7 @@ export class FirebaseDataService implements DataService {
                   if (!rejected.has(icon.id) && !rejected.has('url:' + icon.url)) {
                       foundIcon = { 
                           iconId: icon.id, 
-                          iconUrl: icon.url,
+                          iconUrl: icon.url || null,
                           score: icon.score,
                           impressions: icon.impressions,
                           rejections: icon.rejections 
@@ -651,7 +656,7 @@ export class FirebaseDataService implements DataService {
 
               if (existingData?.status === 'completed' && existingData.iconId) {
                   if (!rejected.has(existingData.iconId)) {
-                      foundIcon = { iconId: existingData.iconId, iconUrl: existingData.iconUrl };
+                      foundIcon = { iconId: existingData.iconId, iconUrl: existingData.iconUrl || null };
                   }
               }
               

@@ -193,6 +193,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             }));
             setNodes(restoredNodes);
             setEdges(previous.edges);
+            setIsDirty(true);
         }
     }, [past, getNodes, getEdges, setNodes, setEdges, handleDeleteNode]);
 
@@ -217,6 +218,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             }));
             setNodes(restoredNodes);
             setEdges(next.edges);
+            setIsDirty(true);
         }
     }, [future, getNodes, getEdges, setNodes, setEdges, handleDeleteNode]);
 

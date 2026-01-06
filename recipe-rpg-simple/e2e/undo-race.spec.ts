@@ -38,7 +38,7 @@ test.describe('Undo Race Conditions', () => {
 
   for (const device of desktopDevices) {
     
-    // test.skip(`${device.name}: Slow Undo (Control) - Wait for save then undo`, async ({ page, login }) => {
+    // test(`${device.name}: Slow Undo (Control) - Wait for save then undo`, async ({ page, login }) => {
     //   const dir = screenshotDir('undo-race-slow', device.name);
     //   await page.setViewportSize(device.viewport);
     //   await page.goto('/lanes');
@@ -73,7 +73,7 @@ test.describe('Undo Race Conditions', () => {
 
     
     
-    test.skip(`${device.name}: slow Undo`, async ({ page, login }) => {
+    test(`${device.name}: slow Undo`, async ({ page, login }) => {
       const dir = screenshotDir('undo-race-slow-myversion', device.name);
       await page.setViewportSize(device.viewport);
       await page.goto('/lanes');
@@ -135,7 +135,7 @@ test.describe('Undo Race Conditions', () => {
       cleanupScreenshots(dir);
     });
 
-    test.skip(`${device.name}: Fast Undo`, async ({ page, login }) => {
+    test(`${device.name}: Fast Undo`, async ({ page, login }) => {
       const dir = screenshotDir('undo-race-fast-myversion', device.name);
       await page.setViewportSize(device.viewport);
       await page.goto('/lanes');

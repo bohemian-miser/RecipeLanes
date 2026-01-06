@@ -598,7 +598,7 @@ const handleVisualize = async () => {
                     )}
                     {ownerId && (
                         <span className="text-[9px] text-zinc-600 font-mono ml-2">
-                           by {ownerName || ownerId}
+                           by {ownerName || 'User'}
                         </span>
                     )}
                 </div>

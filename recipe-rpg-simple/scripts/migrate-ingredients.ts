@@ -37,6 +37,7 @@ async function migrateIngredients() {
     for (const doc of snapshot.docs) {
         const data = doc.data();
         if (!isForce && (data.cache || data.migrated_to)) {
+            console.log(`Skipping ${doc.id} (already migrated)`);
             continue;
         }
 
@@ -131,16 +132,6 @@ async function migrateIngredients() {
             batch.set(newRef, newDocData, { merge: true });
             opCount++;
             
-            // Also populate feed_icons
-            for (const icon of cache) {
-                 const feedRef = db.collection('feed_icons').doc(icon.id);
-                 batch.set(feedRef, {
-                     ...icon,
-                     ingredientId: stdName
-                 }, { merge: true });
-                 opCount++;
-            }
-
             batch.update(doc.ref, { migrated_to: stdName, migrated_at: FieldValue.serverTimestamp() });
             opCount++;
 

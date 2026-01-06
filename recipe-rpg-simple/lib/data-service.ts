@@ -3,7 +3,7 @@ import { memoryStore, IconData, IngredientData } from './store';
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
 import type { RecipeGraph } from './recipe-lanes/types';
-import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_FEED, DB_COLLECTION_RECIPES } from './config';
+import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName } from './utils';
 
 export interface IconStats {
@@ -108,25 +108,49 @@ export class FirebaseDataService implements DataService {
 
   async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
       try {
-          let q: FirebaseFirestore.Query = db.collection(DB_COLLECTION_FEED)
-              .orderBy('created_at', 'desc');
+          // Query ingredients_new instead of feed_icons
+          // Note: This is an approximation for the "Gallery" debug view.
+          // We fetch recently updated ingredients and aggregate their icons.
+          
+          let q: FirebaseFirestore.Query = db.collection(DB_COLLECTION_INGREDIENTS)
+              .orderBy('updated_at', 'desc');
           
           if (!query) {
-              q = q.limit(500); 
+              q = q.limit(50); // Fetch top 50 active ingredients
           } else {
-              q = q.limit(1000); 
+              // Note: filtering by name requires an index on name, or client-side filter
+              // Firestore doesn't support 'contains'. We can use >= prefix if needed.
+              // For debug, we'll fetch more and filter in memory if name index missing.
+              q = q.limit(100); 
           }
 
           const snapshot = await q.get();
-          let icons = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          let allIcons: any[] = [];
+          
+          snapshot.forEach(doc => {
+              const data = doc.data();
+              if (data.icons && Array.isArray(data.icons)) {
+                  allIcons.push(...data.icons);
+              }
+          });
+
+          // Sort all gathered icons by created_at desc
+          allIcons.sort((a, b) => {
+              const tA = new Date(a.created_at).getTime();
+              const tB = new Date(b.created_at).getTime();
+              return tB - tA;
+          });
 
           if (query && query.trim()) {
               const term = query.toLowerCase().trim();
-              icons = icons.filter((i: any) => i.visualDescription?.toLowerCase().includes(term));
+              allIcons = allIcons.filter((i: any) => 
+                  i.visualDescription?.toLowerCase().includes(term) || 
+                  i.ingredient?.toLowerCase().includes(term)
+              );
           }
 
-          const total = icons.length;
-          const paginated = icons.slice((page - 1) * limit, page * limit);
+          const total = allIcons.length;
+          const paginated = allIcons.slice((page - 1) * limit, page * limit);
 
           return { icons: paginated, total };
       } catch (e: any) {
@@ -485,13 +509,6 @@ export class FirebaseDataService implements DataService {
           if (icons.length > 50) icons = icons.slice(0, 50);
           
           t.update(docRef, { icons, updated_at: FieldValue.serverTimestamp() });
-          
-          // Write to flat feed for real-time gallery
-          const feedRef = db.collection(DB_COLLECTION_FEED).doc(iconId);
-          t.set(feedRef, {
-              ...newIcon,
-              ingredientId // Link back
-          });
       });
 
       return { id: iconId, url: finalUrl, path: fileName };
@@ -536,11 +553,6 @@ export class FirebaseDataService implements DataService {
               deletedId = iconToDelete.id;
               const newIcons = icons.filter((i: any) => i.id !== deletedId);
               t.update(docRef, { icons: newIcons });
-              
-              if (deletedId) {
-                  const feedRef = db.collection(DB_COLLECTION_FEED).doc(deletedId);
-                  t.delete(feedRef);
-              }
           }
       });
       

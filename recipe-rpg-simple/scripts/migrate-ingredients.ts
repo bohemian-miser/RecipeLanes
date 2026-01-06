@@ -90,6 +90,7 @@ async function migrateIngredients() {
                 if (isDryRun) {
                     console.log(`[DryRun] Would copy ${srcPath} -> ${destPath}`);
                 } else {
+                    console.log(`[REAL] Copying ${srcPath} -> ${destPath}`);
                     try {
                         const file = bucket.file(srcPath);
                         const [exists] = await file.exists();
@@ -103,12 +104,12 @@ async function migrateIngredients() {
                     }
                 }
             }
-
+            console.log(`Adding to cache: score p: ${i.popularity_score} lcb:${i.lcb} i:${i.impressions} r:${i.rejections} id:${i.id}`);
             cache.push({
                 id: i.id,
                 path: destPath, // Storing path allows reconstruction
                 shortId: shortId, // Explicitly store shortId if needed
-                score: i.popularity_score || 0,
+                score: i.popularity_score || 1-i.lcb || 0,
                 impressions: i.impressions || 0,
                 rejections: i.rejections || 0,
                 visualDescription: i.visualDescription || i.ingredient_name,
@@ -122,12 +123,13 @@ async function migrateIngredients() {
             created_at: data.created_at || FieldValue.serverTimestamp(),
             updated_at: FieldValue.serverTimestamp(),
             migrated_from: doc.id,
-            cache: cache
+            icons: cache
         };
 
         if (isDryRun) {
             console.log(`[DryRun] Would migrate "${rawName}" -> "ingredients_new/${stdName}" (${doc.id}) with ${cache.length} icons.`);
         } else {
+            console.log(`[REAL] Migrating "${rawName}" -> "ingredients_new/${stdName}" (${doc.id}) with ${cache.length} icons.`);
             const newRef = db.collection('ingredients_new').doc(stdName);
             batch.set(newRef, newDocData, { merge: true });
             opCount++;

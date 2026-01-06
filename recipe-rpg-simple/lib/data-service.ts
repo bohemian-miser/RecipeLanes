@@ -619,7 +619,7 @@ export class FirebaseDataService implements DataService {
           const ingData = cacheMap.get(name);
           if (ingData && ingData.icons && Array.isArray(ingData.icons)) {
               for (const icon of ingData.icons) {
-                  if (!rejected.has(icon.id)) {
+                  if (!rejected.has(icon.id) && !rejected.has('url:' + icon.url)) {
                       foundIcon = { 
                           iconId: icon.id, 
                           iconUrl: icon.url,

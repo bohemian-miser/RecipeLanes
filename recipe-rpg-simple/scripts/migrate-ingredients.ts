@@ -105,11 +105,24 @@ async function migrateIngredients() {
                 }
             }
             console.log(`Adding to cache: score p: ${i.popularity_score} lcb:${i.lcb} i:${i.impressions} r:${i.rejections} id:${i.id}`);
+            
+            let finalScore = 0;
+            const pScore = Number(i.popularity_score);
+            const lcbScore = Number(i.lcb);
+
+            if (!isNaN(pScore)) {
+                finalScore = pScore;
+            } else if (!isNaN(lcbScore)) {
+                finalScore = lcbScore;
+            }
+            
+            if (finalScore < 0) finalScore = 0;
+
             cache.push({
                 id: i.id,
                 path: destPath, // Storing path allows reconstruction
                 shortId: shortId, // Explicitly store shortId if needed
-                score: i.popularity_score || 1-i.lcb || 0,
+                score: finalScore,
                 impressions: i.impressions || 0,
                 rejections: i.rejections || 0,
                 visualDescription: i.visualDescription || i.ingredient_name,

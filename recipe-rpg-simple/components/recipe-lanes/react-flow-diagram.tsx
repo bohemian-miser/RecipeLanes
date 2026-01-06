@@ -334,8 +334,35 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     // Layout Effect
     useEffect(() => {
-        runLayout(true); 
-    }, [graph, mode, spacing, runLayout]);
+        if (isDirty) {
+            // In dirty mode, we ONLY apply metadata updates (icons) from DB to EXISTING nodes.
+            // We DO NOT restore deleted nodes or move nodes based on DB, preventing overwrites.
+            setNodes(currentNodes => {
+                let changed = false;
+                const newNodes = currentNodes.map(n => {
+                     const dbNode = graph.nodes.find(dn => dn.id === n.id);
+                     if (dbNode) {
+                         // Check for Icon Update
+                         if (dbNode.iconUrl && dbNode.iconUrl !== n.data.iconUrl) {
+                             changed = true;
+                             return { 
+                                 ...n, 
+                                 data: { 
+                                     ...n.data, 
+                                     iconUrl: dbNode.iconUrl, 
+                                     iconId: dbNode.iconId 
+                                 } 
+                             };
+                         }
+                     }
+                     return n;
+                });
+                return changed ? newNodes : currentNodes;
+            });
+        } else {
+            runLayout(true); 
+        }
+    }, [graph, mode, spacing, runLayout, isDirty, setNodes]);
 
     // Text Position Update Effect
     useEffect(() => {

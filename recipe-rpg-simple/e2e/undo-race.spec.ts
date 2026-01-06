@@ -104,11 +104,13 @@ test.describe('Undo Race Conditions', () => {
     
     await node.hover();
     await page.mouse.down();
-    await page.mouse.move(box!.x + box!.width / 2 + -400, box!.y + box!.height / 2 , { steps: 2 });
+    await page.mouse.move(box!.x + box!.width / 2 + -400, box!.y + box!.height / 2 , { steps: 5 });
     await page.mouse.up();
+
+    // Verify it actually moved before undoing
+    const boxMoved = await node.boundingBox();
+    expect(Math.abs(boxMoved!.x - boxOriginal!.x)).toBeGreaterThan(50);
     
-      // screenshot(page, dir, `after-move-Eggs`);
-      
     await screenshot(page, dir, `after-move-Eggs-before-undo`);
       
       // WAIT for Save

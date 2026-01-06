@@ -1,4 +1,4 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useEffect } from 'react';
 import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
 import { RefreshCw, RotateCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
@@ -11,11 +11,20 @@ const sessionRejectedUrls = new Set<string>();
 const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?: () => void, onSetLongPress?: (active: boolean) => void }>) => {
   const isIngredient = data.type === 'ingredient';
   const [isRerolling, setIsRerolling] = useState(false);
+  const [rerollStartUrl, setRerollStartUrl] = useState<string | null>(null);
   const [isPivotMode, setIsPivotMode] = useState(false);
   const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
   const { setNodes } = useReactFlow();
   const searchParams = useSearchParams();
   const recipeId = searchParams.get('id');
+
+  // Reset reroll spinner ONLY when icon URL changes (new icon arrived)
+  useEffect(() => {
+      if (isRerolling && data.iconUrl && data.iconUrl !== rerollStartUrl) {
+          setIsRerolling(false);
+          setRerollStartUrl(null);
+      }
+  }, [data.iconUrl, isRerolling, rerollStartUrl]);
 
   const rotation = data.rotation || 0;
   
@@ -55,7 +64,8 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
       console.log(`[MinimalNode] Delete clicked for ${id}`);
       if (data.onDelete) {
           data.onDelete();
-      } else {
+      }
+      else {
           console.error(`[MinimalNode] No onDelete handler for ${id}`);
       }
   };
@@ -63,9 +73,10 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
   const handleReroll = async (e: React.MouseEvent) => {
       e.stopPropagation();
       setIsRerolling(true);
+      const currentUrl = data.iconUrl || '';
+      setRerollStartUrl(currentUrl);
       
       const ingredientName = data.visualDescription || data.text;
-      const currentUrl = data.iconUrl || '';
       
       if (currentUrl) {
           sessionRejectedUrls.add(currentUrl);
@@ -82,6 +93,9 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
         );
         
         if (res && 'iconUrl' in res && res.iconUrl) {
+            // Immediate hit
+            setIsRerolling(false);
+            setRerollStartUrl(null);
             setNodes((nodes) => nodes.map(n => {
                 const nName = n.data.visualDescription || n.data.text;
                 if (nName === ingredientName) {
@@ -91,12 +105,16 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
             }));
         } else if (res && res.status === 'pending') {
             console.log("Reroll queued pending");
-            // Optionally clear local icon to show it's working, or just wait for DB update
+            // Keep spinning (handled by useEffect)
+        } else {
+            // Error or unknown state
+            setIsRerolling(false);
+            setRerollStartUrl(null);
         }
       } catch (err) {
           console.error("Reroll failed", err);
-      } finally {
           setIsRerolling(false);
+          setRerollStartUrl(null);
       }
   };
   
@@ -208,7 +226,8 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
               {/* Reroll Button */}
               <button 
                   onClick={handleReroll}
-                  className={`nodrag absolute -top-2 -right-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-blue-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isRerolling ? '!opacity-100 block' : ''}`}
+                  disabled={isRerolling}
+                  className={`nodrag absolute -top-2 -right-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-blue-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isRerolling ? '!opacity-100 block cursor-not-allowed' : ''}`}
                   title="Reroll Icon"
               >
                   <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin text-blue-500' : ''}`} />

@@ -4,7 +4,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
 import type { RecipeGraph } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
-import { standardizeIngredientName } from './utils';
+import { standardizeIngredientName, removeUndefined } from './utils';
 
 export interface IconStats {
     iconId: string;
@@ -108,20 +108,21 @@ export class FirebaseDataService implements DataService {
 
   async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
       try {
-          // Query ingredients_new instead of feed_icons
-          // Note: This is an approximation for the "Gallery" debug view.
-          // We fetch recently updated ingredients and aggregate their icons.
+          // Pagination Strategy: Page through INGREDIENTS, not icons.
+          // Page 1 = Ingredients 1-50. We return ALL icons in those ingredients.
+          // This ensures full coverage of the DB.
           
+          const INGREDIENTS_PER_PAGE = 50;
+          const offset = (page - 1) * INGREDIENTS_PER_PAGE;
+
           let q: FirebaseFirestore.Query = db.collection(DB_COLLECTION_INGREDIENTS)
               .orderBy('updated_at', 'desc');
           
           if (!query) {
-              q = q.limit(50); // Fetch top 50 active ingredients
+              q = q.offset(offset).limit(INGREDIENTS_PER_PAGE);
           } else {
-              // Note: filtering by name requires an index on name, or client-side filter
-              // Firestore doesn't support 'contains'. We can use >= prefix if needed.
-              // For debug, we'll fetch more and filter in memory if name index missing.
-              q = q.limit(100); 
+              // Search is still limited to recent/scan for now
+              q = q.limit(1000); 
           }
 
           const snapshot = await q.get();
@@ -130,16 +131,16 @@ export class FirebaseDataService implements DataService {
           snapshot.forEach(doc => {
               const data = doc.data();
               if (data.icons && Array.isArray(data.icons)) {
-                  // Ensure created_at is serialized
                   const safeIcons = data.icons.map((icon: any) => ({
                       ...icon,
+                      // Ensure created_at is serialized
                       created_at: icon.created_at?.toDate ? icon.created_at.toDate().toISOString() : (icon.created_at || null)
                   }));
                   allIcons.push(...safeIcons);
               }
           });
 
-          // Sort all gathered icons by created_at desc
+          // Sort by creation time within this batch
           allIcons.sort((a, b) => {
               const tA = new Date(a.created_at).getTime();
               const tB = new Date(b.created_at).getTime();
@@ -152,12 +153,15 @@ export class FirebaseDataService implements DataService {
                   i.visualDescription?.toLowerCase().includes(term) || 
                   i.ingredient?.toLowerCase().includes(term)
               );
+              // For search, we handle manual pagination if needed, or just return all hits
           }
 
-          const total = allIcons.length;
-          const paginated = allIcons.slice((page - 1) * limit, page * limit);
+          // Approximation for total: We don't know total icons without scanning all.
+          // We return a high number to keep "Next" button enabled if we found results.
+          // If current batch is empty, we assume end.
+          const totalEstimate = allIcons.length > 0 ? (page * limit) + allIcons.length : (page - 1) * limit;
 
-          return { icons: paginated, total };
+          return { icons: allIcons, total: totalEstimate };
       } catch (e: any) {
           console.warn('getPagedIcons failed:', e.message);
           return { icons: [], total: 0 };
@@ -255,7 +259,7 @@ export class FirebaseDataService implements DataService {
                   throw new Error("You are not the owner of this recipe.");
               }
           }
-          await db.collection(DB_COLLECTION_RECIPES).doc(existingId).set(data, { merge: true });
+          await db.collection(DB_COLLECTION_RECIPES).doc(existingId).set(removeUndefined(data), { merge: true });
           return existingId;
       }
 
@@ -263,7 +267,7 @@ export class FirebaseDataService implements DataService {
       data.likes = 0;
       data.dislikes = 0;
       
-      const doc = await db.collection(DB_COLLECTION_RECIPES).add(data);
+      const doc = await db.collection(DB_COLLECTION_RECIPES).add(removeUndefined(data));
       return doc.id;
   }
 
@@ -527,8 +531,8 @@ export class FirebaseDataService implements DataService {
         if (!doc.exists) return;
         const icons = doc.data()?.icons || [];
         
-        // Find by URL or Path. 
-        const index = icons.findIndex((i: any) => i.url === iconUrl || i.path === iconUrl);
+        // Find by ID, URL or Path. 
+        const index = icons.findIndex((i: any) => i.id === iconUrl || i.url === iconUrl || i.path === iconUrl);
         if (index !== -1) {
             const icon = icons[index];
             icon.rejections = (icon.rejections || 0) + 1;
@@ -636,7 +640,8 @@ export class FirebaseDataService implements DataService {
           const ingData = cacheMap.get(name);
           if (ingData && ingData.icons && Array.isArray(ingData.icons)) {
               for (const icon of ingData.icons) {
-                  if (!rejected.has(icon.id) && !rejected.has('url:' + icon.url)) {
+                  const isRejected = rejected.has(icon.id) || rejected.has('url:' + icon.url);
+                  if (!isRejected) {
                       foundIcon = { 
                           iconId: icon.id, 
                           iconUrl: icon.url || null,
@@ -690,7 +695,10 @@ export class FirebaseDataService implements DataService {
           }
       }
 
+      console.log(`[queueIcons] Prepared updates for ${updatesByRecipe.size} recipes. Queuing ${queuedCount} items.`);
+
       for (const [recipeId, updates] of updatesByRecipe.entries()) {
+          console.log(`[queueIcons] Updating recipe ${recipeId}...`);
           await db.runTransaction(async (t) => {
               const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
               const doc = await t.get(recipeRef);
@@ -716,12 +724,14 @@ export class FirebaseDataService implements DataService {
               });
               
               if (changed) {
-                  t.update(recipeRef, { "graph.nodes": nodes });
+                  t.update(recipeRef, { "graph.nodes": removeUndefined(nodes) });
               }
           });
+          console.log(`[queueIcons] Recipe ${recipeId} updated.`);
       }
 
       if (queuedCount > 0) {
+          console.log('[queueIcons] Committing batch...');
           await batch.commit();
           console.log(`[DataService] Enqueued ${queuedCount} icons.`);
       }

@@ -32,10 +32,13 @@ export async function resolveIconsForGraph(
             // For unified logic, let's process ALL visual nodes.
             // queueIcons is cheap (cache read).
             
-            const name = n.visualDescription;
+            const rawName = n.visualDescription;
+            const stdName = standardizeIngredientName(rawName);
+            
+            // Rejections are stored by Standardized Name (Title Case)
             const rejections = [
-                ...(graph.rejections?.[name] || []),
-                ...(sessionRejections.get(name) || [])
+                ...(graph.rejections?.[stdName] || []),
+                ...(sessionRejections.get(stdName) || [])
             ];
 
             // If the node ALREADY has an icon, it might be in the rejection list?
@@ -43,7 +46,7 @@ export async function resolveIconsForGraph(
             // If it's NOT in rejection list, queueIcons will likely return it again (cache hit).
             
             itemsToQueue.push({
-                ingredientName: name,
+                ingredientName: rawName, // queueIcons will standardize this
                 recipeId,
                 rejectedIds: rejections
             });

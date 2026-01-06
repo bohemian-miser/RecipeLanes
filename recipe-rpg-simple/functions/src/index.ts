@@ -46,6 +46,35 @@ function standardizeName(name: string): string {
     return name.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 }
 
+async function recordImpression(ingredientId: string, iconId: string, count: number = 1) {
+    const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
+    try {
+      await db.runTransaction(async (t) => {
+          const doc = await t.get(docRef);
+          if (!doc.exists) return;
+          const data = doc.data() || {};
+          const icons = data.icons || [];
+          
+          const index = icons.findIndex((i: any) => i.id === iconId);
+          if (index !== -1) {
+              icons[index].impressions = (icons[index].impressions || 0) + count;
+              const n = icons[index].impressions;
+              const r = icons[index].rejections || 0;
+              // Wilson Score
+              if (n > 0) {
+                  const k = n - r; const p = k / n; const z = 1.645;
+                  const den = 1 + (z * z) / n;
+                  const centre = p + (z * z) / (2 * n);
+                  const adj = z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n);
+                  icons[index].score = Math.max(0, (centre - adj) / den);
+              }
+              icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+              t.update(docRef, { icons });
+          }
+      });
+    } catch (e) { console.error('recordImpression failed', e); }
+}
+
 // Worker Function (Queue Processor)
 export const processIconQueue = onDocumentWritten({ 
     document: `${DB_COLLECTION_QUEUE}/{ingredientName}`, 
@@ -85,6 +114,7 @@ export const processIconQueue = onDocumentWritten({
         cache.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
 
         let generatedIcon: any = null;
+        const impressions = new Map<string, number>();
 
         // 2. Process Each Recipe
         console.log(`[Queue] Checking ${recipeIds.length} recipes for updates...`);
@@ -151,6 +181,10 @@ export const processIconQueue = onDocumentWritten({
                                  n.iconId = selectedIcon.id;
                                  n.iconUrl = selectedIcon.url;
                                  changed = true;
+                                 
+                                 // Track impression locally
+                                 const count = impressions.get(selectedIcon.id) || 0;
+                                 impressions.set(selectedIcon.id, count + 1);
                              }
                          }
                     }
@@ -160,6 +194,11 @@ export const processIconQueue = onDocumentWritten({
                     t.update(recipeRef, { "graph.nodes": nodes });
                 }
             });
+        }
+
+        // Record Collected Impressions
+        for (const [iconId, count] of impressions.entries()) {
+            await recordImpression(ingredientName, iconId, count);
         }
 
         // 3. Standalone / Fallback Generation

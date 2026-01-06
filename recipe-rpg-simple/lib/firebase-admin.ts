@@ -55,7 +55,11 @@ const app = getApps().length > 0 ? getApp() : initializeApp({
 
 // 1. Initialize App
 const db = getFirestore(app);
-db.settings({ ignoreUndefinedProperties: true });
+try {
+    db.settings({ ignoreUndefinedProperties: true });
+} catch (e) {
+    // Ignore "already initialized" error in dev/hot-reload
+}
 const storage = getStorage(app);
 const auth = getAuth(app);
 

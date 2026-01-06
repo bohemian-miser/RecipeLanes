@@ -442,13 +442,14 @@ export async function getRecipeAction(id: string) {
 
 export async function rerollIconAction(
     nodeId: string, 
-    ingredientName: string, 
+    rawIngredientName: string, 
     currentIconUrl: string, 
     seenUrls: string[] = [], 
     recipeId?: string,
     currentIconId?: string
 ) {
     try {
+        const ingredientName = toTitleCase(rawIngredientName);
         console.log(`[rerollIconAction] Rerolling ${ingredientName} (Node ${nodeId})`);
         
         let graph: RecipeGraph | undefined;
@@ -465,6 +466,10 @@ export async function rerollIconAction(
                 const idToReject = currentIconId || (currentIconUrl ? 'url:' + currentIconUrl : null);
                 if (idToReject && !graph.rejections[ingredientName].includes(idToReject)) {
                     graph.rejections[ingredientName].push(idToReject);
+                    
+                    // Record stats
+                    getDataService().recordRejection(idToReject, ingredientName, toTitleCase(ingredientName))
+                        .catch(e => console.error('Failed to record rejection stats:', e));
                 }
                 
                 // Save persistent rejections

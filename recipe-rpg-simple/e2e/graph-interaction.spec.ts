@@ -28,8 +28,8 @@ test.describe('Graph Interaction', () => {
       // Actually, let's start from an edge where no nodes are likely present.
       // Top-left is risky (Sidebar toggle). Bottom is Legend/Chat.
       // Left edge, below header (100px down) is usually safe.
-      const startX = 10;
-      const startY = 100;
+      const startX = 100;
+      const startY = 200;
 
       await page.mouse.move(startX, startY);
       await page.mouse.down();

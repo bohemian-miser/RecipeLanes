@@ -775,6 +775,13 @@ export class MemoryDataService implements DataService {
         
         for (const item of items) {
             const stdName = standardizeIngredientName(item.ingredientName);
+            
+            // Ensure ingredient exists for lookup
+            const existing = memoryStore.getIngredients().find(i => i.name === stdName);
+            if (!existing) {
+                memoryStore.addIngredient({ name: stdName, created_at: Date.now() });
+            }
+
             const mockUrl = `https://placehold.co/64x64/png?text=${encodeURIComponent(stdName)}&uuid=${randomUUID().substring(0, 6)}`;
             const iconId = memoryStore.addIcon({
                 url: mockUrl,
@@ -1016,6 +1023,12 @@ export class MemoryDataService implements DataService {
     }
 
     async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any): Promise<{ id: string, url: string, path?: string }> {
+        // Ensure ingredient exists
+        const existing = memoryStore.getIngredients().find(i => i.name === ingredientId);
+        if (!existing) {
+            memoryStore.addIngredient({ name: ingredientId, created_at: Date.now() });
+        }
+
         const id = memoryStore.addIcon({
             url: publicUrl,
             ingredient: ingredientName,

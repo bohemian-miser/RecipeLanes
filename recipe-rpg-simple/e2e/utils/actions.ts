@@ -25,8 +25,11 @@ export async function move_node(page: Page, text: string, dx: number, dy: number
     
     await node.hover();
     await page.mouse.down();
-    await page.mouse.move(box!.x + box!.width / 2 + dx, box!.y + box!.height / 2 + dy, { steps: 10 });
+    // Increase steps to ensure React Flow catches the drag
+    await page.mouse.move(box!.x + box!.width / 2 + dx, box!.y + box!.height / 2 + dy, { steps: 20 });
     await page.mouse.up();
+    // Wait for state update
+    await page.waitForTimeout(500);
     
     await screenshot(page, dir, `after-move-${text}`);
     return node;

@@ -11,20 +11,22 @@ const sessionRejectedUrls = new Set<string>();
 const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?: () => void, onSetLongPress?: (active: boolean) => void }>) => {
   const isIngredient = data.type === 'ingredient';
   const [isRerolling, setIsRerolling] = useState(false);
-  const [rerollStartUrl, setRerollStartUrl] = useState<string | null>(null);
+  // Track previous icon URL to detect changes (Derived State pattern)
+  const [prevIconUrl, setPrevIconUrl] = useState(data.iconUrl);
+  
+  // If icon URL changes from props, reset reroll spinner immediately
+  if (data.iconUrl !== prevIconUrl) {
+      setPrevIconUrl(data.iconUrl);
+      if (isRerolling) {
+          setIsRerolling(false);
+      }
+  }
+
   const [isPivotMode, setIsPivotMode] = useState(false);
   const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
   const { setNodes } = useReactFlow();
   const searchParams = useSearchParams();
   const recipeId = searchParams.get('id');
-
-  // Reset reroll spinner ONLY when icon URL changes (new icon arrived)
-  useEffect(() => {
-      if (isRerolling && data.iconUrl && data.iconUrl !== rerollStartUrl) {
-          setIsRerolling(false);
-          setRerollStartUrl(null);
-      }
-  }, [data.iconUrl, isRerolling, rerollStartUrl]);
 
   const rotation = data.rotation || 0;
   
@@ -73,10 +75,9 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
   const handleReroll = async (e: React.MouseEvent) => {
       e.stopPropagation();
       setIsRerolling(true);
-      const currentUrl = data.iconUrl || '';
-      setRerollStartUrl(currentUrl);
       
       const ingredientName = data.visualDescription || data.text;
+      const currentUrl = data.iconUrl || '';
       
       if (currentUrl) {
           sessionRejectedUrls.add(currentUrl);
@@ -95,7 +96,6 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
         if (res && 'iconUrl' in res && res.iconUrl) {
             // Immediate hit
             setIsRerolling(false);
-            setRerollStartUrl(null);
             setNodes((nodes) => nodes.map(n => {
                 const nName = n.data.visualDescription || n.data.text;
                 if (nName === ingredientName) {
@@ -105,16 +105,14 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
             }));
         } else if (res && res.status === 'pending') {
             console.log("Reroll queued pending");
-            // Keep spinning (handled by useEffect)
+            // Keep spinning (handled by Derived State logic)
         } else {
             // Error or unknown state
             setIsRerolling(false);
-            setRerollStartUrl(null);
         }
       } catch (err) {
           console.error("Reroll failed", err);
           setIsRerolling(false);
-          setRerollStartUrl(null);
       }
   };
   

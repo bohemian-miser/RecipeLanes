@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { generateRecipePrompt, parseRecipeGraph, extractServes } from '@/lib/recipe-lanes/parser';
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
+import { resolveIconsForGraph } from '@/lib/icon-orchestrator';
 
 // Input Validation Schemas
 const IngredientSchema = z.string().min(1).max(100);
@@ -122,8 +123,8 @@ export async function getOrCreateIconAction(
             console.log(`[getOrCreateIconAction] Cache hit for ${ingredient}: ${hit.iconUrl}`);
             
             // Increment Impressions (Fire and Forget)
-            dataService.incrementImpressions(stdName, hit.iconId, hit.iconUrl, 0, 0)
-                .catch(e => console.error('Failed to increment impressions:', e));
+            dataService.recordImpression(stdName, hit.iconId)
+                .catch(e => console.error('Failed to record impression:', e));
 
             return {
                 iconId: hit.iconId,
@@ -298,34 +299,21 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
         console.log('[createVisualRecipeAction] 💾 Saving initial recipe...');
         const id = await getDataService().saveRecipe(graph, targetId, userId, visibility);
         
-        // 4. Queue Icons (Now we have an ID)
-        // We pass the ID so the Queue (and DataService immediate updates) can link/update the doc.
-        const itemsWithId = queueItems.map(i => ({ ...i, recipeId: id }));
+        // 4. Resolve Icons (Unified Orchestrator)
+        // This handles cache checks, rejections, and queuing.
+        // It updates the graph with immediate hits.
+        const { graph: updatedGraph } = await resolveIconsForGraph(graph, id);
         
-        const immediateHits = await getDataService().queueIcons(itemsWithId);
-        
-        // 5. Apply Immediate Hits & Re-Save (if any) to ensure the returned graph is populated
-        let localUpdate = false;
-        graph.nodes = graph.nodes.map(n => {
-            if (n.visualDescription) {
-                const stdName = toTitleCase(n.visualDescription); // Match DataService logic
-                if (immediateHits.has(stdName)) {
-                    localUpdate = true;
-                    return { 
-                        ...n, 
-                        iconId: immediateHits.get(stdName)!.iconId,
-                        iconUrl: immediateHits.get(stdName)!.iconUrl 
-                    };
-                }
-            }
-            return n;
-        });
-
-        // The DB is already updated by queueIcons transactionally for hits.
-        // We return the populated graph for instant UI feedback.
+        // We already saved the initial graph.
+        // If resolveIconsForGraph found hits, we should update the DB or just return the updated graph?
+        // resolveIconsForGraph updates the passed graph object in place (or returns updated copy).
+        // queueIcons (called inside) updates the DB transactionally for hits.
+        // So we don't need to save again?
+        // Wait, queueIcons updates DB if recipeId is passed.
+        // Yes, updatesByRecipe logic in DataService handles DB update.
         
         console.log(`[createVisualRecipeAction] ✅ Complete. ID: ${id}`);
-        return { graph, id };
+        return { graph: updatedGraph, id };
 
     } catch (e: any) {
         console.error('[createVisualRecipeAction] Failed:', e);
@@ -463,12 +451,13 @@ export async function rerollIconAction(
     try {
         console.log(`[rerollIconAction] Rerolling ${ingredientName} (Node ${nodeId})`);
         
-        let rejectedIds: string[] = [];
+        let graph: RecipeGraph | undefined;
+
         // 1. Persist Rejection to Recipe
         if (recipeId) {
             const recipeData = await getDataService().getRecipe(recipeId);
             if (recipeData) {
-                const graph = recipeData.graph;
+                graph = recipeData.graph;
                 if (!graph.rejections) graph.rejections = {};
                 if (!graph.rejections[ingredientName]) graph.rejections[ingredientName] = [];
                 
@@ -480,24 +469,29 @@ export async function rerollIconAction(
                 
                 // Save persistent rejections
                 await getDataService().saveRecipe(graph, recipeId, recipeData.ownerId, recipeData.visibility as any);
-                rejectedIds = graph.rejections[ingredientName];
             }
         }
 
-        // 2. Queue for New Icon
-        // We pass the full history of rejections for this recipe
-        const result = await getDataService().queueIcons([{ 
-            ingredientName, 
-            recipeId, 
-            rejectedIds 
-        }]);
+        // 2. Resolve Icons (Using Orchestrator)
+        // Even for single reroll, this ensures we check cache/queue correctly
+        // If we didn't fetch graph (no recipeId), we construct a minimal one?
+        // rerollIconAction is mostly called with recipeId in Lanes.
+        // For Main Page, recipeId is undefined.
         
-        // 3. Return Immediate Result (if any)
+        if (!graph) {
+             // Mock graph for standalone reroll (Main Page usage, though Main Page uses getOrCreateIconAction usually?)
+             // Main Page calls handleReroll -> recordRejectionAction -> getOrCreateIconAction.
+             // Lanes calls rerollIconAction.
+             // So this is Lanes specific.
+             return { error: 'Recipe Context required for reroll' };
+        }
+
+        const { hits } = await resolveIconsForGraph(graph, recipeId);
+        
+        // 3. Return Result
         const stdName = toTitleCase(ingredientName);
-        if (result.has(stdName)) {
-            const hit = result.get(stdName)!;
-            // Immediate Update Recipe (Queue already did it? Yes.)
-            // But we return to UI to update state immediately
+        if (hits.has(stdName)) {
+            const hit = hits.get(stdName)!;
             return { 
                 iconId: hit.iconId,
                 iconUrl: hit.iconUrl,
@@ -505,8 +499,6 @@ export async function rerollIconAction(
             };
         }
 
-        // 4. Return Pending
-        // UI should show spinner until subscription updates
         return { 
             status: 'pending',
             nodeId 

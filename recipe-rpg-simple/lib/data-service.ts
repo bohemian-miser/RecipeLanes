@@ -3,6 +3,16 @@ import { memoryStore, IconData, IngredientData } from './store';
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
 import type { RecipeGraph } from './recipe-lanes/types';
+import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_FEED, DB_COLLECTION_RECIPES } from './config';
+import { standardizeIngredientName } from './utils';
+
+export interface IconStats {
+    iconId: string;
+    iconUrl: string;
+    score?: number;
+    impressions?: number;
+    rejections?: number;
+}
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -35,27 +45,34 @@ export interface DataService {
   getPublicRecipes(limit: number): Promise<any[]>;
 
   recordRejection(iconUrl: string, ingredientName: string, ingredientId: string): Promise<void>;
+  recordImpression(ingredientId: string, iconId: string): Promise<void>;
+
   deleteIcon(iconUrl: string, ingredientName?: string): Promise<void>;
   deleteIngredientCategory(ingredientName: string): Promise<void>;
-  incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number): Promise<void>;
+  
   listDebugFiles(): Promise<any[]>;
   checkExistingCopies(originalId: string, userId: string): Promise<any[]>;
   getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }>;
   retryIconGeneration(ingredientName: string): Promise<void>;
-  queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, { iconId: string, iconUrl: string }>>;
-  waitForQueue(ingredientName: string, timeoutMs?: number): Promise<{ iconId: string, iconUrl: string } | null>;
+  queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, IconStats>>;
+  waitForQueue(ingredientName: string, timeoutMs?: number): Promise<IconStats | null>;
 }
 
 // --- Firebase Implementation ---
 export class FirebaseDataService implements DataService { 
   
-  private standardizeIngredientName(name: string): string {
-      return name.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  private calculateWilsonLCB(n: number, r: number): number {
+    if (n === 0) return 0;
+    const k = n - r; const p = k / n; const z = 1.645;
+    const den = 1 + (z * z) / n;
+    const centre = p + (z * z) / (2 * n);
+    const adj = z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n);
+    return Math.max(0, (centre - adj) / den);
   }
 
-  async waitForQueue(ingredientName: string, timeoutMs: number = 15000): Promise<{ iconId: string, iconUrl: string } | null> {
-      const stdName = this.standardizeIngredientName(ingredientName);
-      const docRef = db.collection('icon_queue').doc(stdName);
+  async waitForQueue(ingredientName: string, timeoutMs: number = 15000): Promise<IconStats | null> {
+      const stdName = standardizeIngredientName(ingredientName);
+      const docRef = db.collection(DB_COLLECTION_QUEUE).doc(stdName);
       
       const start = Date.now();
       
@@ -77,8 +94,8 @@ export class FirebaseDataService implements DataService {
 
   async retryIconGeneration(ingredientName: string): Promise<void> {
       try {
-          const stdName = this.standardizeIngredientName(ingredientName);
-          await db.collection('icon_queue').doc(stdName).update({
+          const stdName = standardizeIngredientName(ingredientName);
+          await db.collection(DB_COLLECTION_QUEUE).doc(stdName).update({
               status: 'pending',
               error: FieldValue.delete(),
               created_at: FieldValue.serverTimestamp()
@@ -91,18 +108,13 @@ export class FirebaseDataService implements DataService {
 
   async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
       try {
-          let q: FirebaseFirestore.Query = db.collection('feed_icons')
+          let q: FirebaseFirestore.Query = db.collection(DB_COLLECTION_FEED)
               .orderBy('created_at', 'desc');
           
-          // Note: Firestore doesn't support full-text search natively.
-          // For now, we fetch recent and filter in memory if query exists, 
-          // or if query exists we might need a separate approach.
-          // Given the "Gallery" use case, showing recent is primary.
-          
           if (!query) {
-              q = q.limit(500); // Optimization
+              q = q.limit(500); 
           } else {
-              q = q.limit(1000); // Fetch more to filter
+              q = q.limit(1000); 
           }
 
           const snapshot = await q.get();
@@ -125,7 +137,7 @@ export class FirebaseDataService implements DataService {
 
   async checkExistingCopies(originalId: string, userId: string): Promise<any[]> {
       try {
-          const snapshot = await db.collection('recipes')
+          const snapshot = await db.collection(DB_COLLECTION_RECIPES)
               .where('ownerId', '==', userId)
               .where('sourceId', '==', originalId)
               .orderBy('created_at', 'desc')
@@ -139,7 +151,7 @@ export class FirebaseDataService implements DataService {
 
   async getPublicRecipes(limit: number = 50): Promise<any[]> {
       try {
-          const snapshot = await db.collection('recipes')
+          const snapshot = await db.collection(DB_COLLECTION_RECIPES)
               .where('visibility', '==', 'public')
               .orderBy('created_at', 'desc')
               .limit(limit)
@@ -153,7 +165,7 @@ export class FirebaseDataService implements DataService {
 
   async searchPublicRecipes(query: string): Promise<any[]> {
       const term = query.toLowerCase();
-      const snapshot = await db.collection('recipes')
+      const snapshot = await db.collection(DB_COLLECTION_RECIPES)
           .where('visibility', '==', 'public')
           .orderBy('created_at', 'desc')
           .limit(100)
@@ -173,7 +185,7 @@ export class FirebaseDataService implements DataService {
   }
 
   async getUserRecipes(userId: string): Promise<any[]> {
-      const snapshot = await db.collection('recipes')
+      const snapshot = await db.collection(DB_COLLECTION_RECIPES)
           .where('ownerId', '==', userId)
           .orderBy('created_at', 'desc')
           .get();
@@ -187,7 +199,7 @@ export class FirebaseDataService implements DataService {
       const ids = starSnap.docs.map(d => d.id);
       const recipes = [];
       for (const id of ids) {
-          const doc = await db.collection('recipes').doc(id).get();
+          const doc = await db.collection(DB_COLLECTION_RECIPES).doc(id).get();
           if (doc.exists) {
               recipes.push(this.mapRecipeDoc(doc));
           }
@@ -207,14 +219,14 @@ export class FirebaseDataService implements DataService {
       if (graph.sourceId) data.sourceId = graph.sourceId;
 
       if (existingId) {
-          const existingDoc = await db.collection('recipes').doc(existingId).get();
+          const existingDoc = await db.collection(DB_COLLECTION_RECIPES).doc(existingId).get();
           if (existingDoc.exists) {
               const existingData = existingDoc.data();
               if (existingData?.ownerId && existingData.ownerId !== userId) {
                   throw new Error("You are not the owner of this recipe.");
               }
           }
-          await db.collection('recipes').doc(existingId).set(data, { merge: true });
+          await db.collection(DB_COLLECTION_RECIPES).doc(existingId).set(data, { merge: true });
           return existingId;
       }
 
@@ -222,12 +234,12 @@ export class FirebaseDataService implements DataService {
       data.likes = 0;
       data.dislikes = 0;
       
-      const doc = await db.collection('recipes').add(data);
+      const doc = await db.collection(DB_COLLECTION_RECIPES).add(data);
       return doc.id;
   }
 
     async getRecipe(id: string) {
-        const doc = await db.collection('recipes').doc(id).get();
+        const doc = await db.collection(DB_COLLECTION_RECIPES).doc(id).get();
         if (!doc.exists) return null;
         const data = doc.data()!;
         const graph = data.graph as RecipeGraph;
@@ -254,7 +266,7 @@ export class FirebaseDataService implements DataService {
     }
   async voteRecipe(recipeId: string, userId: string, vote: 'like' | 'dislike' | 'none') {
       const userRef = db.collection('users').doc(userId);
-      const recipeRef = db.collection('recipes').doc(recipeId);
+      const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
       
       await db.runTransaction(async (t) => {
           const userDoc = await t.get(userRef);
@@ -317,7 +329,7 @@ export class FirebaseDataService implements DataService {
   }
 
   async deleteRecipe(recipeId: string, userId: string): Promise<void> {
-      const docRef = db.collection('recipes').doc(recipeId);
+      const docRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
       const doc = await docRef.get();
       if (!doc.exists) throw new Error("Recipe not found");
       const data = doc.data();
@@ -356,10 +368,10 @@ export class FirebaseDataService implements DataService {
   }
 
   async getIngredientByName(name: string) {
-    const stdName = this.standardizeIngredientName(name);
+    const stdName = standardizeIngredientName(name);
     console.log(`[FirebaseDataService] getIngredientByName: ${stdName}`);
     
-    const doc = await db.collection('ingredients_new').doc(stdName).get();
+    const doc = await db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName).get();
     
     if (doc.exists) {
         return { id: doc.id, data: doc.data() };
@@ -368,16 +380,16 @@ export class FirebaseDataService implements DataService {
   }
 
   async createIngredient(name: string) {
-    const stdName = this.standardizeIngredientName(name);
-    const docRef = db.collection('ingredients_new').doc(stdName);
+    const stdName = standardizeIngredientName(name);
+    const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName);
     // Initialize if needed
     await docRef.set({ name: stdName, created_at: FieldValue.serverTimestamp(), icons: [] }, { merge: true });
     return stdName;
   }
 
-  async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number) {
+  async recordImpression(ingredientId: string, iconId: string) {
       // ingredientId is StdName
-      const docRef = db.collection('ingredients_new').doc(ingredientId);
+      const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
       
       await db.runTransaction(async (t) => {
           const doc = await t.get(docRef);
@@ -387,8 +399,12 @@ export class FirebaseDataService implements DataService {
           
           const index = icons.findIndex((i: any) => i.id === iconId);
           if (index !== -1) {
-              icons[index].impressions = newImpressions;
-              icons[index].score = newScore;
+              const currentImpressions = icons[index].impressions || 0;
+              const currentRejections = icons[index].rejections || 0;
+              
+              icons[index].impressions = currentImpressions + 1;
+              icons[index].score = this.calculateWilsonLCB(icons[index].impressions, currentRejections);
+              
               // Keep sorted
               icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
               t.update(docRef, { icons });
@@ -398,14 +414,14 @@ export class FirebaseDataService implements DataService {
 
   async getIconsForIngredient(ingredientId: string) {
     // ingredientId is StdName
-    const doc = await db.collection('ingredients_new').doc(ingredientId).get();
+    const doc = await db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId).get();
     if (!doc.exists) return [];
     return doc.data()?.icons || [];
   }
 
   async getAllIcons() {
      try {
-         const snapshot = await db.collection('ingredients_new').limit(100).get();
+         const snapshot = await db.collection(DB_COLLECTION_INGREDIENTS).limit(100).get();
          let all: any[] = [];
          snapshot.forEach(doc => {
              const data = doc.data();
@@ -442,7 +458,7 @@ export class FirebaseDataService implements DataService {
       }
 
       // Transactional Update
-      const docRef = db.collection('ingredients_new').doc(ingredientId);
+      const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
       await db.runTransaction(async (t) => {
           const doc = await t.get(docRef);
           let icons = [];
@@ -471,7 +487,7 @@ export class FirebaseDataService implements DataService {
           t.update(docRef, { icons, updated_at: FieldValue.serverTimestamp() });
           
           // Write to flat feed for real-time gallery
-          const feedRef = db.collection('feed_icons').doc(iconId);
+          const feedRef = db.collection(DB_COLLECTION_FEED).doc(iconId);
           t.set(feedRef, {
               ...newIcon,
               ingredientId // Link back
@@ -482,7 +498,7 @@ export class FirebaseDataService implements DataService {
   }
 
   async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
-    const docRef = db.collection('ingredients_new').doc(ingredientId);
+    const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
     
     await db.runTransaction(async (t) => {
         const doc = await t.get(docRef);
@@ -494,6 +510,7 @@ export class FirebaseDataService implements DataService {
         if (index !== -1) {
             const icon = icons[index];
             icon.rejections = (icon.rejections || 0) + 1;
+            // Recalculate Score using Wilson LCB
             icon.score = this.calculateWilsonLCB(icon.impressions || 0, icon.rejections);
             
             icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
@@ -504,8 +521,8 @@ export class FirebaseDataService implements DataService {
 
   async deleteIcon(iconUrl: string, ingredientName?: string) {
       if (!ingredientName) return; 
-      const stdName = this.standardizeIngredientName(ingredientName);
-      const docRef = db.collection('ingredients_new').doc(stdName);
+      const stdName = standardizeIngredientName(ingredientName);
+      const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName);
       
       let deletedId: string | null = null;
 
@@ -521,7 +538,7 @@ export class FirebaseDataService implements DataService {
               t.update(docRef, { icons: newIcons });
               
               if (deletedId) {
-                  const feedRef = db.collection('feed_icons').doc(deletedId);
+                  const feedRef = db.collection(DB_COLLECTION_FEED).doc(deletedId);
                   t.delete(feedRef);
               }
           }
@@ -541,8 +558,8 @@ export class FirebaseDataService implements DataService {
   }
 
   async deleteIngredientCategory(ingredientName: string) {
-      const stdName = this.standardizeIngredientName(ingredientName);
-      const docRef = db.collection('ingredients_new').doc(stdName);
+      const stdName = standardizeIngredientName(ingredientName);
+      const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName);
       
       const doc = await docRef.get();
       if (doc.exists) {
@@ -575,15 +592,15 @@ export class FirebaseDataService implements DataService {
       }));
   }
 
-  async queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, { iconId: string, iconUrl: string }>> {
-      const immediateHits = new Map<string, { iconId: string, iconUrl: string }>();
+  async queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, IconStats>> {
+      const immediateHits = new Map<string, IconStats>();
       if (items.length === 0) return immediateHits;
       
       const batch = db.batch();
       let queuedCount = 0;
       
-      const uniqueNames = Array.from(new Set(items.map(i => this.standardizeIngredientName(i.ingredientName))));
-      const refs = uniqueNames.map(name => db.collection('ingredients_new').doc(name));
+      const uniqueNames = Array.from(new Set(items.map(i => standardizeIngredientName(i.ingredientName))));
+      const refs = uniqueNames.map(name => db.collection(DB_COLLECTION_INGREDIENTS).doc(name));
       const snapshots = await db.getAll(...refs);
       
       const cacheMap = new Map<string, any>();
@@ -594,29 +611,35 @@ export class FirebaseDataService implements DataService {
       const updatesByRecipe = new Map<string, Map<string, { iconId: string, iconUrl: string }>>();
 
       for (const item of items) {
-          const name = this.standardizeIngredientName(item.ingredientName);
+          const name = standardizeIngredientName(item.ingredientName);
           const rejected = new Set(item.rejectedIds || []);
           
-          let foundIcon: { id: string, url: string } | null = null;
+          let foundIcon: IconStats | null = null;
 
           const ingData = cacheMap.get(name);
           if (ingData && ingData.icons && Array.isArray(ingData.icons)) {
               for (const icon of ingData.icons) {
                   if (!rejected.has(icon.id)) {
-                      foundIcon = { id: icon.id, url: icon.url };
+                      foundIcon = { 
+                          iconId: icon.id, 
+                          iconUrl: icon.url,
+                          score: icon.score,
+                          impressions: icon.impressions,
+                          rejections: icon.rejections 
+                      };
                       break;
                   }
               }
           }
 
           if (!foundIcon) {
-              const docRef = db.collection('icon_queue').doc(name);
+              const docRef = db.collection(DB_COLLECTION_QUEUE).doc(name);
               const docSnap = await docRef.get();
               const existingData = docSnap.data();
 
               if (existingData?.status === 'completed' && existingData.iconId) {
                   if (!rejected.has(existingData.iconId)) {
-                      foundIcon = { id: existingData.iconId, url: existingData.iconUrl };
+                      foundIcon = { iconId: existingData.iconId, iconUrl: existingData.iconUrl };
                   }
               }
               
@@ -640,19 +663,19 @@ export class FirebaseDataService implements DataService {
           }
 
           if (foundIcon) {
-              immediateHits.set(name, { iconId: foundIcon.id, iconUrl: foundIcon.url });
+              immediateHits.set(name, foundIcon);
               if (item.recipeId) {
                   if (!updatesByRecipe.has(item.recipeId)) {
                       updatesByRecipe.set(item.recipeId, new Map());
                   }
-                  updatesByRecipe.get(item.recipeId)!.set(name, { iconId: foundIcon.id, iconUrl: foundIcon.url });
+                  updatesByRecipe.get(item.recipeId)!.set(name, { iconId: foundIcon.iconId, iconUrl: foundIcon.iconUrl });
               }
           }
       }
 
       for (const [recipeId, updates] of updatesByRecipe.entries()) {
           await db.runTransaction(async (t) => {
-              const recipeRef = db.collection('recipes').doc(recipeId);
+              const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
               const doc = await t.get(recipeRef);
               if (!doc.exists) return;
               const data = doc.data();
@@ -663,7 +686,7 @@ export class FirebaseDataService implements DataService {
               
               nodes.forEach((n: any) => {
                   if (n.visualDescription) {
-                      const nName = this.standardizeIngredientName(n.visualDescription);
+                      const nName = standardizeIngredientName(n.visualDescription);
                       if (updates.has(nName)) {
                           const update = updates.get(nName)!;
                           if (n.iconId !== update.iconId) {
@@ -688,20 +711,8 @@ export class FirebaseDataService implements DataService {
       
       return immediateHits;
   }
-
-  private calculateWilsonLCB(n: number, r: number): number {
-    if (n === 0) return 0;
-    const k = n - r; const p = k / n; const z = 1.645;
-    const den = 1 + (z * z) / n;
-    const centre = p + (z * z) / (2 * n);
-    const adj = z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n);
-    return Math.max(0, (centre - adj) / den);
-  }
-  private urlsMatch(url1: string, url2: string) {
-    if (!url1 || !url2) return false;
-    try { return decodeURIComponent(url1.split('?')[0]) === decodeURIComponent(url2.split('?')[0]); } 
-    catch { return url1.split('?')[0] === url2.split('?')[0]; }
-  }
+  
+  // ... (private helpers)
   private async updateStorageMetadata(iconUrl: string, updates: any) {
       if (!process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) return;
       try {
@@ -731,12 +742,12 @@ export class MemoryDataService implements DataService {
     private userVotes = new Map<string, { liked: Set<string>; disliked: Set<string> }>();
     private userStars = new Map<string, Set<string>>();
 
-    async queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, { iconId: string, iconUrl: string }>> {
+    async queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, IconStats>> {
         console.log(`[MemoryDataService] Queuing icons (Synchronous Mock)`);
-        const hits = new Map<string, { iconId: string, iconUrl: string }>();
+        const hits = new Map<string, IconStats>();
         
         for (const item of items) {
-            const stdName = this.standardizeIngredientName(item.ingredientName);
+            const stdName = standardizeIngredientName(item.ingredientName);
             const mockUrl = `https://placehold.co/64x64/png?text=${encodeURIComponent(stdName)}&uuid=${randomUUID().substring(0, 6)}`;
             const iconId = memoryStore.addIcon({
                 url: mockUrl,
@@ -747,19 +758,33 @@ export class MemoryDataService implements DataService {
                 popularity_score: 0
             });
             
-            hits.set(stdName, { iconId, iconUrl: mockUrl });
+            hits.set(stdName, { iconId, iconUrl: mockUrl, score: 0, impressions: 0, rejections: 0 });
         }
         return hits;
     }
-
-    private standardizeIngredientName(name: string): string {
-        return name.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    
+    async recordImpression(ingredientId: string, iconId: string): Promise<void> {
+        // Simple increment for memory store
+        const icons = memoryStore.getIconsForIngredient(ingredientId);
+        const icon = icons.find(i => i.id === iconId);
+        if (icon) {
+            const n = (icon.impressions || 0) + 1;
+            const r = (icon.rejections || 0);
+            const score = 1.0; // Mock score
+            memoryStore.updateIcon(iconId, { impressions: n, popularity_score: score });
+        }
     }
 
-    async waitForQueue(ingredientName: string, timeoutMs?: number): Promise<{ iconId: string, iconUrl: string } | null> {
+    async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number) {
+        // Legacy support - can be removed or alias to recordImpression if needed
+        await this.recordImpression(ingredientId, iconId);
+    }
+
+    async waitForQueue(ingredientName: string, timeoutMs?: number): Promise<IconStats | null> {
         return null;
     }
-
+    
+    // ... (rest of methods)
     async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
         let icons = memoryStore.getAllIcons().filter(i => !i.marked_for_deletion);
         
@@ -767,7 +792,6 @@ export class MemoryDataService implements DataService {
             const term = query.toLowerCase();
             icons = icons.filter(i => i.ingredient.toLowerCase().includes(term));
         } else {
-             // Sort by date desc by default
              icons.sort((a, b) => b.created_at - a.created_at);
         }
 
@@ -998,10 +1022,6 @@ export class MemoryDataService implements DataService {
 
     async deleteIngredientCategory(ingredientName: string) {
         memoryStore.deleteIngredient(ingredientName);
-    }
-
-    async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number) {
-        memoryStore.updateIcon(iconId, { impressions: newImpressions, popularity_score: newScore });
     }
 
     async retryIconGeneration(ingredientName: string) {

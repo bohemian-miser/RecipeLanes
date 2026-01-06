@@ -6,6 +6,7 @@ import { genkit, z } from 'genkit';
 import { vertexAI } from '@genkit-ai/google-genai';
 import { generateAndStoreIcon } from '../../lib/icon-generator';
 import { setAIService, MockAIService } from '../../lib/ai-service';
+import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from '../../lib/config';
 
 const db = getFirestore();
 const storage = getStorage();
@@ -45,7 +46,7 @@ function standardizeName(name: string): string {
 
 // Worker Function (Queue Processor)
 export const processIconQueue = onDocumentWritten({ 
-    document: "icon_queue/{ingredientName}", 
+    document: `${DB_COLLECTION_QUEUE}/{ingredientName}`, 
     timeoutSeconds: 300, 
     memory: "1GiB",
     maxInstances: 1 
@@ -65,7 +66,7 @@ export const processIconQueue = onDocumentWritten({
         await event.data.after.ref.update({ status: 'processing' });
 
         // 1. Load Cache (ingredients_new)
-        const ingDoc = await db.collection('ingredients_new').doc(ingredientName).get();
+        const ingDoc = await db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientName).get();
         let cache = ingDoc.exists ? (ingDoc.data()?.icons || []) : [];
         
         // Ensure cache is sorted by score
@@ -78,7 +79,7 @@ export const processIconQueue = onDocumentWritten({
         
         for (const rId of recipeIds) {
             await db.runTransaction(async (t) => {
-                const recipeRef = db.collection('recipes').doc(rId);
+                const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(rId);
                 const doc = await t.get(recipeRef);
                 if (!doc.exists) return;
                 
@@ -192,7 +193,7 @@ export const backfillRecipeIcons = onCall({ timeoutSeconds: 60, memory: "256MiB"
     const recipeId = request.data.recipeId;
     if (!recipeId) throw new HttpsError('invalid-argument', 'Missing recipeId');
 
-    const docRef = db.collection('recipes').doc(recipeId);
+    const docRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
     const docSnap = await docRef.get();
     
     if (!docSnap.exists) throw new HttpsError('not-found', 'Recipe not found');
@@ -203,7 +204,7 @@ export const backfillRecipeIcons = onCall({ timeoutSeconds: 60, memory: "256MiB"
         const batch = db.batch();
         nodesToProcess.forEach((n: any) => {
              const name = standardizeName(n.visualDescription);
-             const qRef = db.collection('icon_queue').doc(name);
+             const qRef = db.collection(DB_COLLECTION_QUEUE).doc(name);
              batch.set(qRef, { 
                  status: 'pending', 
                  recipes: FieldValue.arrayUnion(recipeId),

@@ -30,9 +30,9 @@ async function migrateIngredients() {
     console.log(`Found ${snapshot.size} ingredient documents.`);
 
     let migratedCount = 0;
-    const batchSize = 100;
+    const batchSize = 50; // Reduced to avoid limit (50 ingredients * ~5 icons + writes)
     let batch = db.batch();
-    let batchCount = 0;
+    let opCount = 0;
 
     for (const doc of snapshot.docs) {
         const data = doc.data();
@@ -129,22 +129,34 @@ async function migrateIngredients() {
         } else {
             const newRef = db.collection('ingredients_new').doc(stdName);
             batch.set(newRef, newDocData, { merge: true });
-            batch.update(doc.ref, { migrated_to: stdName, migrated_at: FieldValue.serverTimestamp() });
+            opCount++;
+            
+            // Also populate feed_icons
+            for (const icon of cache) {
+                 const feedRef = db.collection('feed_icons').doc(icon.id);
+                 batch.set(feedRef, {
+                     ...icon,
+                     ingredientId: stdName
+                 }, { merge: true });
+                 opCount++;
+            }
 
-            batchCount++;
-            if (batchCount >= batchSize) {
+            batch.update(doc.ref, { migrated_to: stdName, migrated_at: FieldValue.serverTimestamp() });
+            opCount++;
+
+            if (opCount >= 400) { // Limit is 500
                 await batch.commit();
-                console.log(`Committed batch of ${batchCount} migrations.`);
+                console.log(`Committed batch of ${opCount} operations.`);
                 batch = db.batch();
-                batchCount = 0;
+                opCount = 0;
             }
         }
         migratedCount++;
     }
 
-    if (!isDryRun && batchCount > 0) {
+    if (!isDryRun && opCount > 0) {
         await batch.commit();
-        console.log(`Committed final batch of ${batchCount} migrations.`);
+        console.log(`Committed final batch of ${opCount} operations.`);
     }
 
     console.log(`Migration Complete. Processed ${migratedCount} ingredients.`);

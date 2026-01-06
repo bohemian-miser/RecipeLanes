@@ -6,9 +6,8 @@ import { genkit, z } from 'genkit';
 import { vertexAI } from '@genkit-ai/google-genai';
 import { generateAndStoreIcon } from '../../lib/icon-generator';
 import { setAIService, MockAIService } from '../../lib/ai-service';
+import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from '../../lib/config';
 
-// initializeApp() is called in lib usually, but we need db here.
-// In Firebase Functions, admin is already initialized or we should do it.
 const db = getFirestore();
 const storage = getStorage();
 
@@ -19,11 +18,11 @@ if (process.env.FUNCTIONS_EMULATOR === 'true') {
     setAIService(new MockAIService());
 }
 
+/*
 const ai = genkit({
     plugins: [vertexAI({ location: 'us-central1' })], 
 });
 
-// Flow wrapper for consistency if needed
 export const generateIcon = ai.defineFlow(
     {
       name: 'generateIcon',
@@ -40,109 +39,46 @@ export const generateIcon = ai.defineFlow(
       return { url: result.url, prompt: result.prompt };
     }
   );
+*/
 
-// Helper to Queue Icons
-async function enqueueIcons(graph: any, recipeId: string) {
-    if (!graph || !graph.nodes) return;
+// Helper
+function standardizeName(name: string): string {
+    return name.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
 
-    const nodesToProcess = graph.nodes.filter((n: any) => n.visualDescription && !n.iconId);
-    if (nodesToProcess.length === 0) return;
-
-    console.log(`[enqueueIcons] Found ${nodesToProcess.length} nodes to process for recipe ${recipeId}`);
-
-    const batch = db.batch();
-    let queuedCount = 0;
-    
-    // Track immediate updates for already completed items
-    const immediateUpdates: { nodeId: string, iconId: string, iconUrl: string }[] = [];
-
-    for (const node of nodesToProcess) {
-        const rawName = node.visualDescription.trim();
-        const name = rawName.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-        
-        // 1. Check existing in DB first (Optimization & Cleanup Support)
-        const ingredientsRef = db.collection('ingredients');
-        const q = await ingredientsRef.where('name', '==', name).limit(1).get();
-        
-        let foundInDb = false;
-        if (!q.empty) {
-            const ingredientDocId = q.docs[0].id;
-            const iconsRef = db.collection(`ingredients/${ingredientDocId}/icons`);
-            const iconSnap = await iconsRef.orderBy('popularity_score', 'desc').limit(1).get();
-            if (!iconSnap.empty) {
-                const iconDoc = iconSnap.docs[0];
-                console.log(`[enqueueIcons] Found existing icon in DB for "${name}", updating immediately.`);
-                immediateUpdates.push({ 
-                    nodeId: node.id, 
-                    iconId: iconDoc.id, 
-                    iconUrl: iconDoc.data().url 
-                });
-                foundInDb = true;
-            }
-        }
-        if (foundInDb) continue;
-
-        const docRef = db.collection('icon_queue').doc(name);
-        const docSnap = await docRef.get();
-        const existingData = docSnap.data();
-
-        if (existingData?.status === 'completed' && existingData.iconId && existingData.iconUrl) {
-            console.log(`[enqueueIcons] Icon for "${name}" already completed, checking if recipe needs update.`);
-            // We need to update the recipe because the frontend might not have it yet 
-            // (e.g. cache miss in createVisualRecipeAction but queue has it).
-            immediateUpdates.push({ 
-                nodeId: node.id, 
-                iconId: existingData.iconId, 
-                iconUrl: existingData.iconUrl 
-            });
-            continue;
-        }
-        
-        batch.set(docRef, {
-            status: 'pending', 
-            created_at: existingData?.created_at || FieldValue.serverTimestamp(),
-            recipes: FieldValue.arrayUnion(recipeId) 
-        }, { merge: true });
-        queuedCount++;
-    }
-    
-    if (immediateUpdates.length > 0) {
-        console.log(`[enqueueIcons] Applying ${immediateUpdates.length} immediate updates to recipe ${recipeId}`);
-        await db.runTransaction(async (t) => {
-            const recipeRef = db.collection('recipes').doc(recipeId);
-            const doc = await t.get(recipeRef);
-            if (!doc.exists) return;
-            const data = doc.data();
-            if (!data?.graph?.nodes) return;
-            
-            const nodes = data.graph.nodes;
-            let changed = false;
-            
-            immediateUpdates.forEach(update => {
-                const nodeIndex = nodes.findIndex((n: any) => n.id === update.nodeId);
-                if (nodeIndex !== -1 && !nodes[nodeIndex].iconId) {
-                    nodes[nodeIndex].iconId = update.iconId;
-                    nodes[nodeIndex].iconUrl = update.iconUrl;
-                    changed = true;
-                }
-            });
-            
-            if (changed) {
-                t.update(recipeRef, { "graph.nodes": nodes });
-            }
-        });
-    }
-
-    if (queuedCount > 0) {
-        await batch.commit();
-        console.log(`[enqueueIcons] Enqueued ${queuedCount} icons.`);
-    }
+// count parameter allows batch recording of impressions when a single icon is assigned to multiple waiting recipes simultaneously.
+async function recordImpression(ingredientId: string, iconId: string, count: number = 1) {
+    const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
+    try {
+      await db.runTransaction(async (t) => {
+          const doc = await t.get(docRef);
+          if (!doc.exists) return;
+          const data = doc.data() || {};
+          const icons = data.icons || [];
+          
+          const index = icons.findIndex((i: any) => i.id === iconId);
+          if (index !== -1) {
+              icons[index].impressions = (icons[index].impressions || 0) + count;
+              const n = icons[index].impressions;
+              const r = icons[index].rejections || 0;
+              // Wilson Score
+              if (n > 0) {
+                  const k = n - r; const p = k / n; const z = 1.645;
+                  const den = 1 + (z * z) / n;
+                  const centre = p + (z * z) / (2 * n);
+                  const adj = z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n);
+                  icons[index].score = Math.max(0, (centre - adj) / den);
+              }
+              icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+              t.update(docRef, { icons });
+          }
+      });
+    } catch (e) { console.error('recordImpression failed', e); }
 }
 
 // Worker Function (Queue Processor)
-// Max Instances = 1 to throttle rate
 export const processIconQueue = onDocumentWritten({ 
-    document: "icon_queue/{ingredientName}", 
+    document: `${DB_COLLECTION_QUEUE}/{ingredientName}`, 
     timeoutSeconds: 300, 
     memory: "1GiB",
     maxInstances: 1 
@@ -150,80 +86,90 @@ export const processIconQueue = onDocumentWritten({
     if (!event.data || !event.data.after) return;
     const data = event.data.after.data();
     
-    // Only process if status is 'pending'
-    if (!data || data.status !== 'pending') return;
+    if (!data) return;
 
-    const ingredientName = event.params.ingredientName;
+    const rawIngredientName = event.params.ingredientName;
+    const ingredientName = standardizeName(rawIngredientName);
     const recipeIds: string[] = data.recipes || [];
+    const hasRecipes = recipeIds.length > 0;
+
+    // If status is 'processing', assume active runner handles it.
+    if (data.status === 'processing') return;
+
+    // If pending, OR (completed/failed AND has new recipes to process)
+    if (data.status !== 'pending' && !hasRecipes) return;
 
     console.log(`[Queue] Processing: "${ingredientName}" for recipes: ${recipeIds.join(', ')}`);
 
     try {
+        // Lock it
         await event.data.after.ref.update({ status: 'processing' });
 
-        // 1. Check Existing Cache first
-        let iconId: string | undefined, iconUrl: string | undefined;
+        // 1. GENERATE NEW ICON (Batch Mode)
+        // Contract: If requests are in the queue, they have exhausted the cache.
+        // We generate ONE new icon for the entire waiting batch.
+        console.log(`[Queue] Generating new icon for "${ingredientName}" (Batch size: ${recipeIds.length})...`);
+        const result = await generateAndStoreIcon({ ingredientName });
         
-        const ingredientsRef = db.collection('ingredients');
-        const q = await ingredientsRef.where('name', '==', ingredientName).limit(1).get();
-        
-        if (!q.empty) {
-            const ingredientDocId = q.docs[0].id;
-            const iconsRef = db.collection(`ingredients/${ingredientDocId}/icons`);
-            const iconSnap = await iconsRef.orderBy('popularity_score', 'desc').limit(1).get();
-            if (!iconSnap.empty) {
-                const iconDoc = iconSnap.docs[0];
-                iconId = iconDoc.id;
-                iconUrl = iconDoc.data().url;
-                console.log(`[Queue] Found existing icon for "${ingredientName}"`);
-            }
-        }
+        const newIconId = result.id;
+        const newIconUrl = result.url;
 
-        // 2. Generate if missing
-        if (!iconId) {
-             console.log(`[Queue] Generating new icon for "${ingredientName}"...`);
-             const result = await generateAndStoreIcon({ ingredientName });
-             iconId = result.id;
-             iconUrl = result.url;
-        }
+        // 2. FAN-OUT UPDATES
+        console.log(`[Queue] Assigning new icon ${newIconId} to ${recipeIds.length} recipes...`);
         
-        // 3. Update all linked recipes
-        console.log(`[Queue] Updating ${recipeIds.length} recipes...`);
+        let successCount = 0;
+
         for (const rId of recipeIds) {
-            const recipeRef = db.collection('recipes').doc(rId);
             await db.runTransaction(async (t) => {
+                const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(rId);
                 const doc = await t.get(recipeRef);
                 if (!doc.exists) return;
+                
                 const recipeData = doc.data();
                 if (!recipeData?.graph?.nodes) return;
                 
                 const nodes = recipeData.graph.nodes;
                 let changed = false;
-                
+
                 nodes.forEach((n: any) => {
-                    if (n.visualDescription && !n.iconId) {
-                         const nName = n.visualDescription.trim().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+                    if (n.visualDescription) {
+                         const nName = standardizeName(n.visualDescription);
                          if (nName === ingredientName) {
-                             n.iconId = iconId;
-                             n.iconUrl = iconUrl;
-                             changed = true;
+                             // Blindly update. They queued for a new icon, they get it.
+                             if (n.iconId !== newIconId) {
+                                 n.iconId = newIconId;
+                                 n.iconUrl = newIconUrl;
+                                 changed = true;
+                             }
                          }
                     }
                 });
                 
                 if (changed) {
                     t.update(recipeRef, { "graph.nodes": nodes });
+                    successCount++;
                 }
             });
         }
 
-        // 4. Mark Queue Done
-        await event.data.after.ref.update({ 
+        // 3. RECORD IMPRESSIONS
+        if (successCount > 0) {
+            await recordImpression(ingredientName, newIconId, successCount);
+        }
+
+        // 4. CLEANUP
+        const update: any = { 
             status: 'completed', 
-            iconId, 
-            iconUrl, 
+            iconId: newIconId, 
+            iconUrl: newIconUrl, 
             updated_at: FieldValue.serverTimestamp() 
-        });
+        };
+
+        if (recipeIds.length > 0) {
+            update.recipes = FieldValue.arrayRemove(...recipeIds);
+        }
+        
+        await event.data.after.ref.update(update);
         console.log(`[Queue] Completed "${ingredientName}"`);
 
     } catch (e: any) {
@@ -236,24 +182,32 @@ export const processIconQueue = onDocumentWritten({
     }
 });
 
-// 1. Automatic Trigger on Creation
-export const processNewRecipe = onDocumentCreated({ document: "recipes/{recipeId}", timeoutSeconds: 60, memory: "256MiB" }, async (event) => {
-    if (!event.data) return;
-    const newData = event.data.data();
-    await enqueueIcons(newData.graph, event.params.recipeId);
-});
-
-// 2. Manual Callable Function (Debug / Retry)
+// Manual Callable Function (Debug / Retry)
+// Updated to use the new queue system manually
 export const backfillRecipeIcons = onCall({ timeoutSeconds: 60, memory: "256MiB" }, async (request) => {
     const recipeId = request.data.recipeId;
     if (!recipeId) throw new HttpsError('invalid-argument', 'Missing recipeId');
 
-    const docRef = db.collection('recipes').doc(recipeId);
+    const docRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
     const docSnap = await docRef.get();
     
     if (!docSnap.exists) throw new HttpsError('not-found', 'Recipe not found');
+    const graph = docSnap.data()?.graph;
     
-    await enqueueIcons(docSnap.data()?.graph, recipeId);
+    if (graph && graph.nodes) {
+        const nodesToProcess = graph.nodes.filter((n: any) => n.visualDescription && !n.iconId);
+        const batch = db.batch();
+        nodesToProcess.forEach((n: any) => {
+             const name = standardizeName(n.visualDescription);
+             const qRef = db.collection(DB_COLLECTION_QUEUE).doc(name);
+             batch.set(qRef, { 
+                 status: 'pending', 
+                 recipes: FieldValue.arrayUnion(recipeId),
+                 created_at: FieldValue.serverTimestamp() 
+             }, { merge: true });
+        });
+        await batch.commit();
+    }
     
     return { success: true, message: "Queued icon generation." };
 });

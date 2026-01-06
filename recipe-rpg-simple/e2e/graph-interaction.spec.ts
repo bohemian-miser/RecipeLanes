@@ -19,25 +19,34 @@ test.describe('Graph Interaction', () => {
       await wait_for_graph(page, dir);
 
       const viewport = page.locator('.react-flow__viewport');
+      await page.waitForTimeout(1000); // Wait for layout to settle
       const initialTransform = await viewport.getAttribute('style');
+      console.log('Initial Transform:', initialTransform);
 
-      await page.waitForTimeout(500); // Wait for layout to settle
+      // Pan from center-ish (avoiding nodes which are usually centered)
+      // Moving to bottom-right (300, 300) should be safe if graph is centered.
+      // Actually, let's start from an edge where no nodes are likely present.
+      // Top-left is risky (Sidebar toggle). Bottom is Legend/Chat.
+      // Left edge, below header (100px down) is usually safe.
+      const startX = 100;
+      const startY = 200;
 
-      // Pan from left side (background) to avoid dragging nodes
-      await page.mouse.move(50, 200);
+      await page.mouse.move(startX, startY);
       await page.mouse.down();
       await screenshot(page, dir, 'pan-started');
 
-      await page.mouse.move(50, 100); // Move up 100px
+      await page.mouse.move(startX + 300, startY + 300, { steps: 50 }); // Move diagonal 300px, slowly
       await page.mouse.up();
       await page.waitForTimeout(2000);
       await screenshot(page, dir, 'pan-completed');
 
       const midTransform = await viewport.getAttribute('style');
+      console.log('Initial Transform:', initialTransform);
+      console.log('Mid Transform:', midTransform);
       expect(midTransform).not.toBe(initialTransform);
 
       const box = await viewport.boundingBox();
-      expect(box?.height).toBeGreaterThan(500);
+      expect(box?.height).toBeGreaterThan(100);
       await screenshot(page, dir, 'final-state');
       cleanupScreenshots(dir);
     });

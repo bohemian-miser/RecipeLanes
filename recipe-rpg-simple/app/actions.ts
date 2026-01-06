@@ -1,43 +1,17 @@
 'use server';
 
-import { embeddingModel, imageModelName, textModel, ai } from '@/lib/genkit';
 import { getAIService } from '@/lib/ai-service';
 import { getDataService } from '@/lib/data-service';
 import { getAuthService } from '@/lib/auth-service';
 import { z } from 'zod';
 import { generateRecipePrompt, parseRecipeGraph, extractServes } from '@/lib/recipe-lanes/parser';
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
-import { generateIconFlow } from '@/lib/flows';
-// import { processIcon } from '@/lib/image-processing';
-import { generateAndStoreIcon } from '@/lib/icon-generator';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
-
-// Constants for Generation Gating
-const SESSION_REJECT_LIMIT = 4;
-const PROVEN_SAMPLE_SIZE = 20;
-const QUALITY_FLOOR_LCB = 0.40;
-const MIN_CACHE_SIZE = 3;
+import { resolveIconsForGraph } from '@/lib/icon-orchestrator';
 
 // Input Validation Schemas
 const IngredientSchema = z.string().min(1).max(100);
-const IconUrlSchema = z.string().url().optional();
-const CountSchema = z.number().int().min(0).default(0);
 const SeenUrlsSchema = z.array(z.string().url()).default([]);
-
-// Wilson Score Interval (Lower Confidence Bound)
-function calculateWilsonLCB(n: number, r: number): number {
-  if (n === 0) return 0;
-  const k = n - r;
-  const p = k / n;
-  const z = 1.645; // 95% confidence (one-sided)
-  
-  const den = 1 + (z * z) / n;
-  const centre = p + (z * z) / (2 * n);
-  const adj = z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n);
-  
-  const lcb = (centre - adj) / den;
-  return Math.max(0, lcb); // Clamp to 0
-}
 
 // Helper for Title Case
 function toTitleCase(str: string) {
@@ -94,156 +68,90 @@ export async function getSharedGalleryAction() {
 
 export async function getOrCreateIconAction(
     rawIngredient: string,
-    rawSessionRejections = 0,
+    rawSessionRejections = 0, // Kept for API compatibility, unused in new logic
     rawSeenUrls: string[] = []
 ) {
     console.log(`[getOrCreateIconAction] Starting for: ${rawIngredient}`);
     try {
-        // Guests allowed, but we check session for accounting if needed
-        const session = await getAuthService().verifyAuth();
-      
         // Validate Input
         const ingredientParse = IngredientSchema.safeParse(rawIngredient);
         if (!ingredientParse.success) {
             console.warn(`[getOrCreateIconAction] Invalid ingredient: ${rawIngredient}`);
             return { error: 'Invalid ingredient' };
         }
-        let ingredient = toTitleCase(ingredientParse.data);
-
-        const countParse = CountSchema.safeParse(rawSessionRejections);
-        const sessionRejections = countParse.success ? countParse.data : 0;
+        const ingredient = toTitleCase(ingredientParse.data);
 
         const seenParse = SeenUrlsSchema.safeParse(rawSeenUrls);
-        const seenUrls = new Set(seenParse.success ? seenParse.data : []);
-
-        // 1. Search for Ingredient Group
-        const bestMatch = await getDataService().getIngredientByName(ingredient);
-        if (bestMatch) {
-            ingredient = bestMatch.data.name; // Canonical name
-            console.log(`[getOrCreateIconAction] Found existing group: ${ingredient}`);
-        } else {
-            console.log(`[getOrCreateIconAction] New ingredient group: ${ingredient}`);
+        const seenUrls = seenParse.success ? seenParse.data : [];
+        
+        // Treat seen URLs as rejected to force cycling/new generation
+        // Map URLs to IDs if possible? queueIcons checks ID in cache.
+        // But seenUrls are URLs. DataService queueIcons logic:
+        // "if (!rejected.has(icon.id))"
+        
+        // We need to map seen URLs to IDs, or update queueIcons to check URLs too.
+        // For now, let's assume we can't easily map back without querying.
+        // BUT queueIcons implementation only checks ID.
+        // The client passes URLs.
+        // We should fetch the ingredient first to resolve URLs to IDs?
+        // Or update queueIcons to accept URLs.
+        
+        // Actually, let's fetch the ingredient to map URLs to IDs.
+        const dataService = getDataService();
+        const match = await dataService.getIngredientByName(ingredient);
+        const rejectedIds: string[] = [];
+        
+        if (match && match.data.icons) {
+            match.data.icons.forEach((icon: any) => {
+                if (seenUrls.includes(icon.url)) {
+                    rejectedIds.push(icon.id);
+                }
+            });
         }
 
-        // 2. Decide: Pick Existing or Generate New
-        if (bestMatch) {
-            const icons = await getDataService().getIconsForIngredient(bestMatch.id);
-            console.log(`[getOrCreateIconAction] Found ${icons.length} existing icons for ${ingredient}`);
-
-            // Calculate LCB for decision making
-            const evaluated = icons
-                .map((icon: any) => {
-                    const n = icon.impressions || 0;
-                    const r = icon.rejections || 0;
-                    return {
-                        ...icon,
-                        lcb: calculateWilsonLCB(n, r),
-                        n, r
-                    };
-                })
-                .filter((i: any) => !i.marked_for_deletion && !seenUrls.has(i.url));
-
-            // Debug Info
-            const sortedCandidates = [...evaluated].sort((a: any, b: any) => b.lcb - a.lcb);
-            const debugInfo = {
-                candidates: sortedCandidates.slice(0, 5).map((c: any) => ({
-                    url: c.url,
-                    score: c.lcb,
-                    impressions: c.n,
-                    rejections: c.r
-                })),
-                sessionRejections,
-                totalAvailable: evaluated.length,
-                decision: 'UNKNOWN'
-            };
-
-            // Generation Logic
-            let shouldGenerate = false;
-            const provenIcons = evaluated.filter((i: any) => i.n >= PROVEN_SAMPLE_SIZE);
-            const bestProvenLCB = provenIcons.length > 0 ? Math.max(...provenIcons.map((i: any) => i.lcb)) : 0;
-          
-            if (evaluated.length === 0) {
-                console.log(`[getOrCreateIconAction] Cache exhausted for ${ingredient}, generating new.`);
-                debugInfo.decision = 'CACHE_EXHAUSTED';
-                shouldGenerate = true;
-            } else if (sessionRejections >= SESSION_REJECT_LIMIT) {
-                if (provenIcons.length > 0 && bestProvenLCB < QUALITY_FLOOR_LCB) {
-                    console.log(`[getOrCreateIconAction] Quality floor breach for ${ingredient}, generating new.`);
-                    debugInfo.decision = 'QUALITY_FLOOR_BREACH';
-                    shouldGenerate = true;
-                } else if (icons.length < MIN_CACHE_SIZE) {
-                    console.log(`[getOrCreateIconAction] Cache too small for ${ingredient} and rejections high, generating new.`);
-                    debugInfo.decision = 'CACHE_TOO_SMALL_REJECT_STREAK';
-                    shouldGenerate = true;
-                } else {
-                    debugInfo.decision = 'CACHE_SUFFICIENT';
-                }
-            } else {
-                debugInfo.decision = 'NORMAL_SELECTION';
-            }
-
-            if (!shouldGenerate) {
-                const selected = sortedCandidates[0];
-                console.log(`[getOrCreateIconAction] Returning cached icon: ${selected.url}`);
-                const newImpressions = (selected.n || 0) + 1;
-                const newLCB = calculateWilsonLCB(newImpressions, selected.r || 0);
-
-                try {
-                    await getDataService().incrementImpressions(
-                        bestMatch.id,
-                        selected.id,
-                        selected.url,
-                        newLCB,
-                        newImpressions
-                    );
-                } catch (e) {
-                    console.error('Failed to increment impressions:', e);
-                }
-
-                return {
-                    iconId: selected.id,
-                    iconUrl: selected.url,
-                    isNew: false,
-                    popularityScore: newLCB,
-                    fullPrompt: selected.fullPrompt || selected.imagePrompt,
-                    visualDescription: selected.visualDescription || selected.prompt,
-                    debugInfo
-                };
-            }
-          
-                      console.log(`[getOrCreateIconAction] Calling generateAndStoreIcon for ${ingredient}...`);
-                      const result = await generateAndStoreIcon({ ingredientName: ingredient });
-                      console.log(`[getOrCreateIconAction] Generation success for ${ingredient}: ${result.url}`);
-                      return { 
-                          ...result,
-                          iconId: result.id,
-                          iconUrl: result.url, 
-                          popularityScore: result.lcb,
-                          isNew: true, 
-                          debugInfo: { ...debugInfo, decision: 'GENERATED_NEW' } 
-                      };
-                  } 
-                        
-                // 3. Create New Ingredient Group (Requires Auth)
-                // This is currently commented out so anyone can forge new ingredients.
-                // I will add this back as soon as there are any shenanigans or costs.
-                //   if (!session) {
-                //       console.warn(`[getOrCreateIconAction] Item not found and user not logged in: ${ingredient}`);
-                //       return { error: 'Item not found. Login to forge new items.' };
-                //   }
+        // 1. Queue Request
+        const result = await dataService.queueIcons([{ 
+            ingredientName: ingredient, 
+            rejectedIds 
+        }]);
+        
+        const stdName = toTitleCase(ingredient);
+        
+        // 2. Check for Immediate Hit
+        if (result.has(stdName)) {
+            const hit = result.get(stdName)!;
+            console.log(`[getOrCreateIconAction] Cache hit for ${ingredient}: ${hit.iconUrl}`);
             
-                  console.log(`[getOrCreateIconAction] Creating new ingredient group for ${ingredient}...`);
-                  // const newDocId = await getDataService().createIngredient(ingredient); // Handled inside generateAndStoreIcon
-                  const result = await generateAndStoreIcon({ ingredientName: ingredient });
-                  console.log(`[getOrCreateIconAction] Initial generation success for ${ingredient}: ${result.url}`);
-                  return { 
-                      ...result,
-                      iconId: result.id,
-                      iconUrl: result.url,
-                      popularityScore: result.lcb,
-                      isNew: true, 
-                      debugInfo: { decision: 'NEW_INGREDIENT_GROUP' } 
-                  };
+            // Increment Impressions (Fire and Forget)
+            dataService.recordImpression(stdName, hit.iconId)
+                .catch(e => console.error('Failed to record impression:', e));
+
+            return {
+                iconId: hit.iconId,
+                iconUrl: hit.iconUrl,
+                isNew: false,
+                popularityScore: 0,
+                visualDescription: ingredient
+            };
+        }
+
+        // 3. Poll for Completion
+        console.log(`[getOrCreateIconAction] Waiting for generation: ${ingredient}`);
+        const completion = await dataService.waitForQueue(ingredient, 15000); // 15s timeout
+        
+        if (completion) {
+             console.log(`[getOrCreateIconAction] Generation completed: ${completion.iconUrl}`);
+             return {
+                iconId: completion.iconId,
+                iconUrl: completion.iconUrl,
+                isNew: true,
+                popularityScore: 0,
+                visualDescription: ingredient
+            };
+        }
+
+        return { error: 'Generation timed out. Please try again.' };
+
     } catch (e: any) {
         console.error('[getOrCreateIconAction] Fatal Error:', e);
         return { error: e.message || 'Unknown error during icon generation' };
@@ -341,67 +249,17 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
             graph.serves = 1;
         }
 
-        // 2. Optimistic Cache Lookup (Fast Path)
-        // We look for existing icons to populate immediately.
-        // Missing icons are left as null (triggering the Background Worker).
-        console.log('[createVisualRecipeAction] 🔍 Checking cache for icons...');
-        const nodesWithIcons = await Promise.all(graph.nodes.map(async (node) => {
-            if (node.visualDescription) {
-                try {
-                    // Title Case Normalization for lookup
-                    const name = toTitleCase(node.visualDescription);
-                    const match = await getDataService().getIngredientByName(name);
-                    
-                    console.log(`[createVisualRecipeAction] Lookup '${name}' -> Match: ${match ? match.id : 'null'}`);
+        // 2. Optimistic Cache Lookup & Queuing (Unified)
+        console.log('[createVisualRecipeAction] 🔍 Checking cache & queuing...');
+        
+        // Prepare Queue Requests
+        const queueItems = graph.nodes
+            .filter(n => n.visualDescription)
+            .map(n => ({
+                ingredientName: n.visualDescription
+            }));
 
-                    if (match) {
-                        const icons = await getDataService().getIconsForIngredient(match.id);
-                        console.log(`[createVisualRecipeAction] '${name}' has ${icons.length} icons.`);
-                        
-                        // Pick best icon (Simple highest score)
-                        const bestIcon = icons
-                            .filter((i: any) => !i.marked_for_deletion)
-                            .sort((a: any, b: any) => (b.popularity_score || 0) - (a.popularity_score || 0))[0];
-                        
-                        if (bestIcon) {
-                            // Quality Check: If proven bad, treat as missing to trigger regeneration
-                            const n = bestIcon.impressions || 0;
-                            const score = bestIcon.popularity_score || 0;
-                            
-                            // IF the best icon is very bad, skip it and make a new one.
-                            if (n >= PROVEN_SAMPLE_SIZE && score < QUALITY_FLOOR_LCB) {
-                                console.log(`[createVisualRecipeAction] Skipping '${name}' icon (Score ${score.toFixed(2)} below floor).`);
-                                return node; // Return without iconId -> Trigger Background
-                            }
-
-                            console.log(`[createVisualRecipeAction] Selected icon for '${name}': ${bestIcon.url}`);
-                            
-                            // Increment Impressions for the selected icon
-                            const newImpressions = (bestIcon.impressions || 0) + 1;
-                            const newLCB = calculateWilsonLCB(newImpressions, bestIcon.rejections || 0);
-                            await getDataService().incrementImpressions(match.id, bestIcon.id, bestIcon.url, newLCB, newImpressions);
-
-                            return { 
-                                ...node, 
-                                iconId: bestIcon.id, 
-                                iconUrl: bestIcon.url // Keep URL for immediate display
-                            };
-                        }
-                    }else {
-                        console.log(`[createVisualRecipeAction] CACHE MISS for '${name}'.`);
-
-                    }
-                } catch (e) {
-                    console.warn(`[createVisualRecipeAction] Cache lookup failed for ${node.text}`, e);
-                }
-            }
-            // Return node as is (iconId undefined/null)
-            return node;
-        }));
-
-        graph.nodes = nodesWithIcons;
-
-        // 3. Save to Firestore (Triggers Cloud Function)
+        // 3. Save to Firestore (Initial)
         const session = await getAuthService().verifyAuth();
         const userId = session?.uid;
         
@@ -412,17 +270,12 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
             const original = await getDataService().getRecipe(currentId);
             if (original) {
                 if (original.ownerId === userId) {
-                    // Owner -> Update existing
-                    console.log('[createVisualRecipeAction] Updating existing recipe:', currentId);
                     targetId = currentId;
                     visibility = (original.visibility as any) || 'unlisted';
-                    if (original.graph.title) graph.title = original.graph.title; // Preserve title if not parsed
+                    if (original.graph.title) graph.title = original.graph.title;
                 } else {
-                    // Not Owner -> Fork
-                    console.log('[createVisualRecipeAction] Forking from', currentId);
                     graph.sourceId = currentId;
-                    
-                    // Smart Naming
+                    // ... naming logic ...
                     let newTitle = graph.title || original.graph.title || 'Untitled';
                     if (newTitle.startsWith('Yet another copy of ')) {
                         const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
@@ -443,11 +296,24 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
             }
         }
         
-        console.log('[createVisualRecipeAction] 💾 Saving recipe...');
+        console.log('[createVisualRecipeAction] 💾 Saving initial recipe...');
         const id = await getDataService().saveRecipe(graph, targetId, userId, visibility);
         
+        // 4. Resolve Icons (Unified Orchestrator)
+        // This handles cache checks, rejections, and queuing.
+        // It updates the graph with immediate hits.
+        const { graph: updatedGraph } = await resolveIconsForGraph(graph, id);
+        
+        // We already saved the initial graph.
+        // If resolveIconsForGraph found hits, we should update the DB or just return the updated graph?
+        // resolveIconsForGraph updates the passed graph object in place (or returns updated copy).
+        // queueIcons (called inside) updates the DB transactionally for hits.
+        // So we don't need to save again?
+        // Wait, queueIcons updates DB if recipeId is passed.
+        // Yes, updatesByRecipe logic in DataService handles DB update.
+        
         console.log(`[createVisualRecipeAction] ✅ Complete. ID: ${id}`);
-        return { graph, id };
+        return { graph: updatedGraph, id };
 
     } catch (e: any) {
         console.error('[createVisualRecipeAction] Failed:', e);
@@ -574,44 +440,70 @@ export async function getRecipeAction(id: string) {
 
 
 
-export async function rerollIconAction(nodeId: string, ingredientName: string, currentIconUrl: string, seenUrls: string[] = [], recipeId?: string) {
+export async function rerollIconAction(
+    nodeId: string, 
+    rawIngredientName: string, 
+    currentIconUrl: string, 
+    seenUrls: string[] = [], 
+    recipeId?: string,
+    currentIconId?: string
+) {
     try {
-        // Record Rejection if possible
-        if (currentIconUrl) {
-             const ingMatch = await getDataService().getIngredientByName(ingredientName);
-             if (ingMatch) {
-                 await getDataService().recordRejection(currentIconUrl, ingredientName, ingMatch.id);
-             }
-        }
-
-        // Get New Icon
-        // Combine current bad one with history of bad ones
-        const allSeen = Array.from(new Set([...seenUrls, currentIconUrl]));
-        const result = await getOrCreateIconAction(ingredientName, 0, allSeen);
+        const ingredientName = toTitleCase(rawIngredientName);
+        console.log(`[rerollIconAction] Rerolling ${ingredientName} (Node ${nodeId})`);
         
-        if ('error' in result) return { error: result.error };
+        let graph: RecipeGraph | undefined;
 
-        // Update Stored Recipe if recipeId is provided
+        // 1. Persist Rejection to Recipe
         if (recipeId) {
             const recipeData = await getDataService().getRecipe(recipeId);
             if (recipeData) {
-                const graph = recipeData.graph;
-                const nodeIndex = graph.nodes.findIndex(n => n.id === nodeId);
-                if (nodeIndex !== -1) {
-                    graph.nodes[nodeIndex] = {
-                        ...graph.nodes[nodeIndex],
-                        iconId: result.iconId,
-                        iconUrl: result.iconUrl
-                    };
-                    await getDataService().saveRecipe(graph, recipeId, recipeData.ownerId, recipeData.visibility as any);
-                    console.log(`[rerollIconAction] Updated recipe ${recipeId} node ${nodeId} with new icon.`);
+                graph = recipeData.graph;
+                if (!graph.rejections) graph.rejections = {};
+                if (!graph.rejections[ingredientName]) graph.rejections[ingredientName] = [];
+                
+                // Add current to rejections
+                const idToReject = currentIconId || (currentIconUrl ? 'url:' + currentIconUrl : null);
+                if (idToReject && !graph.rejections[ingredientName].includes(idToReject)) {
+                    graph.rejections[ingredientName].push(idToReject);
+                    
+                    // Record stats
+                    getDataService().recordRejection(idToReject, ingredientName, toTitleCase(ingredientName))
+                        .catch(e => console.error('Failed to record rejection stats:', e));
                 }
+                
+                // Save persistent rejections
+                await getDataService().saveRecipe(graph, recipeId, recipeData.ownerId, recipeData.visibility as any);
             }
         }
+
+        // 2. Resolve Icons (Using Orchestrator)
+        if (!graph) {
+             return { error: 'Recipe Context required for reroll' };
+        }
+
+        // Force the specific node to be re-evaluated by clearing its icon
+        const nodeIndex = graph.nodes.findIndex(n => n.id === nodeId);
+        if (nodeIndex !== -1) {
+            graph.nodes[nodeIndex].iconUrl = undefined;
+            graph.nodes[nodeIndex].iconId = undefined;
+        }
+
+        const { hits } = await resolveIconsForGraph(graph, recipeId);
         
+        // 3. Return Result
+        const stdName = toTitleCase(ingredientName);
+        if (hits.has(stdName)) {
+            const hit = hits.get(stdName)!;
+            return { 
+                iconId: hit.iconId,
+                iconUrl: hit.iconUrl,
+                nodeId 
+            };
+        }
+
         return { 
-            iconId: result.iconId,
-            iconUrl: result.iconUrl,
+            status: 'pending',
             nodeId 
         };
 

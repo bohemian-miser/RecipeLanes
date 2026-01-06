@@ -9,7 +9,7 @@ test.describe('Undo Persistence Interaction', () => {
   const desktopDevices = deviceConfigs.filter(d => d.name === 'desktop');
 
   for (const device of desktopDevices) {
-    test.skip(`${device.name}: complex undo redo persistence check`, async ({ page, login }) => {
+    test(`${device.name}: complex undo redo persistence check`, async ({ page, login }) => {
       const dir = screenshotDir('undo-persistence-complex', device.name);
 
       await page.setViewportSize(device.viewport);

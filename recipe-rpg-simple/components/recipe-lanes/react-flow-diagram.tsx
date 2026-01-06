@@ -168,7 +168,9 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         
         setEdges(newEdgesList);
         setNodes(nds => nds.filter(n => n.id !== nodeId));
-    }, [takeSnapshot, getEdges, setEdges, setNodes, edgeStyle]);
+        setIsDirty(true);
+        setTimeout(() => onEdit?.(), 0);
+    }, [takeSnapshot, getEdges, setEdges, setNodes, edgeStyle, onEdit]);
 
     const undo = useCallback(() => {
         if (past.length === 0) return;
@@ -191,6 +193,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             }));
             setNodes(restoredNodes);
             setEdges(previous.edges);
+            setIsDirty(true);
         }
     }, [past, getNodes, getEdges, setNodes, setEdges, handleDeleteNode]);
 
@@ -215,6 +218,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             }));
             setNodes(restoredNodes);
             setEdges(next.edges);
+            setIsDirty(true);
         }
     }, [future, getNodes, getEdges, setNodes, setEdges, handleDeleteNode]);
 
@@ -330,10 +334,48 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     }, [graph, mode, spacing, setNodes, setEdges, fitView, handleDeleteNode, edgeStyle]); 
 
+    const prevMode = useRef(mode);
+
     // Layout Effect
     useEffect(() => {
-        runLayout(true); 
-    }, [graph, mode, spacing, runLayout]);
+        const modeChanged = prevMode.current !== mode;
+        if (modeChanged) {
+            prevMode.current = mode;
+            setIsDirty(true);
+            takeSnapshot();
+            runLayout(false); // Force layout recalculation
+            return;
+        }
+
+        if (isDirty) {
+            // In dirty mode, we ONLY apply metadata updates (icons) from DB to EXISTING nodes.
+            // We DO NOT restore deleted nodes or move nodes based on DB, preventing overwrites.
+            setNodes(currentNodes => {
+                let changed = false;
+                const newNodes = currentNodes.map(n => {
+                     const dbNode = graph.nodes.find(dn => dn.id === n.id);
+                     if (dbNode) {
+                         // Check for Icon Update
+                         if (dbNode.iconUrl && dbNode.iconUrl !== n.data.iconUrl) {
+                             changed = true;
+                             return { 
+                                 ...n, 
+                                 data: { 
+                                     ...n.data, 
+                                     iconUrl: dbNode.iconUrl, 
+                                     iconId: dbNode.iconId 
+                                 } 
+                             };
+                         }
+                     }
+                     return n;
+                });
+                return changed ? newNodes : currentNodes;
+            });
+        } else {
+            runLayout(true); 
+        }
+    }, [graph, mode, spacing, runLayout, isDirty, setNodes, takeSnapshot]);
 
     // Text Position Update Effect
     useEffect(() => {
@@ -428,6 +470,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     const getGraph = useCallback((): RecipeGraph => {
         const currentNodes = getNodes().filter(n => n.type !== 'lane');
+        const currentEdges = getEdges();
         const layouts = graph.layouts || {};
         layouts[mode as string] = currentNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
         
@@ -436,11 +479,17 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             .filter(n => currentNodes.some(rn => rn.id === n.id))
             .map(n => {
                const rfn = currentNodes.find(rn => rn.id === n.id)!;
-               return { ...n, x: rfn.position.x, y: rfn.position.y };
+               
+               // Reconstruct inputs from current edges to capture bridging/changes
+               const inputs = currentEdges
+                   .filter(e => e.target === n.id)
+                   .map(e => e.source);
+
+               return { ...n, x: rfn.position.x, y: rfn.position.y, inputs };
             });
             
         return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
-    }, [graph, mode, getNodes]);
+    }, [graph, mode, getNodes, getEdges]);
 
     const performSave = async () => {
         const graphToSave = getGraph();

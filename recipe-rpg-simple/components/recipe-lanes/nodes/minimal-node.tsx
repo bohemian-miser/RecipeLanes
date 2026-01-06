@@ -1,4 +1,4 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useEffect } from 'react';
 import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
 import { RefreshCw, RotateCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
@@ -11,6 +11,17 @@ const sessionRejectedUrls = new Set<string>();
 const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?: () => void, onSetLongPress?: (active: boolean) => void }>) => {
   const isIngredient = data.type === 'ingredient';
   const [isRerolling, setIsRerolling] = useState(false);
+  // Track previous icon URL to detect changes (Derived State pattern)
+  const [prevIconUrl, setPrevIconUrl] = useState(data.iconUrl);
+  
+  // If icon URL changes from props, reset reroll spinner immediately
+  if (data.iconUrl !== prevIconUrl) {
+      setPrevIconUrl(data.iconUrl);
+      if (isRerolling) {
+          setIsRerolling(false);
+      }
+  }
+
   const [isPivotMode, setIsPivotMode] = useState(false);
   const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
   const { setNodes } = useReactFlow();
@@ -55,7 +66,8 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
       console.log(`[MinimalNode] Delete clicked for ${id}`);
       if (data.onDelete) {
           data.onDelete();
-      } else {
+      }
+      else {
           console.error(`[MinimalNode] No onDelete handler for ${id}`);
       }
   };
@@ -72,20 +84,34 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
       }
 
       try {
-        const res = await rerollIconAction(id, ingredientName, currentUrl, Array.from(sessionRejectedUrls), recipeId || undefined);
-        if (res && res.iconUrl) {
+        const res = await rerollIconAction(
+            id, 
+            ingredientName, 
+            currentUrl, 
+            Array.from(sessionRejectedUrls), 
+            recipeId || undefined,
+            data.iconId || undefined // Pass current ID for persistent rejection
+        );
+        
+        if (res && 'iconUrl' in res && res.iconUrl) {
+            // Immediate hit
+            setIsRerolling(false);
             setNodes((nodes) => nodes.map(n => {
-                // Update all nodes that share the same visual description/text
                 const nName = n.data.visualDescription || n.data.text;
                 if (nName === ingredientName) {
                     return { ...n, data: { ...n.data, iconUrl: res.iconUrl, iconId: res.iconId } };
                 }
                 return n;
             }));
+        } else if (res && res.status === 'pending') {
+            console.log("Reroll queued pending");
+            // Keep spinning (handled by Derived State logic)
+        } else {
+            // Error or unknown state
+            setIsRerolling(false);
         }
       } catch (err) {
           console.error("Reroll failed", err);
-      } finally {
           setIsRerolling(false);
       }
   };
@@ -198,7 +224,8 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
               {/* Reroll Button */}
               <button 
                   onClick={handleReroll}
-                  className={`nodrag absolute -top-2 -right-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-blue-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isRerolling ? '!opacity-100 block' : ''}`}
+                  disabled={isRerolling}
+                  className={`nodrag absolute -top-2 -right-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-blue-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isRerolling ? '!opacity-100 block cursor-not-allowed' : ''}`}
                   title="Reroll Icon"
               >
                   <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin text-blue-500' : ''}`} />

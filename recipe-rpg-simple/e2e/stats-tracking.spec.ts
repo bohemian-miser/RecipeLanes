@@ -1,0 +1,91 @@
+import { test, expect } from '@playwright/test';
+import { create_recipe, wait_for_graph, get_node } from './utils/actions';
+import { screenshotDir, cleanupScreenshots } from './utils/screenshot';
+
+test.describe('Stats Tracking', () => {
+  test('should track impressions and rejections', async ({ page }) => {
+    test.slow();
+    const dir = screenshotDir('stats-tracking', 'desktop');
+    const uniqueName = `Stats Test ${Date.now()}`;
+    
+    // 1. Create Recipe
+    await page.goto('/lanes');
+    await create_recipe(page, `make ${uniqueName}`, dir);
+    await wait_for_graph(page, dir);
+    
+    // 2. Wait for Icon
+    // The prompt "make Stats Test <timestamp>" should generate an ingredient node "Stats Test <timestamp>"
+    const node = get_node(page, uniqueName);
+    await expect(node).toBeVisible();
+    await expect(node.locator('img')).toBeVisible({ timeout: 30000 });
+
+    // 3. Check Stats in Gallery (New Tab)
+    const galleryPage = await page.context().newPage();
+    await galleryPage.goto('/');
+    
+    // Search for the ingredient
+    await galleryPage.getByPlaceholder('Search ingredients...').fill(uniqueName);
+    await galleryPage.getByPlaceholder('Search ingredients...').press('Enter');
+    
+    // Wait for results
+    // The gallery card format: Score (top left), Imp/Rej (top left next to score?)
+    // In SharedGallery.tsx:
+    // <div className="absolute top-1 left-1 ... text-[10px]">
+    //   <span className="..."> {score} </span>
+    //   <span className="..."> {impressions} / {rejections} </span>
+    // </div>
+    
+    const card = galleryPage.locator('.relative.group').filter({ hasText: uniqueName }).first();
+    await expect(card).toBeVisible({ timeout: 10000 });
+    
+    // Verify Impressions = 1, Rejections = 0
+    await expect(card).toContainText('1 / 0');
+    console.log('Verified Initial Impression: 1 / 0');
+
+    // 4. Reroll in Recipe (Original Tab)
+    await page.bringToFront();
+    await node.hover();
+    const rerollBtn = node.locator('button[title="Reroll Icon"]');
+    await rerollBtn.click();
+    
+    // Wait for spinner to start and stop (icon change)
+    await expect(rerollBtn.locator('svg')).toHaveClass(/animate-spin/);
+    await expect(rerollBtn.locator('svg')).not.toHaveClass(/animate-spin/, { timeout: 30000 });
+    
+    // 5. Verify Stats Updated
+    await galleryPage.bringToFront();
+    await galleryPage.reload();
+    await galleryPage.getByPlaceholder('Search ingredients...').fill(uniqueName);
+    
+    // We expect TWO cards now? Or one?
+    // If we rejected the first one, it's still in the DB.
+    // The NEW one is also in the DB.
+    // The gallery shows ALL icons for the ingredient?
+    // "Community Collection" (SharedGallery) groups by ingredient?
+    // In `getSharedGalleryAction`:
+    // "Group by Ingredient... Take top 4"
+    // So it shows top 4 icons for that ingredient.
+    
+    // Only one card showing "Stats Test ..."? 
+    // It shows icons.
+    // If we have 2 icons, we should see 2 cards.
+    // We filter by text.
+    
+    const cards = galleryPage.locator('.relative.group').filter({ hasText: uniqueName });
+    await expect(cards).toHaveCount(2);
+    
+    // Card 1 (Rejected): Should be 1 / 1
+    // Card 2 (New): Should be 1 / 0
+    
+    const cardTexts = await cards.allTextContents();
+    console.log('Card Stats:', cardTexts);
+    
+    const hasRejected = cardTexts.some(t => t.includes('1 / 1'));
+    const hasNew = cardTexts.some(t => t.includes('1 / 0'));
+    
+    expect(hasRejected, 'Should find rejected icon (1/1)').toBeTruthy();
+    expect(hasNew, 'Should find new icon (1/0)').toBeTruthy();
+    
+    cleanupScreenshots(dir);
+  });
+});

@@ -2,6 +2,9 @@
 
 **Recipe Lanes** is a comprehensive visual recipe platform that transforms text into flowchart-style diagrams and lets users forge custom pixel-art icons.
 
+## Architecture & Database
+See [ARCHITECTURE.md](ARCHITECTURE.md) for details on the Schema V2 (Unified Queue) architecture.
+
 ## Modules 🧩
 
 ### 1. Icon Maker (Recipe RPG) - `/`
@@ -26,6 +29,7 @@ Browse and manage recipes.
 -   **AI Parsing & Generation:** Gemini 2.5 Flash for logic, Imagen 4 for art.
 -   **Smart Icons:** Automatically generates icons for ingredients and steps (cached & reusable).
 -   **Mobile Friendly:** Optimized for use in the kitchen on phones and tablets.
+-   **Unified Queue:** Scalable background generation for icons.
 
 ## Tech Stack 🛠️
 
@@ -33,7 +37,7 @@ Browse and manage recipes.
 -   **UI:** Tailwind CSS, Lucide Icons
 -   **Graph:** React Flow
 -   **AI:** Google Genkit (Gemini 2.5 Flash, Imagen 4)
--   **Database:** Firebase Firestore
+-   **Database:** Firebase Firestore (Schema V2)
 -   **Storage:** Firebase Storage
 -   **Testing:** Playwright, Vitest
 
@@ -42,21 +46,19 @@ Browse and manage recipes.
 1.  **Install Dependencies:**
     ```bash
     npm install
+    cd functions && npm install && cd ..
     ```
 
 2.  **Environment Setup:**
     Create a `.env` file with your Firebase and Genkit credentials.
-    ```env
-    GOOGLE_GENAI_API_KEY=...
-    NEXT_PUBLIC_FIREBASE_API_KEY=...
-    # ... other firebase config
-    ```
 
-3.  **Run Development Server:**
+3.  **Run Development Server (with Emulators):**
     ```bash
+    ./scripts/test-e2e.sh # Runs emulators + tests
+    # OR for interactive dev:
+    firebase emulators:start --import=./debug/firebase-export
     npm run dev
     ```
-    Open [http://localhost:8001](http://localhost:8001).
 
 ## Testing 🧪
 
@@ -76,3 +78,4 @@ npm run test:e2e
 ## Deployment 🌍
 
 Deployed on Vercel/Firebase App Hosting.
+Data migration scripts are in `scripts/`.

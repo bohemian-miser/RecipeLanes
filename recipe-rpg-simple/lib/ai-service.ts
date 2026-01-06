@@ -113,8 +113,13 @@ export class MockAIService implements AIService {
     // Generic fallback for E2E tests - Try to extract ingredient from prompt
     // Prompt usually contains: "convert the following cooking instructions... Input Recipe ... "
     // Handle both quoted and unquoted inputs, and varying newlines
-    const match = prompt.match(/Input Recipe\s*\n\s*"?([\s\S]*)"?\s*$/);
-    const inputDerived = match ? match[1].trim() : "Mock Ingredient 1";
+    const match = prompt.match(/Input Recipe\s*\n\s*(["']?)([\s\S]*)\1\s*$/);
+    let inputDerived = match ? match[2].trim() : "Mock Ingredient 1";
+    // Extra cleanup if regex missed something (e.g. mismatched quotes or just one quote captured)
+    if (inputDerived.endsWith('"') && !inputDerived.startsWith('"')) {
+        inputDerived = inputDerived.slice(0, -1);
+    }
+
     const lines = inputDerived.split('\n').filter(l => l.trim());
     const nodes = lines.map((l, i) => ({
         id: (i + 1).toString(),

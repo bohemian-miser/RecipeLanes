@@ -38,7 +38,7 @@ test.describe('Undo Race Conditions', () => {
 
   for (const device of desktopDevices) {
     
-    // test.skip(`${device.name}: Slow Undo (Control) - Wait for save then undo`, async ({ page, login }) => {
+    // test(`${device.name}: Slow Undo (Control) - Wait for save then undo`, async ({ page, login }) => {
     //   const dir = screenshotDir('undo-race-slow', device.name);
     //   await page.setViewportSize(device.viewport);
     //   await page.goto('/lanes');
@@ -73,7 +73,7 @@ test.describe('Undo Race Conditions', () => {
 
     
     
-    test.skip(`${device.name}: slow Undo`, async ({ page, login }) => {
+    test(`${device.name}: slow Undo`, async ({ page, login }) => {
       const dir = screenshotDir('undo-race-slow-myversion', device.name);
       await page.setViewportSize(device.viewport);
       await page.goto('/lanes');
@@ -104,11 +104,13 @@ test.describe('Undo Race Conditions', () => {
     
     await node.hover();
     await page.mouse.down();
-    await page.mouse.move(box!.x + box!.width / 2 + -400, box!.y + box!.height / 2 , { steps: 2 });
+    await page.mouse.move(box!.x + box!.width / 2 + -400, box!.y + box!.height / 2 , { steps: 5 });
     await page.mouse.up();
+
+    // Verify it actually moved before undoing
+    const boxMoved = await node.boundingBox();
+    expect(Math.abs(boxMoved!.x - boxOriginal!.x)).toBeGreaterThan(50);
     
-      // screenshot(page, dir, `after-move-Eggs`);
-      
     await screenshot(page, dir, `after-move-Eggs-before-undo`);
       
       // WAIT for Save
@@ -135,7 +137,7 @@ test.describe('Undo Race Conditions', () => {
       cleanupScreenshots(dir);
     });
 
-    test.skip(`${device.name}: Fast Undo`, async ({ page, login }) => {
+    test(`${device.name}: Fast Undo`, async ({ page, login }) => {
       const dir = screenshotDir('undo-race-fast-myversion', device.name);
       await page.setViewportSize(device.viewport);
       await page.goto('/lanes');
@@ -169,15 +171,11 @@ test.describe('Undo Race Conditions', () => {
     await page.mouse.move(box!.x + box!.width / 2 + -400, box!.y + box!.height / 2 , { steps: 2 });
     await page.mouse.up();
     
-      // screenshot(page, dir, `after-move-Eggs`);
-      
     await screenshot(page, dir, `after-move-Eggs-before-undo`);
       
-    
     // Undo
-    // await click_undo_fast(page, dir);
-    // await expect(undoBtn).toBeEnabled();
-    // screenshot(page, dir, `before-undo`);
+    // Ensure the action is registered in history stack
+    await expect(undoBtn).toBeEnabled();
     await undoBtn.click();
     await page.waitForTimeout(500); // Wait for animation
     await screenshot(page, dir, `after-undo`);

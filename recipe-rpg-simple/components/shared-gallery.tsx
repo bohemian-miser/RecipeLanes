@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { getPagedIconsAction, deleteIconByUrlAction } from '@/app/actions';
 import { Search, ChevronLeft, ChevronRight, Loader2, Trash2, Sparkles } from 'lucide-react';
-import { db } from '@/lib/firebase-client';
-import { collectionGroup, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 
 export function SharedGallery() {
   const [icons, setIcons] = useState<any[]>([]);
@@ -12,7 +10,6 @@ export function SharedGallery() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
-  const [newArrivalIds, setNewArrivalIds] = useState<Set<string>>(new Set());
   const limitCount = 20;
 
   useEffect(() => {
@@ -35,42 +32,6 @@ export function SharedGallery() {
 
     return () => clearTimeout(timer);
   }, [page, search]);
-
-  // Real-time listener for new arrivals
-  useEffect(() => {
-    if (!db || Object.keys(db).length === 0 || search || page > 1) return;
-
-    const q = query(
-      collectionGroup(db, 'icons'),
-      where('marked_for_deletion', '==', false),
-      orderBy('created_at', 'desc'),
-      limit(5)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const data = change.doc.data();
-          const newIcon = { 
-            id: change.doc.id, 
-            ...data,
-            created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at || null,
-          } as any;
-          
-          setIcons(prev => {
-            const exists = prev.some(i => i.id === newIcon.id || i.url === newIcon.url);
-            if (exists) return prev;
-            
-            // Mark as new arrival for visual flair
-            setNewArrivalIds(ids => new Set(ids).add(newIcon.id));
-            return [newIcon, ...prev].slice(0, 50);
-          });
-        }
-      });
-    });
-
-    return () => unsubscribe();
-  }, [search, page]);
 
   const handleDelete = async (url: string, ingredient: string) => {
     //   if (!confirm('Are you sure you want to delete this icon?')) return;
@@ -119,24 +80,17 @@ export function SharedGallery() {
                     key={icon.id} 
                     className="relative aspect-square bg-zinc-800 border-2 border-zinc-700 shadow-md group overflow-hidden rounded-lg"
                     data-testid="gallery-item"
-                    data-ingredient={icon.ingredient_name || icon.ingredient}
+                    data-ingredient={icon.ingredient_name || icon.ingredient || icon.visualDescription}
                 >
                    <div className="absolute top-1 right-1 z-10 bg-black/60 px-1.5 py-0.5 text-[8px] font-mono text-green-400 pointer-events-none rounded backdrop-blur-sm">
-                      {Number(icon.popularity_score || 0).toFixed(1)}
+                      {Number(icon.popularity_score || icon.score || 0).toFixed(1)}
                    </div>
                    <div className="absolute top-1 left-1 z-10 bg-black/60 px-1.5 py-0.5 text-[8px] font-mono text-zinc-400 pointer-events-none rounded backdrop-blur-sm">
                       {icon.impressions || 0} / {icon.rejections || 0}
                    </div>
                    
-                   {newArrivalIds.has(icon.id) && (
-                      <div className="absolute top-1 left-1/2 -translate-x-1/2 z-10 bg-yellow-500/90 px-2 py-0.5 text-[8px] font-bold text-black pointer-events-none rounded-full shadow-[0_0_10px_rgba(234,179,8,0.5)] flex items-center gap-1 animate-pulse">
-                          <Sparkles className="w-2 h-2" />
-                          NEW
-                      </div>
-                   )}
-                   
                    <button 
-                       onClick={(e) => { e.stopPropagation(); handleDelete(icon.url, icon.ingredient_name); }}
+                       onClick={(e) => { e.stopPropagation(); handleDelete(icon.url, icon.ingredient_name || icon.visualDescription); }}
                        className="absolute top-7 right-1 z-20 p-1 bg-red-900/80 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
                        title="Delete Icon"
                    >
@@ -144,11 +98,11 @@ export function SharedGallery() {
                    </button>
 
                    <div className="absolute bottom-0 left-0 right-0 z-10 bg-black/70 p-1 text-[9px] text-zinc-300 text-center truncate backdrop-blur-sm translate-y-full group-hover:translate-y-0 transition-transform">
-                       {icon.ingredient_name || icon.ingredient}
+                       {icon.ingredient_name || icon.ingredient || icon.visualDescription}
                    </div>
                    <img 
                      src={icon.url} 
-                     alt={icon.ingredient_name}
+                     alt={icon.ingredient_name || icon.visualDescription}
                      title={icon.visualDescription || icon.ingredient_name}
                      className="w-full h-full object-contain rendering-pixelated transition-transform group-hover:scale-110"
                      style={{ imageRendering: 'pixelated' }}

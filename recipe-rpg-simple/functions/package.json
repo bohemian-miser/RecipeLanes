@@ -17,11 +17,13 @@
   "dependencies": {
     "@genkit-ai/firebase": "^1.26.0",
     "@genkit-ai/google-genai": "^1.25.0",
+    "clsx": "^2.1.1",
     "firebase-admin": "^13.6.0",
     "firebase-functions": "^7.0.2",
     "genkit": "^1.26.0",
     "jpeg-js": "^0.4.4",
     "pngjs": "^7.0.0",
+    "tailwind-merge": "^3.4.0",
     "uuid": "^13.0.0",
     "zod": "^3.23.8"
   },

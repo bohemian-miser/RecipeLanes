@@ -334,8 +334,19 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     }, [graph, mode, spacing, setNodes, setEdges, fitView, handleDeleteNode, edgeStyle]); 
 
+    const prevMode = useRef(mode);
+
     // Layout Effect
     useEffect(() => {
+        const modeChanged = prevMode.current !== mode;
+        if (modeChanged) {
+            prevMode.current = mode;
+            setIsDirty(true);
+            takeSnapshot();
+            runLayout(false); // Force layout recalculation
+            return;
+        }
+
         if (isDirty) {
             // In dirty mode, we ONLY apply metadata updates (icons) from DB to EXISTING nodes.
             // We DO NOT restore deleted nodes or move nodes based on DB, preventing overwrites.
@@ -364,7 +375,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         } else {
             runLayout(true); 
         }
-    }, [graph, mode, spacing, runLayout, isDirty, setNodes]);
+    }, [graph, mode, spacing, runLayout, isDirty, setNodes, takeSnapshot]);
 
     // Text Position Update Effect
     useEffect(() => {

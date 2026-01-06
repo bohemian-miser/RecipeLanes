@@ -546,7 +546,16 @@ const handleVisualize = async () => {
       }
   };
 
-  if (authLoading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 font-mono">Loading...</div>;
+    const handleLayoutClick = (mode: LayoutMode | 'repulsive') => {
+        if (layoutMode === mode) {
+            diagramRef.current?.resetLayout();
+        } else {
+            setLayoutMode(mode);
+            if (mode === 'repulsive') setEdgeStyle('bezier');
+        }
+    };
+
+    if (authLoading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 font-mono">Loading...</div>;
   
   const hasIcons = graph?.nodes.some(n => !!n.iconUrl);
   const isPublic = graph?.visibility === 'public';
@@ -801,43 +810,35 @@ const handleVisualize = async () => {
                     <div className="h-4 w-px bg-zinc-200 mx-1" />
 
                     <button
-                        onClick={() => setLayoutMode('swimlanes')}
+                        onClick={() => handleLayoutClick('swimlanes')}
                         className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'swimlanes' ? 'bg-zinc-100' : ''}`}
                         title="Lanes"
                     >
                         <List className="w-4 h-4" />
                     </button>
                     <button
-                        onClick={() => setLayoutMode('dagre')}
+                        onClick={() => handleLayoutClick('dagre')}
                         className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'dagre' ? 'bg-zinc-100' : ''}`}
                         title="Smart"
                     >
                         <Network className="w-4 h-4" />
                     </button>
                     <button
-                        onClick={() => setLayoutMode('dagre-lr')}
+                        onClick={() => handleLayoutClick('dagre-lr')}
                         className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'dagre-lr' ? 'bg-zinc-100' : ''}`}
                         title="Smart LR"
                     >
                         <RotateCw className="w-4 h-4" />
                     </button>
                      <button
-                        onClick={() => { setLayoutMode('repulsive'); setEdgeStyle('bezier'); }}
+                        onClick={() => handleLayoutClick('repulsive')}
                         className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'repulsive' ? 'bg-zinc-100' : ''}`}
                         title="Repulsive"
                     >
                         <Orbit className="w-4 h-4" />
                     </button>
                     
-                    {graph && (
-                        <button
-                            onClick={() => diagramRef.current?.resetLayout()}
-                            className="p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ml-2 border-l border-zinc-100"
-                            title="Reset Layout"
-                        >
-                            <RotateCcw className="w-4 h-4" />
-                        </button>
-                    )}
+
                 </div>
 
                 <div className="flex items-center gap-4">

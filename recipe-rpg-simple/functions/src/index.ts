@@ -18,6 +18,7 @@ if (process.env.FUNCTIONS_EMULATOR === 'true') {
     setAIService(new MockAIService());
 }
 
+/*
 const ai = genkit({
     plugins: [vertexAI({ location: 'us-central1' })], 
 });
@@ -38,6 +39,7 @@ export const generateIcon = ai.defineFlow(
       return { url: result.url, prompt: result.prompt };
     }
   );
+*/
 
 // Helper
 function standardizeName(name: string): string {

@@ -242,7 +242,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     }, [undo, redo]);
 
     // Initial Layout Calculation
-    const runLayout = useCallback(async (preservePositions = false) => {
+    const runLayout = useCallback(async (preservePositions = false, fit = true) => {
         let layout;
         
         // Determine effective graph and preservation status based on mode
@@ -326,7 +326,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         setNodes(newNodes);
         setEdges(newEdges);
 
-        if (!canPreserve) {
+        if (fit && !canPreserve) {
             setTimeout(() => {
                 fitView({ padding: 0.1 });
             }, 50);
@@ -335,16 +335,34 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     }, [graph, mode, spacing, setNodes, setEdges, fitView, handleDeleteNode, edgeStyle]); 
 
     const prevMode = useRef(mode);
+    const prevSpacing = useRef(spacing);
+    const lastSnapshotRef = useRef(0);
 
     // Layout Effect
     useEffect(() => {
+        if (isLive) return; // Skip static layout if physics is running
+
         const modeChanged = prevMode.current !== mode;
-        if (modeChanged) {
+        const spacingChanged = prevSpacing.current !== spacing;
+
+        if (modeChanged || spacingChanged) {
             prevMode.current = mode;
+            prevSpacing.current = spacing;
             setIsDirty(true);
-            takeSnapshot();
-            runLayout(false); // Force layout recalculation
-            return;
+            
+            // Throttle snapshot for spacing to prevent history spam and lag
+            const now = Date.now();
+            if (modeChanged || now - lastSnapshotRef.current > 500) {
+                takeSnapshot();
+                lastSnapshotRef.current = now;
+            }
+            
+            // Yield to main thread for UI updates
+            const timer = setTimeout(() => {
+                const shouldFit = modeChanged; // Only fit if mode changed
+                runLayout(false, shouldFit); 
+            }, 5);
+            return () => clearTimeout(timer);
         }
 
         if (isDirty) {
@@ -714,8 +732,39 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         }
     };
 
+    const updateLaneBounds = useCallback(() => {
+        setNodes(nds => {
+            const laneNodes = nds.filter(n => n.type === 'lane');
+            if (laneNodes.length === 0) return nds;
+
+            const contentNodes = nds.filter(n => n.type !== 'lane');
+            let changed = false;
+
+            const newNodes = nds.map(n => {
+                if (n.type === 'lane') {
+                    const children = contentNodes.filter(c => c.data.laneId === n.id);
+                    if (children.length > 0) {
+                        let maxY = 0;
+                        children.forEach(c => {
+                            const bottom = c.position.y + (c.height || 100);
+                            if (bottom > maxY) maxY = bottom;
+                        });
+                        const newHeight = Math.max(maxY + 50, 600);
+                        if (n.style?.height !== newHeight) {
+                            changed = true;
+                            return { ...n, style: { ...n.style, height: newHeight } };
+                        }
+                    }
+                }
+                return n;
+            });
+            return changed ? newNodes : nds;
+        });
+    }, [setNodes]);
+
     const onNodeDragStop = () => {
         dragRef.current = { active: false };
+        updateLaneBounds();
         if (isOwner) {
             handleSave();
         } else {

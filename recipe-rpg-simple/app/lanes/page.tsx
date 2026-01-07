@@ -244,7 +244,7 @@ function RecipeLanesContent() {
       setShowJson(!showJson);
   };
 
-  const [spacing, setSpacing] = useState(1);
+  const [spacing, setSpacing] = useState(0.5);
   const [edgeStyle, setEdgeStyle] = useState<'straight' | 'step' | 'bezier'>('straight');
   const [textPos, setTextPos] = useState<'bottom' | 'top' | 'left' | 'right'>('bottom');
   const [isLive, setIsLive] = useState(false);
@@ -885,9 +885,9 @@ const handleVisualize = async () => {
                         <span className="text-xs font-mono text-zinc-400">Spacing</span>
                         <input 
                             type="range" 
-                            min="0.2" 
-                            max="3" 
-                            step="0.1" 
+                            min="0" 
+                            max="1" 
+                            step="0.01" 
                             value={spacing} 
                             onChange={(e) => setSpacing(parseFloat(e.target.value))}
                             className="w-20 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer touch-none"

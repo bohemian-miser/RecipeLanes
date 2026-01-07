@@ -9,7 +9,7 @@ import { MinimalNodeModern } from './minimal-node-modern';
 // Track rejected URLs for the session to prevent them from reappearing immediately
 const sessionRejectedUrls = new Set<string>();
 
-const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?: () => void, onSetLongPress?: (active: boolean) => void, iconTheme?: 'classic' | 'modern' }>) => {
+const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?: () => void, onSetLongPress?: (active: boolean) => void, iconTheme?: 'classic' | 'modern' | 'modern_clean' }>) => {
   const [isRerolling, setIsRerolling] = useState(false);
   const [prevIconUrl, setPrevIconUrl] = useState(data.iconUrl);
   
@@ -93,7 +93,7 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
       onTouchEnd: handleTouchEnd
   };
 
-  if (iconTheme === 'modern') {
+  if (iconTheme === 'modern' || iconTheme === 'modern_clean') {
       return <MinimalNodeModern data={data} selected={selected} isRerolling={isRerolling} isPivotMode={isPivotMode} handlers={handlers} />;
   }
 

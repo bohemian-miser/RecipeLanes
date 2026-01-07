@@ -121,7 +121,8 @@ const calculateDagreLayout = (graph: RecipeGraph, spacing: number, rankDir: 'TB'
 
     graph.nodes.forEach(node => {
         const height = node.type === 'ingredient' ? C.NODE_HEIGHT_ING : C.NODE_HEIGHT_ACT;
-        g.setNode(node.id, { width: C.NODE_WIDTH, height: height, data: node });
+        const width = node.type === 'ingredient' ? C.NODE_WIDTH : 280;
+        g.setNode(node.id, { width: width, height: height, data: node });
     });
 
     graph.nodes.forEach(node => {
@@ -267,7 +268,7 @@ const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'standard' | 'compact
     if (clusteredIngredients.has(node.id)) return;
 
     const laneIdx = laneMap.get(node.laneId) || 0;
-    let width = C.NODE_WIDTH;
+    let width = node.type === 'action' ? 280 : C.NODE_WIDTH;
     let height = node.type === 'ingredient' ? C.INGREDIENT_HEIGHT : C.ACTION_HEIGHT;
     
     // If Action, check for clustered ingredients to place FIRST

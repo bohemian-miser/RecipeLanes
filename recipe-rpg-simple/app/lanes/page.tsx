@@ -41,6 +41,7 @@ function RecipeLanesContent() {
   const [showIngredients, setShowIngredients] = useState(false);
   const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
+  const [iconTheme, setIconTheme] = useState<'classic' | 'modern' | 'modern_clean'>('classic');
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
@@ -838,6 +839,20 @@ const handleVisualize = async () => {
                         <Orbit className="w-4 h-4" />
                     </button>
                     
+                    <div className="h-4 w-px bg-zinc-200 mx-1" />
+
+                    <button
+                        onClick={() => setIconTheme(t => {
+                            if (t === 'classic') return 'modern';
+                            if (t === 'modern') return 'modern_clean';
+                            return 'classic';
+                        })}
+                        className={`p-1.5 rounded hover:bg-zinc-100 transition-colors ${iconTheme === 'modern' ? 'bg-purple-50 text-purple-600' : iconTheme === 'modern_clean' ? 'bg-blue-50 text-blue-600' : 'text-zinc-600'}`}
+                        title={`Theme: ${iconTheme === 'classic' ? 'Classic' : iconTheme === 'modern' ? 'Modern' : 'Clean'}`}
+                    >
+                        {iconTheme === 'modern' || iconTheme === 'modern_clean' ? <Sparkles className="w-4 h-4" /> : <CircleDot className="w-4 h-4" />}
+                    </button>
+                    
 
                 </div>
 
@@ -936,6 +951,7 @@ const handleVisualize = async () => {
                         edgeStyle={edgeStyle} 
                         textPos={textPos} 
                         isLive={isLive} 
+                        iconTheme={iconTheme}
                         onInteraction={() => setInputExpanded(false)}
                         onEdit={handleEditAttempt}
                         onSave={(newGraph) => {

@@ -31,6 +31,10 @@ export interface RecipeNode {
   rotation?: number;
   textPos?: 'bottom' | 'top' | 'left' | 'right';
   iconTheme?: 'classic' | 'modern' | 'modern_clean';
+  iconMetadata?: {
+      center: { x: number, y: number };
+      bbox: { x: number, y: number, w: number, h: number };
+  };
 }
 
 export interface NodeLayout {

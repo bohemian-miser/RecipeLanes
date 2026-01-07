@@ -3,23 +3,62 @@ import { Position, Node } from 'reactflow';
 // Helper to get center
 function getCenter(node: Node, handlePos?: { x: number, y: number }) {
     // For MinimalNode, we know exact geometry relative to node position
-    // Trusting manual calc avoids React Flow handle pos issues (e.g. if transforms aren't tracked)
     if (node.type === 'minimal') {
         const { x, y } = node.positionAbsolute || node.position;
-        // Check for dimensions, default to standard MinimalNode size if missing
-        const w = node.width ?? (node.data?.textPos === 'right' || node.data?.textPos === 'left' ? 160 : 100);
-        const h = node.height ?? 100;
-        const textPos = node.data?.textPos || 'bottom';
+        const theme = node.data?.iconTheme || 'classic';
+        const meta = node.data?.iconMetadata; // { center: {x,y}, bbox: ... } normalized 0-1
+
+        let imageX = x;
+        let imageY = y;
+        let imageSize = 0;
+
+        if (theme === 'modern' || theme === 'modern_clean') {
+            // Modern: 120x120 container. 96x96 icon centered.
+            // Padding: (120-96)/2 = 12.
+            imageX = x + 12;
+            imageY = y + 12;
+            imageSize = 96;
+        } else {
+            // Classic: Dynamic Size. Icon container is 80x80. Image is 72x72 centered inside.
+            const textPos = node.data?.textPos || 'bottom';
+            const w = node.width ?? (textPos === 'right' || textPos === 'left' ? 160 : 100);
+            const h = node.height ?? 100;
+            
+            let containerX = 0;
+            let containerY = 0;
+            
+            if (textPos === 'bottom') { // Icon at Top
+                containerX = (w - 80) / 2;
+                containerY = 0;
+            } else if (textPos === 'top') { // Icon at Bottom
+                containerX = (w - 80) / 2;
+                containerY = h - 80;
+            } else if (textPos === 'right') { // Icon at Left
+                 containerX = 0;
+                 containerY = (h - 80) / 2;
+            } else if (textPos === 'left') { // Icon at Right
+                 containerX = w - 80;
+                 containerY = (h - 80) / 2;
+            }
+            
+            // Image is 72x72 inside 80x80 (4px padding)
+            imageX = x + containerX + 4;
+            imageY = y + containerY + 4;
+            imageSize = 72;
+        }
+
+        if (meta && meta.center) {
+             return {
+                 x: imageX + meta.center.x * imageSize,
+                 y: imageY + meta.center.y * imageSize
+             };
+        }
         
-        // Icon is 64x64. Radius 32.
-        // If bottom: Icon is at top. Center is (w/2, 32).
-        if (textPos === 'bottom') return { x: x + w / 2, y: y + 32 };
-        // If top: Icon is at bottom. Center is (w/2, h - 32).
-        if (textPos === 'top') return { x: x + w / 2, y: y + h - 32 };
-        // If right: Icon is left. Center is (32, h/2).
-        if (textPos === 'right') return { x: x + 32, y: y + h / 2 };
-        // If left: Icon is right. Center is (w - 32, h/2).
-        if (textPos === 'left') return { x: x + w - 32, y: y + h / 2 };
+        // Fallback to center of image area
+        return {
+            x: imageX + imageSize / 2,
+            y: imageY + imageSize / 2
+        };
     }
 
     if (handlePos && typeof handlePos.x === 'number' && typeof handlePos.y === 'number') return handlePos;

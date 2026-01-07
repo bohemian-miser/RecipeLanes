@@ -10,7 +10,7 @@ const CONSTANTS = {
     NODE_WIDTH: 200,
     PADDING_TOP: 40,
     PADDING_LEFT: 30,
-    GAP_Y: 30,
+    GAP_Y: 20,
     INGREDIENT_HEIGHT: 50,
     ACTION_HEIGHT: 100
   },
@@ -57,10 +57,39 @@ export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'dagre', 
       nodes.forEach(n => nodePosMap.set(n.id, n));
       generateEdges(graph, nodes, nodePosMap, edges, 'vertical'); 
 
+      // Reconstruct Lanes if in Swimlanes mode
+      let visualLanes: VisualLane[] = [];
+      if (mode === 'swimlanes' && graph.lanes && graph.lanes.length > 0) {
+          const BaseC = CONSTANTS.standard;
+          const C = {
+              PADDING_LEFT: BaseC.PADDING_LEFT * spacing,
+              LANE_WIDTH: BaseC.LANE_WIDTH * spacing,
+              PADDING_TOP: BaseC.PADDING_TOP * spacing
+          };
+
+          // Calculate height based on content
+          let maxY = 0;
+          nodes.forEach(n => {
+              const bottom = n.y + (n.height || 100);
+              if (bottom > maxY) maxY = bottom;
+          });
+          const layoutHeight = Math.max(maxY + 50, 600) + C.PADDING_TOP;
+
+          visualLanes = graph.lanes.map((lane, idx) => ({
+              id: lane.id,
+              label: lane.label,
+              x: C.PADDING_LEFT + idx * C.LANE_WIDTH,
+              y: 0,
+              width: C.LANE_WIDTH,
+              height: layoutHeight,
+              color: LANE_COLORS[lane.type] || LANE_COLORS.default
+          }));
+      }
+
       return {
           nodes,
           edges,
-          lanes: [], 
+          lanes: visualLanes, 
           width: 2000,
           height: 2000
       };
@@ -82,10 +111,11 @@ export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'dagre', 
 const calculateDagreLayout = (graph: RecipeGraph, spacing: number, rankDir: 'TB' | 'LR' = 'TB'): LayoutGraph => {
     const C = CONSTANTS.dagre;
     const g = new dagre.graphlib.Graph();
+    console.log(`Calculating Dagre Layout with rankDir=${rankDir} and spacing=${spacing}, ${(0.7*spacing-0.5 +0.05)}`);
     g.setGraph({ 
         rankdir: rankDir, 
-        nodesep: 10 * spacing, 
-        ranksep: 20 * spacing
+        nodesep: 100 * (0.7*spacing-0.5 +0.05), 
+        ranksep: 200 * (0.7*spacing-0.5 +0.05)
     });
     g.setDefaultEdgeLabel(() => ({}));
 
@@ -174,8 +204,9 @@ const calculateSwimlaneLayout = (graph: RecipeGraph, mode: 'standard' | 'compact
       ...BaseC,
       PADDING_TOP: BaseC.PADDING_TOP * spacing,
       PADDING_LEFT: BaseC.PADDING_LEFT * spacing,
-      GAP_Y: BaseC.GAP_Y * spacing,
-      LANE_WIDTH: BaseC.LANE_WIDTH * spacing
+      GAP_Y: BaseC.GAP_Y * spacing*2,
+      // Dampen Lane Width scaling so spacing affects edges (vertical) more than lanes (horizontal)
+      LANE_WIDTH: BaseC.LANE_WIDTH * Math.pow(spacing, 0.5) 
   };
   const nodes: VisualNode[] = [];
   const edges: VisualEdge[] = [];

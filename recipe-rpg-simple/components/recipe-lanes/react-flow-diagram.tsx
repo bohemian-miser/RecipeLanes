@@ -43,6 +43,7 @@ interface ReactFlowDiagramProps {
   isLoggedIn?: boolean;
   onNotify?: (msg: string) => void;
   isOwner?: boolean; // YOLO: Added to support auto-save on move logic
+  iconTheme?: 'classic' | 'modern' | 'modern_clean';
 }
 
 export interface ReactFlowDiagramHandle {
@@ -61,7 +62,7 @@ const INITIAL_EDGE_TYPES = {
     floating: FloatingEdge
 };
 
-const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false }, ref) => {
+const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme = 'classic' }, ref) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const { fitView, getNodes, getEdges } = useReactFlow();
@@ -95,6 +96,14 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
              setInternalIsPublic(pub);
         }
     }, [graph.visibility, propIsPublic]);
+
+    // Theme Effect
+    useEffect(() => {
+        setNodes(nds => nds.map(n => ({
+            ...n,
+            data: { ...n.data, iconTheme }
+        })));
+    }, [iconTheme, setNodes]);
 
     // Wrap change handlers to track dirty state
     const onNodesChangeWrapped = useCallback((changes: any) => {
@@ -300,7 +309,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                  id: n.id,
                  type: nodeType,
                  position: { x: n.x, y: n.y },
-                 data: { ...originalNode, ...n.data, textPos, depth: n.depth, onDelete: () => handleDeleteNode(n.id), onSetLongPress: setLongPress },
+                 data: { ...originalNode, ...n.data, textPos, depth: n.depth, onDelete: () => handleDeleteNode(n.id), onSetLongPress: setLongPress, iconTheme },
                  width: n.width,
                  height: n.height,
                  draggable: true,
@@ -322,6 +331,9 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             },
             animated: false
         }));
+
+        // Sort by Y for depth buffering (Painter's Algo)
+        newNodes.sort((a, b) => a.position.y - b.position.y);
 
         setNodes(newNodes);
         setEdges(newEdges);

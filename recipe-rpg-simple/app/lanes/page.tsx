@@ -11,7 +11,7 @@ import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, getReci
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, Bug } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, Bug } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -41,6 +41,7 @@ function RecipeLanesContent() {
   const [showIngredients, setShowIngredients] = useState(false);
   const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
+  const [iconTheme, setIconTheme] = useState<'classic' | 'modern' | 'modern_clean'>('classic');
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
@@ -814,7 +815,7 @@ const handleVisualize = async () => {
                         className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'swimlanes' ? 'bg-zinc-100' : ''}`}
                         title="Lanes"
                     >
-                        <List className="w-4 h-4" />
+                        <Kanban className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => handleLayoutClick('dagre')}
@@ -836,6 +837,20 @@ const handleVisualize = async () => {
                         title="Repulsive"
                     >
                         <Orbit className="w-4 h-4" />
+                    </button>
+                    
+                    <div className="h-4 w-px bg-zinc-200 mx-1" />
+
+                    <button
+                        onClick={() => setIconTheme(t => {
+                            if (t === 'classic') return 'modern';
+                            if (t === 'modern') return 'modern_clean';
+                            return 'classic';
+                        })}
+                        className={`p-1.5 rounded hover:bg-zinc-100 transition-colors ${iconTheme === 'modern' ? 'bg-purple-50 text-purple-600' : iconTheme === 'modern_clean' ? 'bg-blue-50 text-blue-600' : 'text-zinc-600'}`}
+                        title={`Theme: ${iconTheme === 'classic' ? 'Classic' : iconTheme === 'modern' ? 'Modern' : 'Clean'}`}
+                    >
+                        {iconTheme === 'modern' || iconTheme === 'modern_clean' ? <Sparkles className="w-4 h-4" /> : <CircleDot className="w-4 h-4" />}
                     </button>
                     
 
@@ -936,6 +951,7 @@ const handleVisualize = async () => {
                         edgeStyle={edgeStyle} 
                         textPos={textPos} 
                         isLive={isLive} 
+                        iconTheme={iconTheme}
                         onInteraction={() => setInputExpanded(false)}
                         onEdit={handleEditAttempt}
                         onSave={(newGraph) => {

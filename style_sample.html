@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Lanes - Design Proposal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif;
+            background: #f5f5f5;
+        }
+        
+        .bg-parchment {
+            background: linear-gradient(135deg, #f9f6f1 0%, #f3ede0 25%, #f9f6f1 50%, #efe8d8 75%, #f9f6f1 100%);
+            background-size: 400% 400%;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // RECIPE DATA
+        const recipeSimple = {
+            name: "Simple Cake",
+            description: "A basic cake recipe with eggs and flour",
+            nodes: [
+                { id: "egg", type: "ingredient", text: "EGGS", quantity: 3, unit: "", x: 20, y: 20,
+                  iconUrl: "https://storage.googleapis.com/recipe-lanes-staging.firebasestorage.app/icons%2FEgg-ffce081a.png" },
+                { id: "flour", type: "ingredient", text: "FLOUR", quantity: 200, unit: "g", x: 170, y: 20,
+                  iconUrl: "https://storage.googleapis.com/recipe-lanes-staging.firebasestorage.app/icons%2FFlour-dbd9e215.png" },
+                { id: "whisk", type: "action", text: "Whisk vigorously", duration: "5m", inputs: ["egg", "flour"], x: 95, y: 120,
+                  iconUrl: "https://storage.googleapis.com/recipe-lanes-staging.firebasestorage.app/icons%2FWhisked-Batter-In-A-Bowl-42654f91.png" },
+                { id: "bake", type: "action", text: "Bake", temperature: "180°C", duration: "45m", inputs: ["whisk"], x: 95, y: 240,
+                  iconUrl: "https://storage.googleapis.com/recipe-lanes-staging.firebasestorage.app/icons%2FBaked-Cake-In-A-Dish-66ddd78f.png" }
+            ]
+        };
+
+        const recipeLamb = {
+            name: "Crusted Rack of Lamb",
+            description: "Professional multi-step recipe with multiple ingredients",
+            nodes: [
+                { id: "lamb", type: "ingredient", text: "RACK OF LAMB", quantity: 1, unit: "Rack", x: 20, y: 20,
+                  iconUrl: "https://storage.googleapis.com/recipe-lanes.firebasestorage.app/icons%2FRack-Of-Lamb-1766931542920.png?alt=media" },
+                { id: "salt", type: "ingredient", text: "SALT", quantity: 1, unit: "Pinch", x: 170, y: 20,
+                  iconUrl: "https://storage.googleapis.com/recipe-lanes.firebasestorage.app/icons%2FSalt-1766929961499.png?alt=media" },
+                { id: "pepper", type: "ingredient", text: "PEPPER", quantity: 1, unit: "Pinch", x: 320, y: 20,
+                  iconUrl: "https://storage.googleapis.com/recipe-lanes.firebasestorage.app/icons%2FPepper-1766929959597.png?alt=media" },
+                { id: "fry", type: "action", text: "Fry Lamb", duration: "4m", temperature: "High", inputs: ["lamb", "salt", "pepper"], x: 95, y: 120,
+                  iconUrl: "https://storage.googleapis.com/recipe-lanes.firebasestorage.app/icons%2FRack-Of-Lamb-Frying-In-A-Pan-1767339036955.png?alt=media" },
+                { id: "mustard", type: "ingredient", text: "MUSTARD", quantity: 2, unit: "tbsp", x: 245, y: 140,
+                  iconUrl: "https://storage.googleapis.com/recipe-lanes.firebasestorage.app/icons%2FMustard-1766931543148.png?alt=media" },
+                { id: "coat", type: "action", text: "Coat with Mustard", inputs: ["fry", "mustard"], x: 170, y: 260,
+                  iconUrl: "https://firebasestorage.googleapis.com/v0/b/recipe-lanes.firebasestorage.app/o/icons%2FRack-Of-Lamb-Covered-In-Mustard-1767578515819.png?alt=media&token=ed308107-f67b-4283-b5d5-bafed7012f68" },
+                { id: "herbs", type: "ingredient", text: "HERBS", quantity: 2, unit: "tbsp", x: 320, y: 280,
+                  iconUrl: "https://firebasestorage.googleapis.com/v0/b/recipe-lanes.firebasestorage.app/o/icons%2FDried-Herbs-1767578515897.png?alt=media&token=dfdf2700-87ac-4448-9ade-070d45e5b3cb" },
+                { id: "breadcrumbs", type: "ingredient", text: "BREADCRUMBS", quantity: 1, unit: "cup", x: 470, y: 280,
+                  iconUrl: "https://storage.googleapis.com/recipe-lanes.firebasestorage.app/icons%2FBreadcrumbs-1767522980479.png?alt=media" },
+                { id: "crust", type: "action", text: "Crust Lamb", inputs: ["coat", "herbs", "breadcrumbs"], x: 395, y: 400,
+                  iconUrl: "https://firebasestorage.googleapis.com/v0/b/recipe-lanes.firebasestorage.app/o/icons%2FRack-Of-Lamb-Coated-In-Herbs%2C-Spices%2C-And-Breadcrumbs-1767578514254.png?alt=media&token=9e202b70-0b08-48ef-8c89-c184b49d3684" },
+                { id: "bake_lamb", type: "action", text: "Bake", duration: "15m", temperature: "230°C", inputs: ["crust"], x: 395, y: 540,
+                  iconUrl: "https://firebasestorage.googleapis.com/v0/b/recipe-lanes.firebasestorage.app/o/icons%2FRoasted-Rack-Of-Lamb-1767578511488.png?alt=media&token=4dc3357b-9a06-4aaf-a567-3339a22e32d8" }
+            ]
+        };
+
+        // INGREDIENT NODE - Inline style with XL font and L icons
+        const IngredientNode = ({ node }) => {
+            return (
+                <div className="absolute flex items-center justify-center z-10 hover:z-50" 
+                     style={{ left: node.x, top: node.y, width: 0, height: 0 }}>
+                    <div className="relative flex flex-col items-center">
+                        {/* Icon - Large */}
+                        <div className="relative w-28 h-28 z-10">
+                            <img 
+                                src={node.iconUrl}
+                                className="w-full h-full object-contain drop-shadow-md transition-transform duration-300 hover:scale-110"
+                                style={{ imageRendering: 'pixelated' }}
+                            />
+                        </div>
+                        
+                        {/* Inline text - XL font */}
+                        <div className="relative z-20 -mt-5 bg-white/80 backdrop-blur-sm border border-white/50 shadow-sm rounded-full px-3 py-1">
+                            <div className="flex items-center gap-1 text-xs font-bold leading-none">
+                                {node.quantity && (
+                                    <>
+                                        <span className="text-orange-600">{node.quantity}</span>
+                                        {node.unit && <span className="text-amber-500 text-[10px]">{node.unit}</span>}
+                                        <span className="text-zinc-400">×</span>
+                                    </>
+                                )}
+                                <span className="text-zinc-800 uppercase tracking-wide">{node.text}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ACTION NODE - Left bubble with L font and L icons
+        const ActionNode = ({ node }) => {
+            return (
+                <div className="absolute group flex items-center justify-center hover:z-50"
+                     style={{ left: node.x, top: node.y, width: 140, transform: 'translate(-50%, -50%)' }}>
+                    <div className="relative flex items-center w-full">
+                        {/* Text bubble on left */}
+                        <div className="absolute right-[50%] mr-12 w-48 flex flex-col items-end text-right z-20 pointer-events-none">
+                            <div className="bg-white/80 backdrop-blur-sm border border-zinc-200 shadow-sm px-3 py-2 rounded-lg">
+                                <span className="text-sm font-semibold text-zinc-800 leading-snug block">
+                                    {node.text}
+                                </span>
+                                {(node.duration || node.temperature) && (
+                                    <div className="flex gap-1 mt-1 justify-end">
+                                        {node.duration && (
+                                            <span className="text-[9px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100">
+                                                ⏱ {node.duration}
+                                            </span>
+                                        )}
+                                        {node.temperature && (
+                                            <span className="text-[9px] font-bold bg-red-50 text-red-600 px-1.5 py-0.5 rounded border border-red-100">
+                                                ð¥ {node.temperature}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="w-12 h-[1px] bg-zinc-300 mr-[-12px] mt-[-15px] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        </div>
+                        
+                        {/* Icon center - Large */}
+                        <div className="relative w-32 h-32 z-10 flex items-center justify-center transition-transform group-hover:scale-110">
+                            <img 
+                                src={node.iconUrl}
+                                className="w-full h-full object-contain drop-shadow-xl"
+                                style={{ imageRendering: 'pixelated' }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // MAIN APP
+        const App = () => {
+            const [activeRecipe, setActiveRecipe] = React.useState('simple');
+            
+            const recipe = activeRecipe === 'simple' ? recipeSimple : recipeLamb;
+            
+            // Layout settings
+            const scale = 1.5;
+            const offsetX = 100;
+            const offsetY = 80;
+            
+            const getScreenPos = (x, y) => ({
+                x: (x * scale) + offsetX,
+                y: (y * scale) + offsetY
+            });
+
+            // Calculate connections
+            const connections = [];
+            recipe.nodes.forEach(target => {
+                if (target.inputs) {
+                    target.inputs.forEach(sourceId => {
+                        const source = recipe.nodes.find(n => n.id === sourceId);
+                        if (source) {
+                            const startPos = getScreenPos(source.x, source.y);
+                            const endPos = getScreenPos(target.x, target.y);
+                            connections.push({ start: startPos, end: endPos });
+                        }
+                    });
+                }
+            });
+
+            const getConnectorPath = (start, end) => {
+                const dist = Math.abs(end.y - start.y);
+                const controlOffset = dist * 0.4;
+                return `M ${start.x} ${start.y} C ${start.x} ${start.y + controlOffset}, ${end.x} ${end.y - controlOffset}, ${end.x} ${end.y}`;
+            };
+
+            return (
+                <div className="min-h-screen bg-parchment">
+                    {/* Header */}
+                    <div className="bg-white/90 backdrop-blur-sm border-b border-zinc-200 px-8 py-6 shadow-sm">
+                        <div className="max-w-7xl mx-auto">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h1 className="text-3xl font-bold text-zinc-900 mb-1">Recipe Lanes</h1>
+                                    <p className="text-zinc-600">Visual recipe flow design</p>
+                                </div>
+                                
+                                {/* Recipe Toggle */}
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setActiveRecipe('simple')}
+                                        className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                                            activeRecipe === 'simple'
+                                                ? 'bg-orange-500 text-white shadow-lg'
+                                                : 'bg-white text-zinc-700 border border-zinc-300 hover:border-orange-300'
+                                        }`}
+                                    >
+                                        Simple Recipe
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveRecipe('lamb')}
+                                        className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                                            activeRecipe === 'lamb'
+                                                ? 'bg-orange-500 text-white shadow-lg'
+                                                : 'bg-white text-zinc-700 border border-zinc-300 hover:border-orange-300'
+                                        }`}
+                                    >
+                                        Complex Recipe
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {/* Recipe info */}
+                            <div className="mt-4 p-4 bg-zinc-50 rounded-lg border border-zinc-200">
+                                <h2 className="font-bold text-zinc-900 mb-1">{recipe.name}</h2>
+                                <p className="text-sm text-zinc-600">{recipe.description}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Canvas */}
+                    <div className="relative overflow-auto">
+                        <div className="relative min-w-[1200px] min-h-[900px] p-8">
+                            {/* Arrows */}
+                            <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }}>
+                                <defs>
+                                    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="28" refY="3" orient="auto">
+                                        <polygon points="0 0, 8 3, 0 6" fill="#1e1e1e" />
+                                    </marker>
+                                </defs>
+                                {connections.map((conn, i) => (
+                                    <path
+                                        key={i}
+                                        d={getConnectorPath(conn.start, conn.end)}
+                                        fill="none"
+                                        stroke="#1e1e1e"
+                                        strokeWidth="4"
+                                        strokeLinecap="round"
+                                        markerEnd="url(#arrowhead)"
+                                    />
+                                ))}
+                            </svg>
+
+                            {/* Nodes */}
+                            {recipe.nodes.map(node => {
+                                const pos = getScreenPos(node.x, node.y);
+                                const nodeWithPos = { ...node, x: pos.x, y: pos.y };
+                                
+                                return node.type === 'ingredient' ? (
+                                    <IngredientNode key={node.id} node={nodeWithPos} />
+                                ) : (
+                                    <ActionNode key={node.id} node={nodeWithPos} />
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Design Specs Footer */}
+                    <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-zinc-200 px-8 py-4 shadow-lg">
+                        <div className="max-w-7xl mx-auto">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="font-bold text-zinc-900 mb-1">Design Specifications</h3>
+                                    <div className="flex gap-6 text-xs text-zinc-600">
+                                        <div><strong className="text-zinc-800">Ingredient Style:</strong> Inline (quantity × name)</div>
+                                        <div><strong className="text-zinc-800">Ingredient Font:</strong> XL</div>
+                                        <div><strong className="text-zinc-800">Action Font:</strong> Large</div>
+                                        <div><strong className="text-zinc-800">Icon Size:</strong> Large</div>
+                                        <div><strong className="text-zinc-800">Background:</strong> Parchment</div>
+                                        <div><strong className="text-zinc-800">Arrows:</strong> 4px Sharpie style</div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-xs text-zinc-500">Recipe Lanes Design System</div>
+                                    <div className="text-xs text-zinc-400">v1.0 • {new Date().toLocaleDateString()}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

@@ -30,6 +30,7 @@ export interface RecipeNode {
   y?: number;
   rotation?: number;
   textPos?: 'bottom' | 'top' | 'left' | 'right';
+  iconTheme?: 'classic' | 'modern' | 'modern_clean';
 }
 
 export interface NodeLayout {

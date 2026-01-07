@@ -59,20 +59,20 @@ test.describe('Stats Tracking', () => {
     
     // We expect TWO cards now? Or one?
     // If we rejected the first one, it's still in the DB.
-    // The NEW one is also in the DB.
-    // The gallery shows ALL icons for the ingredient?
-    // "Community Collection" (SharedGallery) groups by ingredient?
-    // In `getSharedGalleryAction`:
-    // "Group by Ingredient... Take top 4"
-    // So it shows top 4 icons for that ingredient.
+    // The gallery shows ALL icons for the ingredient.
     
-    // Only one card showing "Stats Test ..."? 
-    // It shows icons.
-    // If we have 2 icons, we should see 2 cards.
-    // We filter by text.
-    
+    // Wait for the second card to appear (retry loop via polling)
     const cards = galleryPage.locator('.relative.group').filter({ hasText: uniqueName });
-    await expect(cards).toHaveCount(2);
+    await expect.poll(async () => {
+        await galleryPage.reload(); // Reload to fetch fresh data
+        await galleryPage.getByPlaceholder('Search ingredients...').fill(uniqueName);
+        await galleryPage.getByPlaceholder('Search ingredients...').press('Enter');
+        await galleryPage.waitForTimeout(500); // Wait for render
+        return cards.count();
+    }, {
+        timeout: 10000,
+        message: 'Second card did not appear in gallery'
+    }).toBe(2);
     
     // Card 1 (Rejected): Should be 1 / 1
     // Card 2 (New): Should be 1 / 0

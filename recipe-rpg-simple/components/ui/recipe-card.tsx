@@ -15,7 +15,8 @@ interface RecipeCardProps {
     nodeCount: number;
     likes: number;
     dislikes: number;
-    ownerId?: string; // Added ownerId
+    ownerId?: string;
+    ownerName?: string;
   };
   userId?: string; // Optional: Current user ID for optimistic updates
 }
@@ -132,7 +133,7 @@ export function RecipeCard({ recipe, userId }: RecipeCardProps) {
             
             {recipe.ownerId && (
                 <div className="text-[10px] text-zinc-600 font-mono mb-2">
-                    by {recipe.ownerId}
+                    by {recipe.ownerName || "Anon"}
                 </div>
             )}
             

@@ -302,7 +302,7 @@ function RecipeLanesContent() {
               });
 
               if (data.ownerId) setOwnerId(data.ownerId);
-              // if (data.ownerName) setOwnerName(data.ownerName); // not always in doc
+              if (data.ownerName) setOwnerName(data.ownerName);
               setRecipeText(currentGraph.originalText || '');
               setRecipeTitle(currentGraph.title || '');
               setStatus('complete');
@@ -598,7 +598,7 @@ const handleVisualize = async () => {
                     )}
                     {ownerId && (
                         <span className="text-[9px] text-zinc-600 font-mono ml-2">
-                           by {ownerName || 'User'}
+                           by {ownerName || 'Anon'}
                         </span>
                     )}
                 </div>

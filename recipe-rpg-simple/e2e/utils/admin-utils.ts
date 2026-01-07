@@ -17,7 +17,7 @@ if (!admin.apps.length) {
  * Creates a user in the emulator and returns a Custom Token for them.
  */
 export async function getTestUserToken(uid: string, claims?: object, displayName?: string) {
-  const finalDisplayName = displayName || uid;
+  const finalDisplayName = displayName || '';
 
   try {
     // 1. Try to find the user

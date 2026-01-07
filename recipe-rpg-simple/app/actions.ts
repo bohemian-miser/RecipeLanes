@@ -409,9 +409,10 @@ export async function saveRecipeAction(graph: RecipeGraph, existingId?: string, 
   try {
     const session = await getAuthService().verifyAuth();
     const userId = session?.uid; 
+    const ownerName = session?.name;
     
     const dataService = getDataService();
-    const id = await dataService.saveRecipe(graph, existingId, userId, visibility);
+    const id = await dataService.saveRecipe(graph, existingId, userId, visibility, ownerName);
     return { id };
   } catch (e: any) {
     return { error: e.message };

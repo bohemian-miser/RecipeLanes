@@ -31,7 +31,7 @@ export interface DataService {
       meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string }
   ): Promise<{ id: string, url: string, path?: string }>;
   
-  saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public'): Promise<string>;
+  saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public', ownerName?: string): Promise<string>;
   getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null>;
 
   voteRecipe(recipeId: string, userId: string, vote: 'like' | 'dislike' | 'none'): Promise<void>;
@@ -240,13 +240,14 @@ export class FirebaseDataService implements DataService {
       return recipes;
   }
 
-  async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted'): Promise<string> {
+  async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted', ownerName?: string): Promise<string> {
       const data: any = {
           graph,
           updated_at: FieldValue.serverTimestamp()
       };
       
       if (userId) data.ownerId = userId;
+      if (ownerName) data.ownerName = ownerName;
       if (visibility) data.visibility = visibility;
       if (graph.title) data.title = graph.title;
       if (graph.sourceId) data.sourceId = graph.sourceId;
@@ -278,8 +279,10 @@ export class FirebaseDataService implements DataService {
         const graph = data.graph as RecipeGraph;
         if (data.visibility) graph.visibility = data.visibility as any; 
   
-        let ownerName = undefined;
-        if (data.ownerId) {
+        let ownerName = data.ownerName;
+        
+        // Fallback: Fetch from user profile if not cached on recipe
+        if (!ownerName && data.ownerId) {
             try {
                 const userSnap = await db.collection('users').doc(data.ownerId).get();
                 if (userSnap.exists) {
@@ -394,6 +397,7 @@ export class FirebaseDataService implements DataService {
           nodeCount: data.graph?.nodes?.length || 0,
           previewIcon: data.graph?.nodes?.find((n: any) => n.iconUrl)?.iconUrl,
           ownerId: data.ownerId,
+          ownerName: data.ownerName,
           visibility: data.visibility || 'unlisted',
           likes: data.likes || 0,
           dislikes: data.dislikes || 0
@@ -760,6 +764,7 @@ export class MemoryDataService implements DataService {
     private recipes = new Map<string, {
         graph: RecipeGraph;
         ownerId?: string;
+        ownerName?: string;
         sourceId?: string;
         visibility: string;
         stats: { likes: number; dislikes: number };
@@ -946,7 +951,7 @@ export class MemoryDataService implements DataService {
         this.recipes.delete(recipeId);
     }
     
-    async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted'): Promise<string> {
+    async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted', ownerName?: string): Promise<string> {
         const id = existingId || randomUUID();
         const existing = this.recipes.get(id);
         
@@ -957,10 +962,12 @@ export class MemoryDataService implements DataService {
         const stats = existing?.stats || { likes: 0, dislikes: 0 };
         const created_at = existing?.created_at || Date.now();
         const ownerId = existing?.ownerId || userId; // Keep original owner if update
+        const finalOwnerName = existing?.ownerName || ownerName;
         
         this.recipes.set(id, {
             graph,
             ownerId,
+            ownerName: finalOwnerName,
             sourceId: graph.sourceId,
             visibility,
             stats,
@@ -998,6 +1005,7 @@ export class MemoryDataService implements DataService {
             nodeCount: r.graph.nodes.length,
             previewIcon: r.graph.nodes.find((n: any) => n.iconUrl)?.iconUrl,
             ownerId: r.ownerId,
+            ownerName: r.ownerName,
             visibility: r.visibility,
             likes: r.stats.likes,
             dislikes: r.stats.dislikes

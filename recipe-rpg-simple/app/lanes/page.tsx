@@ -11,7 +11,7 @@ import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, getReci
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, List, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, Bug } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, Bug } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -815,7 +815,7 @@ const handleVisualize = async () => {
                         className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'swimlanes' ? 'bg-zinc-100' : ''}`}
                         title="Lanes"
                     >
-                        <List className="w-4 h-4" />
+                        <Kanban className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => handleLayoutClick('dagre')}

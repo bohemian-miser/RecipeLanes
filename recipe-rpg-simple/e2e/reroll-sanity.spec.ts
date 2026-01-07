@@ -47,8 +47,7 @@ test.describe('Reroll Functionality', () => {
     // Check for spinning state (immediate feedback)
     // The spinner is on the SVG inside the button
     const spinner = rerollBtn.locator('svg');
-    // Skipping spinner check as it might be too fast in mock env
-    // await expect(spinner).toHaveClass(/animate-spin/);
+    await expect(spinner).toHaveClass(/animate-spin/);
 
     // 4. Verify Loading State
     // The spinner might be fast, but we can check if the image changes.

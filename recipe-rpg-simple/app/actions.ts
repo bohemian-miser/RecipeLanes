@@ -450,6 +450,11 @@ export async function rerollIconAction(
     currentIconId?: string
 ) {
     try {
+        // Artificial delay for UI/Test sanity in mock mode (so spinner is visible)
+        if (process.env.MOCK_AI === 'true' || process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
+             await new Promise(r => setTimeout(r, 500));
+        }
+
         const ingredientName = toTitleCase(rawIngredientName);
         console.log(`[rerollIconAction] Rerolling ${ingredientName} (Node ${nodeId})`);
         

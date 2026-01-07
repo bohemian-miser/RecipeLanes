@@ -734,7 +734,7 @@ export class FirebaseDataService implements DataService {
               t.set(docRef, { name: ingredientName, created_at: FieldValue.serverTimestamp() });
           }
           
-          const newIcon = {
+          const newIcon: any = {
               id: iconId,
               path: fileName,
               url: finalUrl,
@@ -745,6 +745,10 @@ export class FirebaseDataService implements DataService {
               fullPrompt,
               created_at: new Date().toISOString()
           };
+          
+          if (meta.geometry) {
+              newIcon.metadata = meta.geometry;
+          }
           
           icons.push(newIcon);
           icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
@@ -1358,7 +1362,8 @@ export class MemoryDataService implements DataService {
             visualDescription: visualDescription,
             fullPrompt: fullPrompt,
             textModel: meta.textModel,
-            imageModel: meta.imageModel
+            imageModel: meta.imageModel,
+            metadata: meta.geometry
         });
         return { id, url: publicUrl, path: `icons/${id}.png` };
     }

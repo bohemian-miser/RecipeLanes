@@ -39,7 +39,7 @@ export class RealAIService implements AIService {
         const imageBuffer = await imageResponse.arrayBuffer();
 
         // Process the image to remove the background
-        const processedBuffer = await processIcon(imageBuffer);
+        const { buffer: processedBuffer } = await processIcon(imageBuffer);
 
         // Convert the processed buffer to a data URL
         const base64 = processedBuffer.toString('base64');

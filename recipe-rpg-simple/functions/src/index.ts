@@ -50,7 +50,7 @@ export const processIconQueue = onDocumentWritten({
         const dataService = getDataService();
         
         for (const rId of recipeIds) {
-            await dataService.assignIconToRecipe(rId, result.id, result.url, ingredientName);
+            await dataService.assignIconToRecipe(rId, result.id, result.url, ingredientName, result.metadata);
         }
 
         // Delete the queue item now that processing is complete.

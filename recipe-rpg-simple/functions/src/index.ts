@@ -113,6 +113,7 @@ export const processIconQueue = onDocumentWritten({
         
         const newIconId = result.id;
         const newIconUrl = result.url;
+        const newMetadata = result.metadata;
 
         // 2. FAN-OUT UPDATES
         console.log(`[Queue] Assigning new icon ${newIconId} to ${recipeIds.length} recipes...`);
@@ -139,6 +140,7 @@ export const processIconQueue = onDocumentWritten({
                              if (n.iconId !== newIconId) {
                                  n.iconId = newIconId;
                                  n.iconUrl = newIconUrl;
+                                 if (newMetadata) n.iconMetadata = newMetadata;
                                  changed = true;
                              }
                          }
@@ -164,6 +166,8 @@ export const processIconQueue = onDocumentWritten({
             iconUrl: newIconUrl, 
             updated_at: FieldValue.serverTimestamp() 
         };
+        
+        if (newMetadata) update.metadata = newMetadata;
 
         if (recipeIds.length > 0) {
             update.recipes = FieldValue.arrayRemove(...recipeIds);

@@ -12,6 +12,7 @@ export interface IconStats {
     score?: number;
     impressions?: number;
     rejections?: number;
+    metadata?: any;
 }
 
 export interface DataService {
@@ -28,8 +29,8 @@ export interface DataService {
       fullPrompt: string,
       publicUrl: string, 
       imageBuffer: ArrayBuffer | Buffer, 
-      meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string }
-  ): Promise<{ id: string, url: string, path?: string }>;
+      meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string, geometry?: any }
+  ): Promise<{ id: string, url: string, path?: string, metadata?: any }>;
   
   saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public', ownerName?: string): Promise<string>;
   getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null>;
@@ -528,7 +529,7 @@ export class FirebaseDataService implements DataService {
           t.update(docRef, { icons, updated_at: FieldValue.serverTimestamp() });
       });
 
-      return { id: iconId, url: finalUrl, path: fileName };
+      return { id: iconId, url: finalUrl, path: fileName, metadata: meta.geometry };
   }
 
   async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
@@ -637,7 +638,7 @@ export class FirebaseDataService implements DataService {
           if (snap.exists) cacheMap.set(snap.id, snap.data());
       });
 
-      const updatesByRecipe = new Map<string, Map<string, { iconId: string, iconUrl: string }>>();
+      const updatesByRecipe = new Map<string, Map<string, { iconId: string, iconUrl: string, metadata?: any }>>();
 
       for (const item of items) {
           const name = standardizeIngredientName(item.ingredientName);
@@ -655,7 +656,8 @@ export class FirebaseDataService implements DataService {
                           iconUrl: icon.url || null,
                           score: icon.score,
                           impressions: icon.impressions,
-                          rejections: icon.rejections 
+                          rejections: icon.rejections,
+                          metadata: icon.metadata
                       };
                       break;
                   }
@@ -669,7 +671,7 @@ export class FirebaseDataService implements DataService {
 
               if (existingData?.status === 'completed' && existingData.iconId) {
                   if (!rejected.has(existingData.iconId)) {
-                      foundIcon = { iconId: existingData.iconId, iconUrl: existingData.iconUrl || null };
+                      foundIcon = { iconId: existingData.iconId, iconUrl: existingData.iconUrl || null, metadata: existingData.metadata };
                   }
               }
               
@@ -698,7 +700,7 @@ export class FirebaseDataService implements DataService {
                   if (!updatesByRecipe.has(item.recipeId)) {
                       updatesByRecipe.set(item.recipeId, new Map());
                   }
-                  updatesByRecipe.get(item.recipeId)!.set(name, { iconId: foundIcon.iconId, iconUrl: foundIcon.iconUrl });
+                  updatesByRecipe.get(item.recipeId)!.set(name, { iconId: foundIcon.iconId, iconUrl: foundIcon.iconUrl, metadata: foundIcon.metadata });
               }
           }
       }
@@ -725,6 +727,7 @@ export class FirebaseDataService implements DataService {
                           if (n.iconId !== update.iconId) {
                               n.iconId = update.iconId;
                               n.iconUrl = update.iconUrl;
+                              if (update.metadata) n.iconMetadata = update.metadata;
                               changed = true;
                           }
                       }
@@ -792,16 +795,18 @@ export class MemoryDataService implements DataService {
             }
 
             const mockUrl = `https://placehold.co/64x64/png?text=${encodeURIComponent(stdName)}&uuid=${randomUUID().substring(0, 6)}`;
+            const dummyMeta = { center: { x: 0.5, y: 0.5 }, bbox: { x: 0, y: 0, w: 1, h: 1 } };
             const iconId = memoryStore.addIcon({
                 url: mockUrl,
                 ingredient: stdName,
                 ingredientId: stdName,
                 created_at: Date.now(),
                 marked_for_deletion: false,
-                popularity_score: 0
+                popularity_score: 0,
+                metadata: dummyMeta
             });
             
-            hits.set(stdName, { iconId, iconUrl: mockUrl, score: 0, impressions: 0, rejections: 0 });
+            hits.set(stdName, { iconId, iconUrl: mockUrl, score: 0, impressions: 0, rejections: 0, metadata: dummyMeta });
         }
         return hits;
     }
@@ -1034,7 +1039,7 @@ export class MemoryDataService implements DataService {
         return memoryStore.getAllIcons().sort((a, b) => b.popularity_score - a.popularity_score);
     }
 
-    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any): Promise<{ id: string, url: string, path?: string }> {
+    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any): Promise<{ id: string, url: string, path?: string, metadata?: any }> {
         // Ensure ingredient exists
         const existing = memoryStore.getIngredients().find(i => i.name === ingredientId);
         if (!existing) {
@@ -1056,7 +1061,7 @@ export class MemoryDataService implements DataService {
             imageModel: meta.imageModel,
             metadata: meta.geometry
         });
-        return { id, url: publicUrl, path: `icons/${id}.png` };
+        return { id, url: publicUrl, path: `icons/${id}.png`, metadata: meta.geometry };
     }
 
     async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {

@@ -1,5 +1,5 @@
-import { getAIService } from './ai-service';
-import { getDataService } from './data-service';
+import { getAIService } from '../../lib/ai-service';
+import { getDataService } from '../../lib/data-service';
 import { processIcon } from './image-processing';
 import { randomUUID } from 'crypto';
 
@@ -9,6 +9,7 @@ interface GenerateIconOptions {
     skipStorage?: boolean; // For testing/mock
 }
 
+// This functipno should only be called from Cloud Functions.
 export async function generateAndStoreIcon(options: GenerateIconOptions) {
     const { ingredientName, visualDescription = ingredientName, skipStorage = false } = options;
     console.log(`[IconGenerator] 🟢 Generating icon for: "${ingredientName}"`);

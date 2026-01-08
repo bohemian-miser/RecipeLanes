@@ -1,10 +1,11 @@
 import React, { memo, useState } from 'react';
 import { NodeProps, useReactFlow } from 'reactflow';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
-import { rerollIconAction } from '@/app/actions';
 import { useSearchParams } from 'next/navigation';
 import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
+import { functions } from '@/lib/firebase-client';
+import { httpsCallable } from 'firebase/functions';
 
 // Track rejected URLs for the session to prevent them from reappearing immediately
 const sessionRejectedUrls = new Set<string>();
@@ -52,34 +53,16 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
       setIsRerolling(true);
       
       const ingredientName = data.visualDescription || data.text;
-      const currentUrl = data.iconUrl || '';
       
-      if (currentUrl) {
-          sessionRejectedUrls.add(currentUrl);
-      }
-
       try {
-        const res = await rerollIconAction(
-            id, 
+        const rejectIcon = httpsCallable(functions, 'rejectIcon');
+        await rejectIcon({ 
+            recipeId, 
+            nodeId: id, 
             ingredientName, 
-            currentUrl, 
-            Array.from(sessionRejectedUrls), 
-            recipeId || undefined,
-            data.iconId || undefined
-        );
-        
-        if (res && 'iconUrl' in res && res.iconUrl) {
-            setIsRerolling(false);
-            setNodes((nodes) => nodes.map(n => {
-                const nName = n.data.visualDescription || n.data.text;
-                if (nName === ingredientName) {
-                    return { ...n, data: { ...n.data, iconUrl: res.iconUrl, iconId: res.iconId } };
-                }
-                return n;
-            }));
-        } else {
-            setIsRerolling(false);
-        }
+            currentIconId: data.iconId 
+        });
+        // State update handled by prop change from Firestore listener
       } catch (err) {
           console.error("Reroll failed", err);
           setIsRerolling(false);

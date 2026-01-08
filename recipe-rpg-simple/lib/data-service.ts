@@ -540,8 +540,11 @@ export class FirebaseDataService implements DataService {
         if (index !== -1) {
             const icon = icons[index];
             icon.rejections = (icon.rejections || 0) + 1;
+            if (icon.impressions === undefined || icon.impressions < icon.rejections) {
+                console.warn(`[recordRejection] MORE REJECTIONS THAN IMPRESSIONS`);
+            }
             // Recalculate Score using Wilson LCB
-            icon.score = this.calculateWilsonLCB(icon.impressions || 0, icon.rejections);
+            icon.score = this.calculateWilsonLCB(icon.impressions, icon.rejections);
             
             icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
             t.update(docRef, { icons });

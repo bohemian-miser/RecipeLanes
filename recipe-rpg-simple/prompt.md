@@ -45,7 +45,7 @@ The core visualization tool that converts text recipes into interactive "Swimlan
     *   **Interactivity:** Drag-and-drop nodes, adjustable connection lines (Bezier/Step/Straight).
 *   **Asset Integration:**
     *   Automatically matches graph nodes to existing icons in the Icon Maker DB.
-    *   Generates missing icons on-the-fly (`populateRecipeIconsAction`).
+    *   Generates missing icons via Cloud Function trigger (`fillGraph`).
 
 ### Core Features
 *   **Visual Editor:** Swimlanes for Prep/Cook/Serve.

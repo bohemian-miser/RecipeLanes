@@ -39,6 +39,7 @@ export interface NodeLayout {
   y: number;
 }
 
+// TODO add last update, created by, currentID.
 export interface RecipeGraph {
   title?: string;
   sourceId?: string;

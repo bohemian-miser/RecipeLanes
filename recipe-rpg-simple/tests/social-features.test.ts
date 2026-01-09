@@ -1,4 +1,4 @@
-import { MemoryDataService, setDataService } from '../lib/data-service';
+import { getDataService } from '../lib/data-service';
 import type { RecipeGraph } from '../lib/recipe-lanes/types';
 import assert from 'node:assert';
 
@@ -15,8 +15,7 @@ const mockGraph: RecipeGraph = {
 
 async function testSocialFeatures() {
     console.log("Testing Social Features...");
-    const service = new MemoryDataService();
-    setDataService(service);
+    const service = getDataService();
 
     // 1. Ownership & Visibility
     console.log(" [1] Ownership & Visibility");

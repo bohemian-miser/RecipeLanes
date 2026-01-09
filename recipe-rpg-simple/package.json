@@ -14,7 +14,8 @@
     "test:e2e": "./scripts/test-e2e.sh",
     "mcp": "npx tsx scripts/mcp-server.ts",
     "emulators": "./scripts/start-emulators.sh",
-    "dev:emulators": "NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 STORAGE_EMULATOR_HOST=127.0.0.1:9199 next dev -p 8001",
+    "dev:old_emulators": "MOCK_AI=true NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 STORAGE_EMULATOR_HOST=127.0.0.1:9199 next dev -p 8001",
+    "dev:emulators": "MOCK_AI=true NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true NEXT_PUBLIC_FIREBASE_PROJECT_ID=local-project-id NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=local-project-id.firebasestorage.app FIRESTORE_EMULATOR_HOST=localhost:8080 FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 STORAGE_EMULATOR_HOST=localhost:9199 next dev -p 8001",
     "verify": "npm run build && npm test",
     "prepare": "if [ -d ../.git ]; then cd .. && git config core.hooksPath recipe-rpg-simple/.husky; fi"
   },

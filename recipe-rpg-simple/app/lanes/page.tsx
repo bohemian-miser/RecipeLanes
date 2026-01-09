@@ -7,7 +7,7 @@ import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
-import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, getRecipeAction, checkExistingCopiesAction, getOrCreateIconAction, debugLogAction } from '@/app/actions';
+import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction } from '@/app/actions';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
@@ -477,40 +477,28 @@ const handleVisualize = async () => {
         const currentId = searchParams.get('id');
         const res = await createVisualRecipeAction(recipeText, currentId || undefined);
         
-        if (res.error || !res.graph) {
+        if (res.error || !res.id) {
             throw new Error(res.error || 'Failed to parse recipe structure.');
         }
+        const url = new URL(window.location.href);
+        url.searchParams.delete('new');
+        url.searchParams.set('id', res.id);
         
-        const currentGraph = res.graph;
+        window.history.pushState({}, '', url.pathname + url.search);
         
-        if (!recipeTitle && currentGraph.title) {
-            setRecipeTitle(currentGraph.title);
-        } else {
-            currentGraph.title = recipeTitle || currentGraph.title;
-        }
+        if (user) setOwnerId(user.uid); // is this needed??
+
+        // The Snapshot Listener in useEffect will pick this up if we pushed URL?
+        // Actually pushState doesn't trigger useEffect on searchParams unless we use router.push or Next.js handles it.
+        // Next.js `useSearchParams` does update on pushState/replaceState in App Router usually.
+        // But to be safe, we can rely on router.push if we want the effect to run.
+        // Or better: we already have the graph. The listener will attach on next render/effect cycle.
         
-        setGraph(currentGraph);
-        
-        if (res.id) {
-             const url = new URL(window.location.href);
-             url.searchParams.delete('new');
-             url.searchParams.set('id', res.id);
-             
-             window.history.pushState({}, '', url.pathname + url.search);
-             
-             if (user) setOwnerId(user.uid);
-             // The Snapshot Listener in useEffect will pick this up if we pushed URL?
-             // Actually pushState doesn't trigger useEffect on searchParams unless we use router.push or Next.js handles it.
-             // Next.js `useSearchParams` does update on pushState/replaceState in App Router usually.
-             // But to be safe, we can rely on router.push if we want the effect to run.
-             // Or better: we already have the graph. The listener will attach on next render/effect cycle.
-        }
 
         setStatus('complete');
         // No explicit populateIcons call. Background worker handles it.
         setWarningDismissed(false);
         localStorage.setItem('recipe_draft', recipeText);
-
     } catch (e: any) {
         console.error('Visualization failed:', e);
         setError(e.message);

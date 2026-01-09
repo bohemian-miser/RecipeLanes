@@ -1,7 +1,7 @@
 import { ai, textModel, imageModelName } from './genkit';
-import { processIcon } from './image-processing';
 import * as fs from 'fs';
 import * as path from 'path';
+import { processIcon } from '../functions/src/image-processing';
 
 export interface AIService {
   generateText(prompt: string): Promise<string>;

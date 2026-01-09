@@ -1,0 +1,22 @@
+registering /util/generate
+Registering v2 plugin vertexai...
+
+=== Starting Fake Graph Test for: Integration-Burger-1767936504844 ===
+
+[1] Creating Debug Recipe...
+ -> Recipe ID: d11dbfab-cfc1-4c9c-b520-dedcea05afe5
+
+[2] Adding Ingredient Node...
+addIngredientNodeAction failed: Error: Recipe not found
+    at <anonymous> (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/app/actions.ts:238:37)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async Transaction.runTransactionOnce (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/node_modules/@google-cloud/firestore/build/src/transaction.js:440:28)
+    at async /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/node_modules/@google-cloud/firestore/build/src/transaction.js:412:28
+    at async addIngredientNodeAction (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/app/actions.ts:236:9)
+    at async testFakeGraphFlow (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/tests/lifecycle.test.ts:76:16)
+TEST FAILED: Error: Recipe not found
+    at testFakeGraphFlow (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/tests/lifecycle.test.ts:77:25)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+*** gpkg: This tool is configured to use Corp Airlock for package installs: http://go/corp-airlock
+*** gpkg: If Corp Airlock is breaking your workflow please report at: http://go/corp-airlock-feedback
+*** gpkg: Exceptions are available: http://go/corp-airlock#request-exception

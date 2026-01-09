@@ -1,0 +1,277 @@
+Building Functions...
+
+up to date, audited 921 packages in 2s
+
+176 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+> build
+> tsc
+
+Cleaning up ports...
+----------------------------------------------------------------
+Starting Firebase Emulators and running: npx playwright test e2e/forking-workflow.spec.ts
+----------------------------------------------------------------
+i  emulators: Starting emulators: auth, functions, firestore, storage
+⚠  functions: The following emulators are not running, calls to these services from the Functions emulator will affect production: apphosting, database, hosting, pubsub, dataconnect
+⚠  functions: Application Default Credentials detected. Non-emulated services will access production using these credentials. Be careful!
+⚠  functions: Unable to fetch project Admin SDK configuration, Admin SDK behavior in Cloud Functions emulator may be incorrect.
+i  firestore: Firestore Emulator logging to firestore-debug.log
+✔  firestore: Firestore Emulator UI websocket is running on 9150.
+i  functions: Watching "/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-rpg-simple/functions" for Cloud Functions...
+⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory.
+✔  functions: Using node@20 from host.
+Serving at port 8928
+
+registering /util/generate
+
+Registering v2 plugin vertexai...
+
+✔  functions: Loaded functions definitions from source: processIconQueue.
+✔  functions[us-central1-processIconQueue]: firestore function initialized.
+i  Running script: npx playwright test e2e/forking-workflow.spec.ts
+[2m[WebServer] [22m[1m[38;2;173;127;168m▲ Next.js 16.1.0[39m[22m (Turbopack)
+[2m[WebServer] [22m- Local:         http://localhost:8002
+[2m[WebServer] [22m- Network:       http://192.168.1.90:8002
+[2m[WebServer] [22m- Environments: .env.local, .env
+[2m[WebServer] [22m- Experiments (use with caution):
+[2m[WebServer] [22m  · serverActions
+[2m[WebServer] [22m
+[2m[WebServer] [22m[32m[1m✓[22m[39m Starting...
+[2m[WebServer] [22m[32m[1m✓[22m[39m Ready in 1060ms
+[2m[WebServer] [22mWARNING: You are using the Auth Emulator, which is intended for local testing only.  Do not use with production credentials.
+[2m[WebServer] [22m GET / [32m200[39m in 1820ms[2m (compile: 1444ms, render: 375ms)[22m
+
+Running 1 test using 1 worker
+
+[2m[WebServer] [22m GET /lanes?new=true [32m200[39m in 283ms[2m (compile: 106ms, render: 177ms)[22m
+[2m[WebServer] [22m GET /lanes [32m200[39m in 28ms[2m (compile: 5ms, render: 22ms)[22m
+[2m[WebServer] [22m POST /api/auth/logout [32m200[39m in 112ms[2m (compile: 82ms, render: 30ms)[22m
+[2m[WebServer] [22m GET /lanes [32m200[39m in 33ms[2m (compile: 5ms, render: 28ms)[22m
+[2m[WebServer] [22m🔥 Admin SDK switching to Emulator mode via Env Vars
+[2m[WebServer] [22m🔥 Admin SDK switching to Emulator mode via Env Vars
+[2m[WebServer] [22mregistering /util/generate
+[2m[WebServer] [22mRegistering v2 plugin vertexai...
+[2m[WebServer] [22m🔥 Admin SDK switching to Emulator mode via Env Vars
+[2m[WebServer] [22m🔥 Admin SDK switching to Emulator mode via Env Vars
+[2m[WebServer] [22m[CLIENT-LOG] Starting visualization...
+[2m[WebServer] [22m POST /api/auth/login [32m200[39m in 870ms[2m (compile: 484ms, render: 386ms)[22m
+[2m[WebServer] [22m POST /lanes [32m200[39m in 375ms[2m (compile: 4ms, render: 371ms)[22m
+[2m[WebServer] [22m[createVisualRecipeAction] 🚀 Starting...
+[2m[WebServer] [22m[MockAIService] generateText received prompt: 
+[2m[WebServer] [22mYou are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+[2m[WebServer] [22m
+[2m[WebServer] [22m### Core Philosophy: The State-Flow Pattern
+[2m[WebServer] [22m1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+[2m[WebServer] [22m2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+[2m[WebServer] [22m3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+[2m[WebServer] [22m
+[2m[WebServer] [22m### Critical Rules
+[2m[WebServer] [22m1. **QUANTITY:** The 
+[2m[WebServer] [22mtext
+[2m[WebServer] [22m field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+[2m[WebServer] [22m2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+[2m[WebServer] [22m3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+[2m[WebServer] [22m4. **TITLE & SERVES:** Extract a concise 
+[2m[WebServer] [22m_title_
+[2m[WebServer] [22m and estimated 
+[2m[WebServer] [22m_baseServes_
+[2m[WebServer] [22m (number) from the text.
+[2m[WebServer] [22m
+[2m[WebServer] [22m### Schema
+[2m[WebServer] [22mReturn ONLY raw JSON complying with this TypeScript interface:
+[2m[WebServer] [22m
+[2m[WebServer] [22m```typescript
+[2m[WebServer] [22m
+[2m[WebServer] [22minterface RecipeGraph {
+[2m[WebServer] [22m  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+[2m[WebServer] [22m  baseServes?: number; // Estimated servings (e.g. 4)
+[2m[WebServer] [22m  lanes: {
+[2m[WebServer] [22m    id: string;
+[2m[WebServer] [22m    label: string; // e.g. "Skillet"
+[2m[WebServer] [22m    type: 'prep' | 'cook' | 'serve';
+[2m[WebServer] [22m  }[];
+[2m[WebServer] [22m  nodes: {
+[2m[WebServer] [22m    id: string;
+[2m[WebServer] [22m    laneId: string; // Must match a lane.id
+[2m[WebServer] [22m    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+[2m[WebServer] [22m    visualDescription: string; // Detailed prompt for pixel-art icon
+[2m[WebServer] [22m    type: 'ingredient' | 'action';
+[2m[WebServer] [22m    inputs?: string[]; // IDs of previous nodes flowing into this one
+[2m[WebServer] [22m    temperature?: string; // e.g. "Medium Heat" (for actions)
+[2m[WebServer] [22m    duration?: string; // e.g. "5 min" (for actions)
+[2m[WebServer] [22m  }[];
+[2m[WebServer] [22m}
+[2m[WebServer] [22m
+[2m[WebServer] [22m```
+[2m[WebServer] [22m
+[2m[WebServer] [22m### Visual Description Guidelines (CRITICAL)
+[2m[WebServer] [22mThese are cached, so simplicity and consistency is key.
+[2m[WebServer] [22m
+[2m[WebServer] [22m1. **INGREDIENT Nodes (The "Item"):**
+[2m[WebServer] [22m   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+[2m[WebServer] [22m   - **Clarify Ambiguity:** If a word has multiple meanings (e.g. "Pepper"), add a qualifier (e.g. "Black Pepper" or "Bell Pepper").
+[2m[WebServer] [22m   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+[2m[WebServer] [22m   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+[2m[WebServer] [22m   - **Examples:**
+[2m[WebServer] [22m     - "3 Eggs" -> "egg"
+[2m[WebServer] [22m     - "A pinch of Salt" -> "Salt"
+[2m[WebServer] [22m     - "Pepper" -> "Black Pepper"
+[2m[WebServer] [22m     - "Bottle of Olive Oil" -> "Olive Oil"
+[2m[WebServer] [22m     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+[2m[WebServer] [22m
+[2m[WebServer] [22m2. **ACTION Nodes (The "State"):
+[2m[WebServer] [22m
+[2m[WebServer] [22m### Input Recipe
+[2m[WebServer] [22m"test eggs with alice"
+[2m[WebServer] [22m
+[2m[WebServer] [22m[createVisualRecipeAction] 🔍 Checking cache & queuing...
+[2m[WebServer] [22m GET /lanes [32m200[39m in 57ms[2m (compile: 5ms, render: 52ms)[22m
+[2m[WebServer] [22m[createVisualRecipeAction] 💾 Saving initial recipe...
+[2m[WebServer] [22m[createVisualRecipeAction] Resolving icons
+[2m[WebServer] [22m[resolveIcons] Processing recipe: 45SJLa3V93kfZE3sesyD
+[2m[WebServer] [22m[resolveIcons] Found 4 nodes to process.
+[2m[WebServer] [22m[resolveIcons] Batch committed: 0 updates, 4 queued.
+[2m[WebServer] [22m[createVisualRecipeAction] ✅ Complete. ID: 45SJLa3V93kfZE3sesyD
+[2m[WebServer] [22m POST /lanes [32m200[39m in 273ms[2m (compile: 11ms, render: 262ms)[22m
+[2m[WebServer] [22m[CLIENT-LOG] Setting up listener for recipe: 45SJLa3V93kfZE3sesyD
+[2m[WebServer] [22m POST /lanes?id=45SJLa3V93kfZE3sesyD [32m200[39m in 14ms[2m (compile: 5ms, render: 10ms)[22m
+Alice Recipe ID: 45SJLa3V93kfZE3sesyD
+[2m[WebServer] [22m POST /api/auth/login [32m200[39m in 18ms[2m (compile: 5ms, render: 14ms)[22m
+[2m[WebServer] [22m POST /lanes?id=45SJLa3V93kfZE3sesyD [32m200[39m in 20ms[2m (compile: 7ms, render: 13ms)[22m
+[2m[WebServer] [22m GET /lanes?id=45SJLa3V93kfZE3sesyD [32m200[39m in 97ms[2m (compile: 4ms, render: 93ms)[22m
+[2m[WebServer] [22m[CLIENT-LOG] Setting up listener for recipe: 45SJLa3V93kfZE3sesyD
+[2m[WebServer] [22m POST /lanes?id=45SJLa3V93kfZE3sesyD [32m200[39m in 14ms[2m (compile: 5ms, render: 9ms)[22m
+[2m[WebServer] [22m POST /api/auth/login [32m200[39m in 16ms[2m (compile: 2ms, render: 13ms)[22m
+[2m[WebServer] [22m GET /lanes?id=45SJLa3V93kfZE3sesyD [32m200[39m in 28ms[2m (compile: 4ms, render: 25ms)[22m
+[2m[WebServer] [22m[CLIENT-LOG] Setting up listener for recipe: 45SJLa3V93kfZE3sesyD
+[2m[WebServer] [22m POST /lanes?id=45SJLa3V93kfZE3sesyD [32m200[39m in 13ms[2m (compile: 4ms, render: 8ms)[22m
+[2m[WebServer] [22m POST /lanes?id=45SJLa3V93kfZE3sesyD [32m200[39m in 48ms[2m (compile: 11ms, render: 37ms)[22m
+>  registering /util/generate
+>  Registering v2 plugin vertexai...
+[2m[WebServer] [22m POST /lanes?id=45SJLa3V93kfZE3sesyD [32m200[39m in 44ms[2m (compile: 5ms, render: 40ms)[22m
+[2m[WebServer] [22m GET /lanes?id=Eg0DjePL41BihzjdLfoR [32m200[39m in 26ms[2m (compile: 4ms, render: 23ms)[22m
+i  functions: Beginning execution of "us-central1-processIconQueue"
+>  [Queue] Processing: "Eggs" for recipes: 45SJLa3V93kfZE3sesyD
+[2m[WebServer] [22m[CLIENT-LOG] Starting visualization...
+[2m[WebServer] [22m POST /lanes?id=Eg0DjePL41BihzjdLfoR [32m200[39m in 12ms[2m (compile: 4ms, render: 8ms)[22m
+[2m[WebServer] [22m[createVisualRecipeAction] 🚀 Starting...
+[2m[WebServer] [22m[MockAIService] generateText received prompt: 
+[2m[WebServer] [22mYou are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+[2m[WebServer] [22m
+[2m[WebServer] [22m### Core Philosophy: The State-Flow Pattern
+[2m[WebServer] [22m1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
+[2m[WebServer] [22m2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
+[2m[WebServer] [22m3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
+[2m[WebServer] [22m
+[2m[WebServer] [22m### Critical Rules
+[2m[WebServer] [22m1. **QUANTITY:** The 
+[2m[WebServer] [22mtext
+[2m[WebServer] [22m field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+[2m[WebServer] [22m2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
+[2m[WebServer] [22m3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
+[2m[WebServer] [22m4. **TITLE & SERVES:** Extract a concise 
+[2m[WebServer] [22m_title_
+[2m[WebServer] [22m and estimated 
+[2m[WebServer] [22m_baseServes_
+[2m[WebServer] [22m (number) from the text.
+[2m[WebServer] [22m
+[2m[WebServer] [22m### Schema
+[2m[WebServer] [22mReturn ONLY raw JSON complying with this TypeScript interface:
+[2m[WebServer] [22m
+[2m[WebServer] [22m```typescript
+[2m[WebServer] [22m
+[2m[WebServer] [22minterface RecipeGraph {
+[2m[WebServer] [22m  title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
+[2m[WebServer] [22m  baseServes?: number; // Estimated servings (e.g. 4)
+[2m[WebServer] [22m  lanes: {
+[2m[WebServer] [22m    id: string;
+[2m[WebServer] [22m    label: string; // e.g. "Skillet"
+[2m[WebServer] [22m    type: 'prep' | 'cook' | 'serve';
+[2m[WebServer] [22m  }[];
+[2m[WebServer] [22m  nodes: {
+[2m[WebServer] [22m    id: string;
+[2m[WebServer] [22m    laneId: string; // Must match a lane.id
+[2m[WebServer] [22m    text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
+[2m[WebServer] [22m    visualDescription: string; // Detailed prompt for pixel-art icon
+[2m[WebServer] [22m    type: 'ingredient' | 'action';
+[2m[WebServer] [22m    inputs?: string[]; // IDs of previous nodes flowing into this one
+[2m[WebServer] [22m    temperature?: string; // e.g. "Medium Heat" (for actions)
+[2m[WebServer] [22m    duration?: string; // e.g. "5 min" (for actions)
+[2m[WebServer] [22m  }[];
+[2m[WebServer] [22m}
+[2m[WebServer] [22m
+[2m[WebServer] [22m```
+[2m[WebServer] [22m
+[2m[WebServer] [22m### Visual Description Guidelines (CRITICAL)
+[2m[WebServer] [22mThese are cached, so simplicity and consistency is key.
+[2m[WebServer] [22m
+[2m[WebServer] [22m1. **INGREDIENT Nodes (The "Item"):**
+[2m[WebServer] [22m   - **Atomic & Generic:** Visuals must be simple, singular, and reusable inventory items.
+[2m[WebServer] [22m   - **Clarify Ambiguity:** If a word has multiple meanings (e.g. "Pepper"), add a qualifier (e.g. "Black Pepper" or "Bell Pepper").
+[2m[WebServer] [22m   - **NO Quantities:** Never show specific numbers (e.g. "3 eggs"). Visual should be "egg".
+[2m[WebServer] [22m   - **NO Action Context:** Do not show pouring/falling/mixing. Just the item.
+[2m[WebServer] [22m   - **Examples:**
+[2m[WebServer] [22m     - "3 Eggs" -> "egg"
+[2m[WebServer] [22m     - "A pinch of Salt" -> "Salt"
+[2m[WebServer] [22m     - "Pepper" -> "Black Pepper"
+[2m[WebServer] [22m     - "Bottle of Olive Oil" -> "Olive Oil"
+[2m[WebServer] [22m     - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
+[2m[WebServer] [22m
+[2m[WebServer] [22m2. **ACTION Nodes (The "State"):
+[2m[WebServer] [22m
+[2m[WebServer] [22m### Input Recipe
+[2m[WebServer] [22m"test eggs with alice
+[2m[WebServer] [22mAdd salt."
+[2m[WebServer] [22m
+[2m[WebServer] [22m[createVisualRecipeAction] 🔍 Checking cache & queuing...
+[2m[WebServer] [22m[createVisualRecipeAction] 💾 Saving initial recipe...
+[2m[WebServer] [22m[createVisualRecipeAction] Resolving icons
+[2m[WebServer] [22m[resolveIcons] Processing recipe: GCse3Mkz972ET6dZi0dm
+[2m[WebServer] [22m[resolveIcons] Found 4 nodes to process.
+[2m[WebServer] [22m[resolveIcons] Batch committed: 0 updates, 4 queued.
+[2m[WebServer] [22m[createVisualRecipeAction] ✅ Complete. ID: GCse3Mkz972ET6dZi0dm
+[2m[WebServer] [22m POST /lanes?id=Eg0DjePL41BihzjdLfoR [32m200[39m in 93ms[2m (compile: 3ms, render: 90ms)[22m
+[2m[WebServer] [22m[CLIENT-LOG] Setting up listener for recipe: GCse3Mkz972ET6dZi0dm
+[2m[WebServer] [22m POST /lanes?id=GCse3Mkz972ET6dZi0dm [32m200[39m in 13ms[2m (compile: 4ms, render: 9ms)[22m
+Bob Copy ID: GCse3Mkz972ET6dZi0dm
+>  [Queue] Generating new icon for "Eggs"...
+>  [IconGenerator] 🟢 Generating icon for: "Eggs"
+>  [IconGenerator] 🎨 Prompting AI: "Generate a high-quality 64x64 pixel art icon of Eg..."
+>  [MockAIService] generateImage called for: "Generate a high-quality 64x64 "...
+>  [MockAIService] Returning mock URL: https://placehold.co/64x64/png?text=Mock+Generate%20a&uuid=pzkzzh
+>  [IconGenerator] Downloading from: https://placehold.co/64x64/png...
+[2m[WebServer] [22m GET /lanes?id=45SJLa3V93kfZE3sesyD [32m200[39m in 48ms[2m (compile: 4ms, render: 44ms)[22m
+[2m[WebServer] [22m[CLIENT-LOG] Setting up listener for recipe: 45SJLa3V93kfZE3sesyD
+[2m[WebServer] [22m POST /lanes?id=45SJLa3V93kfZE3sesyD [32m200[39m in 14ms[2m (compile: 4ms, render: 10ms)[22m
+[2m[WebServer] [22m POST /api/auth/login [32m200[39m in 15ms[2m (compile: 3ms, render: 12ms)[22m
+[2m[WebServer] [22m GET /lanes?id=45SJLa3V93kfZE3sesyD [32m200[39m in 23ms[2m (compile: 4ms, render: 19ms)[22m
+[2m[WebServer] [22m[CLIENT-LOG] Setting up listener for recipe: 45SJLa3V93kfZE3sesyD
+[2m[WebServer] [22m POST /lanes?id=45SJLa3V93kfZE3sesyD [32m200[39m in 11ms[2m (compile: 4ms, render: 7ms)[22m
+[2m[WebServer] [22m POST /lanes?id=45SJLa3V93kfZE3sesyD [32m200[39m in 44ms[2m (compile: 4ms, render: 40ms)[22m
+  ✓  1 [chromium] › e2e/forking-workflow.spec.ts:9:9 › Forking Workflow › desktop: Alice Copy Workflow (5.8s)
+
+  1 passed (11.6s)
+✔  Script exited successfully (code 0)
+i  emulators: Shutting down emulators.
+i  functions: Stopping Functions Emulator
+i  functions: Waiting for all functions to finish...
+>  [IconGenerator] Processing image (background removal)...
+>  [IconGenerator] Saving to DataService...
+>  [FirebaseDataService] getIngredientByName: Eggs
+⚠  Cloud Storage ACLs are not supported in the Storage Emulator. All related methods will succeed, but have no effect.
+>  [IconGenerator] ✅ Success. Icon ID: 84d7b9bf-cf17-4d0d-b4c8-b020c803864a
+>  [Queue] Updating 1 recipes...
+>  [Queue] Completed "Eggs"
+i  functions: Finished "us-central1-processIconQueue" in 4967.753435ms
+i  firestore: Stopping Firestore Emulator
+>  Shutting down all Genkit servers...
+i  auth: Stopping Authentication Emulator
+i  storage: Stopping Storage Emulator
+i  eventarc: Stopping Eventarc Emulator
+i  tasks: Stopping Cloud Tasks Emulator
+i  hub: Stopping emulator hub
+i  logging: Stopping Logging Emulator
+Removing test env file...

@@ -11,7 +11,6 @@ import { db } from '../../lib/firebase-admin';
 
 // --- Helper Functions ---
 
-
 /**
  * Worker Function (Queue Processor)
  * Processes items in 'icon_queue' collection.

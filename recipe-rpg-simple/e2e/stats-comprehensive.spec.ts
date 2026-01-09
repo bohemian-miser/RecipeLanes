@@ -13,7 +13,7 @@ test.describe('Comprehensive Stats & Reroll', () => {
 
     // 1. Create Recipe
     await page.goto('/lanes');
-    await create_recipe(page, `chop ${ingredient}`, dir);
+    await create_recipe(page, `test eggs with ${ingredient}`, dir);
     await wait_for_graph(page, dir);
     await screenshot(page, dir, '01-recipe-created');
     

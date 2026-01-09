@@ -27,6 +27,7 @@ TEST_ARGS="${@:-}"
 CMD="npx playwright test $TEST_ARGS"
 
 # 5. Smart Execution
+# lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null ;
 if nc -z localhost 8080 2>/dev/null; then
     echo "🟢 Emulators detected on port 8080. Running tests against EXISTING emulators."
     echo "Running: $CMD"
@@ -54,12 +55,12 @@ else
     npm install --prefix "$PROJECT_ROOT/functions" 
     npm run build --prefix "$PROJECT_ROOT/functions"
 
-    # Cleanup .env on exit
-    cleanup() {
-      echo "Removing test env file..."
-      rm -f "$PROJECT_ROOT/functions/.env"
-    }
-    trap cleanup EXIT
+    # # Cleanup .env on exit This is not needed, it was overly cautious by gem.
+    # cleanup() {
+    #   echo "Removing test env file..."
+    #   rm -f "$PROJECT_ROOT/functions/.env"
+    # }
+    # trap cleanup EXIT
 
     echo "----------------------------------------------------------------"
     echo "Starting Firebase Emulators and running: $CMD"

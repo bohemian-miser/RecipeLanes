@@ -126,14 +126,14 @@ These are cached, so simplicity and consistency is key.
 }
 
 export function parseRecipeGraph(aiResponse: string): RecipeGraph {
+  // 1. Clean Markdown code blocks if present
+  let jsonStr = aiResponse.trim();
+  if (jsonStr.startsWith("```")) {
+    jsonStr = jsonStr.replace(/^```(json)?/, "").replace(/```$/, "");
+  }
+  jsonStr = jsonStr.trim();
+  
   try {
-    // 1. Clean Markdown code blocks if present
-    let jsonStr = aiResponse.trim();
-    if (jsonStr.startsWith("```")) {
-      jsonStr = jsonStr.replace(/^```(json)?/, "").replace(/```$/, "");
-    }
-    jsonStr = jsonStr.trim();
-
     // 2. Parse JSON
     const rawObj = JSON.parse(jsonStr);
 
@@ -151,7 +151,7 @@ export function parseRecipeGraph(aiResponse: string): RecipeGraph {
     // 4. Validate Schema (Relaxed to allow extra fields we just added)
     return rawObj as RecipeGraph; 
   } catch (e) {
-    console.error('Failed to parse recipe graph:', e);
+    console.error(`[parseRecipeGraph]Failed to parse recipe graph:${e}\n\nResponse:\n${aiResponse}`);
     throw new Error('Invalid AI Response Format');
   }
 }

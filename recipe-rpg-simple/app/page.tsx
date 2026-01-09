@@ -30,6 +30,7 @@ export default function Home() {
   // 1. Initialize Debug Recipe
   useEffect(() => {
     async function init() {
+      if (authLoading) return;
       if (recipeCreated.current) return;
       recipeCreated.current = true;
       

@@ -320,27 +320,27 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
                     // Keep the title the same.
                     if (original.graph.title) graph.title = original.graph.title;
                 }
-                // else {
+                else {
                     // Forking logic.
-                    // graph.sourceId = currentId;
-                    // // ... naming logic ...
-                    // let newTitle = graph.title || original.graph.title || 'Untitled';
-                    // if (newTitle.startsWith('Yet another copy of ')) {
-                    //     const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
-                    //     if (match) {
-                    //         newTitle = `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;
-                    //     } else {
-                    //         newTitle = `${newTitle} (1)`;
-                    //     }
-                    // } else if (newTitle.startsWith('Another copy of ')) {
-                    //     newTitle = newTitle.replace('Another copy of ', 'Yet another copy of ');
-                    // } else if (newTitle.startsWith('Copy of ')) {
-                    //     newTitle = newTitle.replace('Copy of ', 'Another copy of ');
-                    // } else {
-                    //     newTitle = `Copy of ${newTitle}`;
-                    // }
-                    // graph.title = newTitle;
-                // }
+                    graph.sourceId = currentId;
+                    // ... naming logic ...
+                    let newTitle = graph.title || original.graph.title || 'Untitled';
+                    if (newTitle.startsWith('Yet another copy of ')) {
+                        const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
+                        if (match) {
+                            newTitle = `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;
+                        } else {
+                            newTitle = `${newTitle} (1)`;
+                        }
+                    } else if (newTitle.startsWith('Another copy of ')) {
+                        newTitle = newTitle.replace('Another copy of ', 'Yet another copy of ');
+                    } else if (newTitle.startsWith('Copy of ')) {
+                        newTitle = newTitle.replace('Copy of ', 'Another copy of ');
+                    } else {
+                        newTitle = `Copy of ${newTitle}`;
+                    }
+                    graph.title = newTitle;
+                }
             }
         }
         
@@ -412,6 +412,7 @@ export async function saveRecipeAction(graph: RecipeGraph, existingId?: string, 
   }
 }
 
+/* TODO: These can probably be moved to firestore rules at some point */
 
 // This needs to be server action to access auth.
 export async function toggleStarAction(recipeId: string): Promise<{ starred: boolean; error?: string }> {
@@ -487,3 +488,17 @@ export async function debugLogAction(message: string) {
     console.log(`[CLIENT-LOG] ${message}`);
 }
 /* ^ Triaged ^ */
+
+
+// this is for the shared gallery on '/'.
+export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: string): Promise<{ success: boolean; error?: string }> {
+    // const session = await getAuthService().verifyAuth();
+    // if (!session?.isAdmin) return { success: false, error: 'Admin required' };
+     try {
+        await getDataService().deleteIcon(iconUrl, ingredientName);
+        return { success: true };
+    } catch (e: any) {
+        console.error('deleteIconByUrlAction failed:', e);
+        return { success: false, error: e.message };
+    }
+}

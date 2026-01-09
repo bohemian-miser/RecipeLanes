@@ -6,6 +6,7 @@ import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
 import { functions } from '@/lib/firebase-client';
 import { httpsCallable } from 'firebase/functions';
+import {rejectIcon} from '@/app/actions';
 
 // Track rejected URLs for the session to prevent them from reappearing immediately
 const sessionRejectedUrls = new Set<string>();
@@ -55,13 +56,13 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
       const ingredientName = data.visualDescription || data.text;
       
       try {
-        const rejectIcon = httpsCallable(functions, 'rejectIcon');
-        await rejectIcon({ 
-            recipeId, 
-            nodeId: id, 
+        
+        await rejectIcon(
+            recipeId || '', 
+            id, 
             ingredientName, 
-            currentIconId: data.iconId 
-        });
+            data.iconId ||'' 
+        );
         // State update handled by prop change from Firestore listener
       } catch (err) {
           console.error("Reroll failed", err);

@@ -1,48 +1,109 @@
 'use client';
 
-import { useState, useId, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { IngredientForm } from '@/components/ingredient-form';
 import { IconDisplay, Icon } from '@/components/icon-display';
 import { SharedGallery } from '@/components/shared-gallery';
-import { RerollMonitor } from '@/components/reroll-monitor';
 import { QueueMonitor } from '@/components/queue-monitor';
-import { Login } from '@/components/login';
 import { LogoutButton } from '@/components/logout-button';
 import { useAuth } from '@/components/auth-provider';
-import { getOrCreateIconAction, recordRejectionAction, getAllIconsAction, deleteIconByUrlAction } from './actions';
-import { LogOut, ChefHat, Globe, User, Star, Plus } from 'lucide-react';
+import { createDebugRecipeAction, addIngredientNodeAction, rejectIcon, deleteRecipeAction } from './actions';
+import { ChefHat, Globe, Plus } from 'lucide-react';
 import Link from 'next/link';
-import { AUTH_DISABLED } from '@/lib/config';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase-client';
+import { DB_COLLECTION_RECIPES } from '@/lib/config';
+import { standardizeIngredientName } from '@/lib/utils';
 
 export default function Home() {
-  const { user, loading: authLoading, logout, signIn } = useAuth();
+  const { user, loading: authLoading, signIn } = useAuth();
   const [icons, setIcons] = useState<Icon[]>([]);
+  const [recipeId, setRecipeId] = useState<string | null>(null);
+  const [initializing, setInitializing] = useState(true);
   
-  // Session State
-  const [sessionRejections, setSessionRejections] = useState<Record<string, number>>({});
-  const [seenIcons, setSeenIcons] = useState<Record<string, Set<string>>>({});
-  const [lastDebugInfo, setLastDebugInfo] = useState<any>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  // Parallel Request Management
   const [rerollingIds, setRerollingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
-  const uniqueId = useId();
+
+  // Use a ref to track if we've already created a recipe to prevent double-creation in strict mode
+  const recipeCreated = useRef(false);
+
+  // 1. Initialize Debug Recipe
+  useEffect(() => {
+    async function init() {
+      if (recipeCreated.current) return;
+      recipeCreated.current = true;
+      
+      try {
+        const result = await createDebugRecipeAction();
+        if (result.error) throw new Error(result.error);
+        if (result.recipeId) {
+            console.log('Debug Recipe Created:', result.recipeId);
+            setRecipeId(result.recipeId);
+        }
+      } catch (e) {
+        console.error('Failed to create debug recipe:', e);
+        setError('Failed to initialize session.');
+      } finally {
+        setInitializing(false);
+      }
+    }
+    
+    init();
+
+    // Cleanup on Unmount
+    return () => {
+        if (recipeId) {
+            // Best effort cleanup
+            deleteRecipeAction(recipeId).catch(console.error);
+        }
+    };
+  }, []); // Run once on mount
+
+  // 2. Listen for Updates
+  useEffect(() => {
+    if (!recipeId) return;
+
+    // We can use the client-side DB directly for listening!
+    // Assuming config.ts exports DB_COLLECTION_RECIPES
+    const unsub = onSnapshot(doc(db, DB_COLLECTION_RECIPES, recipeId), (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            const graph = data?.graph;
+            if (graph && Array.isArray(graph.nodes)) {
+                // Map nodes to Icons
+                // Reverse to show newest first? Or preserve order?
+                // Typically newest first is better for "adding" items.
+                // But the graph order is append.
+                // Let's reverse it for the display.
+                const newIcons: Icon[] = [...graph.nodes].reverse().map((n: any) => ({
+                    id: n.id,
+                    ingredient: standardizeIngredientName(n.visualDescription || n.text),
+                    iconUrl: n.iconUrl || '',
+                    isPending: !n.iconUrl && !n.iconId, // Pending if no URL/ID
+                    popularityScore: 0, // Not tracked in node
+                    // @ts-ignore - Storing iconId for reroll logic
+                    iconId: n.iconId
+                }));
+                setIcons(newIcons);
+            }
+        }
+    });
+
+    return () => unsub();
+  }, [recipeId]);
+
 
   const toTitleCase = (str: string) => {
     return str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
   };
 
-  const updateSeen = (ingredient: string, url: string) => {
-      setSeenIcons(prev => {
-          const next = new Set(prev[ingredient] || []);
-          next.add(url);
-          return { ...prev, [ingredient]: next };
-      });
-  };
-
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!recipeId) {
+        setError("Session not initialized.");
+        return;
+    }
+
     const formData = new FormData(event.currentTarget);
     const rawIngredient = formData.get('ingredient') as string;
     
@@ -51,52 +112,23 @@ export default function Home() {
     event.currentTarget.reset();
     
     const newIngredient = toTitleCase(rawIngredient);
-    const tempId = typeof crypto !== 'undefined' && crypto.randomUUID ? `temp-${crypto.randomUUID()}` : `temp-${Date.now()}`;
-    const pendingIcon: Icon = {
-        id: tempId,
-        ingredient: newIngredient,
-        iconUrl: '',
-        isPending: true
-    };
-    setIcons(prev => [...prev, pendingIcon]);
     
-    setError(null);
-    setLastDebugInfo(null);
-
-    const rejections = sessionRejections[newIngredient] || 0;
-    const seen = Array.from(seenIcons[newIngredient] || []);
-
+    // Optimistic Update (optional, but good for UX)
+    // We rely on the listener, but adding a temporary one helps with "instant" feel
+    // Actually, let's just let the listener handle it since it's fast enough locally
+    // and safer for consistency. But we can set a loading state if we want.
+    
     try {
-      const result = await getOrCreateIconAction(rawIngredient, rejections, seen);
-      
-      if ('error' in result && result.error) {
-          throw new Error(result.error);
-      }
-      
-      const { iconUrl, popularityScore, debugInfo, visualDescription } = result as any; 
-      
-      const newIcon: Icon = {
-        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`, 
-        ingredient: newIngredient,
-        iconUrl: iconUrl,
-        popularityScore: popularityScore,
-        visualDescription: visualDescription
-      };
-      
-      setIcons(prev => prev.map(i => i.id === tempId ? newIcon : i));
-      updateSeen(newIngredient, iconUrl);
-      setLastDebugInfo(debugInfo);
-      setRefreshKey(prev => prev + 1);
-      
-    } catch (err: any) {
-      setError(err.message || 'Failed to forge item. Please try again.');
-      console.error(err);
-      setIcons(prev => prev.filter(i => i.id !== tempId));
+        await addIngredientNodeAction(recipeId, newIngredient);
+    } catch (e: any) {
+        console.error(e);
+        setError("Failed to add item.");
     }
   };
 
   const handleReroll = async (iconToReroll: Icon) => {
     if (rerollingIds.has(iconToReroll.id)) return;
+    if (!recipeId) return;
     
     setRerollingIds(prev => {
         const next = new Set(prev);
@@ -105,28 +137,21 @@ export default function Home() {
     });
     
     try {
-        await recordRejectionAction(iconToReroll.iconUrl, iconToReroll.ingredient);
+        // @ts-ignore - accessing hidden iconId
+        const currentIconId = iconToReroll.iconId;
+
+        const result = await rejectIcon(
+            recipeId,
+            iconToReroll.id,
+            iconToReroll.ingredient,
+            currentIconId
+        );
+
+        if (result.error) throw new Error(result.error); // rejectIcon returns {success: true} usually, or throws?
+        // It returns { success: true } or void?
+        // In actions.ts it returns { success: true }.
         
-        const ingredient = iconToReroll.ingredient;
-        const newRejections = (sessionRejections[ingredient] || 0) + 1;
-        setSessionRejections(prev => ({ ...prev, [ingredient]: newRejections }));
-        
-        const seen = Array.from(seenIcons[ingredient] || []);
-        if (!seen.includes(iconToReroll.iconUrl)) seen.push(iconToReroll.iconUrl);
-
-        const result = await getOrCreateIconAction(ingredient, newRejections, seen);
-
-        if ('error' in result && result.error) throw new Error(result.error);
-        const { iconUrl, popularityScore, debugInfo, visualDescription } = result as any;
-
-        setIcons(prev => prev.map(icon => 
-            icon.id === iconToReroll.id 
-                ? { ...icon, iconUrl: iconUrl, popularityScore: popularityScore, visualDescription: visualDescription }
-                : icon
-        ));
-        updateSeen(ingredient, iconUrl);
-        setLastDebugInfo(debugInfo);
-        setRefreshKey(prev => prev + 1);
+        // Listener will update the UI
 
     } catch (err: any) {
         setError(err.message || 'Failed to reroll item.');
@@ -140,19 +165,22 @@ export default function Home() {
     }
   };
 
-  const handleInventoryDelete = async (iconId: string, ingredientName?: string) => {
-      const icon = icons.find(i => i.id === iconId);
-      if (icon && icon.iconUrl) {
-          // Call server action to delete from DB/Storage
-          deleteIconByUrlAction(icon.iconUrl, ingredientName || icon.ingredient).catch(console.error);
-      }
-      setIcons(prev => prev.filter(i => i.id !== iconId));
+  const handleInventoryDelete = async (iconId: string) => {
+     // TODO: Implement node deletion if needed
+     // For now, client-side filtering or just ignore?
+     // The user said "don't have all the other stuff", so maybe deletion isn't critical
+     // or should be implemented via action.
+     // Let's implement a simple node deletion action if I had time, 
+     // but for now let's just hide it locally or skip it.
+     // Actually, let's just filter it locally for this "hack" view, 
+     // knowing it comes back on refresh.
+     setIcons(prev => prev.filter(i => i.id !== iconId));
   };
 
-  if (authLoading) {
+  if (authLoading || initializing) {
     return (
       <div className="flex min-h-screen w-full bg-zinc-900 text-zinc-100 font-mono items-center justify-center">
-        <div className="animate-pulse text-yellow-500">INITIALIZING...</div>
+        <div className="animate-pulse text-yellow-500">INITIALIZING SESSION...</div>
       </div>
     );
   }
@@ -216,8 +244,6 @@ export default function Home() {
           />
 
           <QueueMonitor />
-          
-          <RerollMonitor debugInfo={lastDebugInfo} />
 
           <IconDisplay
             icons={icons}

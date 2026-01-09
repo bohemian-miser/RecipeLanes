@@ -10,7 +10,7 @@ To ensure safe development and testing of AI agents, we strictly enforce a Stagi
 *   **Automatic Deployment:** Merging a PR into `staging` triggers an automatic deployment of the Backend (Cloud Functions & Firestore Rules) to the **Staging Firebase Project** (`recipe-lanes-staging`).
 *   **Verification:** Verify changes in the Staging environment before proceeding.
 
-### 2. Production Release
+### 2. Production Release - HUMAN ONLY
 *   **Promotion:** To release to production, open a PR to merge `staging` into `main`.
 *   **Production Deployment:** Merging into `main` triggers deployment to the **Production Firebase Project** (`recipe-lanes`).
 

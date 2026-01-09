@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { screenshot, screenshotDir, cleanupScreenshots} from './utils/screenshot';
 
 test('issue 66: shared gallery icon label appears on hover', async ({ page }) => {
-  const dir = screenshotDir('auth-flow', 'desktop');
+  const dir = screenshotDir('issue-66', 'desktop');
   const uniqueName = `TestHoverItem-${Date.now()}`;
 
   // 1. Go to homepage

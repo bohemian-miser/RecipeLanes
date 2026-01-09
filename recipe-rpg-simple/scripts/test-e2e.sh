@@ -36,23 +36,31 @@ TEST_ARGS="${@:-}"
 CMD="npx playwright test $TEST_ARGS"
 
 # 5. Cleanup & Run
-echo "Cleaning up ports..."
-fuser -k 8002/tcp || true
-fuser -k 9099/tcp || true
-fuser -k 8080/tcp || true
-fuser -k 9199/tcp || true
-fuser -k 5001/tcp || true
+if lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null ; then
+    echo "Emulators detected (Port 8080). Reusing existing instance..."
+    echo "Running: $CMD"
+    # Execute CMD directly (assuming environment is already set up or inherited)
+    # We still export the variables above so Playwright sees them.
+    $CMD
+else
+    echo "Cleaning up ports..."
+    fuser -k 8002/tcp || true
+    fuser -k 9099/tcp || true
+    fuser -k 8080/tcp || true
+    fuser -k 9199/tcp || true
+    fuser -k 5001/tcp || true
 
-# Cleanup .env on exit
-cleanup() {
-  echo "Removing test env file..."
-  rm -f "$PROJECT_ROOT/functions/.env"
-}
-trap cleanup EXIT
+    # Cleanup .env on exit
+    cleanup() {
+      echo "Removing test env file..."
+      rm -f "$PROJECT_ROOT/functions/.env"
+    }
+    trap cleanup EXIT
 
-echo "----------------------------------------------------------------"
-echo "Starting Firebase Emulators and running: $CMD"
-echo "----------------------------------------------------------------"
+    echo "----------------------------------------------------------------"
+    echo "Starting Firebase Emulators and running: $CMD"
+    echo "----------------------------------------------------------------"
 
-# We use 'npx firebase' to ensure we use the local project version
-npx firebase emulators:exec --only auth,firestore,storage,functions --project local-project-id "$CMD"
+    # We use 'npx firebase' to ensure we use the local project version
+    npx firebase emulators:exec --only auth,firestore,storage,functions --project local-project-id "$CMD"
+fi

@@ -6,7 +6,6 @@ import { setAuthService, MockAuthService } from '../lib/auth-service';
 
 // Explicitly use Mocks for tests
 setAIService(new MockAIService());
-setDataService(new MemoryDataService());
 setAuthService(new MockAuthService());
 
 // Helper to get the current icon of a node
@@ -36,8 +35,9 @@ async function testFakeGraphFlow() {
     const nodeId = r2.nodeId;
     console.log(` -> Node ID: ${nodeId}`);
 
-    // 3. Resolve (Implicitly handled by addIngredientNodeAction in Memory Mode)
-    // await rerollIconAction(nodeId, ingredient, '', [], recipeId, undefined);
+    // 3. Resolve (Implicitly handled by addIngredientNodeAction)
+    // Wait for Cloud Function
+    await getDataService().waitForQueue(ingredient);
     
     let current = await getNodeIcon(recipeId, nodeId);
     console.log(` -> Icon A: ${current.iconUrl}`);
@@ -49,6 +49,9 @@ async function testFakeGraphFlow() {
     // Pass current URL to reject it
     await rerollIconAction(nodeId, ingredient, urlA, [], recipeId, undefined);
     
+    // Wait for Cloud Function
+    await getDataService().waitForQueue(ingredient);
+
     current = await getNodeIcon(recipeId, nodeId);
     console.log(` -> Icon B: ${current.iconUrl}`);
     if (!current.iconUrl) throw new Error("Failed to generate Icon B");

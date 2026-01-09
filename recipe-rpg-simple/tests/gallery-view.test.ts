@@ -1,4 +1,4 @@
-import { MemoryDataService, setDataService } from '../lib/data-service';
+import { getDataService } from '../lib/data-service';
 import type { RecipeGraph } from '../lib/recipe-lanes/types';
 import assert from 'node:assert';
 
@@ -11,8 +11,7 @@ const mockGraph: RecipeGraph = {
 
 async function testGalleryView() {
     console.log("Testing Gallery View Logic...");
-    const service = new MemoryDataService();
-    setDataService(service);
+    const service = getDataService();
 
     console.log(" [1] Public Filter");
     await service.saveRecipe({ ...mockGraph, title: 'Public 1' }, undefined, 'u1', 'public');

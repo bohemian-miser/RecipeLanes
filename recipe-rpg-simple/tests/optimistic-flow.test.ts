@@ -21,12 +21,11 @@ class CustomMockAIService extends MockAIService {
 
 // Explicitly use Mocks for tests
 setAIService(new CustomMockAIService());
-const dataService = new MemoryDataService();
-setDataService(dataService);
 setAuthService(new MockAuthService());
 
 async function testOptimisticFlow() {
   console.log('\n=== Testing Optimistic Return + Background Trigger Flow ===');
+  const dataService = getDataService();
 
   // 1. Pre-seed Cache with an Icon for "Carrot"
   console.log('[Setup] Seeding cache for "Carrot"...');

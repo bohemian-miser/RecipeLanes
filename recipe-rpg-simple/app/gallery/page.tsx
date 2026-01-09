@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { getPublicGalleryAction } from '@/app/actions';
 import { ChefHat, ArrowLeft, Search, Star, User, Plus, Globe } from 'lucide-react';
 import { RecipeCard } from '@/components/ui/recipe-card';
 import { getDataService } from '@/lib/data-service';
@@ -28,7 +27,7 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
       } else if (query) {
           recipes = await getDataService().searchPublicRecipes(query);
       } else {
-          recipes = await getPublicGalleryAction();
+          recipes = await getDataService().getPublicRecipes(50);
       }
   } catch (e: any) {
       console.error('Gallery Fetch Error:', e);

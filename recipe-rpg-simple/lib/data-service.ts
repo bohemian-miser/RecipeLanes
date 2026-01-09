@@ -242,7 +242,7 @@ export class FirebaseDataService implements DataService {
 
   async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted', ownerName?: string): Promise<string> {
       const data: any = {
-          graph,
+          graph, // TODO add last_updated to graph.
           updated_at: FieldValue.serverTimestamp()
       };
       
@@ -256,10 +256,12 @@ export class FirebaseDataService implements DataService {
           const existingDoc = await db.collection(DB_COLLECTION_RECIPES).doc(existingId).get();
           if (existingDoc.exists) {
               const existingData = existingDoc.data();
+              // TODO: Consider just saving under a new ID if not owner?
               if (existingData?.ownerId && existingData.ownerId !== userId) {
                   throw new Error("You are not the owner of this recipe.");
               }
           }
+          // Maybe allow a non-merging option?
           await db.collection(DB_COLLECTION_RECIPES).doc(existingId).set(removeUndefined(data), { merge: true });
           return existingId;
       }
@@ -309,7 +311,7 @@ export class FirebaseDataService implements DataService {
           const userData = userDoc.data() || {};
           const currentLikes = new Set(userData.likedRecipes || []);
           const currentDislikes = new Set(userData.dislikedRecipes || []);
-          
+          // TODO: i don't like the logic here but it works... i think ..
           let likeChange = 0;
           let dislikeChange = 0;
           

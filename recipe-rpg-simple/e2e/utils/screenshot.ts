@@ -49,13 +49,25 @@ export const cleanupScreenshots = (dir: string) => {
       try {
         // Force remove the uuid dir.
         fs.rmSync(dir, { recursive: true, force: true });
+      } catch (e) {
+        // Ignore if not empty (other device tests running or failed)
+        console.log(`Could not remove UUID dir:${dir}`);
+      }
+
+      try {
         // Optionally remove device dir. Only runs when no other uuid runs exist.
         fs.rmdirSync(path.dirname(dir));
+      } catch (e) {
+        // Previous failed attempt.
+        console.log(`Could not remove device dir:${path.dirname(dir)}`);
+      }
+
+      try {
         // Optionally remove test dir. Only runs when no other device runs exist.
         fs.rmdirSync(path.dirname(path.dirname(dir)));
       } catch (e) {
-        // Ignore if not empty (other device tests running or failed)
-        console.log(`Could not remove parent screenshot directory, likely not empty.\ndir:${dir}\npar:${path.dirname(dir)}\nparpar:${path.dirname(path.dirname(dir))}`);
+        // other divice is likely running.
+        // console.log(`Could not remove parent screenshot directory, likely not empty.\ndir:${path.dirname(path.dirname(dir))}`);
       }
     }
     

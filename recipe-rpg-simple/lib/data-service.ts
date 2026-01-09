@@ -56,6 +56,11 @@ export interface DataService {
   retryIconGeneration(ingredientName: string): Promise<void>;
   queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, IconStats>>;
   waitForQueue(ingredientName: string, timeoutMs?: number): Promise<IconStats | null>;
+  
+  // New Methods for Refactor
+  resolveRecipeIcons(recipeId: string): Promise<void>;
+  addNodeToRecipe(recipeId: string, ingredientName: string, laneId?: string): Promise<{ success: boolean, nodeId?: string, error?: string }>;
+  rejectRecipeIcon(recipeId: string, nodeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }>;
 }
 
 // --- Firebase Implementation ---
@@ -90,6 +95,177 @@ export class FirebaseDataService implements DataService {
           await new Promise(r => setTimeout(r, 1000));
       }
       return null;
+  }
+
+  async resolveRecipeIcons(recipeId: string): Promise<void> {
+      console.log(`[FirebaseDataService] resolveRecipeIcons: ${recipeId}`);
+      const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+      const doc = await recipeRef.get();
+      
+      if (!doc.exists) {
+          console.error(`Recipe ${recipeId} not found.`);
+          return;
+      }
+      
+      const data = doc.data();
+      const graph = data?.graph;
+      
+      if (!graph || !Array.isArray(graph.nodes)) return;
+
+      const recipeRejections = graph.rejections || {};
+
+      // Identify nodes that need icons
+      const nodesToProcess = graph.nodes.filter((n: any) => {
+          if (!n.visualDescription) return false;
+          if (!n.iconId) return true;
+          const stdName = standardizeIngredientName(n.visualDescription as string);
+          return recipeRejections[stdName]?.includes(n.iconId);
+      });
+      
+      if (nodesToProcess.length === 0) return;
+
+      const batch = db.batch();
+      let queuedCount = 0;
+      const immediateUpdates = new Map<string, { iconId: string, iconUrl: string }>();
+      
+      const uniqueNames = Array.from(new Set(nodesToProcess.map((n: any) => standardizeIngredientName(String(n.visualDescription))))) as string[];
+      const ingRefs = uniqueNames.map((name: string) => db.collection(DB_COLLECTION_INGREDIENTS).doc(name));
+      
+      let ingSnaps: FirebaseFirestore.DocumentSnapshot[] = [];
+      if (ingRefs.length > 0) {
+          ingSnaps = await db.getAll(...ingRefs);
+      }
+      
+      const ingMap = new Map<string, any>();
+      ingSnaps.forEach(s => {
+          if (s.exists) ingMap.set(s.id, s.data());
+      });
+
+      for (const node of nodesToProcess) {
+          const stdName = standardizeIngredientName(String(node.visualDescription));
+          const rejectedIds = new Set<string>(recipeRejections[stdName] || []);
+          
+          const ingData = ingMap.get(stdName);
+          let bestIcon = null;
+
+          if (ingData && ingData.icons && Array.isArray(ingData.icons)) {
+              const sortedIcons = [...ingData.icons].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+              for (const icon of sortedIcons) {
+                  if (!rejectedIds.has(icon.id) && !icon.marked_for_deletion) {
+                      bestIcon = icon;
+                      break;
+                  }
+              }
+          }
+
+          if (bestIcon) {
+              immediateUpdates.set(node.id, { iconId: bestIcon.id, iconUrl: bestIcon.url });
+          } else {
+              const queueRef = db.collection(DB_COLLECTION_QUEUE).doc(stdName);
+              batch.set(queueRef, {
+                  status: 'pending',
+                  created_at: FieldValue.serverTimestamp(),
+                  recipes: FieldValue.arrayUnion(recipeId)
+              }, { merge: true });
+              queuedCount++;
+          }
+      }
+
+      if (immediateUpdates.size > 0) {
+          const newNodes = graph.nodes.map((n: any) => {
+              if (immediateUpdates.has(n.id)) {
+                  return { ...n, ...immediateUpdates.get(n.id) };
+              }
+              return n;
+          });
+          batch.update(recipeRef, { "graph.nodes": newNodes });
+      }
+
+      if (queuedCount > 0 || immediateUpdates.size > 0) {
+          await batch.commit();
+      }
+  }
+
+  async addNodeToRecipe(recipeId: string, ingredientName: string, laneId: string = 'lane-1'): Promise<{ success: boolean, nodeId?: string, error?: string }> {
+      try {
+        const stdName = standardizeIngredientName(ingredientName);
+        const nodeId = 'node-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        
+        const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+        
+        await db.runTransaction(async (t) => {
+             const doc = await t.get(recipeRef);
+             if (!doc.exists) throw new Error("Recipe not found");
+             const data = doc.data();
+             const graph = data?.graph;
+             
+             const newNode = {
+                id: nodeId,
+                laneId: laneId,
+                text: stdName,
+                visualDescription: stdName,
+                type: 'ingredient',
+                x: 0, y: 0
+            };
+            
+            const newNodes = [...(graph.nodes || []), newNode];
+            t.update(recipeRef, { "graph.nodes": newNodes });
+        });
+        
+        await this.resolveRecipeIcons(recipeId);
+        
+        return { success: true, nodeId };
+      } catch (e: any) {
+          return { success: false, error: e.message };
+      }
+  }
+
+  async rejectRecipeIcon(recipeId: string, nodeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }> {
+      try {
+        const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+        let iconIdToReject = currentIconId;
+
+        await db.runTransaction(async (t) => {
+            const doc = await t.get(recipeRef);
+            if (!doc.exists) throw new Error('Recipe not found');
+            
+            const data = doc.data()!;
+            const graph = data.graph;
+            const nodes = graph.nodes || [];
+            const nodeIndex = nodes.findIndex((n: any) => n.id === nodeId);
+            
+            if (nodeIndex === -1) throw new Error('Node not found in graph');
+            
+            const node = nodes[nodeIndex];
+            const stdName = standardizeIngredientName(String(ingredientName));
+
+            if (!graph.rejections) graph.rejections = {};
+            if (!graph.rejections[stdName]) graph.rejections[stdName] = [];
+            
+            if (iconIdToReject && !graph.rejections[stdName].includes(iconIdToReject)) {
+                graph.rejections[stdName].push(iconIdToReject);
+            }
+
+            nodes[nodeIndex].iconId = null;
+            nodes[nodeIndex].iconUrl = null;
+            
+            t.update(recipeRef, {
+                "graph.rejections": graph.rejections,
+                "graph.nodes": nodes
+            });
+        });
+
+        if (iconIdToReject) {
+            const stdName = standardizeIngredientName(ingredientName);
+            // Best effort
+            this.recordRejection(iconIdToReject, ingredientName, stdName).catch(console.error);
+        }
+
+        await this.resolveRecipeIcons(recipeId);
+        return { success: true };
+      } catch (e: any) {
+          return { success: false, error: e.message };
+      }
   }
 
   async retryIconGeneration(ingredientName: string): Promise<void> {
@@ -805,6 +981,81 @@ export class MemoryDataService implements DataService {
             hits.set(stdName, { iconId, iconUrl: mockUrl, score: 0, impressions: 0, rejections: 0 });
         }
         return hits;
+    }
+
+    async resolveRecipeIcons(recipeId: string): Promise<void> {
+        const recipe = this.recipes.get(recipeId);
+        if (!recipe) return;
+        
+        const nodesToProcess = recipe.graph.nodes.filter(n => {
+            if (!n.visualDescription) return false;
+            // In memory, we just force update or check if missing
+            return !n.iconId;
+        });
+
+        if (nodesToProcess.length === 0) return;
+
+        const items = nodesToProcess.map(n => ({
+            ingredientName: n.visualDescription!,
+            recipeId
+        }));
+
+        const hits = await this.queueIcons(items);
+        
+        recipe.graph.nodes.forEach(n => {
+            if (n.visualDescription) {
+                const stdName = standardizeIngredientName(n.visualDescription);
+                if (hits.has(stdName)) {
+                    const hit = hits.get(stdName)!;
+                    n.iconId = hit.iconId;
+                    n.iconUrl = hit.iconUrl;
+                }
+            }
+        });
+    }
+
+    async addNodeToRecipe(recipeId: string, ingredientName: string, laneId: string = 'lane-1'): Promise<{ success: boolean, nodeId?: string, error?: string }> {
+        const recipe = this.recipes.get(recipeId);
+        if (!recipe) return { success: false, error: 'Recipe not found' };
+        
+        const stdName = standardizeIngredientName(ingredientName);
+        const nodeId = 'node-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        
+        recipe.graph.nodes.push({
+            id: nodeId,
+            laneId,
+            text: stdName,
+            visualDescription: stdName,
+            type: 'ingredient',
+            x: 0, y: 0
+        });
+        
+        await this.resolveRecipeIcons(recipeId);
+        return { success: true, nodeId };
+    }
+
+    async rejectRecipeIcon(recipeId: string, nodeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }> {
+        const recipe = this.recipes.get(recipeId);
+        if (!recipe) return { success: false, error: 'Recipe not found' };
+        
+        const node = recipe.graph.nodes.find(n => n.id === nodeId);
+        if (!node) return { success: false, error: 'Node not found' };
+        
+        const stdName = standardizeIngredientName(ingredientName);
+        
+        if (!recipe.graph.rejections) recipe.graph.rejections = {};
+        if (!recipe.graph.rejections[stdName]) recipe.graph.rejections[stdName] = [];
+        
+        if (currentIconId) {
+            recipe.graph.rejections[stdName].push(currentIconId);
+            this.recordRejection(currentIconId, ingredientName, stdName);
+        }
+        
+        node.iconId = undefined;
+        node.iconUrl = undefined;
+        
+        await this.resolveRecipeIcons(recipeId);
+        return { success: true };
     }
     
     async recordImpression(ingredientId: string, iconId: string): Promise<void> {

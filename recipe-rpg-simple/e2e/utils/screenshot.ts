@@ -44,11 +44,13 @@ export const cleanupScreenshots = (dir: string) => {
   if (!process.env.NO_CLEANUP) {
     if (fs.existsSync(dir)) {
       fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(path.dirname(dir), { recursive: true, force: true });
     }
     try {
-      fs.rmdirSync(path.dirname(path.dirname(dir)));
+      fs.rmdirSync(path.dirname(dir));
     } catch (e) {
       // Ignore if not empty (other device tests running or failed)
+      console.log(`Could not remove parent screenshot directory, likely not empty.\ndir:${dir} par:${path.dirname(dir)}`);
     }
   }
 };

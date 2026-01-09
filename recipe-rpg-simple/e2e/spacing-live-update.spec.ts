@@ -30,8 +30,8 @@ test.describe('Spacing Live Update', () => {
     const slider = page.locator('input[type="range"]');
     await expect(slider).toBeVisible();
     
-    // Current value is 1. Change to 2.
-    await slider.fill('2');
+    // Current value is .5. Change to 1.
+    await slider.fill('1');
     // Trigger change event if needed (fill usually does it for text, for range it might need explicit dispatch)
     await slider.evaluate(e => {
         const event = new Event('change', { bubbles: true });

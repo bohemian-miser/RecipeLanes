@@ -1,5 +1,7 @@
 import { ai, textModel, imageModelName } from './genkit';
 import { processIcon } from './image-processing';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface AIService {
   generateText(prompt: string): Promise<string>;
@@ -139,6 +141,33 @@ export class MockAIService implements AIService {
 
   async generateImage(prompt: string): Promise<string> {
     console.log(`[MockAIService] generateImage called for: "${prompt.substring(0, 30)}"...`);
+    
+    const knownIngredients = ['Eggs', 'Flour', 'Sugar', 'Butter', 'Onion', 'Garlic', 'Milk', 'Mixing Bowl', 'Fry An Egg', 'Ham', 'Cheese'];
+    const lowerPrompt = prompt.toLowerCase();
+    
+    // Find matching ingredient. Sort by length desc to match "Fry An Egg" before "Egg"
+    const match = knownIngredients
+        .sort((a, b) => b.length - a.length)
+        .find(ing => lowerPrompt.includes(ing.toLowerCase()));
+    
+    if (match) {
+         // Try to find file
+         const possiblePaths = [
+             path.join(process.cwd(), 'e2e/test_data/icons/', `${match}.png`),
+             path.join(process.cwd(), '../e2e/test_data/icons/', `${match}.png`), // If cwd is functions
+             path.join(__dirname, '../../../e2e/test_data/icons/', `${match}.png`) // Relative to compiled lib
+         ];
+         
+         for (const p of possiblePaths) {
+             if (fs.existsSync(p)) {
+                 console.log(`[MockAIService] Found local icon at: ${p}`);
+                 const buffer = fs.readFileSync(p);
+                 return `data:image/png;base64,${buffer.toString('base64')}`;
+             }
+         }
+         console.warn(`[MockAIService] Icon for ${match} not found in search paths: ${possiblePaths.join(', ')}`);
+    }
+
     // Append random UUID to ensure unique URL for each generation (simulate reroll)
     const uuid = Math.random().toString(36).substring(7);
     const url = `https://placehold.co/64x64/png?text=Mock+${encodeURIComponent(prompt.slice(0, 10))}&uuid=${uuid}`;

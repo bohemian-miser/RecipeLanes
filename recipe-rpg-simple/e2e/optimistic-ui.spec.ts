@@ -46,7 +46,7 @@ test.describe('Optimistic UI & Background Trigger', () => {
         // Wait for graph container
         await expect(page.locator('.react-flow')).toBeVisible({ timeout: 30000 });      await screenshot(page, dir, 'after click2');
 
-        const eggNode = page.locator('.react-flow__node-minimal', { hasText: '2 Eggs' }).or(page.locator('.react-flow__node-minimal', { hasText: 'Eggs' })).first();
+        const eggNode = page.locator('.react-flow__node-minimal', { hasText: '2 Eggs' }).or(page.locator('.react-flow__node-minimal', { hasText: 'Egg' })).first();
         const flourNode = page.locator('.react-flow__node-minimal', { hasText: '100g Flour' }).or(page.locator('.react-flow__node-minimal', { hasText: 'Flour' })).first();
         const hamNode = page.locator('.react-flow__node-minimal', { hasText: newIngredient }).first();
         const mixNode = page.locator('.react-flow__node-minimal', { hasText: 'Mix' }).first();
@@ -68,7 +68,7 @@ test.describe('Optimistic UI & Background Trigger', () => {
         // Wait for hydration if needed, but they should be there fast
         await expect(eggImg).toBeVisible();
         console.log('Egg image src:', await eggImg.getAttribute('src'));
-        await expect(eggImg).toHaveAttribute('src', /icons%2Fseed-Eggs-/);
+        await expect(eggImg).toHaveAttribute('src', /icons%2Fseed-Egg-/);
         
         await expect(flourImg).toBeVisible();
         console.log('Flour image src:', await flourImg.getAttribute('src'));

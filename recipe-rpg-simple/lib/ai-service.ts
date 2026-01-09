@@ -68,7 +68,7 @@ export class MockAIService implements AIService {
         }
         
         const nodes = [
-                { id: "1", laneId: "l1", text: "2 Eggs", type: "ingredient", visualDescription: "Eggs" },
+                { id: "1", laneId: "l1", text: "2 Eggs", type: "ingredient", visualDescription: "Egg" },
                 { id: "2", laneId: "l1", text: "100g Flour", type: "ingredient", visualDescription: "Flour" },
                 { id: "3", laneId: "l1", text: "Mix", type: "action", inputs: ["1", "2"], visualDescription: "Mixing bowl" }
         ];
@@ -142,7 +142,7 @@ export class MockAIService implements AIService {
   async generateImage(prompt: string): Promise<string> {
     console.log(`[MockAIService] generateImage called for: "${prompt.substring(0, 30)}"...`);
     
-    const knownIngredients = ['Eggs', 'Flour', 'Sugar', 'Butter', 'Onion', 'Garlic', 'Milk', 'Mixing Bowl', 'Fry An Egg', 'Ham', 'Cheese'];
+    const knownIngredients = ['Egg', 'Flour', 'Sugar', 'Butter', 'Onion', 'Garlic', 'Milk', 'Mixing Bowl', 'Fry An Egg', 'Ham', 'Cheese'];
     const lowerPrompt = prompt.toLowerCase();
     
     // Find matching ingredient. Sort by length desc to match "Fry An Egg" before "Egg"

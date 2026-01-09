@@ -22,8 +22,8 @@ export async function seedCommonIngredients() {
     
     // map names to filenames
     const assets: Record<string, string> = {
-        'Eggs': 'egg.png',
-        'Flour': 'flour.png'
+        'Egg': 'Egg.png',
+        'Flour': 'Flour.png'
     };
     
     for (const [name, filename] of Object.entries(assets)) {
@@ -41,7 +41,7 @@ export async function seedCommonIngredients() {
         if (!hasSeeded) {
             console.log(`Uploading local icon for ${name}...`);
             
-            const filePath = path.join(process.cwd(), 'e2e/data', filename);
+            const filePath = path.join(process.cwd(), 'e2e/test_data/icons/', filename);
             const buffer = fs.readFileSync(filePath);
             
             const bucket = storage.bucket(bucketName);

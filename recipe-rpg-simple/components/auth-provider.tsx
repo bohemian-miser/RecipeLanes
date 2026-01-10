@@ -28,37 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const forceMock = process.env.NEXT_PUBLIC_MOCK_AUTH === 'true';
-    const hasMockCookie = process.env.NODE_ENV === 'development' && document.cookie.includes('session=mock-');
-    
-    console.log('[AuthProvider] Init check:', { isInitialized, forceMock, hasMockCookie, cookie: document.cookie });
-
-    if (!isInitialized || forceMock || hasMockCookie) {
-        (window as any)._authMockMode = true;
-        // Mock Auth check from cookie for E2E/Local
-        const checkMockCookie = () => {
-             const match = document.cookie.match(/session=(mock-[^;]+)/);
-             if (match) {
-                 let uid = match[1];
-                 if (uid.startsWith('mock-')) uid = uid.replace('mock-', '');
-                 // Mock User object
-                 const mockUser: any = { 
-                     uid, 
-                     email: `${uid}@test.com`, 
-                     displayName: uid,
-                     getIdToken: async () => 'mock-token'
-                 };
-                 setUser(mockUser);
-             } else {
-                 setUser(null);
-             }
-             setLoading(false);
-        };
-        checkMockCookie();
-        // Also listen for cookie changes if possible, or just run once. 
-        // For E2E we usually reload page or set cookie before load.
-        return;
-    }
+    console.log('[AuthProvider] Initializing...');
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -80,28 +50,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setLoading(false);
     });
-    return () => unsubscribe();
+
+    // Safety timeout: If emulator/auth is unreachable, don't block app forever
+    const timer = setTimeout(() => {
+        setLoading((currentLoading) => {
+            if (currentLoading) {
+                console.warn('[AuthProvider] Auth listener timed out. Proceeding unauthenticated.');
+                return false;
+            }
+            return currentLoading;
+        });
+    }, 2000);
+
+    return () => {
+        clearTimeout(timer);
+        unsubscribe();
+    };
   }, [router]);
 
   const signIn = async () => {
     setError(null);
-    const forceMock = process.env.NEXT_PUBLIC_MOCK_AUTH === 'true';
-
-    if (!isInitialized || forceMock) {
-        try {
-            // Mock Login: Send a fake token. The backend (if in mock mode) will use it to create a session cookie.
-            const mockUid = 'user-' + Math.floor(Math.random() * 10000);
-            await fetch('/api/auth/login', { 
-                method: 'POST', 
-                body: JSON.stringify({ idToken: `mock-${mockUid}` }) 
-            });
-            window.location.reload();
-        } catch (e) {
-            console.error('Mock login failed', e);
-        }
-        return;
-    }
-
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
@@ -115,22 +83,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     setError(null);
-    const forceMock = process.env.NEXT_PUBLIC_MOCK_AUTH === 'true';
-
-    if (!isInitialized || forceMock) {
-        try {
-            await fetch('/api/auth/logout', { method: 'POST' });
-            setUser(null);
-            router.refresh();
-        } catch (e) {
-            console.error('Mock logout failed:', e);
-        }
-        return;
-    }
-
     try {
       await signOut(auth);
-      // onAuthStateChanged will handle the rest (cookie clear + refresh)
     } catch (err: any) {
       console.error('Logout failed:', err);
       setError(err.message || 'Logout failed');

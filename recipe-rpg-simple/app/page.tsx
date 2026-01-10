@@ -147,7 +147,6 @@ export default function Home() {
 
         const result = await rejectIcon(
             recipeId,
-            iconToReroll.id,
             iconToReroll.ingredient,
             currentIconId
         );

@@ -60,7 +60,7 @@ export interface DataService {
   // New Methods for Refactor
   resolveRecipeIcons(recipeId: string): Promise<void>;
   addNodeToRecipe(recipeId: string, ingredientName: string, laneId?: string): Promise<{ success: boolean, nodeId?: string, error?: string }>;
-  rejectRecipeIcon(recipeId: string, nodeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }>;
+  rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }>;
   assignIconToRecipe(recipeId: string, iconId: string, iconUrl: string, ingredientName: string): Promise<void>;
 }
 
@@ -270,7 +270,7 @@ export class FirebaseDataService implements DataService {
       }
   }
 
-  async rejectRecipeIcon(recipeId: string, nodeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }> {
+  async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }> {
       try {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
         let iconIdToReject = currentIconId;
@@ -1085,7 +1085,7 @@ export class MemoryDataService implements DataService {
         return { success: true, nodeId };
     }
 
-    async rejectRecipeIcon(recipeId: string, nodeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }> {
+    async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }> {
         const recipe = this.recipes.get(recipeId);
         if (!recipe) return { success: false, error: 'Recipe not found' };
         

@@ -52,14 +52,10 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
   const handleReroll = async (e: React.MouseEvent) => {
       e.stopPropagation();
       setIsRerolling(true);
-      
       const ingredientName = data.visualDescription || data.text;
-      
       try {
-        
         await rejectIcon(
             recipeId || '', 
-            id, 
             ingredientName, 
             data.iconId ||'' 
         );

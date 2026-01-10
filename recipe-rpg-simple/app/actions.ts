@@ -23,8 +23,8 @@ const SeenUrlsSchema = z.array(z.string().url()).default([]);
  * Server Action for clients to reject an icon.
  * Records the rejection, clears the icon from the node, and triggers a refill.
  */
-export async function rejectIcon(recipeId: string, nodeId: string, ingredientName: string, currentIconId?: string) {
-    return getDataService().rejectRecipeIcon(recipeId, nodeId, ingredientName, currentIconId);
+export async function rejectIcon(recipeId: string, ingredientName: string, currentIconId?: string) {
+    return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId);
 }
 
 export async function createDebugRecipeAction() {

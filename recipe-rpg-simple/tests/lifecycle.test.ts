@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import { createDebugRecipeAction, addIngredientNodeAction, rerollIconAction } from '../app/actions';
+import { createDebugRecipeAction, addIngredientNodeAction, rejectIcon } from '../app/actions';
 import { setAIService, MockAIService } from '../lib/ai-service';
-import { setDataService, MemoryDataService, getDataService } from '../lib/data-service';
+import { getDataService } from '../lib/data-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
 
 // Explicitly use Mocks for tests
@@ -46,8 +46,12 @@ async function testFakeGraphFlow() {
 
     // 4. Reroll (Reject A, Get B)
     console.log('\n[4] Rerolling (Reject A)...');
-    // Pass current URL to reject it
-    await rerollIconAction(nodeId, ingredient, urlA, [], recipeId, undefined);
+
+    await rejectIcon(
+        recipeId,
+        ingredient,
+        current.iconId!
+    );
     
     // Wait for Cloud Function
     await getDataService().waitForQueue(ingredient);

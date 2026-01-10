@@ -1,5 +1,6 @@
 import { getDataService } from '../lib/data-service';
 import type { RecipeGraph } from '../lib/recipe-lanes/types';
+import { clearFirestore } from '../e2e/utils/admin-utils';
 import assert from 'node:assert';
 
 // Mock Graph
@@ -15,6 +16,7 @@ const mockGraph: RecipeGraph = {
 
 async function testSocialFeatures() {
     console.log("Testing Social Features...");
+    await clearFirestore();
     const service = getDataService();
 
     // 1. Ownership & Visibility

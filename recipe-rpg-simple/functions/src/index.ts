@@ -1,9 +1,8 @@
 import {onDocumentWritten } from "firebase-functions/v2/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { generateAndStoreIcon } from './icon-generator';
-import {  DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from '../../lib/config';
-import { standardizeIngredientName } from '../../lib/utils';
-import { db } from '../../lib/firebase-admin';
+import {  DB_COLLECTION_QUEUE } from '../../lib/config';
+import { getDataService } from '../../lib/data-service';
 
 // --- Helper Functions ---
 
@@ -46,39 +45,15 @@ export const processIconQueue = onDocumentWritten({
         
         const result = await generateAndStoreIcon({ ingredientName });
         
-        // Update all linked recipes
+        // Update all linked recipes using the atomic helper
         console.log(`[Queue] Updating ${recipeIds.length} recipes...`);
+        const dataService = getDataService();
+        
         for (const rId of recipeIds) {
-            const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(rId);
-            await db.runTransaction(async (t) => {
-                const doc = await t.get(recipeRef);
-                if (!doc.exists) return;
-                const recipeData = doc.data();
-                if (!recipeData?.graph?.nodes) return;
-                
-                const nodes = recipeData.graph.nodes;
-                let changed = false;
-                
-                nodes.forEach((n: any) => {
-                    if (n.visualDescription && !n.iconId) {
-                         const nName = standardizeIngredientName(String(n.visualDescription));
-                        if (nName === ingredientName) {
-                            // Update node with new icon details
-                            n.iconId = result.id;
-                            n.iconUrl = result.url;
-                            changed = true;
-                        }
-                    }
-                });
-                
-                if (changed) {
-                    t.update(recipeRef, { "graph.nodes": nodes });
-                }
-            });
+            await dataService.assignIconToRecipe(rId, result.id, result.url, ingredientName);
         }
 
         // Delete the queue item now that processing is complete.
-        // Waiting clients will check the ingredients collection if the queue item vanishes.
         await event.data.after.ref.delete();
 
         console.log(`[Queue] Completed and removed "${ingredientName}"`);

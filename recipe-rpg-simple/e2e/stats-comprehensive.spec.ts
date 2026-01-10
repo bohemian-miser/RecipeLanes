@@ -52,9 +52,9 @@ test.describe('Comprehensive Stats & Reroll', () => {
         await galleryPage.close();
     };
 
-    // 2. Initial Check: 1 Impression, 0 Rejections (1/0)
+    // 2. Initial Check: 0 Rejections, 1 Impression (0/1)
     console.log('Checking Initial Stats...');
-    await checkStats(ingredient, ['1 / 0'], '02-initial');
+    await checkStats(ingredient, ['0 / 1'], '02-initial');
 
     // 3. Reroll 1 (Reject Icon A) -> Get Icon B
     console.log('Reroll 1...');
@@ -73,9 +73,9 @@ test.describe('Comprehensive Stats & Reroll', () => {
     await screenshot(page, dir, '04-reroll-1-complete');
     currentSrc = await node.locator('img').getAttribute('src');
 
-    // 4. Check Stats: Icon A (1/1), Icon B (1/0)
+    // 4. Check Stats: Icon A (1/1), Icon B (0/1)
     console.log('Checking Stats after Reroll 1...');
-    await checkStats(ingredient, ['1 / 1', '1 / 0'], '05-stats-after-reroll-1');
+    await checkStats(ingredient, ['1 / 1', '0 / 1'], '05-stats-after-reroll-1');
 
     // 5. Reroll 2 (Reject Icon B) -> Get Icon C
     console.log('Reroll 2...');
@@ -89,9 +89,9 @@ test.describe('Comprehensive Stats & Reroll', () => {
     
     await screenshot(page, dir, '06-reroll-2-complete');
     
-    // 6. Check Stats: Icon A (1/1), Icon B (1/1), Icon C (1/0)
+    // 6. Check Stats: Icon A (1/1), Icon B (1/1), Icon C (0/1)
     console.log('Checking Stats after Reroll 2...');
-    await checkStats(ingredient, ['1 / 1', '1 / 1', '1 / 0'], '07-stats-after-reroll-2');
+    await checkStats(ingredient, ['1 / 1', '1 / 1', '0 / 1'], '07-stats-after-reroll-2');
 
     // 7. Test "Make 1 - refresh - reroll" logic with NEW ingredient
     const ingredient2 = `${prefix} Garlic`;
@@ -124,9 +124,9 @@ test.describe('Comprehensive Stats & Reroll', () => {
     }, { timeout: 20000 }).not.toBe(startSrc2);
     await screenshot(page, dir, '10-recipe-2-rerolled');
     
-    // Check Stats: Icon A (1/1), Icon B (1/0)
+    // Check Stats: Icon A (1/1), Icon B (0/1)
     console.log('Checking Stats for Ingredient 2...');
-    await checkStats(ingredient2, ['1 / 1', '1 / 0'], '11-stats-recipe-2');
+    await checkStats(ingredient2, ['1 / 1', '0 / 1'], '11-stats-recipe-2');
 
     cleanupScreenshots(dir);
   });

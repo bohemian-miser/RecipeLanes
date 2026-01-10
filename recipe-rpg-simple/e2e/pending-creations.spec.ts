@@ -45,7 +45,7 @@ test.describe('Pending Creations & Gallery', () => {
   });
 
   test('should allow retrying failed items', async ({ page }) => {
-    const dir = screenshotDir('retry-test', 'desktop');
+    const dir = screenshotDir('pending-creations-retry-test', 'desktop');
     cleanupScreenshots(dir);
 
     await page.goto('/');

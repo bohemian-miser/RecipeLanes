@@ -38,9 +38,9 @@ test.describe('Stats Tracking', () => {
     const card = galleryPage.locator('.relative.group').filter({ hasText: uniqueName }).first();
     await expect(card).toBeVisible({ timeout: 10000 });
     
-    // Verify Impressions = 1, Rejections = 0
-    await expect(card).toContainText('1 / 0');
-    console.log('Verified Initial Impression: 1 / 0');
+    // Verify Rejections = 0, Impressions = 1 (0/1)
+    await expect(card).toContainText('0 / 1');
+    console.log('Verified Initial Impression: 0 / 1');
 
     // 4. Reroll in Recipe (Original Tab)
     await page.bringToFront();
@@ -75,16 +75,16 @@ test.describe('Stats Tracking', () => {
     }).toBe(2);
     
     // Card 1 (Rejected): Should be 1 / 1
-    // Card 2 (New): Should be 1 / 0
+    // Card 2 (New): Should be 0 / 1
     
     const cardTexts = await cards.allTextContents();
     console.log('Card Stats:', cardTexts);
     
     const hasRejected = cardTexts.some(t => t.includes('1 / 1'));
-    const hasNew = cardTexts.some(t => t.includes('1 / 0'));
+    const hasNew = cardTexts.some(t => t.includes('0 / 1'));
     
     expect(hasRejected, 'Should find rejected icon (1/1)').toBeTruthy();
-    expect(hasNew, 'Should find new icon (1/0)').toBeTruthy();
+    expect(hasNew, 'Should find new icon (0/1)').toBeTruthy();
     
     cleanupScreenshots(dir);
   });

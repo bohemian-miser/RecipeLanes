@@ -86,7 +86,7 @@ export function SharedGallery() {
                       {Number(icon.popularity_score || icon.score || 0).toFixed(1)}
                    </div>
                    <div className="absolute top-1 left-1 z-10 bg-black/60 px-1.5 py-0.5 text-[8px] font-mono text-zinc-400 pointer-events-none rounded backdrop-blur-sm">
-                      {icon.impressions || 0} / {icon.rejections || 0}
+                      <span className="text-red-400">{icon.rejections || 0}</span> / {icon.impressions || 0}
                    </div>
                    
                    <button 

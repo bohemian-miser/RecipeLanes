@@ -151,45 +151,9 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
     }
 }
 
-export async function rerollIconAction(
-    nodeId: string, 
-    rawIngredientName: string, 
-    currentIconUrl: string, 
-    seenUrls: string[] = [], 
-    recipeId?: string,
-    currentIconId?: string
-) {
-    try {
-        if (process.env.MOCK_AI === 'true' || process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
-             await new Promise(r => setTimeout(r, 500));
-        }
 
-        const ingredientName = standardizeIngredientName(rawIngredientName);
-        
-        if (recipeId) {
-             await getDataService().rejectRecipeIcon(recipeId, nodeId, ingredientName, currentIconId || (currentIconUrl ? 'url:' + currentIconUrl : undefined));
-             
-             // Fetch updated icon
-             const recipeData = await getDataService().getRecipe(recipeId);
-             const node = recipeData?.graph.nodes.find((n: any) => n.id === nodeId);
-             if (node && node.iconUrl) {
-                 return { 
-                    iconId: node.iconId,
-                    iconUrl: node.iconUrl,
-                    nodeId 
-                };
-             }
-             return { status: 'pending', nodeId };
-        }
-        
-        return { error: 'Recipe Context required for reroll' };
 
-    } catch (e: any) {
-        console.error('rerollIconAction failed:', e);
-        return { error: e.message };
-    }
-}
-
+// TODO: Why is this needed for a test??
 export async function getOrCreateIconAction(
     rawIngredient: string,
     rawSessionRejections = 0,

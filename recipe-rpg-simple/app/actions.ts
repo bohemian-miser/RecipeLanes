@@ -42,7 +42,7 @@ export async function createDebugRecipeAction() {
 
         const dataService = getDataService();
         // Force title 'debug recipe' and private
-        const id = await dataService.saveRecipe(graph, undefined, userId, 'private', 'System');
+        const id = await dataService.saveRecipe(graph, undefined, userId, 'unlisted', 'System');
         
         return { recipeId: id };
     } catch (e: any) {

@@ -27,4 +27,4 @@ rm -rf functions/lib
 npm install --prefix functions
 npm run build --prefix functions
 
-firebase emulators:start --only auth,firestore,storage,functions --project local-project-id
+npx env-cmd -f .env.test firebase emulators:start --only auth,firestore,storage,functions  --project local-project-id

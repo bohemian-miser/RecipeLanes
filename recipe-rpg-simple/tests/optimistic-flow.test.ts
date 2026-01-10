@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { createVisualRecipeAction, getOrCreateIconAction } from '../app/actions';
 import { setAIService, MockAIService } from '../lib/ai-service';
-import { setDataService, MemoryDataService } from '../lib/data-service';
+import { setDataService, MemoryDataService, getDataService } from '../lib/data-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
 
 // Custom Mock for this test

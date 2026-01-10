@@ -75,7 +75,7 @@ export class FirebaseDataService implements DataService {
     return Math.max(0, (centre - adj) / den);
   }
 
-  async waitForQueue(ingredientName: string, timeoutMs: number = 15000): Promise<IconStats | null> {
+  async waitForQueue(ingredientName: string, timeoutMs: number = 30000): Promise<IconStats | null> {
       const stdName = standardizeIngredientName(ingredientName);
       const docRef = db.collection(DB_COLLECTION_QUEUE).doc(stdName);
       
@@ -83,15 +83,37 @@ export class FirebaseDataService implements DataService {
       
       while (Date.now() - start < timeoutMs) {
           const snap = await docRef.get();
+          
+          // 1. Check Queue Status
           if (snap.exists) {
               const data = snap.data();
+              // Legacy support: if 'completed' status still used
               if (data?.status === 'completed' && data.iconId && data.iconUrl) {
                   return { iconId: data.iconId, iconUrl: data.iconUrl };
               }
               if (data?.status === 'failed') {
                   throw new Error(data.error || 'Generation failed');
               }
+              // If pending/processing, keep waiting
+          } else {
+              console.log(`[FIREBASEDATASERVICE] WAITFORQUEUE: NO QUEUE DOCUMENT FOR "${stdName}", CHECKING INGREDIENTS...`);
+              // 2. Queue item missing? It might be completed and deleted.
+              // Check the Ingredients collection.
+              const ingDoc = await db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName).get();
+              if (ingDoc.exists) {
+                  const data = ingDoc.data();
+                  if (data && data.icons && Array.isArray(data.icons) && data.icons.length > 0) {
+                      // Return the newest/best icon
+                      // Assuming icons are sorted or we take first
+                      // DataService.saveIcon sorts by score, so first is best
+                      const best = data.icons[0]; 
+                      return { iconId: best.id, iconUrl: best.url };
+                  }
+              }
+              // If neither queue nor ingredient exists, it might not be queued yet or deleted entirely.
+              // We continue waiting until timeout in case it's about to be created.
           }
+          
           await new Promise(r => setTimeout(r, 1000));
       }
       return null;
@@ -1352,13 +1374,13 @@ let currentDataService: DataService | null = null;
 export function getDataService(): DataService {
   if (currentDataService) return currentDataService;
   
-  // if (process.env.FORCE_MEMORY_DB === 'true' || !isFirebaseEnabled) {
-  //     if (process.env.FORCE_MEMORY_DB === 'true') console.warn("Forcing MemoryDataService");
-  //     else console.warn("Firebase not enabled, using MemoryDataService");
-  //     currentDataService = new MemoryDataService();
-  // } else {
+  if (process.env.FORCE_MEMORY_DB === 'true' || !isFirebaseEnabled) {
+      if (process.env.FORCE_MEMORY_DB === 'true') console.warn("Forcing MemoryDataService");
+      else console.warn("Firebase not enabled, using MemoryDataService");
+      currentDataService = new MemoryDataService();
+  } else {
       currentDataService = new FirebaseDataService();
-  // }
+  }
   return currentDataService;
 }
 export function setDataService(service: DataService) { currentDataService = service; }

@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 import path from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.test' });
 
 export default defineConfig({
   testDir: './e2e',
@@ -26,13 +29,10 @@ export default defineConfig({
     reuseExistingServer: true,
     timeout: 120 * 1000,
     stdout: 'pipe',
+    // env: inherited from process.env (loaded by dotenv)
     env: {
-      MOCK_AI: 'true',
-      DIST_DIR: '.next-test',
-      NEXT_PUBLIC_USE_FIREBASE_EMULATOR: 'true',
-      NEXT_PUBLIC_FIREBASE_API_KEY: 'demo-key',
-      NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'local-project-id',
-      GOOGLE_APPLICATION_CREDENTIALS: path.join(process.cwd(), 'mock-service-account.json'),
-    },
+        GOOGLE_APPLICATION_CREDENTIALS: path.join(process.cwd(), 'mock-service-account.json'),
+        DIST_DIR: '.next-test',
+    }
   },
 });

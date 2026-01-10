@@ -1,11 +1,7 @@
-import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import {onDocumentWritten } from "firebase-functions/v2/firestore";
 import { FieldValue } from "firebase-admin/firestore";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { getAIService } from '../../lib/ai-service';
-import { getDataService } from '../../lib/data-service';
-import { processIcon } from './image-processing';
 import { generateAndStoreIcon } from './icon-generator';
-import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from '../../lib/config';
+import {  DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from '../../lib/config';
 import { standardizeIngredientName } from '../../lib/utils';
 import { db } from '../../lib/firebase-admin';
 
@@ -16,7 +12,7 @@ import { db } from '../../lib/firebase-admin';
  * Processes items in 'icon_queue' collection.
  */
 export const processIconQueue = onDocumentWritten({ 
-    document: "icon_queue/{ingredientName}", 
+    document: `${DB_COLLECTION_QUEUE}/{ingredientName}`, 
     timeoutSeconds: 300, 
     memory: "1GiB",
     maxInstances: 1 
@@ -29,6 +25,18 @@ export const processIconQueue = onDocumentWritten({
 
     const ingredientName = event.params.ingredientName;
     const recipeIds: string[] = data.recipes || [];
+
+    // Double-check current state to handle race conditions (e.g. rapid delete/update)
+    const currentSnap = await event.data.after.ref.get();
+    if (!currentSnap.exists) {
+        console.log(`[Queue] Skipped "${ingredientName}": Document no longer exists.`);
+        return;
+    }
+    const currentData = currentSnap.data();
+    if (currentData?.status !== 'pending') {
+        console.log(`[Queue] Skipped "${ingredientName}": Status is '${currentData?.status}', expected 'pending'.`);
+        return;
+    }
 
     console.log(`[Queue] Processing: "${ingredientName}" for recipes: ${recipeIds.join(', ')}`);
 
@@ -69,17 +77,11 @@ export const processIconQueue = onDocumentWritten({
             });
         }
 
-        //TODO: Delete the record. Any in flight recipes that would be added 
-        // to the backlog, will instead have their reject list checked and find
-        // the new icon in the cache.
-        await event.data.after.ref.update({ 
-            status: 'completed',
-            iconId: result.id,
-            iconUrl: result.url,
-            updated_at: FieldValue.serverTimestamp()
-        });
+        // Delete the queue item now that processing is complete.
+        // Waiting clients will check the ingredients collection if the queue item vanishes.
+        await event.data.after.ref.delete();
 
-        console.log(`[Queue] Completed "${ingredientName}"`);
+        console.log(`[Queue] Completed and removed "${ingredientName}"`);
 
     } catch (e: any) {
         console.error(`[Queue] Failed "${ingredientName}":`, e);

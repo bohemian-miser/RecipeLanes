@@ -58,6 +58,7 @@
     "@types/pngjs": "^6.0.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv-cli": "^11.0.0",
     "env-cmd": "^11.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.8",

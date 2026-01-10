@@ -31,6 +31,10 @@ export default function Home() {
   useEffect(() => {
     async function init() {
       if (authLoading) return;
+      if (recipeId) {
+          setInitializing(false);
+          return;
+      }
       if (recipeCreated.current) return;
       recipeCreated.current = true;
       
@@ -58,7 +62,7 @@ export default function Home() {
             deleteRecipeAction(recipeId).catch(console.error);
         }
     };
-  }, []); // Run once on mount
+  }, [authLoading, recipeId]); // Run when auth ready or ID changes
 
   // 2. Listen for Updates
   useEffect(() => {

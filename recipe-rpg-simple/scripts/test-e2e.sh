@@ -19,40 +19,52 @@ export NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="local-project-id.firebasestorage.app
 # Ensure Functions picks up the env var (robust workaround for emulator env inheritance)
 # echo "MOCK_AI=true" > "$PROJECT_ROOT/functions/.env"
 
-# 3. Build Functions (Ensure they are fresh for emulators)
-echo "Building Functions..."
-# Clean previous build to force fresh load
-rm -rf "$PROJECT_ROOT/functions/lib"
 
-# Only run install if node_modules doesn't exist to save time, or always run it? 
-# For correctness in CI/Dev, running it is safer, but slow. 
-# We'll run it.
-npm install --prefix "$PROJECT_ROOT/functions" --quiet
-npm run build --prefix "$PROJECT_ROOT/functions"
 
 # 4. Construct Test Command
 # Default to running all tests if no args provided
 TEST_ARGS="${@:-}" 
 CMD="npx playwright test $TEST_ARGS"
 
-# 5. Cleanup & Run
-echo "Cleaning up ports..."
-fuser -k 8002/tcp || true
-fuser -k 9099/tcp || true
-fuser -k 8080/tcp || true
-fuser -k 9199/tcp || true
-fuser -k 5001/tcp || true
+# 5. Smart Execution
+if nc -z localhost 8080 2>/dev/null; then
+    echo "🟢 Emulators detected on port 8080. Running tests against EXISTING emulators."
+    echo "Running: $CMD"
+    
+    # We assume functions are already running/built in the existing emulator session
+    # Run command
+    npx env-cmd -f .env.test $CMD
+    
+else
+    echo "🟡 No emulators detected. Starting NEW emulators."
 
-# Cleanup .env on exit
-cleanup() {
-  echo "Removing test env file..."
-  rm -f "$PROJECT_ROOT/functions/.env"
-}
-trap cleanup EXIT
+    # Cleanup ports just in case
+    echo "Cleaning up ports..."
+    fuser -k 8002/tcp || true
+    fuser -k 9099/tcp || true
+    fuser -k 8080/tcp || true
+    fuser -k 9199/tcp || true
+    fuser -k 5001/tcp || true
 
-echo "----------------------------------------------------------------"
-echo "Starting Firebase Emulators and running: $CMD"
-echo "----------------------------------------------------------------"
+        # 3. Build Functions (Ensure they are fresh for emulators)
+    echo "Building Functions..."
+    # Clean previous build to force fresh load
+    rm -rf "$PROJECT_ROOT/functions/lib"
 
-# We use 'npx firebase' to ensure we use the local project version
-npx firebase emulators:exec --only auth,firestore,storage,functions --project local-project-id "$CMD"
+    npm install --prefix "$PROJECT_ROOT/functions" 
+    npm run build --prefix "$PROJECT_ROOT/functions"
+
+    # Cleanup .env on exit
+    cleanup() {
+      echo "Removing test env file..."
+      rm -f "$PROJECT_ROOT/functions/.env"
+    }
+    trap cleanup EXIT
+
+    echo "----------------------------------------------------------------"
+    echo "Starting Firebase Emulators and running: $CMD"
+    echo "----------------------------------------------------------------"
+
+    # We use 'npx firebase' to ensure we use the local project version
+    npx env-cmd -f .env.test firebase emulators:exec --only auth,firestore,storage,functions --project local-project-id "$CMD"
+fi

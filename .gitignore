@@ -2,7 +2,7 @@ debug/
 
 # gemini-cli settings
 .gemini/
-
+*.log
 # GitHub App credentials
 gha-creds-*.json
 test-results/

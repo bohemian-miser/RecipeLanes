@@ -2,7 +2,12 @@
 import { PNG } from 'pngjs';
 import jpeg from 'jpeg-js';
 
-export async function processIcon(imageBuffer: ArrayBuffer | Buffer): Promise<Buffer> {
+export interface IconMetadata {
+    center: { x: number, y: number };
+    bbox: { x: number, y: number, w: number, h: number };
+}
+
+export async function processIcon(imageBuffer: ArrayBuffer | Buffer): Promise<{ buffer: Buffer; metadata: IconMetadata }> {
     const buffer = Buffer.isBuffer(imageBuffer) ? imageBuffer : Buffer.from(imageBuffer);
 
     // Check for JPEG (FF D8 FF)
@@ -34,7 +39,7 @@ export async function processIcon(imageBuffer: ArrayBuffer | Buffer): Promise<Bu
     });
 }
 
-function processRawData(width: number, height: number, buffer: Buffer): Buffer {
+function processRawData(width: number, height: number, buffer: Buffer): { buffer: Buffer; metadata: IconMetadata } {
     // Helper: Get RGBA at index
     const getPixel = (idx: number) => {
         return {
@@ -165,8 +170,9 @@ function processRawData(width: number, height: number, buffer: Buffer): Buffer {
         }
     }
 
-    // 4. Find bounding box of non-transparent pixels
+    // 4. Find bounding box of non-transparent pixels AND Centroid
     let minX = width, maxX = 0, minY = height, maxY = 0;
+    let sumX = 0, sumY = 0, totalPixels = 0;
     
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
@@ -176,6 +182,10 @@ function processRawData(width: number, height: number, buffer: Buffer): Buffer {
                 maxX = Math.max(maxX, x);
                 minY = Math.min(minY, y);
                 maxY = Math.max(maxY, y);
+                
+                sumX += x;
+                sumY += y;
+                totalPixels++;
             }
         }
     }
@@ -184,7 +194,13 @@ function processRawData(width: number, height: number, buffer: Buffer): Buffer {
     if (minX > maxX) {
         const png = new PNG({ width: 1, height: 1 });
         png.data = Buffer.alloc(4);
-        return PNG.sync.write(png);
+        return { 
+            buffer: PNG.sync.write(png), 
+            metadata: { 
+                center: { x: 0.5, y: 0.5 }, 
+                bbox: { x: 0, y: 0, w: 1, h: 1 } 
+            } 
+        };
     }
     
     // 5. Calculate bounding box dimensions and create square
@@ -212,8 +228,29 @@ function processRawData(width: number, height: number, buffer: Buffer): Buffer {
         }
     }
     
+    // 8. Calculate Metadata in New Coordinates
+    const centroidX = (sumX / totalPixels);
+    const centroidY = (sumY / totalPixels);
+    
+    const newCentroidX = (centroidX - minX) + offsetX;
+    const newCentroidY = (centroidY - minY) + offsetY;
+    
+    // Normalize coordinates (0-1) for resolution independence
+    const metadata: IconMetadata = {
+        center: {
+            x: newCentroidX / squareSize,
+            y: newCentroidY / squareSize
+        },
+        bbox: {
+            x: offsetX / squareSize,
+            y: offsetY / squareSize,
+            w: boxWidth / squareSize,
+            h: boxHeight / squareSize
+        }
+    };
+    
     // Pack
     const png = new PNG({ width: squareSize, height: squareSize });
     png.data = newBuffer;
-    return PNG.sync.write(png);
+    return { buffer: PNG.sync.write(png), metadata };
 }

@@ -33,9 +33,13 @@ export async function generateAndStoreIcon(options: GenerateIconOptions) {
 
     // 3. Process Image (Transparency)
     let processedBuffer: Buffer;
+    let metadata: any; 
+
     try {
         console.log(`[IconGenerator] Processing image (background removal)...`);
-        processedBuffer = await processIcon(arrayBuffer);
+        const result = await processIcon(arrayBuffer);
+        processedBuffer = result.buffer;
+        metadata = result.metadata;
     } catch (e) {
         console.warn('[IconGenerator] ⚠️ Background removal failed, using original:', e);
         processedBuffer = Buffer.from(arrayBuffer);
@@ -61,7 +65,8 @@ export async function generateAndStoreIcon(options: GenerateIconOptions) {
         impressions: 0,
         rejections: 0,
         textModel: 'unknown',
-        imageModel: 'imagen-3.0'
+        imageModel: 'imagen-3.0',
+        geometry: metadata // Save geometric metadata (center, bbox)
     };
 
     // Save
@@ -75,7 +80,7 @@ export async function generateAndStoreIcon(options: GenerateIconOptions) {
         meta
     );
 
-    console.log(`[IconGenerator] ✅ Success. Icon ID: ${result.id}`);
+    console.log(`[IconGenerator] ✅ Success. Icon ID: ${result.iconId}`);
     return {
         ...result,
         prompt,

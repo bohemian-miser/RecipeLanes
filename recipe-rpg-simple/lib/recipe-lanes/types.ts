@@ -6,13 +6,27 @@ export interface Lane {
   type: 'prep' | 'cook' | 'serve';
 }
 
+export interface IconStats {
+    iconId: string;
+    iconUrl: string;
+    score?: number;
+    impressions?: number;
+    rejections?: number;
+    metadata?: {
+        center: { x: number, y: number };
+        bbox: { x: number, y: number, w: number, h: number };
+    };
+}
+
 export interface RecipeNode {
   id: string;
   laneId: string;
   text: string; // "Grate 2 carrots"
   visualDescription: string; // "A carrot going into a grater"
-  iconId?: string | null; // Firestore/Storage ID
-  iconUrl?: string; // Generated Icon URL (Computed or Cached)
+  
+  // Icon Data
+  icon?: IconStats;
+
   type: 'ingredient' | 'action';
   inputs?: string[]; // IDs of nodes that flow into this one
   

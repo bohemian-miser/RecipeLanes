@@ -6,17 +6,18 @@ import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
 import { functions } from '@/lib/firebase-client';
 import { httpsCallable } from 'firebase/functions';
-import {rejectIcon} from '@/app/actions';
+import { rejectIcon } from '@/app/actions';
+import { getNodeIconId, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
 
 // Track rejected URLs for the session to prevent them from reappearing immediately
 const sessionRejectedUrls = new Set<string>();
 
 const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?: () => void, onSetLongPress?: (active: boolean) => void, iconTheme?: 'classic' | 'modern' | 'modern_clean' }>) => {
   const [isRerolling, setIsRerolling] = useState(false);
-  const [prevIconUrl, setPrevIconUrl] = useState(data.iconUrl);
+  const [prevIconUrl, setPrevIconUrl] = useState(getNodeIconUrl(data));
   
-  if (data.iconUrl !== prevIconUrl) {
-      setPrevIconUrl(data.iconUrl);
+  if (getNodeIconUrl(data) !== prevIconUrl) {
+      setPrevIconUrl(getNodeIconUrl(data));
       if (isRerolling) setIsRerolling(false);
   }
 
@@ -56,8 +57,8 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
       try {
         await rejectIcon(
             recipeId || '', 
-            ingredientName, 
-            data.iconId ||'' 
+            ingredientName,
+            getNodeIconId(data) || '',
         );
         // State update handled by prop change from Firestore listener
       } catch (err) {

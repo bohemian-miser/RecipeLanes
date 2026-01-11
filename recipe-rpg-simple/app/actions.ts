@@ -8,6 +8,7 @@ import { generateRecipePrompt, parseRecipeGraph, extractServes } from '@/lib/rec
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
+import { applyIconToNode, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from '@/lib/config';
@@ -283,9 +284,9 @@ export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: stri
 
     // Restore icons if ID matches and AI forgot them
     newGraph.nodes.forEach(n => {
-        if (!n.iconUrl) {
+        if (!getNodeIconUrl(n)) {
             const old = currentGraph.nodes.find(o => o.id === n.id);
-            if (old && old.iconUrl) n.iconUrl = old.iconUrl;
+            if (old && old.icon) applyIconToNode(n, old.icon);
         }
     });
 

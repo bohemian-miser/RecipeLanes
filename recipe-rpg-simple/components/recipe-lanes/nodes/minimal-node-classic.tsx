@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { RefreshCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
+import { getNodeIconUrl } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
@@ -20,6 +21,7 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
     data, selected, isRerolling, isPivotMode, handlers 
 }) => {
     const isIngredient = data.type === 'ingredient';
+    const iconUrl = getNodeIconUrl(data);
     const textPos = data.textPos || 'bottom';
     const isVertical = textPos === 'top' || textPos === 'bottom';
   
@@ -30,9 +32,19 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
         left: 'flex-row-reverse'
     }[textPos];
 
+    const justifyClass = isVertical ? 'justify-center' : 'justify-start';
+
+    //  {/* Debug Bounding Box & Center */}
+    //             { { iconMetadata && ( }
+    //                     <>
+    //                     // <div className="absolute border border-red-500/70 z-50 pointer-events-none" style={{ left: `${iconMetadata.bbox.x * 100}%`, top: `${iconMetadata.bbox.y * 100}%`, width: `${iconMetadata.bbox.w * 100}%`, height: `${iconMetadata.bbox.h * 100}%` }} />
+    //                     <div className="absolute w-1.5 h-1.5 bg-red-500 rounded-full z-50 pointer-events-none shadow-sm border border-white" style={{ left: `${iconMetadata.center.x * 100}%`, top: `${iconMetadata.center.y * 100}%`, transform: 'translate(-50%, -50%)' }} />
+    //                     </>
+    //             )} 
+
     return (
         <div 
-            className={`flex ${flexClass} items-center justify-center relative group transition-transform duration-300`}
+            className={`flex ${flexClass} items-center ${justifyClass} relative group transition-transform duration-300`}
             style={{ 
                 width: isVertical ? 120 : 'auto', 
                 minWidth: isVertical ? 120 : 180
@@ -46,9 +58,9 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                 <Handle id="target" type="target" position={Position.Top} className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                 <Handle id="source" type="source" position={Position.Top} className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
 
-                {data.iconUrl ? (
+                {iconUrl ? (
                     <img 
-                        src={data.iconUrl} 
+                        src={iconUrl} 
                         alt="" 
                         className={`w-18 h-18 object-contain drop-shadow-md mix-blend-multiply ${isRerolling ? 'opacity-50' : ''}`}
                         style={{ imageRendering: 'pixelated' }}

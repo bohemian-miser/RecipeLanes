@@ -2,17 +2,10 @@ import { db, storage, isFirebaseEnabled } from './firebase-admin';
 import { memoryStore, IconData, IngredientData } from './store';
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
-import type { RecipeGraph } from './recipe-lanes/types';
+import type { RecipeGraph, IconStats } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined, calculateWilsonLCB } from './utils';
-
-export interface IconStats {
-    iconId: string;
-    iconUrl: string;
-    score?: number;
-    impressions?: number;
-    rejections?: number;
-}
+import { applyIconToNode, clearNodeIcon, getNodeIconId, getNodeIconUrl, hasNodeIcon } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -28,8 +21,8 @@ export interface DataService {
       fullPrompt: string,
       publicUrl: string, 
       imageBuffer: ArrayBuffer | Buffer, 
-      meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string }
-  ): Promise<{ id: string, url: string, path?: string }>;
+      meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string, geometry?: any }
+  ): Promise<IconStats>;
   
   saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public', ownerName?: string): Promise<string>;
   getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null>;
@@ -61,13 +54,13 @@ export interface DataService {
   resolveRecipeIcons(recipeId: string): Promise<void>;
   addNodeToRecipe(recipeId: string, ingredientName: string, laneId?: string): Promise<{ success: boolean, nodeId?: string, error?: string }>;
   rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }>;
-  assignIconToRecipe(recipeId: string, iconId: string, iconUrl: string, ingredientName: string): Promise<void>;
+  assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats): Promise<void>;
 }
 
 // --- Firebase Implementation ---
 export class FirebaseDataService implements DataService { 
 
-  async assignIconToRecipe(recipeId: string, iconId: string, iconUrl: string, ingredientName: string): Promise<void> {
+  async assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats): Promise<void> {
       const stdName = standardizeIngredientName(ingredientName);
       const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
       const ingRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName);
@@ -84,8 +77,7 @@ export class FirebaseDataService implements DataService {
               if (n.visualDescription) {
                   const nName = standardizeIngredientName(String(n.visualDescription));
                   if (nName === stdName) {
-                      n.iconId = iconId;
-                      n.iconUrl = iconUrl;
+                      applyIconToNode(n, icon);
                       changed = true;
                   }
               }
@@ -97,7 +89,7 @@ export class FirebaseDataService implements DataService {
               // Update Impressions (Once per recipe update)
               if (ingDoc.exists) {
                   const icons = ingDoc.data()?.icons || [];
-                  const iconIndex = icons.findIndex((i: any) => i.id === iconId);
+                  const iconIndex = icons.findIndex((i: any) => i.id === icon.iconId);
                   
                   if (iconIndex !== -1) {
                       icons[iconIndex].impressions = (icons[iconIndex].impressions || 0) + 1;
@@ -219,7 +211,7 @@ export class FirebaseDataService implements DataService {
 
           if (bestIcon) {
               console.log(`[FirebaseDataService] resolveRecipeIcons: Assigning existing icon for "${stdName}" in recipe ${recipeId}`);
-              await this.assignIconToRecipe(recipeId, bestIcon.id, bestIcon.url, stdName);
+              await this.assignIconToRecipe(recipeId, stdName, { iconId: bestIcon.id, iconUrl: bestIcon.url, metadata: bestIcon.metadata });
           } else {
               const queueRef = db.collection(DB_COLLECTION_QUEUE).doc(stdName);
               batch.set(queueRef, {
@@ -295,8 +287,7 @@ export class FirebaseDataService implements DataService {
             // Clear ALL nodes matching this ingredient
             nodes.forEach((n: any) => {
                 if (n.visualDescription && standardizeIngredientName(n.visualDescription) === stdName) {
-                    n.iconId = null;
-                    n.iconUrl = null;
+                                        clearNodeIcon(n);
                 }
             });
             
@@ -624,7 +615,7 @@ export class FirebaseDataService implements DataService {
           title,
           createdAt: data.created_at?.toDate?.()?.toISOString() || null,
           nodeCount: data.graph?.nodes?.length || 0,
-          previewIcon: data.graph?.nodes?.find((n: any) => n.iconUrl)?.iconUrl,
+          previewIcon: data.graph?.nodes?.find((n: any) => getNodeIconUrl(n))?.icon?.iconUrl,
           ownerId: data.ownerId,
           ownerName: data.ownerName,
           visibility: data.visibility || 'unlisted',
@@ -734,7 +725,7 @@ export class FirebaseDataService implements DataService {
               t.set(docRef, { name: ingredientName, created_at: FieldValue.serverTimestamp() });
           }
           
-          const newIcon = {
+          const newIcon: any = {
               id: iconId,
               path: fileName,
               url: finalUrl,
@@ -746,6 +737,10 @@ export class FirebaseDataService implements DataService {
               created_at: new Date().toISOString()
           };
           
+          if (meta.geometry) {
+              newIcon.metadata = meta.geometry;
+          }
+          
           icons.push(newIcon);
           icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
           if (icons.length > 50) icons = icons.slice(0, 50);
@@ -753,7 +748,7 @@ export class FirebaseDataService implements DataService {
           t.update(docRef, { icons, updated_at: FieldValue.serverTimestamp() });
       });
 
-      return { id: iconId, url: finalUrl, path: fileName };
+      return { iconId, iconUrl: finalUrl, metadata: meta.geometry };
   }
 
   async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
@@ -865,7 +860,7 @@ export class FirebaseDataService implements DataService {
           if (snap.exists) cacheMap.set(snap.id, snap.data());
       });
 
-      const updatesByRecipe = new Map<string, Map<string, { iconId: string, iconUrl: string }>>();
+      const updatesByRecipe = new Map<string, Map<string, { iconId: string, iconUrl: string, metadata?: any }>>();
 
       for (const item of items) {
           const name = standardizeIngredientName(item.ingredientName);
@@ -883,7 +878,8 @@ export class FirebaseDataService implements DataService {
                           iconUrl: icon.url || null,
                           score: icon.score,
                           impressions: icon.impressions,
-                          rejections: icon.rejections 
+                          rejections: icon.rejections,
+                          metadata: icon.metadata
                       };
                       break;
                   }
@@ -897,7 +893,7 @@ export class FirebaseDataService implements DataService {
 
               if (existingData?.status === 'completed' && existingData.iconId) {
                   if (!rejected.has(existingData.iconId)) {
-                      foundIcon = { iconId: existingData.iconId, iconUrl: existingData.iconUrl || null };
+                      foundIcon = { iconId: existingData.iconId, iconUrl: existingData.iconUrl || null, metadata: existingData.metadata };
                   }
               }
               
@@ -926,7 +922,7 @@ export class FirebaseDataService implements DataService {
                   if (!updatesByRecipe.has(item.recipeId)) {
                       updatesByRecipe.set(item.recipeId, new Map());
                   }
-                  updatesByRecipe.get(item.recipeId)!.set(name, { iconId: foundIcon.iconId, iconUrl: foundIcon.iconUrl });
+                  updatesByRecipe.get(item.recipeId)!.set(name, { iconId: foundIcon.iconId, iconUrl: foundIcon.iconUrl, metadata: foundIcon.metadata });
               }
           }
       }
@@ -950,9 +946,8 @@ export class FirebaseDataService implements DataService {
                       const nName = standardizeIngredientName(n.visualDescription);
                       if (updates.has(nName)) {
                           const update = updates.get(nName)!;
-                          if (n.iconId !== update.iconId) {
-                              n.iconId = update.iconId;
-                              n.iconUrl = update.iconUrl;
+                          if (getNodeIconId(n) !== update.iconId) {
+                              applyIconToNode(n, update);
                               changed = true;
                           }
                       }
@@ -1020,16 +1015,18 @@ export class MemoryDataService implements DataService {
             }
 
             const mockUrl = `https://placehold.co/64x64/png?text=${encodeURIComponent(stdName)}&uuid=${randomUUID().substring(0, 6)}`;
+            const dummyMeta = { center: { x: 0.5, y: 0.5 }, bbox: { x: 0, y: 0, w: 1, h: 1 } };
             const iconId = memoryStore.addIcon({
                 url: mockUrl,
                 ingredient: stdName,
                 ingredientId: stdName,
                 created_at: Date.now(),
                 marked_for_deletion: false,
-                popularity_score: 0
+                popularity_score: 0,
+                metadata: dummyMeta
             });
             
-            hits.set(stdName, { iconId, iconUrl: mockUrl, score: 0, impressions: 0, rejections: 0 });
+            hits.set(stdName, { iconId, iconUrl: mockUrl, score: 0, impressions: 0, rejections: 0, metadata: dummyMeta });
         }
         return hits;
     }
@@ -1041,7 +1038,7 @@ export class MemoryDataService implements DataService {
         const nodesToProcess = recipe.graph.nodes.filter(n => {
             if (!n.visualDescription) return false;
             // In memory, we just force update or check if missing
-            return !n.iconId;
+            return !getNodeIconId(n);
         });
 
         if (nodesToProcess.length === 0) return;
@@ -1055,11 +1052,10 @@ export class MemoryDataService implements DataService {
         
         recipe.graph.nodes.forEach(n => {
             if (n.visualDescription) {
-                const stdName = standardizeIngredientName(n.visualDescription);
+                const stdName = standardizeIngredientName(String(n.visualDescription));
                 if (hits.has(stdName)) {
-                    const hit = hits.get(stdName)!;
-                    n.iconId = hit.iconId;
-                    n.iconUrl = hit.iconUrl;
+                    const bestIcon = hits.get(stdName)!;
+                    applyIconToNode(n, bestIcon);
                 }
             }
         });
@@ -1102,8 +1098,7 @@ export class MemoryDataService implements DataService {
         // Clear all nodes matching ingredient
         recipe.graph.nodes.forEach(n => {
             if (n.visualDescription && standardizeIngredientName(n.visualDescription) === stdName) {
-                n.iconId = undefined;
-                n.iconUrl = undefined;
+                                    clearNodeIcon(n);
             }
         });
         
@@ -1312,7 +1307,7 @@ export class MemoryDataService implements DataService {
             title,
             createdAt: new Date(r.created_at).toISOString(),
             nodeCount: r.graph.nodes.length,
-            previewIcon: r.graph.nodes.find((n: any) => n.iconUrl)?.iconUrl,
+            previewIcon: r.graph.nodes.find((n: any) => getNodeIconUrl(n))?.icon?.iconUrl,
             ownerId: r.ownerId,
             ownerName: r.ownerName,
             visibility: r.visibility,
@@ -1339,7 +1334,7 @@ export class MemoryDataService implements DataService {
         return memoryStore.getAllIcons().sort((a, b) => b.popularity_score - a.popularity_score);
     }
 
-    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any): Promise<{ id: string, url: string, path?: string }> {
+    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any): Promise<IconStats> {
         // Ensure ingredient exists
         const existing = memoryStore.getIngredients().find(i => i.name === ingredientId);
         if (!existing) {
@@ -1358,9 +1353,10 @@ export class MemoryDataService implements DataService {
             visualDescription: visualDescription,
             fullPrompt: fullPrompt,
             textModel: meta.textModel,
-            imageModel: meta.imageModel
+            imageModel: meta.imageModel,
+            metadata: meta.geometry
         });
-        return { id, url: publicUrl, path: `icons/${id}.png` };
+        return { iconId: id, iconUrl: publicUrl, metadata: meta.geometry };
     }
 
     async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
@@ -1381,23 +1377,21 @@ export class MemoryDataService implements DataService {
         memoryStore.deleteIngredient(ingredientName);
     }
 
-    async assignIconToRecipe(recipeId: string, iconId: string, iconUrl: string, ingredientName: string): Promise<void> {
-        const recipe = this.recipes.get(recipeId);
-        if (!recipe) throw new Error("Recipe not found");
-        
-        const stdName = standardizeIngredientName(ingredientName);
-        let changed = false;
-        
-        recipe.graph.nodes.forEach(n => {
-            if (n.visualDescription && standardizeIngredientName(n.visualDescription) === stdName) {
-                n.iconId = iconId;
-                n.iconUrl = iconUrl;
-                changed = true;
-            }
-        });
-
+      async assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats): Promise<void> {
+          const recipe = this.recipes.get(recipeId);
+          if (!recipe) throw new Error("Recipe not found");
+          
+          const stdName = standardizeIngredientName(ingredientName);
+          let changed = false;
+          
+          recipe.graph.nodes.forEach(n => {
+              if (n.visualDescription && standardizeIngredientName(n.visualDescription) === stdName) {
+                  applyIconToNode(n, icon);
+                  changed = true;
+              }
+          });
         if (changed) {
-            await this.recordImpression(ingredientName, iconId);
+            await this.recordImpression(ingredientName, icon.iconId);
         }
     }
 

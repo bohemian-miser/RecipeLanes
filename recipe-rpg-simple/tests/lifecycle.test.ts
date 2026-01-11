@@ -3,6 +3,8 @@ import { createDebugRecipeAction, addIngredientNodeAction, rejectIcon } from '..
 import { setAIService, MockAIService } from '../lib/ai-service';
 import { getDataService } from '../lib/data-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
+import { Icon } from 'lucide-react';
+import { getNodeIconUrl, getNodeIconId, getNodeIconMetadata } from '../lib/recipe-lanes/model-utils';
 
 // Explicitly use Mocks for tests
 setAIService(new MockAIService());
@@ -13,7 +15,8 @@ async function getNodeIcon(recipeId: string, nodeId: string) {
     const recipeData = await getDataService().getRecipe(recipeId);
     const graph = recipeData?.graph;
     const node = graph?.nodes?.find((n: any) => n.id === nodeId);
-    return { iconUrl: node?.iconUrl, iconId: node?.iconId };
+    if (!node) return { iconUrl: undefined, iconId: undefined, IconMetadata: undefined };
+    return { iconUrl: getNodeIconUrl(node), iconId: getNodeIconId(node), IconMetadata: getNodeIconMetadata(node) };
 }
 
 async function testFakeGraphFlow() {

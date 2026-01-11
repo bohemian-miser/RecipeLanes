@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { RefreshCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
+import { getNodeIconUrl } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
@@ -30,30 +31,30 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 }) => {
     const isIngredient = data.type === 'ingredient';
     const themeVariant = data.iconTheme || 'modern'; // 'modern' or 'modern_clean'
+    const iconUrl = getNodeIconUrl(data);
 
     if (isIngredient) {
         const parsed = parseNodeText(data.text);
         
         if (themeVariant === 'modern_clean') {
-            // --- MODERN CLEAN (Badge Style) ---
-            return (
-                <div 
-                    className="relative flex flex-col items-center justify-center transition-transform duration-300 hover:z-50 group"
-                    style={{ width: 120, height: 120 }} 
-                    title={data.visualDescription || data.text}
-                    onTouchStart={handlers.onTouchStart}
-                    onTouchEnd={handlers.onTouchEnd}
-                >
-                    {/* Icon Container */}
-                    <div className={`relative w-24 h-24 z-10 transition-transform duration-300 hover:scale-110 ${selected || isPivotMode ? 'drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : ''}`}>
-                        <Handle id="target" type="target" position={Position.Top} className="!bg-transparent !w-1 !h-1 !border-0 top-2 left-1/2" />
-                        <Handle id="source" type="source" position={Position.Bottom} className="!bg-transparent !w-1 !h-1 !border-0 bottom-2 left-1/2" />
-                        
-                        {data.iconUrl ? (
-                            <img 
-                                src={data.iconUrl} 
-                                alt="" 
-                                className={`w-full h-full object-contain drop-shadow-md rendering-pixelated ${isRerolling ? 'opacity-50' : ''}`}
+                            // --- MODERN CLEAN (Badge Style) ---
+                            return (
+                                <div 
+                                    className="relative flex flex-col items-center justify-center transition-transform duration-300 hover:z-50 group"
+                                    style={{ width: 120, height: 120 }} 
+                                    title={data.visualDescription || data.text}
+                                    onTouchStart={handlers.onTouchStart}
+                                    onTouchEnd={handlers.onTouchEnd}
+                                >
+                                    {/* Icon Container */}
+                                    <div className={`relative w-24 h-24 z-10 transition-transform duration-300 hover:scale-110 ${selected || isPivotMode ? 'drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : ''}`}>
+                                        <Handle id="target" type="target" position={Position.Top} className="!bg-transparent !w-1 !h-1 !border-0 top-2 left-1/2" />
+                                        <Handle id="source" type="source" position={Position.Bottom} className="!bg-transparent !w-1 !h-1 !border-0 bottom-2 left-1/2" />
+                                        
+                                        {iconUrl ? (
+                                            <img 
+                                                src={iconUrl} 
+                                                alt=""                                className={`w-full h-full object-contain drop-shadow-md rendering-pixelated ${isRerolling ? 'opacity-50' : ''}`}
                                 style={{ imageRendering: 'pixelated' }}
                             />
                         ) : (
@@ -102,9 +103,9 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                         <Handle id="target" type="target" position={Position.Top} className="!bg-transparent !w-1 !h-1 !border-0 top-2 left-1/2" />
                         <Handle id="source" type="source" position={Position.Bottom} className="!bg-transparent !w-1 !h-1 !border-0 bottom-2 left-1/2" />
                         
-                        {data.iconUrl ? (
+                        {iconUrl ? (
                             <img 
-                                src={data.iconUrl} 
+                                src={iconUrl} 
                                 alt="" 
                                 className={`w-full h-full object-contain drop-shadow-md rendering-pixelated ${isRerolling ? 'opacity-50' : ''}`}
                                 style={{ imageRendering: 'pixelated' }}
@@ -181,9 +182,9 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                   <Handle id="target" type="target" position={Position.Top} className="!bg-transparent !w-1 !h-1 !border-0 top-2" />
                   <Handle id="source" type="source" position={Position.Bottom} className="!bg-transparent !w-1 !h-1 !border-0 bottom-2" />
                   
-                  {data.iconUrl ? (
+                  {iconUrl ? (
                       <img 
-                          src={data.iconUrl} 
+                          src={iconUrl} 
                           alt="" 
                           className={`w-full h-full object-contain drop-shadow-xl rendering-pixelated ${isRerolling ? 'opacity-50' : ''}`}
                           style={{ imageRendering: 'pixelated' }}

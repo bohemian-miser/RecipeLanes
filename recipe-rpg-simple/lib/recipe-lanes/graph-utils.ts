@@ -91,7 +91,7 @@ function getBBox(node: Node, handlePos?: {x: number, y: number}) {
         if (!handlePos) return null; // Simplified fallback for Classic
         imageSize = 80;
         imageX = handlePos.x - 40;
-        imageY = handlePos.y - 40;
+        imageY = handlePos.y;// - 40;
     }
     
     // Apply asymmetric padding to bbox for aesthetics

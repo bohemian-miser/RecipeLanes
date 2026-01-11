@@ -15,6 +15,7 @@ async function getNodeIcon(recipeId: string, nodeId: string) {
     const recipeData = await getDataService().getRecipe(recipeId);
     const graph = recipeData?.graph;
     const node = graph?.nodes?.find((n: any) => n.id === nodeId);
+    if (!node) return { iconUrl: undefined, iconId: undefined, IconMetadata: undefined };
     return { iconUrl: getNodeIconUrl(node), iconId: getNodeIconId(node), IconMetadata: getNodeIconMetadata(node) };
 }
 

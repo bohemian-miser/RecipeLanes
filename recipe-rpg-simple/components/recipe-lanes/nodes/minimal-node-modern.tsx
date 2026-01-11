@@ -2,7 +2,7 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { RefreshCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
-import { getNodeIconUrl, getNodeIconMetadata } from '../../../lib/recipe-lanes/model-utils';
+import { getNodeIconUrl } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
@@ -32,7 +32,6 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
     const isIngredient = data.type === 'ingredient';
     const themeVariant = data.iconTheme || 'modern'; // 'modern' or 'modern_clean'
     const iconUrl = getNodeIconUrl(data);
-    const iconMetadata = getNodeIconMetadata(data);
 
     if (isIngredient) {
         const parsed = parseNodeText(data.text);
@@ -60,14 +59,6 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                             />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-3xl">🥕</div>
-                        )}
-
-                        {/* Debug Bounding Box & Center */}
-                        {iconMetadata && (
-                             <>
-                                <div className="absolute border border-red-500/70 z-50 pointer-events-none" style={{ left: `${iconMetadata.bbox.x * 100}%`, top: `${iconMetadata.bbox.y * 100}%`, width: `${iconMetadata.bbox.w * 100}%`, height: `${iconMetadata.bbox.h * 100}%` }} />
-                                <div className="absolute w-1.5 h-1.5 bg-red-500 rounded-full z-50 pointer-events-none shadow-sm border border-white" style={{ left: `${iconMetadata.center.x * 100}%`, top: `${iconMetadata.center.y * 100}%`, transform: 'translate(-50%, -50%)' }} />
-                             </>
                         )}
 
                         {/* Quantity Badge (Left) - Scaled down */}
@@ -121,14 +112,6 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                             />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-3xl">🥕</div>
-                        )}
-
-                        {/* Debug Bounding Box & Center */}
-                        {iconMetadata && (
-                             <>
-                                <div className="absolute border border-red-500/70 z-50 pointer-events-none" style={{ left: `${iconMetadata.bbox.x * 100}%`, top: `${iconMetadata.bbox.y * 100}%`, width: `${iconMetadata.bbox.w * 100}%`, height: `${iconMetadata.bbox.h * 100}%` }} />
-                                <div className="absolute w-1.5 h-1.5 bg-red-500 rounded-full z-50 pointer-events-none shadow-sm border border-white" style={{ left: `${iconMetadata.center.x * 100}%`, top: `${iconMetadata.center.y * 100}%`, transform: 'translate(-50%, -50%)' }} />
-                             </>
                         )}
 
                         {/* Controls */}
@@ -208,14 +191,6 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                       />
                   ) : (
                       <div className="text-3xl">🍳</div>
-                  )}
-
-                  {/* Debug Bounding Box & Center */}
-                  {iconMetadata && (
-                        <>
-                        <div className="absolute border border-red-500/70 z-50 pointer-events-none" style={{ left: `${iconMetadata.bbox.x * 100}%`, top: `${iconMetadata.bbox.y * 100}%`, width: `${iconMetadata.bbox.w * 100}%`, height: `${iconMetadata.bbox.h * 100}%` }} />
-                        <div className="absolute w-1.5 h-1.5 bg-red-500 rounded-full z-50 pointer-events-none shadow-sm border border-white" style={{ left: `${iconMetadata.center.x * 100}%`, top: `${iconMetadata.center.y * 100}%`, transform: 'translate(-50%, -50%)' }} />
-                        </>
                   )}
 
                   {/* Controls */}

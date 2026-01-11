@@ -1,4 +1,4 @@
-import { processIcon } from '../lib/image-processing';
+import { processIcon } from '../functions/src/image-processing';
 import { PNG } from 'pngjs';
 
 async function testCentroidCalculation() {

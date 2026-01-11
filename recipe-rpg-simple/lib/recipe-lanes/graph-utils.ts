@@ -1,64 +1,59 @@
 import { Position, Node } from 'reactflow';
+import { getNodeIconMetadata } from './model-utils';
 
 // Helper to get center
 function getCenter(node: Node, handlePos?: { x: number, y: number }) {
     // For MinimalNode, we know exact geometry relative to node position
     if (node.type === 'minimal') {
-        const { x, y } = node.positionAbsolute || node.position;
         const theme = node.data?.iconTheme || 'classic';
-        const meta = node.data?.iconMetadata; // { center: {x,y}, bbox: ... } normalized 0-1
-
-        let imageX = x;
-        let imageY = y;
-        let imageSize = 0;
+        const meta = getNodeIconMetadata(node.data); // { center: {x,y}, bbox: ... } normalized 0-1
 
         if (theme === 'modern' || theme === 'modern_clean') {
-            // Modern: 120x120 container. 96x96 icon centered.
-            // Padding: (120-96)/2 = 12.
-            imageX = x + 12;
-            imageY = y + 12;
-            imageSize = 96;
-        } else {
-            // Classic: Dynamic Size. Icon container is 80x80. Image is 72x72 centered inside.
-            const textPos = node.data?.textPos || 'bottom';
-            const w = node.width ?? (textPos === 'right' || textPos === 'left' ? 160 : 100);
-            const h = node.height ?? 100;
-            
-            let containerX = 0;
-            let containerY = 0;
-            
-            if (textPos === 'bottom') { // Icon at Top
-                containerX = (w - 80) / 2;
-                containerY = 0;
-            } else if (textPos === 'top') { // Icon at Bottom
-                containerX = (w - 80) / 2;
-                containerY = h - 80;
-            } else if (textPos === 'right') { // Icon at Left
-                 containerX = 0;
-                 containerY = (h - 80) / 2;
-            } else if (textPos === 'left') { // Icon at Right
-                 containerX = w - 80;
-                 containerY = (h - 80) / 2;
+            // Modern: Fixed 120x120 container. 96x96 icon centered.
+            // We use node position because handles are at edges (top/bottom), not center.
+            // Width is fixed, so node.position is reliable.
+            const { x, y } = node.positionAbsolute || node.position;
+            const imageX = x + 12;
+            const imageY = y + 12;
+            const imageSize = 96;
+
+            if (meta && meta.center) {
+                return {
+                    x: imageX + meta.center.x * imageSize,
+                    y: imageY + meta.center.y * imageSize
+                };
+            } else {
+                console.warn('NO METADATA center for modern icon node:', node.id);
+            }
+            return { x: imageX + imageSize / 2, y: imageY + imageSize / 2 };
+        } 
+        else {
+            // Classic: Dynamic Size. Icon container is 80x80.
+            // Handles are ALWAYS centered in the Icon Container (top-1/2 left-1/2).
+            // We MUST use handlePos because node width is unreliable (text wrapping).
+            if (handlePos) {
+                console.log(`Using handlePos: ${handlePos.x}, ${handlePos.y} for classic icon node:`, node.id);
+                 // Red Dot Visualization uses the full 80x80 container for metadata mapping.
+                 // To align arrows with the red dot, we must use the same reference frame.
+                 const imageSize = 80;
+                const imageX = handlePos.x - imageSize/2; // Handle is center.
+                const imageY = handlePos.y; 
+
+                 if (meta && meta.center) {
+                    return {
+                        x: imageX + meta.center.x * imageSize,
+                        y: imageY + meta.center.y * imageSize
+                    };
+                 }
+                 return handlePos; // Default to handle (center)
             }
             
-            // Image is 72x72 inside 80x80 (4px padding)
-            imageX = x + containerX + 4;
-            imageY = y + containerY + 4;
-            imageSize = 72;
+            // Fallback if no handlePos (rare/initial): Use heuristics but accept they might be off
+            // ... (keep existing fallback logic if desired, or simplify) ...
+            const { x, y } = node.positionAbsolute || node.position;
+             // Best guess for bottom layout
+            return { x: x + 50, y: y + 50 }; 
         }
-
-        if (meta && meta.center) {
-             return {
-                 x: imageX + meta.center.x * imageSize,
-                 y: imageY + meta.center.y * imageSize
-             };
-        }
-        
-        // Fallback to center of image area
-        return {
-            x: imageX + imageSize / 2,
-            y: imageY + imageSize / 2
-        };
     }
 
     if (handlePos && typeof handlePos.x === 'number' && typeof handlePos.y === 'number') return handlePos;

@@ -27,13 +27,13 @@ function testVertical() {
     const result = getEdgeParams(n1, n2, h1, h2);
     
     // MinimalNode centers icon at y+40 (was 32). Radius 36.
-    // sy = 40 + 36 = 76
-    // ty = (200 + 40) - 36 = 204
+    // sy = 50 (Handle Center) + 36 (Radius) = 86
+    // ty = 250 (Handle Center) - 36 (Radius) = 214
     
     assertClose(result.sx, 50, 0.1, 'SX');
-    assertClose(result.sy, 76, 0.1, 'SY');
+    assertClose(result.sy, 86, 0.1, 'SY');
     assertClose(result.tx, 50, 0.1, 'TX');
-    assertClose(result.ty, 204, 0.1, 'TY');
+    assertClose(result.ty, 214, 0.1, 'TY');
     
     console.log("Vertical PASS");
 }
@@ -51,10 +51,10 @@ function testHorizontal() {
     // Radius = 36
     // Vector (1, 0)
     // sx = 50 + 36 = 86
-    // sy = 40 (MinimalNode center Y)
+    // sy = 50 (Handle Center)
     
     assertClose(result.sx, 86, 0.1, 'SX');
-    assertClose(result.sy, 40, 0.1, 'SY');
+    assertClose(result.sy, 50, 0.1, 'SY');
     
     console.log("Horizontal PASS");
 }
@@ -72,11 +72,11 @@ function testFallback() {
     // Radius = (100/2) + 5 = 55
     // Distance = 200
     // Vector (0, 1)
-    // sy = 40 + 55 = 95
-    // ty = 240 - 55 = 185
+    // sy = 50 + 55 = 105
+    // ty = 250 - 55 = 195
     
     assertClose(result.sx, 50, 0.1, 'SX Fallback');
-    assertClose(result.sy, 95, 0.1, 'SY Fallback');
+    assertClose(result.sy, 105, 0.1, 'SY Fallback');
     
     console.log("Fallback PASS");
 }

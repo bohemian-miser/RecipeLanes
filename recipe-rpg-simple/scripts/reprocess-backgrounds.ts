@@ -3,7 +3,7 @@ import fetch from 'node-fetch';
 import fs from 'fs/promises';
 import path from 'path';
 import dotenv from 'dotenv';
-import { applyIconToNode, clearNodeIcon, getNodeIconId, getNodeIconUrl, hasNodeIcon } from './recipe-lanes/model-utils';
+import { applyIconToNode, clearNodeIcon, getNodeIconId, getNodeIconUrl, hasNodeIcon } from '../lib/recipe-lanes/model-utils';
 
 async function reprocessIcons() {
     const args = process.argv.slice(2);
@@ -31,8 +31,9 @@ async function reprocessIcons() {
         limit = parseInt(args[nIndex + 1], 10);
     }
     const isDryRun = args.includes('--dry-run');
+    const metadataOnly = args.includes('--metadata-only');
 
-    console.log(`Starting icon reprocessing... ${limit > 0 ? `(Limit: ${limit} random)` : '(All)'} ${isDryRun ? '(Dry Run)' : ''}`);
+    console.log(`Starting icon reprocessing... ${limit > 0 ? `(Limit: ${limit} random)` : '(All)'} ${isDryRun ? '(Dry Run)' : ''} ${metadataOnly ? '(Metadata Only)' : ''}`);
     
     // Create debug directory
     const debugDir = path.join(process.cwd(), 'debug', 'reprocess-examples');
@@ -49,12 +50,13 @@ async function reprocessIcons() {
         const data = doc.data();
         if (data.graph && data.graph.nodes) {
             data.graph.nodes.forEach((node: any) => {
-                if (getNodeIconId(node)) {
-                    if (!iconToRecipesMap.has(getNodeIconId(node))) {
-                        iconToRecipesMap.set(getNodeIconId(node), []);
+                const nid = getNodeIconId(node) || '';
+                if (nid) {
+                    if (!iconToRecipesMap.has(nid)) {
+                        iconToRecipesMap.set(nid, []);
                     }
                     // Avoid duplicates if multiple nodes use same icon
-                    const list = iconToRecipesMap.get(getNodeIconId(node))!;
+                    const list = iconToRecipesMap.get(nid)!;
                     if (!list.find(r => r.id === doc.id)) {
                         list.push(doc);
                     }
@@ -65,34 +67,52 @@ async function reprocessIcons() {
     });
     console.log(`Indexed ${recipeCount} recipes. Found references for ${iconToRecipesMap.size} unique icons.`);
 
-    // 1. Get all icons
-    const snapshot = await db.collectionGroup('icons').get();
-    let docs = snapshot.docs;
-    console.log(`Found ${docs.length} total icons.`);
+    // 1. Get all ingredients
+    const snapshot = await db.collection('ingredients_new').get();
+    let allIcons: { id: string, data: any, ref: any, index: number, ingredient: string}[] = [];
+    
+    snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.icons && Array.isArray(data.icons)) {
+            data.icons.forEach((icon: any, idx: number) => {
+                // console.log('Icon Data:', icon.metadata);
+                if (!icon.metadata) {
+                    console.log(`Found icon ${icon.id} in ingredient ${doc.id}`);
+                    console.log('  - NO Existing Metadata:');
+                    allIcons.push({ 
+                        id: icon.id, // The Icon ID
+                        data: icon,  // The Icon Data
+                        ref: doc.ref, // The Ingredient Doc Ref
+                        index: idx,   // Index in array
+                        ingredient: doc.id // The Ingredient ID
+                    });
+                }
+            });
+        }
+    });
+
+    console.log(`Found ${allIcons.length} total icons.`);
 
     if (limit > 0) {
         // Shuffle
-        for (let i = docs.length - 1; i > 0; i--) {
+        for (let i = allIcons.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [docs[i], docs[j]] = [docs[j], docs[i]];
+            [allIcons[i], allIcons[j]] = [allIcons[j], allIcons[i]];
         }
-        docs = docs.slice(0, limit);
-        console.log(`Selected ${docs.length} random icons.`);
+        allIcons = allIcons.slice(0, limit);
+        console.log(`Selected ${allIcons.length} random icons.`);
     }
 
-    for (const doc of docs) {
-        const data = doc.data();
-        const url = data.url;
+    for (const item of allIcons) {
+        const { id, data: iconData, ref, index, ingredient } = item;
+        const url = iconData.url;
         
         if (!url) {
-            console.log(`Skipping ${doc.id} (no url)`);
+            console.log(`Skipping ${id} (no url)`);
             continue;
         }
 
-        // Skip if already processed? Maybe we want to force re-tokenization if the URL is broken.
-        // if (data.processed_transparent) { ... }
-        
-        console.log(`Processing ${doc.id} (${data.ingredient_name || 'unknown'})...`);
+        console.log(`Processing ${id} (${ingredient ||'unknown'})...`);
 
         try {
             // 2. Download
@@ -107,56 +127,87 @@ async function reprocessIcons() {
                 continue;
             }
             
-            // Save Original
-            await fs.writeFile(path.join(debugDir, `${doc.id}_original.png`), buffer);
+            // Save Original (Optional in metadata mode? No, good for debugging)
+            if (!metadataOnly) await fs.writeFile(path.join(debugDir, `${id}_original.png`), buffer);
 
             // 3. Process with Shared Logic
-            const newBuffer = await processIcon(buffer);
+            // If metadataOnly, we still run processIcon to get the metadata!
+            // But we might skip the expensive background removal if processIcon allows?
+            // processIcon does both. It's fast enough locally.
+            const {buffer:newBuffer, metadata} = await processIcon(buffer);
 
             // Save Processed
-            await fs.writeFile(path.join(debugDir, `${doc.id}_processed.png`), newBuffer);
+            if (!metadataOnly) await fs.writeFile(path.join(debugDir, `${id}_processed.png`), newBuffer);
 
             // 4. Upload & Update
             if (!isDryRun) {
-                // Extract path from URL
-                const matches = url.match(/\/o\/([^?]+)/);
-                if (!matches) {
-                    console.warn('Could not parse path from URL', url);
-                    continue;
-                }
-                
-                const filePath = decodeURIComponent(matches[1]);
-                const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
-                const bucket = storage.bucket(bucketName);
-                const file = bucket.file(filePath);
+                let newUrl = url;
 
-                await file.save(newBuffer, {
-                    metadata: { 
-                        contentType: 'image/png'
+                if (!metadataOnly) {
+                    // Extract path from URL
+                    const matches = url.match(/\/o\/([^?]+)/);
+                    if (!matches) {
+                        console.warn('Could not parse path from URL', url);
+                        continue;
                     }
-                });
-                
-                await file.makePublic();
-                const newUrl = file.publicUrl();
+                    
+                    const filePath = decodeURIComponent(matches[1]);
+                    const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
+                    const bucket = storage.bucket(bucketName);
+                    const file = bucket.file(filePath);
 
-                // Update Icon Doc
-                await doc.ref.update({ 
-                    url: newUrl,
-                    processed_transparent: true 
-                });
-                console.log(`Updated Icon ${doc.id}`);
+                    await file.save(newBuffer, {
+                        metadata: { 
+                            contentType: 'image/png'
+                        }
+                    });
+                    
+                    await file.makePublic();
+                    newUrl = file.publicUrl();
+                }
+
+                // Update Icon Doc (Ingredient Array)
+                // We need to fetch fresh doc to avoid overwrite race conditions if possible,
+                // but for a script it's usually sequential.
+                const freshDoc = await ref.get();
+                const freshData = freshDoc.data();
+                const icons = freshData.icons || [];
+                
+                // Find index again just in case
+                const freshIndex = icons.findIndex((i: any) => i.id === id);
+                if (freshIndex !== -1) {
+                    const updatedIcon = { 
+                        ...icons[freshIndex],
+                        metadata: metadata 
+                    };
+                    if (!metadataOnly) {
+                        updatedIcon.url = newUrl;
+                        updatedIcon.processed_transparent = true;
+                    }
+                    
+                    icons[freshIndex] = updatedIcon;
+                    await ref.update({ icons });
+                    console.log(`Updated Icon ${id} in Ingredient ${freshDoc.id}`);
+                }
 
                 // Update Recipes
-                const recipesToUpdate = iconToRecipesMap.get(doc.id);
+                const recipesToUpdate = iconToRecipesMap.get(id);
                 if (recipesToUpdate) {
                     console.log(`Updating ${recipesToUpdate.length} affected recipes...`);
                     for (const recipeDoc of recipesToUpdate) {
-                        const recipeData = recipeDoc.data();
+                        // Refetch recipe to get latest state
+                        const currentRecipe = await recipeDoc.ref.get();
+                        const recipeData = currentRecipe.data();
+                        
+                        if (!recipeData || !recipeData.graph || !recipeData.graph.nodes) continue;
+
                         let changed = false;
                         const newNodes = recipeData.graph.nodes.map((n: any) => {
-                            if (n.iconId === doc.id && n.iconUrl !== newUrl) {
+                            const nid = getNodeIconId(n);
+                            if (nid === id) {
+                                // Apply update using helper
+                                applyIconToNode(n, { iconId: id, iconUrl: newUrl, metadata });
                                 changed = true;
-                                return { ...n, iconUrl: newUrl };
                             }
                             return n;
                         });
@@ -168,11 +219,12 @@ async function reprocessIcons() {
                     }
                 }
             } else {
-                console.log(`Done ${doc.id} (Saved local only)`);
+                console.log(`Done ${id} (Saved local only / Dry Run)`);
+                console.log('Metadata:', metadata);
             }
 
         } catch (e) {
-            console.error(`Failed to process ${doc.id}:`, e);
+            console.error(`Failed to process ${id}:`, e);
         }
     }
     console.log('Reprocessing complete.');

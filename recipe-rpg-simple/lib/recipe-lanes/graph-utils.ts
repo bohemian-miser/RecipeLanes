@@ -74,6 +74,85 @@ function getNodeIntersection(center: {x:number, y:number}, otherCenter: {x:numbe
     };
 }
 
+function getBBox(node: Node, handlePos?: {x: number, y: number}) {
+    if (node.type !== 'minimal') return null;
+    const meta = getNodeIconMetadata(node.data);
+    if (!meta || !meta.bbox) return null;
+    
+    const theme = node.data?.iconTheme || 'classic';
+    let imageX = 0, imageY = 0, imageSize = 0;
+
+    if (theme === 'modern' || theme === 'modern_clean') {
+        const { x, y } = node.positionAbsolute || node.position;
+        imageX = x + 12;
+        imageY = y + 12;
+        imageSize = 96;
+    } else {
+        if (!handlePos) return null; // Simplified fallback for Classic
+        imageSize = 80;
+        imageX = handlePos.x - 40;
+        imageY = handlePos.y - 40;
+    }
+    
+    // Apply asymmetric padding to bbox for aesthetics
+    const paddingX = 8;
+    const paddingTop = 2;
+    const paddingBottom = 15;
+
+    return {
+        x: imageX + meta.bbox.x * imageSize - paddingX,
+        y: imageY + meta.bbox.y * imageSize - paddingTop,
+        w: meta.bbox.w * imageSize + (paddingX*2),
+        h: meta.bbox.h * imageSize + (paddingTop + paddingBottom)
+    };
+}
+
+function getRectIntersection(center: {x:number, y:number}, other: {x:number, y:number}, rect: {x:number, y:number, w:number, h:number}) {
+    const dx = other.x - center.x;
+    const dy = other.y - center.y;
+    
+    let tMin = Infinity;
+    const check = (t: number) => { if (t > 0 && t < tMin) tMin = t; };
+
+    if (dx !== 0) {
+        const t1 = (rect.x - center.x) / dx;
+        const y1 = center.y + t1 * dy;
+        if (y1 >= rect.y && y1 <= rect.y + rect.h) check(t1);
+        
+        const t2 = (rect.x + rect.w - center.x) / dx;
+        const y2 = center.y + t2 * dy;
+        if (y2 >= rect.y && y2 <= rect.y + rect.h) check(t2);
+    }
+
+    if (dy !== 0) {
+        const t3 = (rect.y - center.y) / dy;
+        const x3 = center.x + t3 * dx;
+        if (x3 >= rect.x && x3 <= rect.x + rect.w) check(t3);
+        
+        const t4 = (rect.y + rect.h - center.y) / dy;
+        const x4 = center.x + t4 * dx;
+        if (x4 >= rect.x && x4 <= rect.x + rect.w) check(t4);
+    }
+    
+    if (tMin !== Infinity && tMin <= 1) { // t<=1 means intersection is between center and other (or at other)
+         return { x: center.x + tMin * dx, y: center.y + tMin * dy };
+    }
+    
+    // Fallback if no intersection (e.g. center is outside) or logic fail
+    return center;
+}
+
+function getRadius(node: Node, hasHandle: boolean) {
+    if (node.type !== 'minimal') {
+        return (Math.min(node.width??100, node.height??50)/2 + 5);
+    }
+    const theme = node.data?.iconTheme || 'classic';
+    if (theme === 'modern' || theme === 'modern_clean') {
+        return 58; // 96px / 2
+    }
+    return 36; // 72px / 2
+}
+
 export function getEdgeParams(
     source: Node, 
     target: Node,
@@ -83,14 +162,23 @@ export function getEdgeParams(
     const c1 = getCenter(source, sourceHandlePos);
     const c2 = getCenter(target, targetHandlePos);
 
-    // Calculate Radius
-    // User requested "stop short at the radius from the centre to a corner" of the icon.
-    // Icon is 64x64. Radius is 32. We want to be close. 36 gives 4px padding.
-    const r1 = sourceHandlePos ? 36 : (Math.min(source.width??100, source.height??50)/2 + 5);
-    const r2 = targetHandlePos ? 36 : (Math.min(target.width??100, target.height??50)/2 + 5);
+    let sInter, tInter;
 
-    const sInter = getNodeIntersection(c1, c2, r1);
-    const tInter = getNodeIntersection(c2, c1, r2);
+    const bbox1 = getBBox(source, sourceHandlePos);
+    if (bbox1) {
+        sInter = getRectIntersection(c1, c2, bbox1);
+    } else {
+        const r1 = getRadius(source, !!sourceHandlePos);
+        sInter = getNodeIntersection(c1, c2, r1);
+    }
+
+    const bbox2 = getBBox(target, targetHandlePos);
+    if (bbox2) {
+        tInter = getRectIntersection(c2, c1, bbox2);
+    } else {
+        const r2 = getRadius(target, !!targetHandlePos);
+        tInter = getNodeIntersection(c2, c1, r2);
+    }
 
     const dx = c2.x - c1.x;
     const dy = c2.y - c1.y;

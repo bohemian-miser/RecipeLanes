@@ -80,25 +80,57 @@ function getBBox(node: Node, handlePos?: {x: number, y: number}) {
     if (!meta || !meta.bbox) return null;
     
     const theme = node.data?.iconTheme || 'classic';
+    const isIngredient = node.data?.type === 'ingredient';
     let imageX = 0, imageY = 0, imageSize = 0;
+
+    let paddingX = 5;
+    let paddingTop = 5;
+    let paddingBottom = 5;
 
     if (theme === 'modern' || theme === 'modern_clean') {
         const { x, y } = node.positionAbsolute || node.position;
-        imageX = x + 12;
-        imageY = y + 12;
-        imageSize = 96;
+        // Asymmetric padding for Modern
+        paddingX = 8;
+        paddingTop = 2;
+        paddingBottom = 15;
+
+        if (isIngredient) {
+            // Compact Modern Ingredient: 80px container, 64px icon
+            imageSize = 64;
+            imageX = x + 8; // (80-64)/2
+            imageY = y + 8;
+        } else {
+            // Standard Modern Action: 120px container, 96px icon
+            imageSize = 96;
+            imageX = x + 12; // (120-96)/2
+            imageY = y + 12;
+        }
     } else {
+        // Classic
         if (!handlePos) return null; // Simplified fallback for Classic
-        imageSize = 80;
-        imageX = handlePos.x - 40;
-        imageY = handlePos.y;// - 40;
+        
+        if (isIngredient) {
+            imageSize = 48; // Visual size (w-12)
+            // Container is 56 (w-14). Padding is 4.
+            // handlePos is center of 56.
+            // Image Top Left = handlePos - 28 + 4 = handlePos - 24.
+            imageX = handlePos.x - 24;
+            imageY = handlePos.y - 24;
+            
+            // Tighter padding for small ingredients
+            paddingX = 2;
+            paddingTop = 2;
+            paddingBottom = 2;
+        } else {
+             // Action: Visual is 72. Container 80.
+             // imageX = handlePos.x - 40 + 4 = handlePos - 36.
+             // But existing getCenter used 80 mapping. If we use 80, padding absorbs the error.
+             imageSize = 80;
+             imageX = handlePos.x - 40;
+            imageY = handlePos.y; //- 40;
+        }
     }
     
-    // Apply asymmetric padding to bbox for aesthetics
-    const paddingX = 8;
-    const paddingTop = 2;
-    const paddingBottom = 15;
-
     return {
         x: imageX + meta.bbox.x * imageSize - paddingX,
         y: imageY + meta.bbox.y * imageSize - paddingTop,

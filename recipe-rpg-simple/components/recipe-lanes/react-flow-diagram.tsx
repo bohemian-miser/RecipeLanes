@@ -428,12 +428,23 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         })));
     }, [edgeStyle, setEdges]);
 
+    const prevIsLiveRef = useRef(isLive);
+
     // Live Force Simulation
     useEffect(() => {
+        const wasLive = prevIsLiveRef.current;
+        prevIsLiveRef.current = isLive;
+
         if (!isLive) {
             if (simulationRef.current) simulationRef.current.stop();
+            if (wasLive) {
+                setIsDirty(true);
+            }
             return;
         }
+
+        // Take snapshot on start
+        if (!wasLive) takeSnapshot();
 
         const d3Nodes = nodes.filter(n => n.type !== 'lane').map(n => ({ 
             id: n.id, 

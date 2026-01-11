@@ -8,10 +8,14 @@ const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 // Enable debug logging for visibility
 logger.setLogLevel('debug');
 
-try {
+if (projectId == "recipe-lanes" || projectId == "recipe-lanes-staging"
+) {
+  // Enable Firebase Telemetry (if possible)
+  try {
     enableFirebaseTelemetry();
-} catch (e) {
+  } catch (e) {
     console.warn("Failed to enable Firebase Telemetry:", e);
+  }
 }
 // Models defined as strings to avoid import issues
 // Using Vertex AI models which use ADC (no API Key required in Prod)

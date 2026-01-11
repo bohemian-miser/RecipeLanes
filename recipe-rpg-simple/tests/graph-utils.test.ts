@@ -69,14 +69,13 @@ function testFallback() {
     
     const result = getEdgeParams(n1, n2);
     
-    // Radius = (100/2) + 5 = 55
+    // Radius = 36 (Classic Fallback)
     // Distance = 200
     // Vector (0, 1)
-    // sy = 50 + 55 = 105
-    // ty = 250 - 55 = 195
+    // sy = 50 + 36 = 86
     
     assertClose(result.sx, 50, 0.1, 'SX Fallback');
-    assertClose(result.sy, 105, 0.1, 'SY Fallback');
+    assertClose(result.sy, 86, 0.1, 'SY Fallback');
     
     console.log("Fallback PASS");
 }

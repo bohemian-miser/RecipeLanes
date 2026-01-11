@@ -31,9 +31,9 @@ if (firebaseConfig.apiKey) {
   
   if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
       connectAuthEmulator(auth, 'http://127.0.0.1:9099');
-      connectFirestoreEmulator(db, '127.0.0.1', 8080);
-      connectStorageEmulator(storage, '127.0.0.1', 9199);
-      connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+      connectFirestoreEmulator(db, 'localhost', 8080);
+      connectStorageEmulator(storage, 'localhost', 9199);
+      connectFunctionsEmulator(functions, 'localhost', 5001);
   }
 
   googleProvider = new GoogleAuthProvider();

@@ -12,9 +12,11 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT" || exit 1
 
 export GOOGLE_APPLICATION_CREDENTIALS="$PROJECT_ROOT/mock-service-account.json"
-export MOCK_AI=true
-export NEXT_PUBLIC_FIREBASE_PROJECT_ID="local-project-id"
-export NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="local-project-id.firebasestorage.app"
+
+# Load test environment variables
+set -a
+source "$PROJECT_ROOT/.env.test"
+set +a
 
 # Ensure Functions picks up the env var (robust workaround for emulator env inheritance)
 # echo "MOCK_AI=true" > "$PROJECT_ROOT/functions/.env"
@@ -27,6 +29,7 @@ TEST_ARGS="${@:-}"
 CMD="npx playwright test $TEST_ARGS"
 
 # 5. Smart Execution
+# lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null ;
 if nc -z localhost 8080 2>/dev/null; then
     echo "🟢 Emulators detected on port 8080. Running tests against EXISTING emulators."
     echo "Running: $CMD"
@@ -54,12 +57,12 @@ else
     npm install --prefix "$PROJECT_ROOT/functions" 
     npm run build --prefix "$PROJECT_ROOT/functions"
 
-    # Cleanup .env on exit
-    cleanup() {
-      echo "Removing test env file..."
-      rm -f "$PROJECT_ROOT/functions/.env"
-    }
-    trap cleanup EXIT
+    # # Cleanup .env on exit This is not needed, it was overly cautious by gem.
+    # cleanup() {
+    #   echo "Removing test env file..."
+    #   rm -f "$PROJECT_ROOT/functions/.env"
+    # }
+    # trap cleanup EXIT
 
     echo "----------------------------------------------------------------"
     echo "Starting Firebase Emulators and running: $CMD"

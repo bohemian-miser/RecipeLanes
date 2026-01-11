@@ -80,7 +80,7 @@ export async function generateAndStoreIcon(options: GenerateIconOptions) {
         meta
     );
 
-    console.log(`[IconGenerator] ✅ Success. Icon ID: ${result.id}`);
+    console.log(`[IconGenerator] ✅ Success. Icon ID: ${result.iconId}`);
     return {
         ...result,
         prompt,

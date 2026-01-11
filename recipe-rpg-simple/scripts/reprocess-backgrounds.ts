@@ -1,8 +1,9 @@
-import { processIcon } from '../lib/image-processing';
+import { processIcon } from '../functions/src/image-processing';
 import fetch from 'node-fetch';
 import fs from 'fs/promises';
 import path from 'path';
 import dotenv from 'dotenv';
+import { applyIconToNode, clearNodeIcon, getNodeIconId, getNodeIconUrl, hasNodeIcon } from './recipe-lanes/model-utils';
 
 async function reprocessIcons() {
     const args = process.argv.slice(2);
@@ -48,12 +49,12 @@ async function reprocessIcons() {
         const data = doc.data();
         if (data.graph && data.graph.nodes) {
             data.graph.nodes.forEach((node: any) => {
-                if (node.iconId) {
-                    if (!iconToRecipesMap.has(node.iconId)) {
-                        iconToRecipesMap.set(node.iconId, []);
+                if (getNodeIconId(node)) {
+                    if (!iconToRecipesMap.has(getNodeIconId(node))) {
+                        iconToRecipesMap.set(getNodeIconId(node), []);
                     }
                     // Avoid duplicates if multiple nodes use same icon
-                    const list = iconToRecipesMap.get(node.iconId)!;
+                    const list = iconToRecipesMap.get(getNodeIconId(node))!;
                     if (!list.find(r => r.id === doc.id)) {
                         list.push(doc);
                     }

@@ -10,6 +10,7 @@ import { ReactFlowProvider } from 'reactflow';
 import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction } from '@/app/actions';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
+import { getNodeIconUrl, getNodeIconId, applyIconToNode, hasNodeIcon } from '@/lib/recipe-lanes/model-utils';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, Bug } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
@@ -133,11 +134,11 @@ function RecipeLanesContent() {
       if (graph) {
           const safeGraph = { 
               ...graph, 
-              nodes: graph.nodes.map(n => {
-                  const { iconUrl, ...rest } = n;
-                  return rest;
-              })
-          };
+                                nodes: graph.nodes.map(n => {
+                                    // const { icon, ...rest } = n;// this removes the whole icon, i just want to remove the url.
+                                    // const { icon, ...rest } = n;
+                                    return n;
+                                })          };
           setJsonText(JSON.stringify(safeGraph, null, 2));
       }
   }, [graph]);
@@ -209,10 +210,14 @@ function RecipeLanesContent() {
       try {
           const partialGraph = JSON.parse(jsonText);
           
-          // Restore iconUrls from existing graph
+          // Restore icons from existing graph
           const newNodes = partialGraph.nodes.map((n: any) => {
               const original = graph?.nodes.find(o => o.id === n.id);
-              return { ...n, iconUrl: original?.iconUrl };
+              const updatedNode = { ...n };
+              if (original?.icon) {
+                  updatedNode.icon = original.icon;
+              }
+              return updatedNode;
           });
           
           const newGraph = { ...partialGraph, nodes: newNodes };
@@ -235,7 +240,7 @@ function RecipeLanesContent() {
               const safeGraph = { 
                   ...freshGraph, 
                   nodes: freshGraph.nodes.map(n => {
-                      const { iconUrl, ...rest } = n;
+                      const { icon, ...rest } = n;
                       return rest;
                   })
               };
@@ -286,11 +291,12 @@ function RecipeLanesContent() {
                   const newNodes = currentGraph.nodes.map(n => {
                       const prevNode = prevGraph.nodes.find(p => p.id === n.id);
                       if (prevNode) {
-                          // Preserve local position if live physics is off?
-                          // Actually, let's trust the DB if it updates
-                          // But mostly we care about icons popping in
-                          if (n.iconUrl && !prevNode.iconUrl) {
-                              return { ...prevNode, iconUrl: n.iconUrl, iconId: n.iconId };
+                          const nUrl = getNodeIconUrl(n);
+                          const prevUrl = getNodeIconUrl(prevNode);
+                          if (nUrl && !prevUrl) {
+                              const updatedNode = { ...prevNode };
+                              if (n.icon) applyIconToNode(updatedNode, n.icon);
+                              return updatedNode;
                           }
                       }
                       return n;
@@ -546,7 +552,7 @@ const handleVisualize = async () => {
 
     if (authLoading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 font-mono">Loading...</div>;
   
-  const hasIcons = graph?.nodes.some(n => !!n.iconUrl);
+  const hasIcons = graph?.nodes.some(n => hasNodeIcon(n));
   const isPublic = graph?.visibility === 'public';
 
   // Common Nav Item Styles
@@ -678,8 +684,8 @@ const handleVisualize = async () => {
                                 </div>
                                 <div className="text-[10px] text-zinc-500 truncate">{n.visualDescription}</div>
                                 <div className="flex items-center gap-2 mt-1">
-                                    <div className={`w-2 h-2 rounded-full ${n.iconUrl ? 'bg-green-500' : 'bg-red-500'}`} />
-                                    <span className="truncate flex-1 text-[10px] text-zinc-600">{n.iconUrl || 'Missing Icon'}</span>
+                                    <div className={`w-2 h-2 rounded-full ${getNodeIconUrl(n) ? 'bg-green-500' : 'bg-red-500'}`} />
+                                    <span className="truncate flex-1 text-[10px] text-zinc-600">{getNodeIconUrl(n) || 'Missing Icon'}</span>
                                 </div>
                             </div>
                         ))}

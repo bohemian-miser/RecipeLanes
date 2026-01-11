@@ -14,6 +14,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { DB_COLLECTION_RECIPES } from '@/lib/config';
 import { standardizeIngredientName } from '@/lib/utils';
+import { getNodeIconUrl, getNodeIconId } from '@/lib/recipe-lanes/model-utils';
 
 export default function Home() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -68,12 +69,15 @@ export default function Home() {
   useEffect(() => {
     if (!recipeId) return;
 
+        console.log('Setting up listener for recipe:', recipeId);
     // We can use the client-side DB directly for listening!
     // Assuming config.ts exports DB_COLLECTION_RECIPES
     const unsub = onSnapshot(doc(db, DB_COLLECTION_RECIPES, recipeId), (docSnap) => {
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            const graph = data?.graph;
+      if (docSnap.exists()) {
+        console.log('Recipe Update Received');
+        const data = docSnap.data();
+        const graph = data?.graph;
+        console.log('Graph Nodes:', graph?.nodes?.length || 0);
             if (graph && Array.isArray(graph.nodes)) {
                 // Map nodes to Icons
                 // Reverse to show newest first? Or preserve order?
@@ -83,11 +87,11 @@ export default function Home() {
                 const newIcons: Icon[] = [...graph.nodes].reverse().map((n: any) => ({
                     id: n.id,
                     ingredient: standardizeIngredientName(n.visualDescription || n.text),
-                    iconUrl: n.iconUrl || '',
-                    isPending: !n.iconUrl && !n.iconId, // Pending if no URL/ID
+                    iconUrl: getNodeIconUrl(n) || '',
+                    isPending: !getNodeIconUrl(n) && !getNodeIconId(n), // Pending if no URL/ID
                     popularityScore: 0, // Not tracked in node
                     // @ts-ignore - Storing iconId for reroll logic
-                    iconId: n.iconId
+                    iconId: getNodeIconId(n)
                 }));
                 setIcons(newIcons);
             }

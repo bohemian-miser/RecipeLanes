@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { ChefHat, X, Users } from 'lucide-react';
+import { getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
 
 interface IngredientsSidebarProps {
   graph: RecipeGraph;
@@ -57,10 +58,12 @@ export function IngredientsSidebar({ graph, onClose, onUpdateServes }: Ingredien
                     displayQty = Math.round(scaled * 100) / 100;
                 }
 
+                const iconUrl = getNodeIconUrl(node);
+
                 return (
                     <div key={node.id} className="flex items-start gap-3 group">
-                        {node.iconUrl ? (
-                            <img src={node.iconUrl} className="w-10 h-10 object-contain mix-blend-multiply bg-zinc-50 rounded-lg p-1 border border-zinc-100 shrink-0" alt="" />
+                        {iconUrl ? (
+                            <img src={iconUrl} className="w-10 h-10 object-contain mix-blend-multiply bg-zinc-50 rounded-lg p-1 border border-zinc-100 shrink-0" alt="" />
                         ) : (
                             <div className="w-10 h-10 flex items-center justify-center bg-zinc-100 rounded-lg text-xl shrink-0">🥕</div>
                         )}

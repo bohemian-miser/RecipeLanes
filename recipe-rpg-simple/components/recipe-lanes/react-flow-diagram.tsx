@@ -20,6 +20,7 @@ import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
+import { getNodeIconUrl, getNodeIconId, applyIconToNode } from '../../lib/recipe-lanes/model-utils';
 import MinimalNode from './nodes/minimal-node';
 import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
@@ -386,15 +387,19 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                      const dbNode = graph.nodes.find(dn => dn.id === n.id);
                      if (dbNode) {
                          // Check for Icon Update
-                         if (dbNode.iconUrl && dbNode.iconUrl !== n.data.iconUrl) {
+                         const dbUrl = getNodeIconUrl(dbNode);
+                         const currentUrl = getNodeIconUrl(n.data);
+                         
+                         if (dbUrl && dbUrl !== currentUrl) {
                              changed = true;
+                             const newData = { ...n.data };
+                             if (dbNode.icon) {
+                                 // Update using the clean icon object from DB
+                                 applyIconToNode(newData, dbNode.icon);
+                             }
                              return { 
                                  ...n, 
-                                 data: { 
-                                     ...n.data, 
-                                     iconUrl: dbNode.iconUrl, 
-                                     iconId: dbNode.iconId 
-                                 } 
+                                 data: newData
                              };
                          }
                      }

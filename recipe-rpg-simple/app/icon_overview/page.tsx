@@ -209,7 +209,7 @@ export default function Home() {
           <div className="flex items-center gap-2">
               <Link href="/gallery" className={navItemClass} title="Public Gallery">
                   <Globe className="w-4 h-4" />
-                  <span className="hidden md:inline">Public</span>
+                  <span>Gallery</span>
               </Link>
               <Link href="/lanes" className={navItemClass} title="Recipe Lanes">
                   <Plus className="w-4 h-4" />

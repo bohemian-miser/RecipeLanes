@@ -12,7 +12,7 @@ import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sid
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { getNodeIconUrl, getNodeIconId, applyIconToNode, hasNodeIcon } from '@/lib/recipe-lanes/model-utils';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, Bug } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -48,26 +48,11 @@ function RecipeLanesContent() {
   const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
   const [existingCopiesDismissed, setExistingCopiesDismissed] = useState(false);
   const [guestBannerDismissed, setGuestBannerDismissed] = useState(false);
-  const [showDebug, setShowDebug] = useState(false);
 
   const diagramRef = useRef<ReactFlowDiagramHandle>(null);
   const isForking = useRef(false);
 
   const isOwner = !ownerId || (!!user && user.uid === ownerId);
-
-  const handleForceRegenerate = async () => {
-        const id = searchParams.get('id');
-        if (!id) return;
-        
-        try {
-            const fn = httpsCallable(functions, 'backfillRecipeIcons');
-            await fn({ recipeId: id });
-            showNotification('Background generation triggered.');
-        } catch (e: any) {
-            console.error('Force regenerate failed:', e);
-            showNotification('Failed to trigger generation: ' + e.message);
-        }
-  };
 
   // ... (Restore Last Recipe, Save Last ID, Sync JSON, Warning, Persistence) ...
 
@@ -604,7 +589,7 @@ const handleVisualize = async () => {
                 {/* Navigation Tabs */}
                 <Link href="/gallery" className={navItemClass} title="Public Gallery">
                     <Globe className="w-4 h-4" />
-                    <span className="hidden md:inline">Public</span>
+                    <span>Gallery</span>
                 </Link>
                 {user && (
                     <>
@@ -621,9 +606,6 @@ const handleVisualize = async () => {
                 <button onClick={handleNew} className={navItemClass} title="Create New">
                     <Plus className="w-4 h-4" />
                     <span className="hidden md:inline">New</span>
-                </button>
-                <button onClick={() => setShowDebug(!showDebug)} className={navItemClass} title="Debug">
-                    <Bug className="w-4 h-4 text-red-400" />
                 </button>
 
                 <div className="h-4 w-px bg-zinc-800 mx-2" />
@@ -645,54 +627,6 @@ const handleVisualize = async () => {
                 </div>
             </div>
         </header>
-        
-        {/* Debug Overlay */}
-        {showDebug && graph && (
-            <div className="absolute top-16 right-4 z-50 bg-zinc-900 border border-zinc-700 p-4 rounded-lg shadow-xl w-96 max-h-[80vh] overflow-y-auto text-xs font-mono text-zinc-300">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-white flex items-center gap-2">
-                        <Bug className="w-4 h-4" /> Debug Console
-                    </h3>
-                    <button onClick={() => setShowDebug(false)} className="text-zinc-500 hover:text-white">Close</button>
-                </div>
-                
-                <div className="space-y-2 mb-4">
-                    <div><span className="text-zinc-500">Recipe ID:</span> {searchParams.get('id')}</div>
-                    <div><span className="text-zinc-500">Owner ID:</span> {ownerId || 'None'}</div>
-                    <div><span className="text-zinc-500">Is Owner:</span> {String(isOwner)}</div>
-                    <div><span className="text-zinc-500">Visibility:</span> {graph.visibility}</div>
-                </div>
-
-                <div className="border-t border-zinc-800 pt-4 mb-4">
-                    <h4 className="font-bold text-zinc-400 mb-2">Actions</h4>
-                    <button 
-                        onClick={handleForceRegenerate}
-                        className="w-full bg-red-900/50 hover:bg-red-900 text-red-200 border border-red-800 rounded py-1.5 px-3 flex items-center justify-center gap-2 transition-colors"
-                    >
-                        <Wand2 className="w-3 h-3" /> Force Regenerate Icons (Cloud)
-                    </button>
-                </div>
-
-                <div className="border-t border-zinc-800 pt-4">
-                    <h4 className="font-bold text-zinc-400 mb-2">Nodes ({graph.nodes.length})</h4>
-                    <div className="space-y-1">
-                        {graph.nodes.map(n => (
-                            <div key={n.id} className="p-2 bg-zinc-950 rounded border border-zinc-800 flex flex-col gap-1">
-                                <div className="flex justify-between">
-                                    <span className="font-bold text-white">{n.text}</span>
-                                    <span className="text-[10px] text-zinc-600">{n.id}</span>
-                                </div>
-                                <div className="text-[10px] text-zinc-500 truncate">{n.visualDescription}</div>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <div className={`w-2 h-2 rounded-full ${getNodeIconUrl(n) ? 'bg-green-500' : 'bg-red-500'}`} />
-                                    <span className="truncate flex-1 text-[10px] text-zinc-600">{getNodeIconUrl(n) || 'Missing Icon'}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        )}
         
             <div className="absolute top-16 left-0 right-0 z-50 flex flex-col items-center pointer-events-none gap-2">
     
@@ -802,50 +736,49 @@ const handleVisualize = async () => {
                         <ChefHat className="w-4 h-4" />
                         <span className="hidden sm:inline">INGREDIENTS</span>
                     </button>
-                    <div className="h-4 w-px bg-zinc-200 mx-1" />
-
-                    <button
-                        onClick={() => handleLayoutClick('swimlanes')}
-                        className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'swimlanes' ? 'bg-zinc-100' : ''}`}
-                        title="Lanes"
-                    >
-                        <Kanban className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => handleLayoutClick('dagre')}
-                        className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'dagre' ? 'bg-zinc-100' : ''}`}
-                        title="Smart"
-                    >
-                        <Network className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => handleLayoutClick('dagre-lr')}
-                        className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'dagre-lr' ? 'bg-zinc-100' : ''}`}
-                        title="Smart LR"
-                    >
-                        <RotateCw className="w-4 h-4" />
-                    </button>
-                     <button
-                        onClick={() => handleLayoutClick('repulsive')}
-                        className={`p-1.5 rounded hover:bg-zinc-100 text-zinc-600 ${layoutMode === 'repulsive' ? 'bg-zinc-100' : ''}`}
-                        title="Repulsive"
-                    >
-                        <Orbit className="w-4 h-4" />
-                    </button>
                     
                     <div className="h-4 w-px bg-zinc-200 mx-1" />
 
-                    <button
-                        onClick={() => setIconTheme(t => {
-                            if (t === 'classic') return 'modern';
-                            if (t === 'modern') return 'modern_clean';
-                            return 'classic';
-                        })}
-                        className={`p-1.5 rounded hover:bg-zinc-100 transition-colors ${iconTheme === 'modern' ? 'bg-purple-50 text-purple-600' : iconTheme === 'modern_clean' ? 'bg-blue-50 text-blue-600' : 'text-zinc-600'}`}
-                        title={`Theme: ${iconTheme === 'classic' ? 'Classic' : iconTheme === 'modern' ? 'Modern' : 'Clean'}`}
-                    >
-                        {iconTheme === 'modern' || iconTheme === 'modern_clean' ? <Sparkles className="w-4 h-4" /> : <CircleDot className="w-4 h-4" />}
-                    </button>
+                    {/* Layout Dropdown */}
+                    <div className="flex items-center gap-2 pl-2">
+                        <span className="text-xs font-mono text-zinc-400">Layout</span>
+                        <select 
+                            value={layoutMode} 
+                            onChange={(e) => handleLayoutClick(e.target.value as any)}
+                            className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1.5 text-zinc-700 font-medium focus:ring-1 focus:ring-yellow-500/50 outline-none"
+                            title="Layout Mode"
+                        >
+                            <option value="swimlanes">Lanes</option>
+                            <option value="dagre">Smart</option>
+                            <option value="dagre-lr">Smart LR</option>
+                            <option value="repulsive">Repulsive</option>
+                        </select>
+                        {/* Reset Layout Button */}
+                        <button 
+                            onClick={() => diagramRef.current?.resetLayout()}
+                            className="p-1.5 rounded hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors"
+                            title="Reset Layout Positions"
+                        >
+                            <RotateCcw className="w-3 h-3" />
+                        </button>
+                    </div>
+
+                    <div className="h-4 w-px bg-zinc-200 mx-2" />
+
+                    {/* Style Dropdown */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-zinc-400">Style</span>
+                        <select 
+                            value={iconTheme} 
+                            onChange={(e) => setIconTheme(e.target.value as any)}
+                            className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1.5 text-zinc-700 font-medium focus:ring-1 focus:ring-yellow-500/50 outline-none"
+                            title="Icon Style"
+                        >
+                            <option value="classic">Classic</option>
+                            <option value="modern">Modern</option>
+                            <option value="modern_clean">Clean</option>
+                        </select>
+                    </div>
                     
 
                 </div>

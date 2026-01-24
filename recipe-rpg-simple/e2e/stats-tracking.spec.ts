@@ -21,7 +21,7 @@ test.describe('Stats Tracking', () => {
 
     // 3. Check Stats in Gallery (New Tab)
     const galleryPage = await page.context().newPage();
-    await galleryPage.goto('/');
+    await galleryPage.goto('/icon_overview');
     
     // Search for the ingredient
     await galleryPage.getByPlaceholder('Search ingredients...').fill(uniqueName);

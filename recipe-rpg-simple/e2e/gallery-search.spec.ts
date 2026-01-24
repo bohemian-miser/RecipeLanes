@@ -11,7 +11,7 @@ test.skip('Gallery Search', () => {
       await page.setViewportSize(device.viewport);
 
       // 1. Seed Data (Authenticated)
-      await page.goto('/'); // Icon Maker
+      await page.goto('/icon_overview'); // Icon Maker
       await login('search-tester');
       
       await screenshot(page, dir, 'debug-before-input-visible');

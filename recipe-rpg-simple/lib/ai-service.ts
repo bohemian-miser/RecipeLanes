@@ -47,8 +47,8 @@ export class RealAIService implements AIService {
 
         return dataUrl;
     } catch (e) {
-        console.error("Real AI Image Generation failed, NOT falling back to Mock (well kinda not):", e);
-        return `https://placehold.co/64x64/png?text=Error+${encodeURIComponent(prompt.slice(0, 10))}`;
+        console.error("Real AI Image Generation failed:", e);
+        throw e;
     }
   }
 }

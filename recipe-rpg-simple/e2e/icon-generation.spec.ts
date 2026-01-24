@@ -11,7 +11,7 @@ test.describe('Icon Generation Pipeline', () => {
       await page.setViewportSize(device.viewport);
 
       // 1. Login
-      await page.goto('/');
+      await page.goto('/icon_overview');
       await login('icon-tester');
       await screenshot(page, dir, '01-initial');
       

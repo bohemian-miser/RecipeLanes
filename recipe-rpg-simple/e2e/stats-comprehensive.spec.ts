@@ -28,7 +28,7 @@ test.describe('Comprehensive Stats & Reroll', () => {
     // Helper to check stats in Gallery (New Tab)
     const checkStats = async (name: string, expectedCounts: string[], stepName: string) => {
         const galleryPage = await page.context().newPage();
-        await galleryPage.goto('/');
+        await galleryPage.goto('/icon_overview');
         await galleryPage.getByPlaceholder('Search ingredients...').fill(name);
         await galleryPage.getByPlaceholder('Search ingredients...').press('Enter');
         

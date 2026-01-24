@@ -57,6 +57,15 @@ export async function getTestUserToken(uid: string, claims?: object, displayName
   return { token, displayName: finalDisplayName };
 }
 
+export async function promoteToAdmin(uid: string) {
+    const db = admin.firestore();
+    await db.collection('users').doc(uid).set({
+        isAdmin: true,
+        updated_at: new Date().toISOString()
+    }, { merge: true });
+    console.log(`Promoted ${uid} to Admin via admin-utils.`);
+}
+
 /**
  * Clears the Firestore Emulator database.
  * Useful for tests that require a clean state (e.g. checking initial generation).

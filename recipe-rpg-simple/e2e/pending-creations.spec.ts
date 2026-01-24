@@ -34,7 +34,7 @@ test.describe('Pending Creations & Gallery', () => {
     await screenshot(page, dir, 'icon-appeared-in-recipe');
     
     // 2. Go to Home to check Gallery
-    await page.goto('/');
+    await page.goto('/icon_overview');
     await screenshot(page, dir, 'home-after-creation');
     
     // 3. Verify it shows up in the gallery
@@ -48,7 +48,7 @@ test.describe('Pending Creations & Gallery', () => {
     const dir = screenshotDir('pending-creations-retry-test', 'desktop');
     cleanupScreenshots(dir);
 
-    await page.goto('/');
+    await page.goto('/icon_overview');
     
     // Generate a unique name that is already Title Cased to match backend standardization
     const failItem = `Fail Item ${Date.now()}`;

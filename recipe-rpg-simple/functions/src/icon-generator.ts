@@ -15,7 +15,10 @@ export async function generateAndStoreIcon(options: GenerateIconOptions) {
     console.log(`[IconGenerator] 🟢 Generating icon for: "${ingredientName}"`);
 
     // 1. Generate Image (AI)
-    const prompt = `Generate a high-quality 64x64 pixel art icon of ${ingredientName}. The style should be distinct, colorful, and clearly recognizable, suitable for a game inventory or flowchart. Use clean outlines and bright colors. Ensure the background is white.`;
+    const prompt = `For use in a recipe card infographic, generate a high-quality 64x64 pixel art icon of "${ingredientName}".
+    The style should be distinct, colorful, and clearly recognizable, suitable for a game inventory or flowchart.
+    Use clean outlines and bright colors.
+    Ensure the background is white.`;
     
     console.log(`[IconGenerator] 🎨 Prompting AI: "${prompt.substring(0, 50)}..."`);
     const aiService = getAIService();

@@ -41,7 +41,6 @@ export interface DataService {
   recordImpression(ingredientId: string, iconId: string): Promise<void>;
 
   deleteIcon(iconUrl: string, ingredientName?: string): Promise<void>;
-  deleteIngredientCategory(ingredientName: string): Promise<void>;
   
   listDebugFiles(): Promise<any[]>;
   checkExistingCopies(originalId: string, userId: string): Promise<any[]>;
@@ -809,23 +808,6 @@ export class FirebaseDataService implements DataService {
       }
   }
 
-  async deleteIngredientCategory(ingredientName: string) {
-      const stdName = standardizeIngredientName(ingredientName);
-      const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName);
-      
-      const doc = await docRef.get();
-      if (doc.exists) {
-          const icons = doc.data()?.icons || [];
-          const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!);
-          
-          icons.forEach((i: any) => {
-              const path = i.path || (i.url && i.url.match(new RegExp('/o/([^?]+)'))?.[1] ? decodeURIComponent(i.url.match(new RegExp('/o/([^?]+)'))![1]) : null);
-              if (path) bucket.file(path).delete().catch(() => {});
-          });
-          
-          await docRef.delete();
-      }
-  }
 
   async listDebugFiles(): Promise<any[]> {
       const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
@@ -1373,9 +1355,6 @@ export class MemoryDataService implements DataService {
         memoryStore.deleteIcon(iconUrl);
     }
 
-    async deleteIngredientCategory(ingredientName: string) {
-        memoryStore.deleteIngredient(ingredientName);
-    }
 
       async assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats): Promise<void> {
           const recipe = this.recipes.get(recipeId);

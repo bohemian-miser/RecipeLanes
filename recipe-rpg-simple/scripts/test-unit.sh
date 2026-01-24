@@ -2,7 +2,7 @@
 set -e
 
 # Define test command
-TEST_CMD="npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx tsx tests/undo-scrambled-logic.test.ts && npx tsx tests/social-features.test.ts && npx tsx tests/gallery-view.test.ts && npx tsx tests/optimistic-flow.test.ts"
+TEST_CMD="npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx tsx tests/undo-scrambled-logic.test.ts && npx tsx tests/social-features.test.ts && npx tsx tests/gallery-view.test.ts && npx tsx tests/optimistic-flow.test.ts && npx tsx tests/admin-security.test.ts"
 
 # 1. Check if Emulators are running (Firestore on 8080)
 # Use nc (netcat) to check port

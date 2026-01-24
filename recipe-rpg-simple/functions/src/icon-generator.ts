@@ -15,7 +15,10 @@ export async function generateAndStoreIcon(options: GenerateIconOptions) {
     console.log(`[IconGenerator] 🟢 Generating icon for: "${ingredientName}"`);
 
     // 1. Generate Image (AI)
-    const prompt = `Generate a high-quality 64x64 pixel art icon of ${ingredientName}. The style should be distinct, colorful, and clearly recognizable, suitable for a game inventory or flowchart. Use clean outlines and bright colors. Ensure the background is white.`;
+    const prompt = `For use in a recipe card infographic, generate a high-quality 64x64 pixel art icon of "${ingredientName}".
+    The style should be distinct, colorful, and clearly recognizable, suitable for a game inventory or flowchart.
+    Use clean outlines and bright colors.
+    Ensure the background is white.`;
     
     console.log(`[IconGenerator] 🎨 Prompting AI: "${prompt.substring(0, 50)}..."`);
     const aiService = getAIService();
@@ -33,9 +36,13 @@ export async function generateAndStoreIcon(options: GenerateIconOptions) {
 
     // 3. Process Image (Transparency)
     let processedBuffer: Buffer;
+    let metadata: any; 
+
     try {
         console.log(`[IconGenerator] Processing image (background removal)...`);
-        processedBuffer = await processIcon(arrayBuffer);
+        const result = await processIcon(arrayBuffer);
+        processedBuffer = result.buffer;
+        metadata = result.metadata;
     } catch (e) {
         console.warn('[IconGenerator] ⚠️ Background removal failed, using original:', e);
         processedBuffer = Buffer.from(arrayBuffer);
@@ -61,7 +68,8 @@ export async function generateAndStoreIcon(options: GenerateIconOptions) {
         impressions: 0,
         rejections: 0,
         textModel: 'unknown',
-        imageModel: 'imagen-3.0'
+        imageModel: 'imagen-3.0',
+        geometry: metadata // Save geometric metadata (center, bbox)
     };
 
     // Save
@@ -75,7 +83,7 @@ export async function generateAndStoreIcon(options: GenerateIconOptions) {
         meta
     );
 
-    console.log(`[IconGenerator] ✅ Success. Icon ID: ${result.id}`);
+    console.log(`[IconGenerator] ✅ Success. Icon ID: ${result.iconId}`);
     return {
         ...result,
         prompt,

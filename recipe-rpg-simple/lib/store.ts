@@ -14,6 +14,7 @@ export interface IconData {
   fullPrompt?: string;
   textModel?: string;
   imageModel?: string;
+  metadata?: any;
 }
 
 export interface IngredientData {

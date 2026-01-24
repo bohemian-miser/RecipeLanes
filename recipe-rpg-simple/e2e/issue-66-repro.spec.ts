@@ -6,7 +6,7 @@ test('issue 66: shared gallery icon label appears on hover', async ({ page }) =>
   const uniqueName = `TestHoverItem-${Date.now()}`;
 
   // 1. Go to homepage
-  await page.goto('/');
+  await page.goto('/icon_overview');
 
   // 2. Create an icon to ensure gallery has content
   await page.getByPlaceholder('ENTER INGREDIENT...').fill(uniqueName);

@@ -12,7 +12,7 @@ test.describe('Issue 74 Repro: Delete and Move', () => {
       await page.setViewportSize(device.viewport);
       
       // Login flow
-      await page.goto('/');
+      await page.goto('/icon_overview');
       await login('issue-74-tester');
       await page.goto('/lanes?new=true');
 

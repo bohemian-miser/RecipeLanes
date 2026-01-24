@@ -46,6 +46,13 @@ test.describe('Optimistic UI & Background Trigger', () => {
         // Wait for graph container
         await expect(page.locator('.react-flow')).toBeVisible({ timeout: 30000 });      await screenshot(page, dir, 'after click2');
 
+        // Force fit view to ensure all nodes are rendered (especially on mobile)
+        const fitViewBtn = page.locator('.react-flow__controls-fitview');
+        if (await fitViewBtn.isVisible()) {
+            await fitViewBtn.click();
+            await page.waitForTimeout(500); // Allow animation
+        }
+
         const eggNode = page.locator('.react-flow__node-minimal', { hasText: '2 Eggs' }).or(page.locator('.react-flow__node-minimal', { hasText: 'Egg' })).first();
         const flourNode = page.locator('.react-flow__node-minimal', { hasText: '100g Flour' }).or(page.locator('.react-flow__node-minimal', { hasText: 'Flour' })).first();
         const hamNode = page.locator('.react-flow__node-minimal', { hasText: newIngredient }).first();

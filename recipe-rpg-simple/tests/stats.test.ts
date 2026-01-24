@@ -18,11 +18,11 @@ async function testStats() {
     // Let's pass standardized ID.
     const stdId = 'Test Ingredient'; // Standardized
     
-    const { id } = await service.saveIcon(stdId, ingName, 'Desc', 'Prompt', iconUrl, Buffer.from(''), meta);
+    const { iconId } = await service.saveIcon(stdId, ingName, 'Desc', 'Prompt', iconUrl, Buffer.from(''), meta);
     
     // 2. Record Impression
     console.log('Recording Impression...');
-    await service.recordImpression(stdId, id);
+    await service.recordImpression(stdId, iconId);
     let icons = await service.getIconsForIngredient(stdId);
     assert.strictEqual(icons[0].impressions, 1, 'Impression count should be 1');
     assert.strictEqual(icons[0].rejections, 0, 'Rejection count should be 0');

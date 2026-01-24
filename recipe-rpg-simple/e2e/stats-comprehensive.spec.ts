@@ -28,7 +28,7 @@ test.describe('Comprehensive Stats & Reroll', () => {
     // Helper to check stats in Gallery (New Tab)
     const checkStats = async (name: string, expectedCounts: string[], stepName: string) => {
         const galleryPage = await page.context().newPage();
-        await galleryPage.goto('/');
+        await galleryPage.goto('/icon_overview');
         await galleryPage.getByPlaceholder('Search ingredients...').fill(name);
         await galleryPage.getByPlaceholder('Search ingredients...').press('Enter');
         
@@ -58,9 +58,16 @@ test.describe('Comprehensive Stats & Reroll', () => {
 
     // 3. Reroll 1 (Reject Icon A) -> Get Icon B
     console.log('Reroll 1...');
+    
+    // Pan graph down to avoid top-right panel overlap
+    await page.mouse.move(400, 300);
+    await page.mouse.down();
+    await page.mouse.move(400, 600); 
+    await page.mouse.up();
+
     const rerollBtn = node.locator('button[title="Reroll Icon"]');
     await node.hover();
-    await rerollBtn.click();
+    await rerollBtn.click({ force: true });
     await expect(rerollBtn.locator('svg')).toHaveClass(/animate-spin/);
     await screenshot(page, dir, '03-reroll-1-spinning');
     
@@ -80,7 +87,7 @@ test.describe('Comprehensive Stats & Reroll', () => {
     // 5. Reroll 2 (Reject Icon B) -> Get Icon C
     console.log('Reroll 2...');
     await node.hover();
-    await rerollBtn.click();
+    await rerollBtn.click({ force: true });
     
     await expect.poll(async () => {
         const newSrc = await node.locator('img').getAttribute('src');
@@ -115,7 +122,7 @@ test.describe('Comprehensive Stats & Reroll', () => {
     
     const startSrc2 = await node2Refreshed.locator('img').getAttribute('src');
     console.log('Reroll 3 (Post-Refresh)...');
-    await rerollBtn2.click();
+    await rerollBtn2.click({ force: true });
     
     // Wait for update
     await expect.poll(async () => {

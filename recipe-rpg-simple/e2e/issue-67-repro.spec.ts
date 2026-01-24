@@ -1,14 +1,22 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir } from './utils/screenshot';
+import { promoteToAdmin } from './utils/admin-utils';
 
-test('issue 67: delete icon removes it from inventory and gallery', async ({ page }) => {
+test('issue 67: delete icon removes it from inventory and gallery', async ({ page, login }) => {
   const dir = screenshotDir('issue-67-repro', 'desktop');
   const uniqueName = `DeleteTest-${Date.now()}`;
-
-  // 1. Go to homepage
-  await page.goto('/');
+  
+  // Login and Promote to Admin
+  const uid = 'issue67-user';
+  
+  // 1. Go to homepage (Required for auth hooks to load)
+  await page.goto('/icon_overview');
   await screenshot(page, dir, '01-home-loaded');
 
+  // Login and Promote to Admin
+  await login(uid);
+  await promoteToAdmin(uid);
+  
   // 2. Generate Icon
   await page.getByPlaceholder('ENTER INGREDIENT...').fill(uniqueName);
   await screenshot(page, dir, '02-input-filled');

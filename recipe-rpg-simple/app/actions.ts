@@ -8,6 +8,7 @@ import { generateRecipePrompt, parseRecipeGraph, extractServes } from '@/lib/rec
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
+import { applyIconToNode, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from '@/lib/config';
@@ -243,22 +244,6 @@ export async function updateIconMetadataAction(iconUrl: string, ingredientName: 
     }
 }
 
-export async function deleteIngredientCategoryAction(rawIngredient: string): Promise<{ success: boolean; error?: string }> {
-    const session = await getAuthService().verifyAuth();
-    // if (!session?.isAdmin) return { success: false, error: 'Admin required' };
-
-    try {
-        const ingredient = standardizeIngredientName(rawIngredient.trim());
-        await getDataService().deleteIngredientCategory(ingredient);
-        return { success: true };
-    } catch (e: any) {
-        console.error('deleteIngredientCategoryAction failed:', e);
-        return { success: false, error: e.message };
-    }
-}
-
-
-
 
 /* Old code below here */
 
@@ -283,9 +268,9 @@ export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: stri
 
     // Restore icons if ID matches and AI forgot them
     newGraph.nodes.forEach(n => {
-        if (!n.iconUrl) {
+        if (!getNodeIconUrl(n)) {
             const old = currentGraph.nodes.find(o => o.id === n.id);
-            if (old && old.iconUrl) n.iconUrl = old.iconUrl;
+            if (old && old.icon) applyIconToNode(n, old.icon);
         }
     });
 
@@ -390,8 +375,13 @@ export async function debugLogAction(message: string) {
 
 // this is for the shared gallery on '/'.
 export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: string): Promise<{ success: boolean; error?: string }> {
-    // const session = await getAuthService().verifyAuth();
-    // if (!session?.isAdmin) return { success: false, error: 'Admin required' };
+    const session = await getAuthService().verifyAuth();
+    if (!session) return { success: false, error: 'Login required' };
+
+    // Explicit DB lookup for security
+    const userDoc = await db.collection('users').doc(session.uid).get();
+    if (!userDoc.data()?.isAdmin) return { success: false, error: 'Admin required' };
+
      try {
         await getDataService().deleteIcon(iconUrl, ingredientName);
         return { success: true };

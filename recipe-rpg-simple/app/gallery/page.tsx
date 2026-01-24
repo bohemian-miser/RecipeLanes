@@ -60,7 +60,7 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
                 {/* Navigation Tabs */}
                 <Link href="/gallery" className={`${navItemClass} ${filter === 'public' ? 'text-white bg-zinc-800' : ''}`} title="Public Gallery">
                     <Globe className="w-4 h-4" />
-                    <span className="hidden md:inline">Public</span>
+                    <span>Gallery</span>
                 </Link>
                 <Link href="/gallery?filter=mine" className={`${navItemClass} ${filter === 'mine' ? 'text-white bg-zinc-800' : ''}`} title="My Recipes">
                     <User className="w-4 h-4" />

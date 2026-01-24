@@ -1,7 +1,22 @@
-import 'dotenv/config';
+// import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config();
 import { auth, db } from '../lib/firebase-admin';
 
 async function makeAdmin(email: string) {
+  const args = process.argv.slice(2);
+  const stagingIndex = args.indexOf('--staging');
+  
+  if (stagingIndex !== -1) {
+      console.log('✨ Switching to STAGING environment (.env.staging)...');
+      if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+          console.log('⚠️  Unsetting GOOGLE_APPLICATION_CREDENTIALS to avoid Prod conflict.');
+          delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      }
+      dotenv.config({ path: '.env.staging', override: true });
+  } else {
+      dotenv.config();
+  }
   if (!email) {
     console.error('Please provide an email address.');
     process.exit(1);

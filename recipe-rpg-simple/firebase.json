@@ -9,6 +9,9 @@
       "firebase-debug.*.log",
       "*.local",
       ".env"
+    ],
+    "predeploy": [
+      "cd \"$RESOURCE_DIR\" && npm run build"
     ]
   },
   "hosting": {

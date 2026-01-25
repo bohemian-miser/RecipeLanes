@@ -12,11 +12,12 @@ import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sid
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { getNodeIconUrl, getNodeIconId, applyIconToNode, hasNodeIcon } from '@/lib/recipe-lanes/model-utils';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/lib/firebase-client';
+import { FeedbackModal } from '@/components/feedback-modal';
 
 function RecipeLanesContent() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -40,6 +41,7 @@ function RecipeLanesContent() {
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
   const [showIngredients, setShowIngredients] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
   const [iconTheme, setIconTheme] = useState<'classic' | 'modern' | 'modern_clean'>('classic');
@@ -607,6 +609,10 @@ const handleVisualize = async () => {
                     <Plus className="w-4 h-4" />
                     <span className="hidden md:inline">New</span>
                 </button>
+                
+                <button onClick={() => setShowFeedback(true)} className={navItemClass} title="Feedback & Contribute">
+                    <MessageSquare className="w-4 h-4" />
+                </button>
 
                 <div className="h-4 w-px bg-zinc-800 mx-2" />
 
@@ -986,6 +992,12 @@ const handleVisualize = async () => {
                 </div>
             )}
         </div>
+        
+        <FeedbackModal 
+            isOpen={showFeedback} 
+            onClose={() => setShowFeedback(false)} 
+            graphJson={jsonText}
+        />
     </div>
   );
 }

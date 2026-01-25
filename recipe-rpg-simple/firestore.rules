@@ -38,5 +38,10 @@ service cloud.firestore {
     match /icon_queue/{ingredient} {
       allow read, write: if true;
     }
+
+    // Feedback
+    match /feedback/{feedbackId} {
+      allow create: if true;
+    }
   }
 }

@@ -54,10 +54,31 @@ export interface DataService {
   addNodeToRecipe(recipeId: string, ingredientName: string, laneId?: string): Promise<{ success: boolean, nodeId?: string, error?: string }>;
   rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }>;
   assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats): Promise<void>;
+  
+  submitFeedback(data: { message: string, url: string, email?: string, graphJson?: string, userId?: string }): Promise<void>;
 }
 
 // --- Firebase Implementation ---
 export class FirebaseDataService implements DataService { 
+
+  async submitFeedback(data: { message: string, url: string, email?: string, graphJson?: string, userId?: string }): Promise<void> {
+      try {
+          // Use DB_COLLECTION_FEEDBACK if imported, else string literal 'feedback'
+          // Since I updated config.ts but not the import in this file yet (wait, I should check imports)
+          // I'll rely on the literal or add the import if needed.
+          // Let's use 'feedback' string literal here or assume config updated.
+          // Wait, I updated config.ts, but I need to import it.
+          // Actually, let's just use 'feedback' string to be safe/quick or update import.
+          // I'll update the import in a separate step or just use 'feedback'.
+          await db.collection('feedback').add({
+              ...data,
+              created_at: FieldValue.serverTimestamp()
+          });
+      } catch (e: any) {
+          console.error("Failed to submit feedback:", e);
+          throw new Error("Failed to save feedback");
+      }
+  }
 
   async assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats): Promise<void> {
       const stdName = standardizeIngredientName(ingredientName);
@@ -1376,6 +1397,10 @@ export class MemoryDataService implements DataService {
 
     async retryIconGeneration(ingredientName: string) {
         console.log(`[MemoryDataService] Retry requested for ${ingredientName} (No-op in memory mode)`);
+    }
+
+    async submitFeedback(data: { message: string, url: string, email?: string, graphJson?: string, userId?: string }): Promise<void> {
+        console.log('[MemoryDataService] Feedback submitted:', data);
     }
 
     async listDebugFiles(): Promise<any[]> {

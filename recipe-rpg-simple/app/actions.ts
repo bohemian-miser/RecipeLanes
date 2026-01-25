@@ -390,3 +390,23 @@ export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: st
         return { success: false, error: e.message };
     }
 }
+
+export async function submitFeedbackAction(data: { message: string, url: string, email?: string, graphJson?: string }) {
+    try {
+        const session = await getAuthService().verifyAuth();
+        const userId = session?.uid;
+        
+        if (!data.message || !data.message.trim()) {
+            return { error: 'Message is required' };
+        }
+
+        await getDataService().submitFeedback({
+            ...data,
+            userId
+        });
+        return { success: true };
+    } catch (e: any) {
+        console.error('submitFeedbackAction failed:', e);
+        return { error: e.message };
+    }
+}

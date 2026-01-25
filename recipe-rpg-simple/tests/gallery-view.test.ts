@@ -1,5 +1,6 @@
 import { getDataService } from '../lib/data-service';
 import type { RecipeGraph } from '../lib/recipe-lanes/types';
+import { db } from '../lib/firebase-admin';
 import assert from 'node:assert';
 
 // Mock Graph
@@ -14,7 +15,9 @@ async function testGalleryView() {
     const service = getDataService();
 
     console.log(" [1] Public Filter");
-    await service.saveRecipe({ ...mockGraph, title: 'Public 1' }, undefined, 'u1', 'public');
+    const pubId = await service.saveRecipe({ ...mockGraph, title: 'Public 1' }, undefined, 'u1', 'public');
+    await db.collection('recipes').doc(pubId).update({ isVetted: true });
+
     await service.saveRecipe({ ...mockGraph, title: 'Private 1' }, undefined, 'u1', 'private');
     await service.saveRecipe({ ...mockGraph, title: 'Unlisted 1' }, undefined, 'u1', 'unlisted');
 
@@ -24,6 +27,12 @@ async function testGalleryView() {
     assert(titles.includes('Public 1'), "Should contain Public 1");
     assert(!titles.includes('Private 1'), "Should NOT contain Private 1");
     assert(!titles.includes('Unlisted 1'), "Should NOT contain Unlisted 1");
+    
+    // Test that unvetted is hidden
+    const unvettedId = await service.saveRecipe({ ...mockGraph, title: 'Public Unvetted' }, undefined, 'u1', 'public');
+    const publicRecipes2 = await service.getPublicRecipes(10);
+    const titles2 = publicRecipes2.map(r => r.title);
+    assert(!titles2.includes('Public Unvetted'), "Should NOT contain Unvetted recipe");
 
     console.log(" [2] User Filter");
     await service.saveRecipe({ ...mockGraph, title: 'My Public' }, undefined, 'me', 'public');

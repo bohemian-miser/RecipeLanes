@@ -60,6 +60,7 @@ export interface RecipeGraph {
   originalText?: string;
   layoutMode?: string;
   visibility?: 'public' | 'unlisted' | 'private';
+  isVetted?: boolean;
   
   // Scaling
   serves?: number; // Current servings setting

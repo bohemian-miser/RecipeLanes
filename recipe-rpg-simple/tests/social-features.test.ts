@@ -1,6 +1,7 @@
 import { getDataService } from '../lib/data-service';
 import type { RecipeGraph } from '../lib/recipe-lanes/types';
 import { clearFirestore } from '../e2e/utils/admin-utils';
+import { db } from '../lib/firebase-admin';
 import assert from 'node:assert';
 
 // Mock Graph
@@ -30,18 +31,21 @@ async function testSocialFeatures() {
 
     // 2. Filter Public
     console.log(" [2] Filter Public");
-    await service.saveRecipe({ ...mockGraph, title: 'Public One' }, undefined, 'u1', 'public');
+    const pubId = await service.saveRecipe({ ...mockGraph, title: 'Public One' }, undefined, 'u1', 'public');
+    await db.collection('recipes').doc(pubId).update({ isVetted: true });
+
     await service.saveRecipe({ ...mockGraph, title: 'Private One' }, undefined, 'u1', 'unlisted');
 
     const publicRecipes = await service.getPublicRecipes(10);
-    // Note: getPublicRecipes might return 'Public One' AND the previous 'Test Recipe' (if public)
+    // Note: getPublicRecipes might return 'Public One' AND the previous 'Test Recipe' (if vetted? No id1 is not vetted)
     const titles = publicRecipes.map(r => r.title);
     assert(titles.includes('Public One'), "Should find public recipe");
     assert(!titles.includes('Private One'), "Should NOT find unlisted recipe");
 
     // 3. Search
     console.log(" [3] Search");
-    await service.saveRecipe({ ...mockGraph, title: 'Spaghetti Bolognese' }, undefined, 'u1', 'public');
+    const spagId = await service.saveRecipe({ ...mockGraph, title: 'Spaghetti Bolognese' }, undefined, 'u1', 'public');
+    await db.collection('recipes').doc(spagId).update({ isVetted: true });
     
     const results = await service.searchPublicRecipes('Spaghetti');
     assert.strictEqual(results.length, 1, "Search count mismatch");
@@ -49,22 +53,15 @@ async function testSocialFeatures() {
 
     // Search by content (Ingredient)
     const contentResults = await service.searchPublicRecipes('Step 1'); // mockGraph has "Step 1" node
-    assert.strictEqual(contentResults.length, 3, "Content search count mismatch (Test Recipe + Public One + Spaghetti)");
-    // Note: mockGraph is used in 3 public saves above: 'Test Recipe' (implicit from first save?), 'Public One', 'Spaghetti Bolognese'.
-    // Wait, first save: saveRecipe(mockGraph... 'public') -> id1.
-    // Second: 'Public One' -> public.
-    // Third: 'Spaghetti' -> public.
-    // 'Chocolate Cake' -> public.
-    // 'Private One' -> unlisted.
-    // 'Chocolate Cake' uses mockGraph which has "Step 1".
-    // So 4 public recipes have "Step 1".
-    // Let's create a unique content recipe to be sure.
+    // Public One + Spaghetti = 2. id1 is public but not vetted.
+    assert.strictEqual(contentResults.length, 2, "Content search count mismatch (Public One + Spaghetti)");
     
-    await service.saveRecipe({ 
+    const hiddenId = await service.saveRecipe({ 
         ...mockGraph, 
         title: 'Hidden Gem', 
         nodes: [{ id: '9', laneId: 'l1', text: 'SecretIngredient', visualDescription: '', type: 'ingredient' }]
     }, undefined, 'u1', 'public');
+    await db.collection('recipes').doc(hiddenId).update({ isVetted: true });
     
     const secretResults = await service.searchPublicRecipes('SecretIngredient');
     assert.strictEqual(secretResults.length, 1, "Secret ingredient search failed");

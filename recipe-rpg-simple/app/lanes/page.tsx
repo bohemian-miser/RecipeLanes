@@ -477,7 +477,7 @@ const handleVisualize = async () => {
         url.searchParams.delete('new');
         url.searchParams.set('id', res.id);
         
-        window.history.pushState({}, '', url.pathname + url.search);
+        router.push(url.pathname + url.search);
         
         if (user) setOwnerId(user.uid); // is this needed??
 

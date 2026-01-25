@@ -56,10 +56,29 @@ export interface DataService {
   assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats): Promise<void>;
   
   submitFeedback(data: { message: string, url: string, email?: string, graphJson?: string, userId?: string }): Promise<void>;
+  
+  vetRecipe(recipeId: string, isVetted: boolean): Promise<void>;
+  getUnvettedRecipes(limit: number): Promise<any[]>;
 }
 
 // --- Firebase Implementation ---
 export class FirebaseDataService implements DataService { 
+
+  async vetRecipe(recipeId: string, isVetted: boolean): Promise<void> {
+      await db.collection(DB_COLLECTION_RECIPES).doc(recipeId).update({
+          isVetted: isVetted
+      });
+  }
+  
+  async getUnvettedRecipes(limit: number): Promise<any[]> {
+      const snapshot = await db.collection(DB_COLLECTION_RECIPES)
+          .where('visibility', '==', 'public')
+          .where('isVetted', '==', false) // Note: Need index or handle missing field
+          .orderBy('created_at', 'desc')
+          .limit(limit)
+          .get();
+      return this.mapRecipes(snapshot);
+  }
 
   async submitFeedback(data: { message: string, url: string, email?: string, graphJson?: string, userId?: string }): Promise<void> {
       try {
@@ -424,6 +443,7 @@ export class FirebaseDataService implements DataService {
       try {
           const snapshot = await db.collection(DB_COLLECTION_RECIPES)
               .where('visibility', '==', 'public')
+              .where('isVetted', '==', true)
               .orderBy('created_at', 'desc')
               .limit(limit)
               .get();
@@ -436,23 +456,29 @@ export class FirebaseDataService implements DataService {
 
   async searchPublicRecipes(query: string): Promise<any[]> {
       const term = query.toLowerCase();
-      const snapshot = await db.collection(DB_COLLECTION_RECIPES)
-          .where('visibility', '==', 'public')
-          .orderBy('created_at', 'desc')
-          .limit(100)
-          .get();
-      
-      return snapshot.docs
-        .filter(doc => {
-            const data = doc.data();
-            const title = (data.title || data.graph?.title || '').toLowerCase();
-            const content = (data.graph?.originalText || '').toLowerCase();
-            const nodes = data.graph?.nodes || [];
-            const nodeText = nodes.some((n: any) => n.text?.toLowerCase().includes(term) || n.visualDescription?.toLowerCase().includes(term));
-            
-            return title.includes(term) || content.includes(term) || nodeText;
-        })
-        .map(doc => this.mapRecipeDoc(doc));
+      try {
+          const snapshot = await db.collection(DB_COLLECTION_RECIPES)
+              .where('visibility', '==', 'public')
+              .where('isVetted', '==', true)
+              .orderBy('created_at', 'desc')
+              .limit(100)
+              .get();
+          
+          return snapshot.docs
+            .filter(doc => {
+                const data = doc.data();
+                const title = (data.title || data.graph?.title || '').toLowerCase();
+                const content = (data.graph?.originalText || '').toLowerCase();
+                const nodes = data.graph?.nodes || [];
+                const nodeText = nodes.some((n: any) => n.text?.toLowerCase().includes(term) || n.visualDescription?.toLowerCase().includes(term));
+                
+                return title.includes(term) || content.includes(term) || nodeText;
+            })
+            .map(doc => this.mapRecipeDoc(doc));
+      } catch (e: any) {
+          console.error('[DataService] Search failed:', e);
+          return [];
+      }
   }
 
   async getUserRecipes(userId: string): Promise<any[]> {
@@ -507,6 +533,7 @@ export class FirebaseDataService implements DataService {
       data.created_at = FieldValue.serverTimestamp();
       data.likes = 0;
       data.dislikes = 0;
+      data.isVetted = false;
       
       const doc = await db.collection(DB_COLLECTION_RECIPES).add(removeUndefined(data));
       return doc.id;
@@ -639,6 +666,7 @@ export class FirebaseDataService implements DataService {
           ownerId: data.ownerId,
           ownerName: data.ownerName,
           visibility: data.visibility || 'unlisted',
+          isVetted: data.isVetted || false,
           likes: data.likes || 0,
           dislikes: data.dislikes || 0
       };
@@ -997,6 +1025,7 @@ export class MemoryDataService implements DataService {
         ownerName?: string;
         sourceId?: string;
         visibility: string;
+        isVetted?: boolean;
         stats: { likes: number; dislikes: number };
         created_at: number;
     }>();
@@ -1155,7 +1184,7 @@ export class MemoryDataService implements DataService {
 
     async getPublicRecipes(limit: number): Promise<any[]> {
         return Array.from(this.recipes.entries())
-            .filter(([_, r]) => r.visibility === 'public')
+            .filter(([_, r]) => r.visibility === 'public' && r.isVetted)
             .sort((a, b) => b[1].created_at - a[1].created_at)
             .map(([id, r]) => this.mapMemoryRecipe(id, r))
             .slice(0, limit);
@@ -1165,7 +1194,7 @@ export class MemoryDataService implements DataService {
         const term = query.toLowerCase();
         return Array.from(this.recipes.entries())
             .filter(([_, r]) => {
-                if (r.visibility !== 'public') return false;
+                if (r.visibility !== 'public' || !r.isVetted) return false;
                 const title = (r.graph.title || '').toLowerCase();
                 const content = (r.graph.originalText || '').toLowerCase();
                 const nodes = r.graph.nodes || [];
@@ -1173,6 +1202,19 @@ export class MemoryDataService implements DataService {
                 return title.includes(term) || content.includes(term) || nodeText;
             })
             .map(([id, r]) => this.mapMemoryRecipe(id, r));
+    }
+    
+    async vetRecipe(recipeId: string, isVetted: boolean): Promise<void> {
+        const r = this.recipes.get(recipeId);
+        if (r) r.isVetted = isVetted;
+    }
+    
+    async getUnvettedRecipes(limit: number): Promise<any[]> {
+        return Array.from(this.recipes.entries())
+            .filter(([_, r]) => r.visibility === 'public' && !r.isVetted)
+            .sort((a, b) => b[1].created_at - a[1].created_at)
+            .map(([id, r]) => this.mapMemoryRecipe(id, r))
+            .slice(0, limit);
     }
 
     async getUserRecipes(userId: string): Promise<any[]> {
@@ -1314,6 +1356,7 @@ export class MemoryDataService implements DataService {
             ownerId: r.ownerId,
             ownerName: r.ownerName,
             visibility: r.visibility,
+            isVetted: r.isVetted || false,
             likes: r.stats.likes,
             dislikes: r.stats.dislikes
         };

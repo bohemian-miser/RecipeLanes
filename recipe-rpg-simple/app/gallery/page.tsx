@@ -24,6 +24,13 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
       } else if (filter === 'starred') {
           if (!session) return <Login />;
           recipes = await getDataService().getStarredRecipes(session.uid);
+      } else if (filter === 'unvetted') {
+          if (!session?.isAdmin) {
+              recipes = [];
+              errorMsg = "Unauthorized";
+          } else {
+              recipes = await getDataService().getUnvettedRecipes(50);
+          }
       } else if (query) {
           recipes = await getDataService().searchPublicRecipes(query);
       } else {
@@ -62,6 +69,12 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
                     <Globe className="w-4 h-4" />
                     <span>Gallery</span>
                 </Link>
+                {session?.isAdmin && (
+                    <Link href="/gallery?filter=unvetted" className={`${navItemClass} ${filter === 'unvetted' ? 'text-white bg-zinc-800' : ''}`} title="Unvetted Recipes">
+                        <span className="text-orange-500 font-bold">!</span>
+                        <span>Unvetted</span>
+                    </Link>
+                )}
                 <Link href="/gallery?filter=mine" className={`${navItemClass} ${filter === 'mine' ? 'text-white bg-zinc-800' : ''}`} title="My Recipes">
                     <User className="w-4 h-4" />
                     <span className="hidden md:inline">Mine</span>
@@ -125,7 +138,7 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {recipes.map((recipe: any) => (
                 <div key={recipe.id} className="h-full">
-                    <RecipeCard recipe={recipe} userId={session?.uid} />
+                    <RecipeCard recipe={recipe} userId={session?.uid} isAdmin={session?.isAdmin} />
                 </div>
             ))}
             

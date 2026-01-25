@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { ChefHat, Calendar, GitGraph, Copy, Star, ThumbsUp, ThumbsDown, Trash2 } from 'lucide-react';
+import { ChefHat, Calendar, GitGraph, Copy, Star, ThumbsUp, ThumbsDown, Trash2, CheckCircle } from 'lucide-react';
 import { useState } from 'react';
-import { toggleStarAction, voteRecipeAction, copyRecipeAction, deleteRecipeAction } from '@/app/actions';
+import { toggleStarAction, voteRecipeAction, copyRecipeAction, deleteRecipeAction, vetRecipeAction } from '@/app/actions';
 import { useRouter } from 'next/navigation';
 
 interface RecipeCardProps {
@@ -17,17 +17,21 @@ interface RecipeCardProps {
     dislikes: number;
     ownerId?: string;
     ownerName?: string;
+    isVetted?: boolean;
   };
   userId?: string; // Optional: Current user ID for optimistic updates
+  isAdmin?: boolean;
 }
 
-export function RecipeCard({ recipe, userId }: RecipeCardProps) {
+export function RecipeCard({ recipe, userId, isAdmin }: RecipeCardProps) {
   const router = useRouter();
   const [likes, setLikes] = useState(recipe.likes);
   const [isStarred, setIsStarred] = useState(false); // Optimistic default
   const [isCopying, setIsCopying] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleted, setIsDeleted] = useState(false);
+  const [isVetting, setIsVetting] = useState(false);
+  const [isVetted, setIsVetted] = useState(recipe.isVetted);
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -42,6 +46,21 @@ export function RecipeCard({ recipe, userId }: RecipeCardProps) {
         alert(res.error || 'Failed to delete');
         setIsDeleting(false);
     }
+  };
+
+  const handleVet = async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsVetting(true);
+      const res = await vetRecipeAction(recipe.id, true);
+      if (res.success) {
+          setIsVetted(true);
+          // Optional: Refresh page to update list if in "Unvetted" view
+          router.refresh();
+      } else {
+          alert(res.error || 'Failed to vet');
+      }
+      setIsVetting(false);
   };
 
   if (isDeleted) return null;
@@ -76,10 +95,20 @@ export function RecipeCard({ recipe, userId }: RecipeCardProps) {
 
   return (
     <Link href={`/lanes?id=${recipe.id}`} className="block group h-full">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-yellow-500/50 hover:shadow-xl hover:shadow-yellow-500/5 transition-all duration-300 h-full flex flex-col relative">
+      <div className={`bg-zinc-900 border ${!isVetted && isAdmin ? 'border-orange-500/50' : 'border-zinc-800'} rounded-xl overflow-hidden hover:border-yellow-500/50 hover:shadow-xl hover:shadow-yellow-500/5 transition-all duration-300 h-full flex flex-col relative`}>
         
         {/* Actions Overlay (Visible on Hover for Desktop, Always for Touch) */}
         <div className="absolute top-2 right-2 z-10 flex gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+            {isAdmin && !isVetted && (
+                <button 
+                    onClick={handleVet}
+                    disabled={isVetting}
+                    className="p-2 bg-black/50 hover:bg-green-500/20 text-zinc-300 hover:text-green-500 rounded-full backdrop-blur-sm transition-colors"
+                    title="Approve (Vet) Recipe"
+                >
+                    <CheckCircle className={`w-4 h-4 ${isVetting ? 'animate-spin' : ''}`} />
+                </button>
+            )}
             <button 
                 onClick={handleCopy} 
                 disabled={isCopying}
@@ -141,7 +170,7 @@ export function RecipeCard({ recipe, userId }: RecipeCardProps) {
                 <div className="flex items-center gap-1.5" title="Created At">
                     <Calendar className="w-3 h-3" />
                     <span suppressHydrationWarning>
-                        {recipe.createdAt ? new Date(recipe.createdAt).toLocaleDateString() : 'Unknown'}
+                        {recipe.createdAt ? new Date(recipe.createdAt).toLocaleDateString('en-GB') : 'Unknown'}
                     </span>
                 </div>
                 <div className="flex items-center gap-1.5" title="Steps">

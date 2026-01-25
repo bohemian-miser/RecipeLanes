@@ -410,3 +410,27 @@ export async function submitFeedbackAction(data: { message: string, url: string,
         return { error: e.message };
     }
 }
+
+export async function vetRecipeAction(recipeId: string, isVetted: boolean) {
+    const session = await getAuthService().verifyAuth();
+    if (!session?.isAdmin) return { error: 'Admin required' };
+
+    try {
+        await getDataService().vetRecipe(recipeId, isVetted);
+        return { success: true };
+    } catch (e: any) {
+        return { error: e.message };
+    }
+}
+
+export async function getUnvettedRecipesAction(limit: number = 20) {
+    const session = await getAuthService().verifyAuth();
+    if (!session?.isAdmin) return { error: 'Admin required' };
+
+    try {
+        const recipes = await getDataService().getUnvettedRecipes(limit);
+        return { recipes };
+    } catch (e: any) {
+        return { error: e.message };
+    }
+}

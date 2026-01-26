@@ -16,9 +16,13 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
   const [isRerolling, setIsRerolling] = useState(false);
   const [prevIconUrl, setPrevIconUrl] = useState(getNodeIconUrl(data));
   
-  if (getNodeIconUrl(data) !== prevIconUrl) {
-      setPrevIconUrl(getNodeIconUrl(data));
-      if (isRerolling) setIsRerolling(false);
+  const currentIconUrl = getNodeIconUrl(data);
+  if (currentIconUrl !== prevIconUrl) {
+      setPrevIconUrl(currentIconUrl);
+      // Only stop rerolling if we received a valid URL (ignore clearing updates)
+      if (isRerolling && currentIconUrl) {
+          setIsRerolling(false);
+      }
   }
 
   const [isPivotMode, setIsPivotMode] = useState(false);

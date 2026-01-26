@@ -23,7 +23,7 @@ Manage Google Cloud resources (if authenticated).
 Manage Firebase services (Firestore, Functions, Hosting).
 
 *   **Emulators:** `firebase emulators:start` (starts local dev environment)
-*   **Deploy Functions:** `firebase deploy --only functions`
+*   **Deploy Functions:** `firebase deploy --only functions` # from the functions folder i think.
 *   **Firestore Shell:** `firebase firestore:shell` (interactive data explorer)
 
 ## Local Scripts (`package.json`)
@@ -52,6 +52,14 @@ Browser automation and testing.
 ## Agent Specifics
 *   **Context:** Always check `GEMINI.md` in root or subfolders for project-specific context.
 *   **Memory:** Use `save_memory` to persist important facts across sessions.
+
+
+
+I've just added an index to firestore.indexes.json, how do i deploy?
+firebase deploy --only firestore:indexes
+
+
+
 
 
 Other things that have been handy:

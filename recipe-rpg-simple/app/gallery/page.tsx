@@ -75,14 +75,18 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
                         <span>Unvetted</span>
                     </Link>
                 )}
-                <Link href="/gallery?filter=mine" className={`${navItemClass} ${filter === 'mine' ? 'text-white bg-zinc-800' : ''}`} title="My Recipes">
-                    <User className="w-4 h-4" />
-                    <span className="hidden md:inline">Mine</span>
-                </Link>
-                <Link href="/gallery?filter=starred" className={`${navItemClass} ${filter === 'starred' ? 'text-white bg-zinc-800' : ''}`} title="Starred">
-                    <Star className="w-4 h-4" />
-                    <span className="hidden md:inline">Starred</span>
-                </Link>
+                {session && (
+                    <>
+                        <Link href="/gallery?filter=mine" className={`${navItemClass} ${filter === 'mine' ? 'text-white bg-zinc-800' : ''}`} title="My Recipes">
+                            <User className="w-4 h-4" />
+                            <span className="hidden md:inline">Mine</span>
+                        </Link>
+                        <Link href="/gallery?filter=starred" className={`${navItemClass} ${filter === 'starred' ? 'text-white bg-zinc-800' : ''}`} title="Starred">
+                            <Star className="w-4 h-4" />
+                            <span className="hidden md:inline">Starred</span>
+                        </Link>
+                    </>
+                )}
                 <Link href="/lanes?new=true" className={navItemClass} title="Create New">
                     <Plus className="w-4 h-4" />
                     <span className="hidden md:inline">New</span>

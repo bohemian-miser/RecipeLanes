@@ -9,9 +9,9 @@ interface GenerateIconOptions {
     skipStorage?: boolean; // For testing/mock
 }
 
-// This functipno should only be called from Cloud Functions.
-export async function generateAndStoreIcon(options: GenerateIconOptions) {
-    const { ingredientName, visualDescription = ingredientName, skipStorage = false } = options;
+// This function should only be called from Cloud Functions.
+export async function generateIconData(ingredientName: string) {
+    // const { ingredientName, visualDescription = ingredientName, skipStorage = false } = options;
     console.log(`[IconGenerator] 🟢 Generating icon for: "${ingredientName}"`);
 
     // 1. Generate Image (AI)
@@ -48,8 +48,45 @@ export async function generateAndStoreIcon(options: GenerateIconOptions) {
         processedBuffer = Buffer.from(arrayBuffer);
     }
 
-    // 4. Save to Storage & DB
-    console.log(`[IconGenerator] Saving to DataService...`);
+    // 4. Save to Storage (Upload)
+    console.log(`[IconGenerator] Uploading to Storage...`);
+    const dataService = getDataService();
+    
+    // Metadata
+    const meta = {
+        lcb: 0, 
+        impressions: 0,
+        rejections: 0,
+        textModel: 'unknown',
+        imageModel: 'imagen-3.0', // lies
+        geometry: metadata 
+    };
+
+    const uploadResult = await dataService.uploadIcon(ingredientName, processedBuffer, 'image/png', meta);
+
+    // Construct the full Icon object ready for publishing
+    const iconData = {
+        id: uploadResult.iconId,
+        path: uploadResult.path,
+        url: uploadResult.url,
+        score: meta.lcb,
+        impressions: meta.impressions,
+        rejections: meta.rejections,
+        visualDescription: ingredientName,
+        fullPrompt: prompt,
+        textModel: meta.textModel,
+        imageModel: meta.imageModel,
+        metadata: meta.geometry,
+        created_at: new Date().toISOString()
+    };
+
+    return { 
+        iconData
+    };
+}
+
+export async function generateAndStoreIcon(ingredientName: string) {
+    const { iconData } = await generateIconData(ingredientName);
     
     // Find or Create Ingredient Group
     const dataService = getDataService();
@@ -62,31 +99,13 @@ export async function generateAndStoreIcon(options: GenerateIconOptions) {
         ingredientDocId = await dataService.createIngredient(ingredientName);
     }
 
-    // Metadata
-    const meta = {
-        lcb: 0, // Initial score (wilson score for 1 impression, 0 rejections is >0 but we use helper usually)
-        impressions: 0,
-        rejections: 0,
-        textModel: 'unknown',
-        imageModel: 'imagen-3.0',
-        geometry: metadata // Save geometric metadata (center, bbox)
-    };
-
-    // Save
-    const result = await dataService.saveIcon(
-        ingredientDocId,
-        ingredientName,
-        visualDescription,
-        prompt,
-        downloadURL, // Original URL (or we could use a new one if we upload processed)
-        processedBuffer,
-        meta
-    );
+    console.log(`[IconGenerator] Publishing to Firestore...`);
+    const result = await dataService.publishIcon(ingredientDocId, ingredientName, iconData);
 
     console.log(`[IconGenerator] ✅ Success. Icon ID: ${result.iconId}`);
     return {
         ...result,
-        prompt,
-        lcb: meta.lcb
+        prompt: iconData.fullPrompt,
+        lcb: iconData.score
     };
 }

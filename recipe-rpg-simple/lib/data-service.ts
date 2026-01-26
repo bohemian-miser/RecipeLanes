@@ -14,6 +14,19 @@ export interface DataService {
   getIconsForIngredient(ingredientId: string): Promise<any[]>;
   getAllIcons(): Promise<any[]>;
   
+  uploadIcon(
+      ingredientName: string, 
+      buffer: ArrayBuffer | Buffer, 
+      contentType: string, 
+      metadata: any
+  ): Promise<{ url: string, path: string, iconId: string }>;
+
+  publishIcon(
+      ingredientId: string, 
+      ingredientName: string, 
+      iconData: any
+  ): Promise<IconStats>;
+
   saveIcon(
       ingredientId: string, 
       ingredientName: string, 
@@ -144,6 +157,7 @@ export class FirebaseDataService implements DataService {
       });
   }
 
+  // TEST ONLY.
   async waitForQueue(ingredientName: string, timeoutMs: number = 15000): Promise<IconStats | null> {
 
       const stdName = standardizeIngredientName(ingredientName);
@@ -188,84 +202,160 @@ export class FirebaseDataService implements DataService {
       }
       return null;
   }
+        
+    /**
+     * Helper to determine if a single node requires icon processing.
+     */
+    private nodeNeedsProcessing(node: any, recipeRejections: any): boolean {
+        if (!node.visualDescription) return false;
+        if (!node.icon || !node.icon.iconId) return true;
+        
+        const stdName = standardizeIngredientName(node.visualDescription as string);
+        const isRejected = recipeRejections[stdName]?.includes(node.icon.iconId);
+        return !!isRejected;
+    }
 
-  async resolveRecipeIcons(recipeId: string): Promise<void> {
-      console.log(`[FirebaseDataService] resolveRecipeIcons: ${recipeId}`);
-      const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
-      const doc = await recipeRef.get();
-      
-      if (!doc.exists) {
-          console.error(`Recipe ${recipeId} not found.`);
-          return;
-      }
-      
-      const data = doc.data();
-      const graph = data?.graph;
-      
-      if (!graph || !Array.isArray(graph.nodes)) return;
+    /**
+     * Attempts to resolve missing icons from the cache. 
+     * Returns the list of standard names that were cache misses and still need processing.
+     */
+    private async attemptUpdateFromCache(recipeId: string, nodes: any[], recipeRejections: any): Promise<string[]> {
+        const stdNamesNeedingIcons = Array.from(new Set(
+            nodes.map(n => standardizeIngredientName(String(n.visualDescription)))
+        )) as string[];
 
-      const recipeRejections = graph.rejections || {};
+        if (stdNamesNeedingIcons.length === 0) return [];
 
-      // Identify nodes that need icons
-      const nodesToProcess = graph.nodes.filter((n: any) => {
-          if (!n.visualDescription) return false;
-          if (!n.iconId) return true;
-          const stdName = standardizeIngredientName(n.visualDescription as string);
-          return recipeRejections[stdName]?.includes(n.iconId);
-      });
-      
-      if (nodesToProcess.length === 0) return;
+        // Fetch cached ingredients
+        const ingRefs = stdNamesNeedingIcons.map(name => db.collection(DB_COLLECTION_INGREDIENTS).doc(name));
+        const ingSnaps = await db.getAll(...ingRefs);
+        
+        const ingMap = new Map<string, any>();
+        ingSnaps.forEach(s => {
+            if (s.exists) ingMap.set(s.id, s.data());
+        });
 
-      const batch = db.batch();
-      let queuedCount = 0;
-      
-      // Get all the ingredients that need resolving - Really likely to only be 1 at a time. Could be issues with handling all of them for subsequent clicks.
-      const uniqueNames = Array.from(new Set(nodesToProcess.map((n: any) => standardizeIngredientName(String(n.visualDescription))))) as string[];
-      const ingRefs = uniqueNames.map((name: string) => db.collection(DB_COLLECTION_INGREDIENTS).doc(name));
-      let ingSnaps: FirebaseFirestore.DocumentSnapshot[] = [];
-      if (ingRefs.length > 0) {
-          ingSnaps = await db.getAll(...ingRefs);
-      }
-      const ingMap = new Map<string, any>();
-      ingSnaps.forEach(s => {
-          if (s.exists) ingMap.set(s.id, s.data());
-      });
+        const cacheMisses: string[] = [];
 
-      for (const node of nodesToProcess) {
-          const stdName = standardizeIngredientName(String(node.visualDescription));
-          const rejectedIds = new Set<string>(recipeRejections[stdName] || []);
-          
-          const ingData = ingMap.get(stdName);
-          let bestIcon = null;
+        // Evaluate each needed ingredient
+        for (const stdName of stdNamesNeedingIcons) {
+            const rejectedIds = new Set<string>(recipeRejections[stdName] || []);
+            const ingData = ingMap.get(stdName);
+            let bestIcon = null;
 
-          if (ingData && ingData.icons && Array.isArray(ingData.icons)) {
-              const sortedIcons = [...ingData.icons].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
-              for (const icon of sortedIcons) {
-                  if (!rejectedIds.has(icon.id) && !icon.marked_for_deletion) {
-                      bestIcon = icon;
-                      break;
-                  }
-              }
-          }
+            if (ingData?.icons && Array.isArray(ingData.icons)) {
+                const sortedIcons = [...ingData.icons].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+                bestIcon = sortedIcons.find(icon => !rejectedIds.has(icon.id) && !icon.marked_for_deletion);
+            }
 
-          if (bestIcon) {
-              console.log(`[FirebaseDataService] resolveRecipeIcons: Assigning existing icon for "${stdName}" in recipe ${recipeId}`);
-              await this.assignIconToRecipe(recipeId, stdName, { iconId: bestIcon.id, iconUrl: bestIcon.url, metadata: bestIcon.metadata });
-          } else {
-              const queueRef = db.collection(DB_COLLECTION_QUEUE).doc(stdName);
-              batch.set(queueRef, {
-                  status: 'pending',
-                  created_at: FieldValue.serverTimestamp(),
-                  recipes: FieldValue.arrayUnion(recipeId)
-              }, { merge: true });
-              queuedCount++;
-          }
-      }
+            if (bestIcon) {
+                console.log(`[FirebaseDataService] resolveRecipeIcons: Cache HIT for "${stdName}" in recipe ${recipeId}`);
+                // Assuming assignIconToRecipe is already implemented elsewhere in your class
+                await this.assignIconToRecipe(recipeId, stdName, { 
+                    iconId: bestIcon.id, 
+                    iconUrl: bestIcon.url, 
+                    metadata: bestIcon.metadata 
+                });
+            } else {
+                console.log(`[FirebaseDataService] resolveRecipeIcons: Cache MISS for "${stdName}"`);
+                cacheMisses.push(stdName);
+            }
+        }
 
-      if (queuedCount > 0) {
-          await batch.commit();
-      }
-  }
+        return cacheMisses;
+    }
+        /**
+     * Safely adds an ingredient to the queue via a transaction.
+     */
+    private async queueIconForGeneration(recipeId: string, stdName: string): Promise<void> {
+        const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+        const queueRef = db.collection(DB_COLLECTION_QUEUE).doc(stdName);
+
+        await db.runTransaction(async (transaction) => {
+            const [recipeDoc, queueDoc] = await transaction.getAll(recipeRef, queueRef);
+
+            if (!recipeDoc.exists) {
+                console.log(`THIS SHOULD NOT HAPPEN or if it does we should be fine? - [Transaction] Recipe ${recipeId} not found. Exiting.`);
+                return; // Recipe deleted mid-process
+            }
+
+            // 1. "Check again": Validate if this node still needs processing
+            const recipeData = recipeDoc.data();
+            const freshNode = recipeData?.graph?.nodes?.find(
+                (n: any) => standardizeIngredientName(n.visualDescription) === stdName
+            );
+            const rejections = recipeData?.graph?.rejections || {};
+
+            if (!freshNode || !this.nodeNeedsProcessing(freshNode, rejections)) {
+                console.log(`[Transaction] "${stdName}" no longer needs processing. Exiting.`);
+                return; 
+            }
+
+            // 2. Handle Queue Document Creation / Updating
+            if (!queueDoc.exists) {
+                // Create new pending entry
+                transaction.set(queueRef, {
+                    status: 'pending',
+                    created_at: FieldValue.serverTimestamp(),
+                    recipes: [recipeId],
+                    recipeCount: 1
+                });
+                console.log(`[Transaction] Created new queue entry for "${stdName}"`);
+            } else {
+                // Update existing entry
+                const existingData = queueDoc.data();
+                const existingRecipes = existingData?.recipes || [];
+                
+                if (!existingRecipes.includes(recipeId)) {
+                    existingRecipes.push(recipeId);
+                    transaction.update(queueRef, {
+                        recipes: existingRecipes,
+                        recipeCount: existingRecipes.length // Accurate count inside transaction
+                    });
+                    console.log(`[Transaction] Added recipe ${recipeId} to existing queue for "${stdName}"`);
+                }
+            }
+        });
+    }
+
+    async resolveRecipeIcons(recipeId: string): Promise<void> {
+        console.log(`[FirebaseDataService] resolveRecipeIcons: ${recipeId}`);
+        const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+        const doc = await recipeRef.get();
+        
+        if (!doc.exists) {
+            console.error(`Recipe ${recipeId} not found.`);
+            return;
+        }
+        
+        const data = doc.data();
+        if (!data?.graph || !Array.isArray(data.graph.nodes)) return;
+
+        const recipeRejections = data.graph.rejections || {};
+
+        // 1. Initial check: Filter nodes that need processing
+        const nodesToProcess = data.graph.nodes.filter((n: any) => 
+            this.nodeNeedsProcessing(n, recipeRejections)
+        );
+        
+        if (nodesToProcess.length === 0) return;
+        console.log(`Processing ${nodesToProcess.length} nodes for recipe ${recipeId}`);
+
+        // 2. Attempt to resolve from cache
+        const unresolvedNames = await this.attemptUpdateFromCache(recipeId, nodesToProcess, recipeRejections);
+
+        if (unresolvedNames.length === 0) return;
+
+        // 3. Queue remaining misses via transactions
+        console.log(`Queueing ${unresolvedNames.length} ingredients for generation...`);
+        
+        const queuePromises = unresolvedNames.map(stdName => 
+            this.queueIconForGeneration(recipeId, stdName)
+        );
+
+        // Run transactions concurrently
+        await Promise.all(queuePromises);
+    }
 
   async addNodeToRecipe(recipeId: string, ingredientName: string, laneId: string = 'lane-1'): Promise<{ success: boolean, nodeId?: string, error?: string }> {
       try {
@@ -736,8 +826,7 @@ export class FirebaseDataService implements DataService {
      } catch (e: any) { return []; }
   }
 
-  async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any) {
-      // ingredientId is StdName
+  async uploadIcon(ingredientName: string, buffer: ArrayBuffer | Buffer, metadata: any): Promise<{ url: string, path: string, iconId: string }> {
       const isEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
       
       // Filename: icons/Kebab-ShortID.png
@@ -745,25 +834,23 @@ export class FirebaseDataService implements DataService {
       const shortId = iconId.substring(0, 8);
       const kebabName = ingredientName.trim().replace(/\s+/g, '-');
       const fileName = `icons/${kebabName}-${shortId}.png`;
+
+      const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
+      const bucket = storage.bucket(bucketName);
+      const file = bucket.file(fileName);
+      const bufferToSave = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer as ArrayBuffer);
       
-      let finalUrl = publicUrl;
+      await file.save(bufferToSave, {
+          metadata: { contentType: 'image/png', metadata: { ...metadata, iconId } }
+      });
+      
+      await file.makePublic();
+      return { url: file.publicUrl(), path: fileName, iconId };
+  }
 
-      if (!(process.env.MOCK_AI === 'true' && !isEmulator)) {
-          const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
-          const bucket = storage.bucket(bucketName);
-          const file = bucket.file(fileName);
-          const bufferToSave = Buffer.isBuffer(imageBuffer) ? imageBuffer : Buffer.from(imageBuffer as ArrayBuffer);
-          
-          await file.save(bufferToSave, {
-              metadata: { contentType: 'image/png', metadata: { ...meta, iconId } }
-          });
-          
-          await file.makePublic();
-          finalUrl = file.publicUrl();
-      }
-
-      // Transactional Update
+  async publishIcon(ingredientId: string, ingredientName: string, iconData: any): Promise<IconStats> {
       const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
+      
       await db.runTransaction(async (t) => {
           const doc = await t.get(docRef);
           let icons = [];
@@ -773,30 +860,56 @@ export class FirebaseDataService implements DataService {
               t.set(docRef, { name: ingredientName, created_at: FieldValue.serverTimestamp() });
           }
           
-          const newIcon: any = {
-              id: iconId,
-              path: fileName,
-              url: finalUrl,
-              score: meta.lcb || 0,
-              impressions: meta.impressions || 0,
-              rejections: meta.rejections || 0,
-              visualDescription,
-              fullPrompt,
-              created_at: new Date().toISOString()
-          };
-          
-          if (meta.geometry) {
-              newIcon.metadata = meta.geometry;
-          }
-          
-          icons.push(newIcon);
+          icons.push(iconData);
           icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
           if (icons.length > 50) icons = icons.slice(0, 50);
           
           t.update(docRef, { icons, updated_at: FieldValue.serverTimestamp() });
       });
 
-      return { iconId, iconUrl: finalUrl, metadata: meta.geometry };
+      return { 
+          iconId: iconData.id, 
+          iconUrl: iconData.url, 
+          metadata: iconData.metadata 
+      };
+  }
+
+  async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any) {
+      let finalUrl = publicUrl;
+      let finalPath = '';
+      let finalId = meta.iconId || randomUUID();
+
+      // 1. Upload if buffer provided
+      if (imageBuffer) {
+          const result = await this.uploadIcon(ingredientName, imageBuffer, { ...meta, iconId: finalId });
+          finalUrl = result.url;
+          finalPath = result.path;
+          finalId = result.iconId;
+      } else {
+          // Fallback if no buffer (shouldn't happen in generation flow, but for safety)
+          const shortId = finalId.substring(0, 8);
+          const kebabName = ingredientName.trim().replace(/\s+/g, '-');
+          finalPath = `icons/${kebabName}-${shortId}.png`;
+      }
+
+      // 2. Publish
+      const newIcon: any = {
+          id: finalId,
+          path: finalPath,
+          url: finalUrl,
+          score: meta.lcb || 0,
+          impressions: meta.impressions || 0,
+          rejections: meta.rejections || 0,
+          visualDescription,
+          fullPrompt,
+          created_at: new Date().toISOString()
+      };
+      
+      if (meta.geometry) {
+          newIcon.metadata = meta.geometry;
+      }
+
+      return this.publishIcon(ingredientId, ingredientName, newIcon);
   }
 
   async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
@@ -875,6 +988,7 @@ export class FirebaseDataService implements DataService {
       }));
   }
 
+    // queueIcons is test only! It's no longer used.
   async queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, IconStats>> {
       const immediateHits = new Map<string, IconStats>();
       if (items.length === 0) return immediateHits;
@@ -935,6 +1049,10 @@ export class FirebaseDataService implements DataService {
                   
                   if (item.recipeId) {
                       update.recipes = FieldValue.arrayUnion(item.recipeId);
+                      // Best-effort count update (ignoring race conditions for performance)
+                      const currentCount = existingData?.recipes?.length || 0;
+                      const alreadyHas = existingData?.recipes?.includes(item.recipeId);
+                      update.recipeCount = alreadyHas ? currentCount : currentCount + 1;
                   }
                   
                   if (!existingData || existingData.status === 'completed' || existingData.status === 'failed') {
@@ -1380,7 +1498,16 @@ export class MemoryDataService implements DataService {
         return memoryStore.getAllIcons().sort((a, b) => b.popularity_score - a.popularity_score);
     }
 
-    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any): Promise<IconStats> {
+    async uploadIcon(ingredientName: string, buffer: ArrayBuffer | Buffer, metadata: any): Promise<{ url: string, path: string, iconId: string }> {
+        const iconId = metadata.iconId || randomUUID();
+        return {
+            url: `https://placehold.co/64x64/png?text=Memory&uuid=${iconId}`,
+            path: `icons/${ingredientName}-${iconId}.png`,
+            iconId
+        };
+    }
+
+    async publishIcon(ingredientId: string, ingredientName: string, iconData: any): Promise<IconStats> {
         // Ensure ingredient exists
         const existing = memoryStore.getIngredients().find(i => i.name === ingredientId);
         if (!existing) {
@@ -1388,21 +1515,35 @@ export class MemoryDataService implements DataService {
         }
 
         const id = memoryStore.addIcon({
-            url: publicUrl,
+            ...iconData,
             ingredient: ingredientName,
             ingredientId: ingredientId,
-            popularity_score: meta.lcb,
+            popularity_score: iconData.score || 0,
+            marked_for_deletion: false
+        });
+        
+        return { iconId: id, iconUrl: iconData.url, metadata: iconData.metadata };
+    }
+
+    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any): Promise<IconStats> {
+        const result = await this.uploadIcon(ingredientName, imageBuffer, meta);
+        
+        const newIcon = {
+            id: result.iconId,
+            url: result.url,
+            path: result.path,
+            score: meta.lcb,
             impressions: meta.impressions,
             rejections: meta.rejections,
             created_at: Date.now(),
-            marked_for_deletion: false,
-            visualDescription: visualDescription,
-            fullPrompt: fullPrompt,
+            visualDescription,
+            fullPrompt,
             textModel: meta.textModel,
             imageModel: meta.imageModel,
             metadata: meta.geometry
-        });
-        return { iconId: id, iconUrl: publicUrl, metadata: meta.geometry };
+        };
+
+        return this.publishIcon(ingredientId, ingredientName, newIcon);
     }
 
     async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {

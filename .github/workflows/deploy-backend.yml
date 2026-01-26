@@ -7,6 +7,7 @@ on:
       - staging
     paths:
       - 'recipe-rpg-simple/functions/**'
+      - 'recipe-rpg-simple/lib/**'
       - 'recipe-rpg-simple/firestore.rules'
       - 'recipe-rpg-simple/firestore.indexes.json'
       - 'recipe-rpg-simple/storage.rules'
@@ -29,7 +30,7 @@ jobs:
 
       - name: Install Function Dependencies
         run: |
-          npm install --no-save @types/pngjs    # In parent dir for shared lib
+          npm ci                # Install root dependencies first (for tsc resolution of ../lib)
           cd functions
           npm ci
 

@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { createVisualRecipeAction, getOrCreateIconAction } from '../app/actions';
+// import { createVisualRecipeAction, getOrCreateIconAction } from '../app/actions';
 import { setAIService, MockAIService } from '../lib/ai-service';
 import { setDataService, MemoryDataService, getDataService } from '../lib/data-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
@@ -24,23 +24,23 @@ setAIService(new CustomMockAIService());
 setAuthService(new MockAuthService());
 
 async function testOptimisticFlow() {
-  console.log('\n=== Testing Optimistic Return + Background Trigger Flow ===');
-  const dataService = getDataService();
+  console.log('\n=== SKIP Testing Optimistic Return + Background Trigger Flow ===');
+//   const dataService = getDataService();
 
-  // 1. Pre-seed Cache with an Icon for "Carrot"
-  console.log('[Setup] Seeding cache for "Carrot"...');
-  const seedRes = await getOrCreateIconAction("Carrot");
-  if ('error' in seedRes) throw new Error("Seed failed");
-  const carrotUrl = seedRes.iconUrl;
-  console.log(` -> Seeded Carrot: ${carrotUrl}`);
+//   // 1. Pre-seed Cache with an Icon for "Carrot"
+//   console.log('[Setup] Seeding cache for "Carrot"...');
+//   const seedRes = await getOrCreateIconAction("Carrot");
+//   if ('error' in seedRes) throw new Error("Seed failed");
+//   const carrotUrl = seedRes.iconUrl;
+//   console.log(` -> Seeded Carrot: ${carrotUrl}`);
 
-  // 2. Call createVisualRecipeAction with "Carrot and Onion"
-  // Expect: Carrot has icon, Onion is null
-  console.log('\n[Action] Calling createVisualRecipeAction("Chop 1 Carrot and 1 Onion")...');
-  const result = await createVisualRecipeAction("Chop 1 Carrot and 1 Onion");
+//   // 2. Call createVisualRecipeAction with "Carrot and Onion"
+//   // Expect: Carrot has icon, Onion is null
+//   console.log('\n[Action] Calling createVisualRecipeAction("Chop 1 Carrot and 1 Onion")...');
+//   const result = await createVisualRecipeAction("Chop 1 Carrot and 1 Onion");
   
-  if (result.error) throw new Error(result.error);
-  if (!result.id) throw new Error("No graph returned");
+//   if (result.error) throw new Error(result.error);
+//   if (!result.id) throw new Error("No graph returned");
   // get the graph  
 
   

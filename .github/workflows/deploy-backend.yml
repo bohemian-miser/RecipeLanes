@@ -6,18 +6,18 @@ on:
       - main
       - staging
     paths:
-      - 'recipe-rpg-simple/functions/**'
-      - 'recipe-rpg-simple/lib/**'
-      - 'recipe-rpg-simple/firestore.rules'
-      - 'recipe-rpg-simple/firestore.indexes.json'
-      - 'recipe-rpg-simple/storage.rules'
+      - 'recipe-lanes/functions/**'
+      - 'recipe-lanes/lib/**'
+      - 'recipe-lanes/firestore.rules'
+      - 'recipe-lanes/firestore.indexes.json'
+      - 'recipe-lanes/storage.rules'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: recipe-rpg-simple
+        working-directory: recipe-lanes
     steps:
       - uses: actions/checkout@v4
 
@@ -26,7 +26,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: recipe-rpg-simple/functions/package-lock.json
+          cache-dependency-path: recipe-lanes/functions/package-lock.json
 
       - name: Install Function Dependencies
         run: |

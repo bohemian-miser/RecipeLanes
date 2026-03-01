@@ -7,6 +7,6 @@ debug/
 gha-creds-*.json
 test-results/
 *.env
-recipe-rpg-simple/functions/.env
+recipe-lanes/functions/.env
 *service-account.json
 .playwright-mcp/

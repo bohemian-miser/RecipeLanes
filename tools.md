@@ -27,7 +27,7 @@ Manage Firebase services (Firestore, Functions, Hosting).
 *   **Firestore Shell:** `firebase firestore:shell` (interactive data explorer)
 
 ## Local Scripts (`package.json`)
-Run these from `recipe-rpg-simple/`:
+Run these from `recipe-lanes/`:
 
 *   **`npm run dev`**: Start Next.js dev server.
 *   **`npm run build`**: Build the application.

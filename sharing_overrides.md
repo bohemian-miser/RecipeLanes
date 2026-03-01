@@ -4,21 +4,7 @@ This document outlines the state machine and user experience logic for handling 
 
 ## 1. Data Model Requirements
 
-To support this logic, the Recipe document in Firestore must support lineage tracking:
 
-```typescript
-interface Recipe {
-  id: string;
-  ownerId: string; // The creator
-  isPublic: boolean;
-  
-  // Forking Metadata
-  copiedFromId?: string; // ID of the parent recipe
-  copiedFromVersion?: number; // (Optional) For future diffing
-  
-  // ... graph data
-}
-```
 
 ## 2. State Machine & UX Logic
 

@@ -56,7 +56,7 @@ Browser automation and testing.
 
 
 I've just added an index to firestore.indexes.json, how do i deploy?
-firebase deploy --only firestore:indexes
+ firebase use recipe-lanes-staging && firebase deploy --only firestore:indexes
 
 
 

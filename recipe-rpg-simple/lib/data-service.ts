@@ -65,7 +65,7 @@ export interface DataService {
   // New Methods for Refactor
   resolveRecipeIcons(recipeId: string): Promise<void>;
   addNodeToRecipe(recipeId: string, ingredientName: string, laneId?: string): Promise<{ success: boolean, nodeId?: string, error?: string }>;
-  rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }>;
+  rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string): Promise<{ success: boolean, error?: string }>;
   assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats): Promise<void>;
   
   submitFeedback(data: { message: string, url: string, email?: string, graphJson?: string, userId?: string }): Promise<void>;
@@ -391,7 +391,7 @@ export class FirebaseDataService implements DataService {
       }
   }
 
-  async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }> {
+  async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string): Promise<{ success: boolean, error?: string }> {
       try {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
         let iconIdToReject = currentIconId;
@@ -401,6 +401,13 @@ export class FirebaseDataService implements DataService {
             if (!doc.exists) throw new Error('Recipe not found');
             
             const data = doc.data()!;
+
+            // Ownership check
+            if (data.ownerId && data.ownerId !== userId) {
+                // TODO: UI should pop up a message "save a copy to reroll"
+                throw new Error("Unauthorized: Save a copy to reroll icons in this recipe.");
+            }
+
             const graph = data.graph;
             const nodes = graph.nodes || [];
             
@@ -1231,10 +1238,15 @@ export class MemoryDataService implements DataService {
         return { success: true, nodeId };
     }
 
-    async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string): Promise<{ success: boolean, error?: string }> {
+    async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string): Promise<{ success: boolean, error?: string }> {
         const recipe = this.recipes.get(recipeId);
         if (!recipe) return { success: false, error: 'Recipe not found' };
         
+        // Ownership check
+        if (recipe.ownerId && recipe.ownerId !== userId) {
+            return { success: false, error: "Unauthorized: Save a copy to reroll icons in this recipe." };
+        }
+
         const stdName = standardizeIngredientName(ingredientName);
         
         if (!recipe.graph.rejections) recipe.graph.rejections = {};

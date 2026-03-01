@@ -25,7 +25,7 @@ import { QueueMonitor } from '@/components/queue-monitor';
 import { LogoutButton } from '@/components/logout-button';
 import { useAuth } from '@/components/auth-provider';
 import { createDebugRecipeAction, addIngredientNodeAction, rejectIcon, deleteRecipeAction } from '@/app/actions';
-import { ChefHat, Globe, Plus } from 'lucide-react';
+import { ChefHat, Globe, Plus, Github } from 'lucide-react';
 import Link from 'next/link';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
@@ -232,6 +232,10 @@ export default function Home() {
                   <Plus className="w-4 h-4" />
                   <span className="hidden md:inline">Lanes</span>
               </Link>
+
+              <a href="https://github.com/BohemianMiser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={navItemClass} title="Find me on GitHub">
+                  <Github className="w-4 h-4" />
+              </a>
 
               <div className="h-4 w-px bg-zinc-800 mx-2" />
 

@@ -29,7 +29,7 @@ import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sid
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { getNodeIconUrl, getNodeIconId, applyIconToNode, hasNodeIcon } from '@/lib/recipe-lanes/model-utils';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -630,6 +630,10 @@ const handleVisualize = async () => {
                 <button onClick={() => setShowFeedback(true)} className={navItemClass} title="Feedback & Contribute">
                     <MessageSquare className="w-4 h-4" />
                 </button>
+
+                <a href="https://github.com/BohemianMiser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={navItemClass} title="Find me on GitHub">
+                    <Github className="w-4 h-4" />
+                </a>
 
                 <div className="h-4 w-px bg-zinc-800 mx-2" />
 

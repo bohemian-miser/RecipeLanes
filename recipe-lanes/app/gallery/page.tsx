@@ -16,7 +16,7 @@
  */
 
 import Link from 'next/link';
-import { ChefHat, ArrowLeft, Search, Star, User, Plus, Globe } from 'lucide-react';
+import { ChefHat, ArrowLeft, Search, Star, User, Plus, Globe, Github } from 'lucide-react';
 import { RecipeCard } from '@/components/ui/recipe-card';
 import { getDataService } from '@/lib/data-service';
 import { getAuthService } from '@/lib/auth-service';
@@ -108,6 +108,10 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
                     <Plus className="w-4 h-4" />
                     <span className="hidden md:inline">New</span>
                 </Link>
+
+                <a href="https://github.com/BohemianMiser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={navItemClass} title="Find me on GitHub">
+                    <Github className="w-4 h-4" />
+                </a>
 
                 <div className="h-4 w-px bg-zinc-800 mx-2" />
 

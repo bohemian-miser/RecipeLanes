@@ -1,4 +1,4 @@
-# [RecipeLanes.com](http://recipelanes.com/) 🍳🛣️
+# [RecipeLanes.com](http://recipelanes.com/)
 
 **Recipe Lanes** is a visual recipe platform that transforms text into flowchart-style diagrams. It's an attempt to make cooking instructions more intuitive by showing the process as a structured flow instead of a wall of text.
 
@@ -8,7 +8,13 @@
 - **Live Site:** [recipelanes.com](http://recipelanes.com)
 - **Staging:** [staging.recipelanes.com](https://staging.recipelanes.com)
 - **Screenshots & Demos:** [Browse all assets in /docs/screenshots](./docs/screenshots)
-- **Architecture:** [Detailed System Design](./recipe-lanes/ARCHITECTURE.md)
+- **Architecture:** [Detailed System Design](./docs/ARCHITECTURE.md)
+
+---
+
+## LICENSE
+
+This project uses the `AGPL-3.0` license. You can modify this code and set up your own backend and charge people to use it, but you must make your **entire** source code (including your backend changes) open source as well. Alternatively, I'm very open to collaboration and PR's, you can also reach out at https://substack.com/@bohemianmiser.
 
 ---
 

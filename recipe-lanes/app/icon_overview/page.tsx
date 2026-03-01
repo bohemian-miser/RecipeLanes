@@ -233,7 +233,7 @@ export default function Home() {
                   <span className="hidden md:inline">Lanes</span>
               </Link>
 
-              <a href="https://github.com/BohemianMiser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={navItemClass} title="Find me on GitHub">
+              <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={navItemClass} title="Find me on GitHub">
                   <Github className="w-4 h-4" />
               </a>
 

@@ -1,18 +1,18 @@
 # Contributing to Recipe Lanes
 
-## Agent Workflow
+## Workflow
 
-To ensure safe development and testing of AI agents, we strictly enforce a Staging -> Production workflow.
+We enforce a Staging -> Production workflow.
 
 ### 1. Development (Staging)
-*   **Target Branch:** All feature development by Agents should target the `staging` branch.
+*   **Target Branch:** All feature development should target the `staging` branch.
 *   **Pull Requests:** Open PRs against `staging`.
-*   **Automatic Deployment:** Merging a PR into `staging` triggers an automatic deployment of the Backend (Cloud Functions & Firestore Rules) to the **Staging Firebase Project** (`recipe-lanes-staging`).
+*   **Automatic Deployment:** Merging a PR into `staging` triggers an automatic deployment of the Backend (Cloud Functions & Firestore Rules) to the **Staging Firebase Project** (`recipe-lanes-staging`) https://staging.recipelanes.com/.
 *   **Verification:** Verify changes in the Staging environment before proceeding.
 
 ### 2. Production Release - HUMAN ONLY
 *   **Promotion:** To release to production, open a PR to merge `staging` into `main`.
-*   **Production Deployment:** Merging into `main` triggers deployment to the **Production Firebase Project** (`recipe-lanes`).
+*   **Production Deployment:** Merging into `main` triggers deployment to the **Production Firebase Project** (`recipe-lanes`) https://recipelanes.com/.
 
 ### 3. Frontend Changes
 *   Frontend changes (Next.js) are verified via CI on every PR.

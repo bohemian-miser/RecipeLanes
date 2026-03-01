@@ -1,8 +1,10 @@
 # Contributing to Recipe Lanes
 
+This is my first open source project so I'm still working some things out. I'm always open to suggestions.
+
 ## Workflow
 
-We enforce a Staging -> Production workflow.
+Staging -> Production.
 
 ### 1. Development (Staging)
 *   **Target Branch:** All feature development should target the `staging` branch.
@@ -10,7 +12,7 @@ We enforce a Staging -> Production workflow.
 *   **Automatic Deployment:** Merging a PR into `staging` triggers an automatic deployment of the Backend (Cloud Functions & Firestore Rules) to the **Staging Firebase Project** (`recipe-lanes-staging`) https://staging.recipelanes.com/.
 *   **Verification:** Verify changes in the Staging environment before proceeding.
 
-### 2. Production Release - HUMAN ONLY
+### 2. Production Release
 *   **Promotion:** To release to production, open a PR to merge your branch into `main`.
 *   **Production Deployment:** Merging into `main` triggers deployment to the **Production Firebase Project** (`recipe-lanes`) https://recipelanes.com/.
 

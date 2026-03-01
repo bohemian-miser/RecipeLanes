@@ -104,9 +104,9 @@ npm run test:e2e
 ---
 
 ## 📝 About the Project
-I made this as a weekend project and it has grown since then. This is the first website I've ever tried to make and it's got some bugs but it's surprisingly useful.
+I made this as a weekend project and it has grown since then. This is the first website I've ever tried to make and it's got some bugs but it's also surprisingly useful.
 
-We even enabled force simulation, it's not too usefull but it is entertaining.
+I even added force simulation, it's not too usefull but it is entertaining.
 
 [![Physics](docs/screenshots/physics.gif)](docs/screenshots/physics.gif)
 

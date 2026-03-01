@@ -25,7 +25,13 @@ const SeenUrlsSchema = z.array(z.string().url()).default([]);
  * Records the rejection, clears the icon from the node, and triggers a refill.
  */
 export async function rejectIcon(recipeId: string, ingredientName: string, currentIconId?: string) {
-    return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId);
+    try {
+        const session = await getAuthService().verifyAuth();
+        const userId = session?.uid;
+        return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }
 
 export async function createDebugRecipeAction() {

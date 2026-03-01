@@ -59,14 +59,20 @@ const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?:
       setIsRerolling(true);
       const ingredientName = data.visualDescription || data.text;
       try {
-        await rejectIcon(
+        const result = await rejectIcon(
             recipeId || '', 
             ingredientName,
             getNodeIconId(data) || '',
         );
-        // State update handled by prop change from Firestore listener
+        
+        if (result && !result.success) {
+            console.error("Reroll failed:", result.error);
+            setIsRerolling(false);
+            // Optionally alert the user here, but for now we just stop the spinner
+        }
+        // Success state update handled by prop change from Firestore listener
       } catch (err) {
-          console.error("Reroll failed", err);
+          console.error("Reroll exception:", err);
           setIsRerolling(false);
       }
   };

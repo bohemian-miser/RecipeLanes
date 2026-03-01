@@ -1,5 +1,5 @@
 {
-  "name": "recipe-rpg-simple",
+  "name": "recipe-lanes",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -17,7 +17,7 @@
     "dev:old_emulators": "MOCK_AI=true NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 STORAGE_EMULATOR_HOST=127.0.0.1:9199 next dev -p 8001",
     "dev:emulators": "env-cmd -f .env.test next dev -p 8001",
     "verify": "npm run build && npm test",
-    "prepare": "if [ -d ../.git ]; then cd .. && git config core.hooksPath recipe-rpg-simple/.husky; fi"
+    "prepare": "if [ -d ../.git ]; then cd .. && git config core.hooksPath recipe-lanes/.husky; fi"
   },
   "engines": {
     "node": "20"

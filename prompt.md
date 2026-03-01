@@ -1,11 +1,58 @@
-We are working in @recipe-rpg-simple/ and I have 'npm run dev' running a version locally on http://localhost:8001/lanes, please use the playwright mcp tools to look around and use the website and the codebase to build some familiarity.
-Have a look around the code base and read the README's and other docs to help. If you see docs that are out of date or missing info that would have been helpfull to bring yourself up to speed you should make a PR to add it. (Use --no-verify iff you are updating docs or adding a new test, otherwise the tests will run and slow you down or block you since you haven't written the fix yet)
+We are working in @recipe-lanes/ and I have 'npm run dev' running a version locally on http://localhost:8001/lanes, please use the playwright mcp tools to look around and use the website and the codebase to build some familiarity.
+Have a look around the code base and read the README's and other docs to help. If you see docs that are out of date or missing info that would have been helpfull to bring yourself up to speed you should make a PR to add it. 
 
-Have a look at the git history with the helper from bash.rc 'glog', there's also 'pr_comments' which is helpfull for getting github comments on issues.
-alias glog='git log --graph --all --color --pretty=format:"%x1b[31m%h%x09%x1b[32m%d%x1b[0m%x20%s"'
+Have a look at the git history with 'git log --graph --all --color --pretty=format:"%x1b[31m%h%x09%x1b[32m%d%x1b[0m%x20%s"'
 
-staging pushes to https://skipping-down--recipe-lanes-staging.asia-southeast1.hosted.app/
-main pushes to https://skipping-down--recipe-lanes.asia-southeast1.hosted.app/
+Here is a function 'pr_comments' which is helpfull for getting github comments on issues.
+function pr_comments() {
+    if [ -z "$1" ]; then
+        echo "Usage: pr_comments <pr-number>"
+        return 1
+    fi
+
+    gh api graphql -F owner=':owner' -F repo=':repo' -F number="$1" -f query='
+    query($owner: String!, $repo: String!, $number: Int!) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $number) {
+          title
+          author { login }
+          body
+          # 1. General Chat (Issue Comments)
+          comments(first: 100) {
+            nodes {
+              #type: __typename
+              author { login }
+              body
+              #createdAt
+            }
+          }
+          # 2. Reviews & Inline Code Comments
+          reviews(first: 50) {
+            nodes {
+              #type: __typename
+              author { login }
+              #state
+              body # Summary text of the review
+              #createdAt
+              # Inline comments attached to this review
+              comments(first: 50) {
+                nodes {
+                  #type: __typename
+                  path
+                  line
+                  body
+                }
+              }
+            }
+          }
+        }
+      }
+    }'
+}
+
+
+staging pushes to https://staging.recipelanes.com/
+main pushes to https://recipelanes.com/
 Use playwright MCP tools to view staging and confirm fixes for things.
 
 Your Main job: 

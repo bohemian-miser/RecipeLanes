@@ -5,7 +5,7 @@ This guide covers how to write, run, and debug tests for RecipeLanes, focusing o
 ## 1. Overview
 
 The testing stack consists of:
--   **Playwright:** For E2E tests (located in `recipe-rpg-simple/e2e/`).
+-   **Playwright:** For E2E tests (located in `recipe-lanes/e2e/`).
 -   **Next.js:** The application framework.
 -   **Firebase Emulator Suite:** For testing backend interactions (Firestore, Auth, Functions) locally.
 -   **TSX (TypeScript Execute):** For running unit tests.
@@ -16,7 +16,7 @@ The testing stack consists of:
 Unit tests cover isolated logic like graph parsing, undo/redo, and data transformations.
 
 ```bash
-cd recipe-rpg-simple
+cd recipe-lanes
 npm run test:unit
 ```
 
@@ -24,7 +24,7 @@ npm run test:unit
 E2E tests run the full application stack against the Firebase Emulators.
 
 ```bash
-cd recipe-rpg-simple
+cd recipe-lanes
 npm run test:e2e
 ```
 *   This script (`scripts/test-e2e.sh`) builds the app, starts the Firebase Emulators, and runs Playwright.
@@ -47,12 +47,12 @@ By default, test runs clean up the screenshot directory. To persist screenshots 
 ```bash
 NO_CLEANUP=true npm run test:e2e
 ```
-Screenshots are saved to `recipe-rpg-simple/e2e/test_screenshots/<test-name>/<device>/<uuid>/`.
+Screenshots are saved to `recipe-lanes/e2e/test_screenshots/<test-name>/<device>/<uuid>/`.
 
 ## 3. Writing E2E Tests
 
 ### File Structure
-Tests are located in `recipe-rpg-simple/e2e/`. Common utilities are in `recipe-rpg-simple/e2e/utils/`.
+Tests are located in `recipe-lanes/e2e/`. Common utilities are in `recipe-lanes/e2e/utils/`.
 
 ### Basic Template
 

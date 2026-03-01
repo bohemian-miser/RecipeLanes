@@ -47,16 +47,14 @@ The site is fully interactive. You can rearrange your recipe flow in real-time.
 
 ## ✨ How it Works
 
-### 1. 🛣️ Lanes Editor
+### 1. 🛣️ Editor
 - **AI Logic:** An LLM converts the recipe into structured metadata with icon descriptions and then these are generated with an image model.
 - **Interactive Graphs:** Drag-and-drop nodes, edit text, and visualize the entire process at a glance.
+- **Forge Icons:** Auto-Generated unique 8-bit art for all ingredients and steps. You can 'reroll' these if the AI did a bad job.
 
-### 2. 🎨 Icon Maker
-- **Forge Icons:** Generate unique 8-bit art for any ingredient.
-- **Gallery:** Browse and vote on icons created by the community.
-
-### 3. 🖼️ Public Gallery
-- **Search:** Find recipes by title or ingredient.
+### 2. 🎨 Gallery
+- [**Gallery:**](https://recipelanes.com/gallery) Browse recipesgraphs created by the community.
+- **Search:** Find recipes by title.
 - **Fork:** Clone any recipe to your private library to customize it.
 
 ---
@@ -75,6 +73,8 @@ The site is fully interactive. You can rearrange your recipe flow in real-time.
 ## 🚀 Getting Started
 
 ### Installation
+Update these instructions if it goes out of date or doesn't work. Feel free to file bugs.
+
 1.  Clone the repository:
     ```bash
     git clone https://github.com/your-username/RecipeLanes.git

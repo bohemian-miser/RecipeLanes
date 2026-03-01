@@ -1,108 +1,115 @@
-# Recipe Lanes
+# [RecipeLanes.com](http://recipelanes.com/) 🍳🛣️
 
-A visual recipe editor that transforms text into clear, lane-based process graphs with AI-generated icons.
+**Recipe Lanes** is a comprehensive visual recipe platform that transforms text into flowchart-style diagrams with custom AI-generated icons. It aims to revolutionize how we view cooking instructions by providing a structured, intuitive process flow instead of a linear wall of text.
 
-## Overview
+---
 
-**Recipe Lanes** aims to revolutionize how we view cooking instructions. Instead of a linear wall of text, it parses recipes into a structured graph where:
-*   **Nodes** are actions or ingredients (e.g., "Grate Carrots", "Sear Steak").
-*   **Lanes** represent physical locations or containers (e.g., "Chopping Board", "Fry Pan", "Oven").
-*   **Edges** represent the flow of ingredients between steps.
+## 🔗 Quick Links
+- **Live Site:** [recipelanes.com](http://recipelanes.com)
+- **Staging:** [staging.recipelanes.com](https://staging.recipelanes.com)
+- **Screenshots & Demos:** [Browse all assets in /docs/screenshots](./docs/screenshots)
+- **Architecture:** [Detailed System Design](./recipe-lanes/ARCHITECTURE.md)
 
-## Core Philosophy: The State-Flow Pattern
+---
+
+## 🚀 Visual Showcase
+
+Experience recipes as a structured flow, not just a wall of text.
+
+| **The Lanes Editor** | **Visual Themes** | **Smart Layouts** |
+| :---: | :---: | :---: |
+| [![Lanes Editor](docs/screenshots/lane.png)](docs/screenshots/lane.png) | [![Themes](docs/screenshots/style.png)](docs/screenshots/style.png) | [![Layouts](docs/screenshots/smart.png)](docs/screenshots/smart.png) |
+| *Separate prep and cooking steps.* | *Classic, Modern, and Clean themes.* | *Auto-organized for maximum readability.* |
+
+---
+
+## 🖱️ Interactive Experience
+
+Recipe Lanes is fully interactive. Rearrange your recipe flow in real-time.
+
+| **Dynamic Physics** | **Drag & Drop** | **Smart Tooling** | **AI Rerolls** |
+| :---: | :---: | :---: | :---: |
+| [![Physics](docs/screenshots/physics.gif)](docs/screenshots/physics.gif) | [![Move Nodes](docs/screenshots/move%20nodes.gif)](docs/screenshots/move%20nodes.gif) | [![Graph Tooling](docs/screenshots/graph-tooling.gif)](docs/screenshots/graph-tooling.gif) | [![Reroll Icons](docs/screenshots/reroll-short.gif)](docs/screenshots/reroll-short.gif) |
+| *Nodes react as you move them.* | *Seamlessly rearrange your steps.* | *Powerful tools for graph manipulation.* | *Instantly regenerate any icon.* |
+
+---
+
+## ✨ Core Modules
+
+### 1. 🎨 Icon Maker (Recipe RPG)
+Forge custom 8-bit pixel art icons for ingredients using AI.
+- **AI Forging:** Generate unique art for any ingredient.
+- **Community Gallery:** Browse and vote on community-created icons.
+- **Social Integration:** Star, reroll, and share your creations.
+
+### 2. 🛣️ Lanes Editor
+The heart of the platform where text becomes a process.
+- **AI Parsing:** `gemini-2.5-flash` handles the heavy lifting of understanding recipe logic.
+- **Interactive Graphs:** Drag-and-drop nodes, edit text, and visualize the entire process at a glance.
+- **Custom Icons:** Integrated seamlessly from the Icon Maker library.
+
+### 3. 🖼️ Public Gallery
+Discover and share recipes from around the world.
+- **Search:** Find recipes by title or ingredient.
+- **Fork & Customize:** Clone any recipe to your private library to make it your own.
+
+---
+
+## 🧠 Philosophy: The State-Flow Pattern
 
 To make recipes intuitive, we visualize them as a sequence of **States** and **Transitions**:
 
-1.  **Ingredient Nodes (The "Input"):**
-    *   Represent the *new* items being added.
-    *   **Visual Rule:** Atomic and singular (e.g., "Salt Shaker", "Egg", "Pile of Sugar"). **NO quantities** in the visual (quantities belong in text).
-    *   **Strict Connectivity:** Every ingredient node has exactly **one output** (the step it feeds into).
-    *   **Splitting:** If an ingredient is used in multiple places (e.g. "half the sugar"), it appears as **two separate nodes**.
+1.  **Ingredient Nodes (Input):** High-fidelity icons representing the *new* items being added.
+2.  **Action Nodes (Prep & State):** Represent the *result* of a process (e.g., "Whisked Eggs" or "Sautéed Onions").
+3.  **Lanes (Physical Vessels):** Represent the containers or locations (e.g., "Bowl", "Pan", "Oven").
+4.  **Flow:** Logic flows top-down, with parallel lanes merging into the main dish.
 
-2.  **Action Nodes (The "State" & "Prep"):**
-    *   Represent the *result* of a process.
-    *   **Visual:** Shows the *combined state* (e.g., "Onions frying in pan", "Whisked Eggs").
-    *   **Prep Granularity:**
-        *   **Combined Node:** If a prep step (e.g. "Grate Cheese") feeds into a step that has *only* ingredient/prep inputs (i.e. starting a new chain), combine them into one node: "Grate Cheese".
-        *   **Split Nodes:** If the prep step feeds into an existing process (e.g. adding cheese to an active pan), keep them split: "Cheese" (Ingredient) -> "Grate" (Action) -> "Add to Pan".
-    *   **Merge Logic:** If an action combines inputs from different lanes (e.g. pouring bowl into pan), it sits in the *receiving* lane and accepts arrows from the source lanes.
+---
 
-3.  **Lanes (Containers):**
-    *   Represent the physical vessel.
-    *   Vertical flow represents time/progress.
+## 🛠️ Tech Stack
 
-## Layout Concept (Vision)
+- **Framework:** [Next.js 16](https://nextjs.org/) (App Router)
+- **Styling:** [Tailwind CSS 4](https://tailwindcss.com/)
+- **Graph Engine:** [React Flow](https://reactflow.dev/)
+- **AI Stack:** [Google Genkit](https://github.com/firebase/genkit) (`gemini-2.5-flash`, `imagen-4.0`)
+- **Backend:** [Firebase](https://firebase.google.com/) (Firestore, Storage, Auth, Cloud Functions)
+- **Testing:** [Playwright](https://playwright.dev/) (E2E), [Vitest](https://vitest.dev/) (Unit)
 
-We aim for a **Compact State-Flow**:
-1.  **Just-in-Time:** Ingredients appear close to where they are used, not forced to the top.
-2.  **Tight Packing:** Minimize vertical gaps to keep the graph dense and readable.
-3.  **Flow:** Logic flows top-down, with parallel lanes merging inwards to the main dish.
+---
 
-## Architecture
+## 🚀 Getting Started
 
-*   **Frontend:** React (Vite/Next.js TBD - migrating from experimental `ui` folder).
-*   **Backend:** Firebase (Firestore for data, Storage for icons, Auth for user management).
-*   **AI:** Google Cloud Vertex AI (Server-Side integration for security and robustness).
-    *   Text Model: `gemini-2.5-flash`
-    *   Image Model: `imagen-3.0-generate-001`
+### Installation
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/your-username/RecipeLanes.git
+    cd recipe-lanes
+    ```
+2.  Install dependencies:
+    ```bash
+    npm install
+    cd functions && npm install && cd ..
+    ```
+3.  Set up your `.env` with Firebase and Vertex AI credentials.
 
-## Examples
-
-### Example 1: Simple Carrot Stir Fry
-
-**Input Text:**
-> "Grate 2 large carrots. Heat a skillet over medium heat. Add the grated carrots to the pan and sauté for 5 minutes."
-
-**Structured Output:**
-```json
-{
-  "lanes": [
-    { "id": "lane-1", "label": "Cutting Board", "type": "prep" },
-    { "id": "lane-2", "label": "Skillet", "type": "cook" }
-  ],
-  "nodes": [
-    { "id": "node-1", "laneId": "lane-1", "text": "2 Carrots", "visualDescription": "Carrot", "type": "ingredient" },
-    { "id": "node-2", "laneId": "lane-1", "text": "Grate", "visualDescription": "A carrot going into a grater", "type": "action", "inputs": ["node-1"] },
-    { "id": "node-3", "laneId": "lane-2", "text": "Sauté", "visualDescription": "Grated carrots sizzling in a pan", "type": "action", "inputs": ["node-2"], "temperature": "Medium", "duration": "5 min" }
-  ]
-}
+### Running Locally
+```bash
+# Start development server
+npm run dev
 ```
 
-### Example 2: Scrambled Eggs (Merge Flow)
+### Testing
+```bash
+# Run unit tests
+npm run test:unit
 
-**Input Text:**
-> "Crack 3 eggs into a bowl. Whisk them with a pinch of salt. Melt butter in a non-stick pan. Pour the eggs into the pan and stir gently until set. Top with grated cheese."
-
-**Structured Output:**
-```json
-{
-  "lanes": [
-    { "id": "lane-1", "label": "Bowl", "type": "prep" },
-    { "id": "lane-2", "label": "Pan", "type": "cook" },
-    { "id": "lane-3", "label": "Board", "type": "prep" }
-  ],
-  "nodes": [
-    // Row 1 (Ingredients)
-    { "id": "n1", "laneId": "lane-1", "text": "3 Eggs", "visualDescription": "Egg", "type": "ingredient" },
-    { "id": "n2", "laneId": "lane-1", "text": "Salt", "visualDescription": "Salt Shaker", "type": "ingredient" },
-    { "id": "n3", "laneId": "lane-2", "text": "Butter", "visualDescription": "Stick of butter", "type": "ingredient" },
-    { "id": "n4", "laneId": "lane-3", "text": "Cheese", "visualDescription": "Block of cheese", "type": "ingredient" },
-
-    // Row 2 (Prep/Actions)
-    { "id": "n5", "laneId": "lane-1", "text": "Whisk", "visualDescription": "Whisk beating eggs", "type": "action", "inputs": ["n1", "n2"] },
-    { "id": "n6", "laneId": "lane-2", "text": "Melt", "visualDescription": "Butter melting in pan", "type": "action", "inputs": ["n3"] },
-    { "id": "n7", "laneId": "lane-3", "text": "Grate", "visualDescription": "Cheese grating", "type": "action", "inputs": ["n4"] },
-
-    // Row 3 (Merge)
-    { "id": "n8", "laneId": "lane-2", "text": "Scramble", "visualDescription": "Eggs cooking in pan", "type": "action", "inputs": ["n5", "n6"] },
-
-    // Row 4 (Finish)
-    { "id": "n9", "laneId": "lane-2", "text": "Add Cheese", "visualDescription": "Cheese melting on eggs", "type": "action", "inputs": ["n8", "n7"] }
-  ]
-}
+# Run E2E tests (requires Firebase Emulators)
+npm run test:e2e
 ```
 
-## Development Workflow
+---
 
-We adhere to a strict **Test Driven Development (TDD)** workflow.
-...
+## 📝 About the Project
+I made this as a weekend project and it has grown since then and maybe one day with some help I could make it into something really great. This is the first website I've ever tried to make and it's got some bugs but it's surprisingly useful.
+
+*Created with ❤️ for better cooking.*

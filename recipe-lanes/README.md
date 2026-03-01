@@ -1,81 +1,44 @@
-# Recipe Lanes 🍳🛣️
+# Recipe Lanes 🍳🛣️ (Main Application)
 
-**Recipe Lanes** is a comprehensive visual recipe platform that transforms text into flowchart-style diagrams and lets users forge custom pixel-art icons.
+This directory contains the core Next.js application for [RecipeLanes.com](http://recipelanes.com/).
 
-## Architecture & Database
-See [ARCHITECTURE.md](ARCHITECTURE.md) for details on the Schema V2 (Unified Queue) architecture.
+## Quick Links
+-   **Main Documentation:** See the root [README.md](../README.md) for a full project overview, features, and philosophy.
+-   **Architecture:** Detailed database and queue logic in [ARCHITECTURE.md](ARCHITECTURE.md).
+-   **Features:** Roadmap and detailed feature list in [FEATURES.md](../docs/FEATURES.md).
 
-## Modules 🧩
+## Technical Overview
 
-### 1. Icon Maker (Recipe RPG) - `/`
-The landing page features the **Icon Maker** (internally "Recipe RPG").
--   **Forge Icons:** Generate 8-bit pixel art icons for ingredients using AI.
--   **Community Gallery:** Vote and browse icons created by others.
--   **Social:** Reroll, star, and share your creations.
+### Stack
+-   **Next.js 16** (App Router)
+-   **Tailwind CSS 4**
+-   **React Flow** (Graph Visualization)
+-   **Google Genkit** (AI Integration)
+-   **Firebase** (Firestore, Auth, Storage, Functions)
 
-### 2. Lanes Editor - `/lanes`
-The core visualization tool.
--   **AI Parsing:** Converts recipe text into a structured node-based graph.
--   **Visual Flow:** Drag-and-drop interface to rearrange steps.
--   **Integration:** Uses icons forged in the Icon Maker for steps and ingredients.
-
-### 3. Gallery - `/gallery`
-Browse and manage recipes.
--   **Search:** Find recipes by title or ingredient.
--   **Fork/Copy:** Clone a recipe to customize it.
-
-## Features ✨
-
--   **AI Parsing & Generation:** Gemini 2.5 Flash for logic, Imagen 4 for art.
--   **Smart Icons:** Automatically generates icons for ingredients and steps (cached & reusable).
--   **Mobile Friendly:** Optimized for use in the kitchen on phones and tablets.
--   **Unified Queue:** Scalable background generation for icons.
-
-## Tech Stack 🛠️
-
--   **Framework:** Next.js 16 (App Router)
--   **UI:** Tailwind CSS, Lucide Icons
--   **Graph:** React Flow
--   **AI:** Google Genkit (Gemini 2.5 Flash, Imagen 4)
--   **Database:** Firebase Firestore (Schema V2)
--   **Storage:** Firebase Storage
--   **Testing:** Playwright, Vitest
-
-## Getting Started 🚀
-
-1.  **Install Dependencies:**
-    ```bash
-    npm install
-    cd functions && npm install && cd ..
-    ```
-
-2.  **Environment Setup:**
-    Create a `.env` file with your Firebase and Genkit credentials.
-
-3.  **Run Development Server (with Emulators):**
-    ```bash
-    ./scripts/test-e2e.sh # Runs emulators + tests
-    # OR for interactive dev:
-    firebase emulators:start --import=./debug/firebase-export
-    npm run dev
-    ```
-
-## Testing 🧪
-
-We use a combination of Logic Tests (Unit) and E2E Tests (Playwright).
-
+### Development
 ```bash
-# Run all tests
-npm test
+# Install dependencies
+npm install
 
-# Run only logic/unit tests
+# Run development server
+npm run dev
+
+# Run unit tests
 npm run test:unit
 
-# Run only E2E tests (requires Firebase Emulators)
+# Run E2E tests
 npm run test:e2e
 ```
 
-## Deployment 🌍
+### Environment Variables
+Ensure you have a `.env` file with the following (see `.env.example` if available):
+-   `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+-   `NEXT_PUBLIC_FIREBASE_API_KEY`
+-   `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+-   ...and other standard Firebase/GCP credentials.
 
-Deployed on Vercel/Firebase App Hosting.
-Data migration scripts are in `scripts/`.
+## Scripts
+-   `npm run mcp`: Starts the Playwright MCP server for agentic interaction.
+-   `npm run verify`: Full build and test suite.
+-   `npm run build`: Production build.

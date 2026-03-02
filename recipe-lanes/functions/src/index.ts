@@ -29,9 +29,9 @@ import {  FieldValue } from "firebase-admin/firestore";
 
 export const processIconQueue = onDocumentCreated({ 
     document: `${DB_COLLECTION_QUEUE}/{ingredientName}`, 
-    timeoutSeconds: 300, 
+    timeoutSeconds: 600, 
     memory: "1GiB",
-    maxInstances: 1 
+    maxInstances: 10
 }, async (event) => {
     if (!event.data) return;
     

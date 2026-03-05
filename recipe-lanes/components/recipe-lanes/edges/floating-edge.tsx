@@ -16,7 +16,7 @@
  */
 
 import React, { useCallback, memo } from 'react';
-import { useStore, getStraightPath, getBezierPath, getSmoothStepPath, EdgeProps, MarkerType } from 'reactflow';
+import EdgeProps, MarkerType, { useStore, getStraightPath, getBezierPath, getSmoothStepPath } from 'reactflow';
 import { getEdgeParams } from '../../../lib/recipe-lanes/graph-utils';
 
 function FloatingEdge({ id, source, target, markerEnd, style, data, sourceX, sourceY, targetX, targetY }: EdgeProps) {

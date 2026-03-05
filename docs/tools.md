@@ -74,3 +74,12 @@ gcloud builds log 89059c6b-7ab3-4664-b9d2-686fdfa4cd32 --region=asia-southeast1 
 gcloud run services list --project recipe-lanes-staging
 gcloud run services logs read skipping-down --limit=50 --project recipe-lanes-staging
 gcloud config set run/region asia-southeast1
+
+### Enabling Cloud Tasks
+TODO: Have a list of these that need to be run when setting up a new project.
+
+gcloud services enable cloudtasks.googleapis.com --project=recipe-lanes-staging
+gcloud services enable cloudtasks.googleapis.com --project=recipe-lanes
+
+### Delete functions when you remove them from code.
+firebase functions:delete processIconQueue --region us-central1

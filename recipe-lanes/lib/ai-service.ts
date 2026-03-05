@@ -162,6 +162,11 @@ export class MockAIService implements AIService {
     const knownIngredients = ['Egg', 'Flour', 'Sugar', 'Butter', 'Onion', 'Garlic', 'Milk', 'Mixing Bowl', 'Fry An Egg', 'Ham', 'Cheese'];
     const lowerPrompt = prompt.toLowerCase();
     
+    if (lowerPrompt.includes('force_quota_error')) {
+         console.log('[MockAIService] Simulating Quota Error...');
+         throw new Error('Quota exceeded (simulated)');
+    }
+    
     // Find matching ingredient. Sort by length desc to match "Fry An Egg" before "Egg"
     const match = knownIngredients
         .sort((a, b) => b.length - a.length)

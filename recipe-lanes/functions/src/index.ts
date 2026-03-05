@@ -31,11 +31,14 @@ export const processIconQueue = onDocumentCreated({
     document: `${DB_COLLECTION_QUEUE}/{ingredientName}`, 
     timeoutSeconds: 600, 
     memory: "1GiB",
-    maxInstances: 10
+    maxInstances: 1
 }, async (event) => {
-    if (!event.data) return;
-    
     const ingredientName = event.params.ingredientName;
+    console.log(`[Queue-${ingredientName}] Triggered - onDocumentCreated`);
+    if (!event.data) {
+        console.log(`[Queue-${ingredientName}] No data`);   
+        return;
+    }
     const docRef = event.data.ref;
 
     try {

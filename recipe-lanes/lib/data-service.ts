@@ -266,7 +266,7 @@ export class FirebaseDataService implements DataService {
             }
 
             if (bestIcon) {
-                console.log(`[FirebaseDataService] resolveRecipeIcons: Cache HIT for "${stdName}" in recipe ${recipeId}`);
+                console.log(`[FirebaseDataService] attemptUpdateFromCache: Cache HIT for "${stdName}" in recipe ${recipeId}`);
                 // Assuming assignIconToRecipe is already implemented elsewhere in your class
                 await this.assignIconToRecipe(recipeId, stdName, { 
                     iconId: bestIcon.id, 
@@ -274,7 +274,7 @@ export class FirebaseDataService implements DataService {
                     metadata: bestIcon.metadata 
                 });
             } else {
-                console.log(`[FirebaseDataService] resolveRecipeIcons: Cache MISS for "${stdName}"`);
+                console.log(`[FirebaseDataService] attemptUpdateFromCache: Cache MISS for "${stdName}"`);
                 cacheMisses.push(stdName);
             }
         }
@@ -463,6 +463,8 @@ export class FirebaseDataService implements DataService {
       }
   }
 
+    // I don't think this should work bc it'll be a write not create..
+    // aaand it doesn't work...
   async retryIconGeneration(ingredientName: string): Promise<void> {
       try {
           const stdName = standardizeIngredientName(ingredientName);

@@ -16,7 +16,7 @@
  */
 
 import React from 'react';
-import { Handle, Position } from 'reactflow';
+import Position, { Handle } from 'reactflow';
 import { RefreshCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { getNodeIconUrl } from '../../../lib/recipe-lanes/model-utils';

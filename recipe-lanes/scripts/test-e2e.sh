@@ -69,5 +69,5 @@ else
     echo "----------------------------------------------------------------"
 
     # We use 'npx firebase' to ensure we use the local project version
-    npx env-cmd -f .env.test firebase emulators:exec --only auth,firestore,storage,functions --project local-project-id "$CMD"
+    npx env-cmd -f .env.test firebase emulators:exec --only auth,firestore,storage,functions,tasks --project local-project-id "$CMD"
 fi

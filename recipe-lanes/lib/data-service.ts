@@ -330,6 +330,7 @@ export class FirebaseDataService implements DataService {
                 console.log(`[Transaction] Created new queue entry for "${stdName}"`);
             } else {
                 // Update existing entry
+                // TODO: handle failed icon.
                 const existingData = queueDoc.data();
                 const existingRecipes = existingData?.recipes || [];
                 

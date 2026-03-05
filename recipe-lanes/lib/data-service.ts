@@ -83,12 +83,14 @@ export interface DataService {
   resolveRecipeIcons(recipeId: string): Promise<void>;
   addNodeToRecipe(recipeId: string, ingredientName: string, laneId?: string): Promise<{ success: boolean, nodeId?: string, error?: string }>;
   rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string): Promise<{ success: boolean, error?: string }>;
-  assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats): Promise<void>;
+  assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<void>;
   
   submitFeedback(data: { message: string, url: string, email?: string, graphJson?: string, userId?: string }): Promise<void>;
   
   vetRecipe(recipeId: string, isVetted: boolean): Promise<void>;
   getUnvettedRecipes(limit: number): Promise<any[]>;
+  
+  failRecipeIcon(recipeId: string, ingredientName: string, errorMsg: string): Promise<void>;
 }
 
 // --- Firebase Implementation ---
@@ -129,12 +131,12 @@ export class FirebaseDataService implements DataService {
       }
   }
 
-  async assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats): Promise<void> {
+  async assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<void> {
       const stdName = standardizeIngredientName(ingredientName);
       const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
       const ingRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName);
 
-      await db.runTransaction(async (t) => {
+      const operation = async (t: any) => {
           const [recipeDoc, ingDoc] = await t.getAll(recipeRef, ingRef);
           
           if (!recipeDoc.exists) throw new Error("Recipe not found");
@@ -171,7 +173,13 @@ export class FirebaseDataService implements DataService {
                   }
               }
           }
-      });
+      };
+
+      if (transaction) {
+          await operation(transaction);
+      } else {
+          await db.runTransaction(operation);
+      }
   }
 
   // TEST ONLY.
@@ -288,7 +296,8 @@ export class FirebaseDataService implements DataService {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
         const queueRef = db.collection(DB_COLLECTION_QUEUE).doc(stdName);
 
-        await db.runTransaction(async (transaction) => {
+        const shouldEnqueue = await db.runTransaction(async (transaction) => {
+            let doEnqueue = false;
             const [recipeDoc, queueDoc] = await transaction.getAll(recipeRef, queueRef);
 
             if (!recipeDoc.exists) {
@@ -317,6 +326,7 @@ export class FirebaseDataService implements DataService {
                     recipes: [recipeId],
                     recipeCount: 1
                 });
+                doEnqueue = true;
                 console.log(`[Transaction] Created new queue entry for "${stdName}"`);
             } else {
                 // Update existing entry
@@ -324,14 +334,112 @@ export class FirebaseDataService implements DataService {
                 const existingRecipes = existingData?.recipes || [];
                 
                 if (!existingRecipes.includes(recipeId)) {
-                    existingRecipes.push(recipeId);
                     transaction.update(queueRef, {
-                        recipes: existingRecipes,
-                        recipeCount: existingRecipes.length // Accurate count inside transaction
+                        recipes: FieldValue.arrayUnion(recipeId),
+                        recipeCount: FieldValue.increment(1)
                     });
                     console.log(`[Transaction] Added recipe ${recipeId} to existing queue for "${stdName}"`);
                 }
             }
+
+            // 3. Mark Node as Pending in Recipe (Optimistic UI)
+            // recipeData is already defined above
+            const nodes = recipeData?.graph?.nodes || [];
+            let changed = false;
+            nodes.forEach((n: any) => {
+                 if (n.visualDescription && standardizeIngredientName(n.visualDescription) === stdName) {
+                     // Only update if not already set to avoid unnecessary writes? 
+                     // Or just force it to pending/processing if it was failed/missing.
+                     if (n.icon?.status !== 'pending' && n.icon?.status !== 'processing') {
+                         n.icon = {
+                             ...(n.icon || {}),
+                             status: 'pending'
+                         };
+                         changed = true;
+                     }
+                 }
+            });
+            
+            if (changed) {
+                transaction.update(recipeRef, { "graph.nodes": nodes });
+            }
+            
+            return doEnqueue;
+        });
+
+        if (shouldEnqueue) {
+            try {
+                const functions = require('firebase-admin').functions; // Lazy load if needed or use imported
+                // Note: getFunctions() is not imported. I need to check imports.
+                // 'firebase-admin' exports `getFunctions`? No, `firebase-admin/functions` or `admin.functions()`.
+                // In this file `db` comes from `./firebase-admin`.
+                // Let's assume `import { getFunctions } from 'firebase-admin/functions';` is needed.
+                // I will add the import next. For now using fully qualified if possible or valid JS.
+                const { getFunctions } = require('firebase-admin/functions');
+                const queue = getFunctions().taskQueue('processIconTask');
+                await queue.enqueue({ ingredientName: stdName });
+                console.log(`[queueIconForGeneration] 🚀 Enqueued task for "${stdName}"`);
+            } catch (error) {
+                console.error(`[queueIconForGeneration] 💥 Failed to enqueue task for "${stdName}":`, error);
+                // Revert to failed state to avoid "Stuck pending" if enqueue fails
+                await queueRef.set({ status: 'failed', error: 'System Enqueue Error' }, { merge: true });
+            }
+        }
+    }
+
+    async retryIconGeneration(ingredientName: string): Promise<void> {
+        try {
+            const stdName = standardizeIngredientName(ingredientName);
+            const queueRef = db.collection(DB_COLLECTION_QUEUE).doc(stdName);
+            
+            await queueRef.set({
+                status: 'pending',
+                error: FieldValue.delete(),
+                created_at: FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            // Always enqueue on retry
+            const { getFunctions } = require('firebase-admin/functions');
+            const queue = getFunctions().taskQueue('processIconTask');
+            await queue.enqueue({ ingredientName: stdName });
+            console.log(`[retryIconGeneration] 🚀 Re-enqueued task for "${stdName}"`);
+
+        } catch (e: any) {
+            console.warn('retryIconGeneration failed:', e.message);
+            throw e;
+        }
+    }
+
+    async failRecipeIcon(recipeId: string, ingredientName: string, errorMsg: string): Promise<void> {
+        const stdName = standardizeIngredientName(ingredientName);
+        const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+
+        await db.runTransaction(async (t) => {
+            const doc = await t.get(recipeRef);
+            if (!doc.exists) return;
+            
+            const data = doc.data();
+            const nodes = data?.graph?.nodes || [];
+            let changed = false;
+
+            nodes.forEach((n: any) => {
+                if (n.visualDescription) {
+                     const nName = standardizeIngredientName(String(n.visualDescription));
+                     if (nName === stdName) {
+                         // Preserve existing icon data if any, but mark as failed
+                         n.icon = {
+                             ...(n.icon || {}),
+                             status: 'failed',
+                             // error: errorMsg // valid to add if we add to type
+                         };
+                         changed = true;
+                     }
+                }
+            });
+
+            if (changed) {
+                t.update(recipeRef, { "graph.nodes": nodes });
+            } //for the diff. pls remove.
         });
     }
 
@@ -465,19 +573,7 @@ export class FirebaseDataService implements DataService {
 
     // I don't think this should work bc it'll be a write not create..
     // aaand it doesn't work...
-  async retryIconGeneration(ingredientName: string): Promise<void> {
-      try {
-          const stdName = standardizeIngredientName(ingredientName);
-          await db.collection(DB_COLLECTION_QUEUE).doc(stdName).update({
-              status: 'pending',
-              error: FieldValue.delete(),
-              created_at: FieldValue.serverTimestamp()
-          });
-      } catch (e: any) {
-          console.warn('retryIconGeneration failed:', e.message);
-          throw e;
-      }
-  }
+    // Removed duplicate retryIconGeneration
 
   async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
       try {
@@ -1592,7 +1688,7 @@ export class MemoryDataService implements DataService {
     }
 
 
-      async assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats): Promise<void> {
+      async assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<void> {
           const recipe = this.recipes.get(recipeId);
           if (!recipe) throw new Error("Recipe not found");
           
@@ -1612,6 +1708,10 @@ export class MemoryDataService implements DataService {
 
     async retryIconGeneration(ingredientName: string) {
         console.log(`[MemoryDataService] Retry requested for ${ingredientName} (No-op in memory mode)`);
+    }
+
+    async failRecipeIcon(recipeId: string, ingredientName: string, errorMsg: string): Promise<void> {
+        console.log(`[MemoryDataService] Fail icon requested for ${ingredientName}: ${errorMsg}`);
     }
 
     async submitFeedback(data: { message: string, url: string, email?: string, graphJson?: string, userId?: string }): Promise<void> {

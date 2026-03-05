@@ -1,0 +1,326 @@
+🟡 No emulators detected. Starting NEW emulators.
+Cleaning up ports...
+Building Functions...
+
+up to date, audited 921 packages in 5s
+
+176 packages are looking for funding
+  run `npm fund` for details
+
+24 vulnerabilities (20 low, 2 moderate, 1 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+> build
+> tsc
+
+----------------------------------------------------------------
+Starting Firebase Emulators and running: npx playwright test e2e/icon-queue-stress.spec.ts
+----------------------------------------------------------------
+i  emulators: Starting emulators: auth, functions, firestore, storage
+⚠  functions: The following emulators are not running, calls to these services from the Functions emulator will affect production: apphosting, database, hosting, pubsub, dataconnect
+⚠  functions: Application Default Credentials detected. Non-emulated services will access production using these credentials. Be careful!
+⚠  functions: Unable to fetch project Admin SDK configuration, Admin SDK behavior in Cloud Functions emulator may be incorrect.
+i  firestore: Firestore Emulator logging to firestore-debug.log
+✔  firestore: Firestore Emulator UI websocket is running on 9150.
+i  functions: Watching "/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions" for Cloud Functions...
+⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory.
+✔  functions: Using node@20 from host.
+i  functions: Loaded environment variables from .env.local.
+Serving at port 8733
+
+registering /util/generate
+
+Registering v2 plugin vertexai...
+
+✔  functions: Loaded functions definitions from source: processIconTask.
+✔  tasks: Created queue with key: queue:local-project-id-us-central1-processIconTask
+✔  functions[us-central1-processIconTask]: http function initialized (http://127.0.0.1:5001/local-project-id/us-central1/processIconTask).
+i  Running script: npx playwright test e2e/icon-queue-stress.spec.ts
+[dotenv@17.2.3] injecting env (0) from .env.test -- tip: ⚙️  override existing env vars with { override: true }
+[WebServer] [1m[38;2;173;127;168m▲ Next.js 16.1.0[39m[22m (Turbopack)
+[WebServer] - Local:         http://localhost:8002
+[WebServer] - Network:       http://192.168.1.90:8002
+[WebServer] - Environments: .env.local, .env
+[WebServer] - Experiments (use with caution):
+[WebServer]   · serverActions
+[WebServer] 
+[WebServer] [32m[1m✓[22m[39m Starting...
+[WebServer] [32m[1m✓[22m[39m Ready in 952ms
+[WebServer] WARNING: You are using the Auth Emulator, which is intended for local testing only.  Do not use with production credentials.
+[WebServer]  GET / [34m307[39m in 1322ms[2m (compile: 962ms, render: 360ms)[22m
+[WebServer]  GET /lanes [32m200[39m in 926ms[2m (compile: 735ms, render: 191ms)[22m
+
+Running 1 test using 1 worker
+
+[dotenv@17.2.3] injecting env (0) from .env.test -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+[WebServer]  GET /icon_overview [32m200[39m in 141ms[2m (compile: 39ms, render: 102ms)[22m
+[WebServer]  POST /api/auth/logout [32m200[39m in 102ms[2m (compile: 77ms, render: 25ms)[22m
+[WebServer]  GET /icon_overview [32m200[39m in 40ms[2m (compile: 8ms, render: 32ms)[22m
+[WebServer] registering /util/generate
+[WebServer] Registering v2 plugin vertexai...
+[WebServer] 🔥 Admin SDK switching to Emulator mode via Env Vars
+[WebServer] 🔥 Admin SDK switching to Emulator mode via Env Vars
+[WebServer] 🔥 Admin SDK switching to Emulator mode via Env Vars
+[WebServer] 🔥 Admin SDK switching to Emulator mode via Env Vars
+[WebServer]  POST /api/auth/login [32m200[39m in 537ms[2m (compile: 430ms, render: 107ms)[22m
+[WebServer]  POST /icon_overview [32m200[39m in 1889ms[2m (compile: 15ms, render: 1875ms)[22m
+[WebServer]  GET /icon_overview [32m200[39m in 29ms[2m (compile: 6ms, render: 23ms)[22m
+[StressTest] Cleaning up queue...
+[WebServer]  POST /icon_overview [32m200[39m in 75ms[2m (compile: 6ms, render: 69ms)[22m
+[StressTest] Adding items via UI...
+[WebServer] [FirebaseDataService] resolveRecipeIcons: sj4nhl3dEhxFgpUAgFqh
+[WebServer] Processing 1 nodes for recipe sj4nhl3dEhxFgpUAgFqh
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Normal-1772684274031-1"
+[WebServer] Queueing 1 ingredients for generation...
+[WebServer] [Transaction] Created new queue entry for "Normal-1772684274031-1"
+[WebServer] [queueIconForGeneration] 🚀 Enqueued task for "Normal-1772684274031-1"
+[WebServer]  POST /icon_overview [32m200[39m in 160ms[2m (compile: 6ms, render: 155ms)[22m
+[WebServer] [FirebaseDataService] resolveRecipeIcons: sj4nhl3dEhxFgpUAgFqh
+[WebServer] Processing 2 nodes for recipe sj4nhl3dEhxFgpUAgFqh
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Normal-1772684274031-1"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Force_quota_error_stress_1772684274031"
+[WebServer] Queueing 2 ingredients for generation...
+[WebServer] [Transaction] Created new queue entry for "Force_quota_error_stress_1772684274031"
+[WebServer] [queueIconForGeneration] 🚀 Enqueued task for "Force_quota_error_stress_1772684274031"
+[WebServer]  POST /icon_overview [32m200[39m in 118ms[2m (compile: 6ms, render: 112ms)[22m
+[WebServer] [FirebaseDataService] resolveRecipeIcons: sj4nhl3dEhxFgpUAgFqh
+[WebServer] Processing 3 nodes for recipe sj4nhl3dEhxFgpUAgFqh
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Normal-1772684274031-1"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Force_quota_error_stress_1772684274031"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Normal-1772684274031-2"
+[WebServer] Queueing 3 ingredients for generation...
+[WebServer] [Transaction] Created new queue entry for "Normal-1772684274031-2"
+i  functions: Loaded environment variables from .env.local.
+[WebServer] [queueIconForGeneration] 🚀 Enqueued task for "Normal-1772684274031-2"
+[WebServer]  POST /icon_overview [32m200[39m in 107ms[2m (compile: 6ms, render: 101ms)[22m
+[WebServer] [FirebaseDataService] resolveRecipeIcons: sj4nhl3dEhxFgpUAgFqh
+[WebServer] Processing 4 nodes for recipe sj4nhl3dEhxFgpUAgFqh
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Normal-1772684274031-1"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Force_quota_error_stress_1772684274031"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Normal-1772684274031-2"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Normal-1772684274031-3"
+[WebServer] Queueing 4 ingredients for generation...
+[WebServer] [Transaction] Created new queue entry for "Normal-1772684274031-3"
+[WebServer] [queueIconForGeneration] 🚀 Enqueued task for "Normal-1772684274031-3"
+[WebServer]  POST /icon_overview [32m200[39m in 108ms[2m (compile: 6ms, render: 102ms)[22m
+[WebServer] [FirebaseDataService] resolveRecipeIcons: sj4nhl3dEhxFgpUAgFqh
+[WebServer] Processing 5 nodes for recipe sj4nhl3dEhxFgpUAgFqh
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Normal-1772684274031-1"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Force_quota_error_stress_1772684274031"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Normal-1772684274031-2"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Normal-1772684274031-3"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Force_quota_error_stress_1772684274031_2"
+[WebServer] Queueing 5 ingredients for generation...
+[WebServer] [Transaction] Created new queue entry for "Force_quota_error_stress_1772684274031_2"
+[WebServer] [queueIconForGeneration] 🚀 Enqueued task for "Force_quota_error_stress_1772684274031_2"
+[WebServer]  POST /icon_overview [32m200[39m in 120ms[2m (compile: 7ms, render: 113ms)[22m
+[WebServer] [FirebaseDataService] resolveRecipeIcons: sj4nhl3dEhxFgpUAgFqh
+[WebServer] Processing 6 nodes for recipe sj4nhl3dEhxFgpUAgFqh
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Normal-1772684274031-1"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Force_quota_error_stress_1772684274031"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Normal-1772684274031-2"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Normal-1772684274031-3"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Force_quota_error_stress_1772684274031_2"
+[WebServer] [FirebaseDataService] attemptUpdateFromCache: Cache MISS for "Force_quota_error_stress_1772684274031_3"
+[WebServer] Queueing 6 ingredients for generation...
+[WebServer] [Transaction] Created new queue entry for "Force_quota_error_stress_1772684274031_3"
+[WebServer] [queueIconForGeneration] 🚀 Enqueued task for "Force_quota_error_stress_1772684274031_3"
+[WebServer]  POST /icon_overview [32m200[39m in 117ms[2m (compile: 5ms, render: 112ms)[22m
+>  registering /util/generate
+>  Registering v2 plugin vertexai...
+>  🔥 Admin SDK switching to Emulator mode via Env Vars
+>  🔥 Admin SDK switching to Emulator mode via Env Vars
+[StressTest] Waiting for processing...
+i  functions: Beginning execution of "us-central1-processIconTask"
+>  [Task-Normal-1772684274031-1] 🚀 Started
+>  [IconGenerator] 🟢 Generating icon for: "Normal-1772684274031-1"
+>  [IconGenerator] 🎨 Prompting AI: "For use in a recipe card infographic, generate a h..."
+>  [MockAIService] generateImage called for: "For use in a recipe card infog"...
+>  [MockAIService] Returning mock URL: https://placehold.co/64x64/png?text=Mock+For%20use%20in&uuid=h9oa54
+>  [IconGenerator] Downloading from: https://placehold.co/64x64/png...
+>  [IconGenerator] Processing image (background removal)...
+>  [IconGenerator] Uploading to Storage...
+⚠  Cloud Storage ACLs are not supported in the Storage Emulator. All related methods will succeed, but have no effect.
+>  [FirebaseDataService] getIngredientByName: Normal-1772684274031-1
+>  [Task-Normal-1772684274031-1] Publishing icon to Firestore...
+>  [Task-Normal-1772684274031-1] Updating 1 recipes...
+>  [FirebaseDataService] getIngredientByName: Normal-1772684274031-1
+>  [Task-Normal-1772684274031-1] ✅ Completed & Deleted
+i  functions: Finished "us-central1-processIconTask" in 1660.031788ms
+i  functions: Beginning execution of "us-central1-processIconTask"
+>  [Task-Force_quota_error_stress_1772684274031] 🚀 Started
+>  [IconGenerator] 🟢 Generating icon for: "Force_quota_error_stress_1772684274031"
+>  [IconGenerator] 🎨 Prompting AI: "For use in a recipe card infographic, generate a h..."
+>  [MockAIService] generateImage called for: "For use in a recipe card infog"...
+>  [MockAIService] Simulating Quota Error...
+>  [Task-Force_quota_error_stress_1772684274031] 💥 Failed: Error: Quota exceeded (simulated)
+>      at MockAIService.generateImage (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/lib/ai-service.js:189:19)
+>      at generateIconData (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/lib/icon-generator.js:35:41)
+>      at /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/functions/src/index.js:53:74
+>      at async /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/node_modules/firebase-functions/lib/common/providers/tasks.js:50:5
+>      at async runFunction (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:399:9)
+>      at async runHTTPS (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:424:5)
+>      at async /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:585:21
+i  functions: Finished "us-central1-processIconTask" in 65.324992ms
+i  functions: Beginning execution of "us-central1-processIconTask"
+>  [Task-Normal-1772684274031-2] 🚀 Started
+>  [IconGenerator] 🟢 Generating icon for: "Normal-1772684274031-2"
+>  [IconGenerator] 🎨 Prompting AI: "For use in a recipe card infographic, generate a h..."
+>  [MockAIService] generateImage called for: "For use in a recipe card infog"...
+>  [MockAIService] Returning mock URL: https://placehold.co/64x64/png?text=Mock+For%20use%20in&uuid=py9bf
+>  [IconGenerator] Downloading from: https://placehold.co/64x64/png...
+>  [IconGenerator] Processing image (background removal)...
+>  [IconGenerator] Uploading to Storage...
+>  [FirebaseDataService] getIngredientByName: Normal-1772684274031-2
+>  [Task-Normal-1772684274031-2] Publishing icon to Firestore...
+>  [Task-Normal-1772684274031-2] Updating 1 recipes...
+>  [FirebaseDataService] getIngredientByName: Normal-1772684274031-2
+>  [Task-Normal-1772684274031-2] ✅ Completed & Deleted
+i  functions: Finished "us-central1-processIconTask" in 1398.448619ms
+i  functions: Beginning execution of "us-central1-processIconTask"
+>  [Task-Normal-1772684274031-3] 🚀 Started
+>  [IconGenerator] 🟢 Generating icon for: "Normal-1772684274031-3"
+>  [IconGenerator] 🎨 Prompting AI: "For use in a recipe card infographic, generate a h..."
+>  [MockAIService] generateImage called for: "For use in a recipe card infog"...
+>  [MockAIService] Returning mock URL: https://placehold.co/64x64/png?text=Mock+For%20use%20in&uuid=ol9r7
+>  [IconGenerator] Downloading from: https://placehold.co/64x64/png...
+>  [IconGenerator] Processing image (background removal)...
+>  [IconGenerator] Uploading to Storage...
+>  [FirebaseDataService] getIngredientByName: Normal-1772684274031-3
+>  [Task-Normal-1772684274031-3] Publishing icon to Firestore...
+>  [Task-Normal-1772684274031-3] Updating 1 recipes...
+>  [FirebaseDataService] getIngredientByName: Normal-1772684274031-3
+>  [Task-Normal-1772684274031-3] ✅ Completed & Deleted
+i  functions: Finished "us-central1-processIconTask" in 1318.921354ms
+i  functions: Beginning execution of "us-central1-processIconTask"
+>  [Task-Force_quota_error_stress_1772684274031_2] 🚀 Started
+>  [IconGenerator] 🟢 Generating icon for: "Force_quota_error_stress_1772684274031_2"
+>  [IconGenerator] 🎨 Prompting AI: "For use in a recipe card infographic, generate a h..."
+>  [MockAIService] generateImage called for: "For use in a recipe card infog"...
+>  [MockAIService] Simulating Quota Error...
+>  [Task-Force_quota_error_stress_1772684274031_2] 💥 Failed: Error: Quota exceeded (simulated)
+>      at MockAIService.generateImage (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/lib/ai-service.js:189:19)
+>      at generateIconData (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/lib/icon-generator.js:35:41)
+>      at /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/functions/src/index.js:53:74
+>      at async /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/node_modules/firebase-functions/lib/common/providers/tasks.js:50:5
+>      at async runFunction (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:399:9)
+>      at async runHTTPS (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:424:5)
+>      at async /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:585:21
+i  functions: Finished "us-central1-processIconTask" in 41.552888ms
+i  functions: Beginning execution of "us-central1-processIconTask"
+>  [Task-Force_quota_error_stress_1772684274031_3] 🚀 Started
+>  [IconGenerator] 🟢 Generating icon for: "Force_quota_error_stress_1772684274031_3"
+>  [IconGenerator] 🎨 Prompting AI: "For use in a recipe card infographic, generate a h..."
+>  [MockAIService] generateImage called for: "For use in a recipe card infog"...
+>  [MockAIService] Simulating Quota Error...
+>  [Task-Force_quota_error_stress_1772684274031_3] 💥 Failed: Error: Quota exceeded (simulated)
+>      at MockAIService.generateImage (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/lib/ai-service.js:189:19)
+>      at generateIconData (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/lib/icon-generator.js:35:41)
+>      at /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/functions/src/index.js:53:74
+>      at async /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/node_modules/firebase-functions/lib/common/providers/tasks.js:50:5
+>      at async runFunction (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:399:9)
+>      at async runHTTPS (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:424:5)
+>      at async /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:585:21
+i  functions: Finished "us-central1-processIconTask" in 55.041359ms
+[StressTest] Screenshot taken: stuck-state
+[StressTest] Quota item Force_quota_error_stress_1772684274031 failed as expected.
+[StressTest] Quota item Force_quota_error_stress_1772684274031_2 failed as expected.
+[StressTest] Quota item Force_quota_error_stress_1772684274031_3 failed as expected.
+[StressTest] Item Normal-1772684274031-1 processed and removed from queue.
+[StressTest] Item Normal-1772684274031-2 processed and removed from queue.
+[StressTest] Item Normal-1772684274031-3 processed and removed from queue.
+[StressTest] Item after quota error status: undefined
+[StressTest] Attempting Retry via QueueMonitor...
+[StressTest] QueueMonitor text: FORGE BACKLOG
+3 ACTIVE
+Force_quota_error_stress_1772684274031
+1 Pending Recipes
+FAILED
+Force_quota_error_stress_1772684274031_2
+1 Pending Recipes
+FAILED
+Force_quota_error_stress_1772684274031_3
+1 Pending Recipes
+FAILED
+[StressTest] Retrying Force_quota_error_stress_1772684274031...
+[StressTest] Retried Force_quota_error_stress_1772684274031. Waiting for processing...
+[StressTest] Retrying Force_quota_error_stress_1772684274031_2...
+[WebServer] [retryIconGeneration] 🚀 Re-enqueued task for "Force_quota_error_stress_1772684274031"
+[WebServer]  POST /icon_overview [32m200[39m in 49ms[2m (compile: 11ms, render: 38ms)[22m
+[StressTest] Retried Force_quota_error_stress_1772684274031_2. Waiting for processing...
+[StressTest] Retrying Force_quota_error_stress_1772684274031_3...
+[StressTest] Retried Force_quota_error_stress_1772684274031_3. Waiting for processing...
+[StressTest] Waiting to see if it processes...
+[WebServer] [retryIconGeneration] 🚀 Re-enqueued task for "Force_quota_error_stress_1772684274031_2"
+[WebServer]  POST /icon_overview [32m200[39m in 53ms[2m (compile: 26ms, render: 27ms)[22m
+[WebServer] [retryIconGeneration] 🚀 Re-enqueued task for "Force_quota_error_stress_1772684274031_3"
+[WebServer]  POST /icon_overview [32m200[39m in 79ms[2m (compile: 48ms, render: 31ms)[22m
+i  functions: Beginning execution of "us-central1-processIconTask"
+>  [Task-Force_quota_error_stress_1772684274031] 🚀 Started
+>  [IconGenerator] 🟢 Generating icon for: "Force_quota_error_stress_1772684274031"
+>  [IconGenerator] 🎨 Prompting AI: "For use in a recipe card infographic, generate a h..."
+>  [MockAIService] generateImage called for: "For use in a recipe card infog"...
+>  [MockAIService] Simulating Quota Error...
+>  [Task-Force_quota_error_stress_1772684274031] 💥 Failed: Error: Quota exceeded (simulated)
+>      at MockAIService.generateImage (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/lib/ai-service.js:189:19)
+>      at generateIconData (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/lib/icon-generator.js:35:41)
+>      at /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/functions/src/index.js:53:74
+>      at async /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/node_modules/firebase-functions/lib/common/providers/tasks.js:50:5
+>      at async runFunction (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:399:9)
+>      at async runHTTPS (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:424:5)
+>      at async /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:585:21
+i  functions: Finished "us-central1-processIconTask" in 57.175911ms
+i  functions: Beginning execution of "us-central1-processIconTask"
+>  [Task-Force_quota_error_stress_1772684274031_2] 🚀 Started
+>  [IconGenerator] 🟢 Generating icon for: "Force_quota_error_stress_1772684274031_2"
+>  [IconGenerator] 🎨 Prompting AI: "For use in a recipe card infographic, generate a h..."
+>  [MockAIService] generateImage called for: "For use in a recipe card infog"...
+>  [MockAIService] Simulating Quota Error...
+>  [Task-Force_quota_error_stress_1772684274031_2] 💥 Failed: Error: Quota exceeded (simulated)
+>      at MockAIService.generateImage (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/lib/ai-service.js:189:19)
+>      at generateIconData (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/lib/icon-generator.js:35:41)
+>      at /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/functions/src/index.js:53:74
+>      at async /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/node_modules/firebase-functions/lib/common/providers/tasks.js:50:5
+>      at async runFunction (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:399:9)
+>      at async runHTTPS (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:424:5)
+>      at async /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:585:21
+i  functions: Finished "us-central1-processIconTask" in 65.170402ms
+i  functions: Beginning execution of "us-central1-processIconTask"
+>  [Task-Force_quota_error_stress_1772684274031_3] 🚀 Started
+>  [IconGenerator] 🟢 Generating icon for: "Force_quota_error_stress_1772684274031_3"
+>  [IconGenerator] 🎨 Prompting AI: "For use in a recipe card infographic, generate a h..."
+>  [MockAIService] generateImage called for: "For use in a recipe card infog"...
+>  [MockAIService] Simulating Quota Error...
+>  [Task-Force_quota_error_stress_1772684274031_3] 💥 Failed: Error: Quota exceeded (simulated)
+>      at MockAIService.generateImage (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/lib/ai-service.js:189:19)
+>      at generateIconData (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/lib/icon-generator.js:35:41)
+>      at /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/lib/functions/src/index.js:53:74
+>      at async /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/functions/node_modules/firebase-functions/lib/common/providers/tasks.js:50:5
+>      at async runFunction (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:399:9)
+>      at async runHTTPS (/usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:424:5)
+>      at async /usr/local/google/home/rop/github-personal/RecipeLanes/recipe-lanes/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:585:21
+i  functions: Finished "us-central1-processIconTask" in 52.481809ms
+[StressTest] Force_quota_error_stress_1772684274031 status: failed
+[StressTest] Force_quota_error_stress_1772684274031_2 status: failed
+[StressTest] Force_quota_error_stress_1772684274031_3 status: failed
+  ✓  1 [chromium] › e2e/icon-queue-stress.spec.ts:21:9 › Icon Queue Stress Test › reproduction: quota failure blocks subsequent items (STRESS SCENARIO) (32.8s)
+
+  1 passed (39.2s)
+✔  Script exited successfully (code 0)
+i  emulators: Shutting down emulators.
+i  functions: Stopping Functions Emulator
+i  firestore: Stopping Firestore Emulator
+>  Shutting down all Genkit servers...
+i  auth: Stopping Authentication Emulator
+i  storage: Stopping Storage Emulator
+i  eventarc: Stopping Eventarc Emulator
+i  tasks: Stopping Cloud Tasks Emulator
+i  hub: Stopping emulator hub
+i  logging: Stopping Logging Emulator

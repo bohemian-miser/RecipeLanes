@@ -33,6 +33,7 @@ export interface IconStats {
         center: { x: number, y: number };
         bbox: { x: number, y: number, w: number, h: number };
     };
+    status?: 'pending' | 'processing' | 'failed';
 }
 
 export interface RecipeNode {
@@ -62,9 +63,6 @@ export interface RecipeNode {
   rotation?: number;
   textPos?: 'bottom' | 'top' | 'left' | 'right';
   iconTheme?: 'classic' | 'modern' | 'modern_clean';
-  
-  // Icon Generation Status available for UI
-  iconStatus?: 'pending' | 'processing' | 'failed';
 }
 
 export interface NodeLayout {

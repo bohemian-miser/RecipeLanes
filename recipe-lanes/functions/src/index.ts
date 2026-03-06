@@ -16,7 +16,7 @@
  */
 
 
-import { generateAndStoreIcon, generateIconData } from './icon-generator';
+import { generateIconData } from './icon-generator';
 import { DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from "../../lib/config";
 import { getDataService } from '../../lib/data-service';
 import { db } from '../../lib/firebase-admin';
@@ -64,18 +64,24 @@ export const processIconTask = onTaskDispatched({
 
         // 3. Publish & Assign (Transaction)
         console.log(`[Queue-${ingredientName}] Publishing to Firestore...`);
+        let ingredientDocId;
+        const dataService = getDataService();
+
+        // Find or Create Ingredient Group.
+        const match = await dataService.getIngredientByName(ingredientName);
+        if (match) {
+            ingredientDocId = match.id;
+        } else {
+            ingredientDocId = await dataService.createIngredient(ingredientName);
+        }
         await db.runTransaction(async (t) => {
-            // Find or Create Ingredient Group
-            const dataService = getDataService();
-            let ingredientDocId;
-            const match = await dataService.getIngredientByName(ingredientName);
-            
-            if (match) {
-                ingredientDocId = match.id;
-            } else {
-                ingredientDocId = await dataService.createIngredient(ingredientName);
+            // Read the queue doc to get the ABSOLUTE LATEST list of recipe IDs
+            const queueDoc = await t.get(docRef);
+            if (!queueDoc.exists) {
+                console.log(`[Queue-${ingredientName}] Queue doc missing, aborting recipe update.`);
+                return; 
             }
-    
+            const latestRecipeIds: string[] = queueDoc.data()?.recipes || [];
             console.log(`[Queue-${ingredientName}] in transaction Publishing to Firestore...`);
             const result = await dataService.publishIcon(ingredientDocId, ingredientName, iconData);
         
@@ -86,15 +92,6 @@ export const processIconTask = onTaskDispatched({
                 lcb: iconData.score
             };
             console.log(`[Queue-${ingredientName}] Committing to recipes...`);
-
-            // 3. Final Transaction: Update recipes and delete queue
-            // Read the queue doc to get the ABSOLUTE LATEST list of recipe IDs
-            const queueDoc = await t.get(docRef);
-            if (!queueDoc.exists) {
-                console.log(`[Queue-${ingredientName}] Queue doc missing, aborting recipe update.`);
-                return; 
-            }
-            const latestRecipeIds: string[] = queueDoc.data()?.recipes || [];
 
             // Update all linked recipes using the atomic helper
             console.log(`[Queue-${ingredientName}] Updating ${latestRecipeIds.length} recipes...`);

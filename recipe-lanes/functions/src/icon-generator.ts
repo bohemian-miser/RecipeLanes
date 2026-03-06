@@ -101,28 +101,3 @@ export async function generateIconData(ingredientName: string) {
         iconData
     };
 }
-
-export async function generateAndStoreIcon(ingredientName: string) {
-    const { iconData } = await generateIconData(ingredientName);
-    
-    // Find or Create Ingredient Group
-    const dataService = getDataService();
-    let ingredientDocId;
-    const match = await dataService.getIngredientByName(ingredientName);
-    
-    if (match) {
-        ingredientDocId = match.id;
-    } else {
-        ingredientDocId = await dataService.createIngredient(ingredientName);
-    }
-
-    console.log(`[IconGenerator] Publishing to Firestore...`);
-    const result = await dataService.publishIcon(ingredientDocId, ingredientName, iconData);
-
-    console.log(`[IconGenerator] ✅ Success. Icon ID: ${result.iconId}`);
-    return {
-        ...result,
-        prompt: iconData.fullPrompt,
-        lcb: iconData.score
-    };
-}

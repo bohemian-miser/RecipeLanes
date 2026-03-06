@@ -44,15 +44,6 @@ export interface DataService {
       iconData: any
   ): Promise<IconStats>;
 
-  saveIcon(
-      ingredientId: string, 
-      ingredientName: string, 
-      visualDescription: string, 
-      fullPrompt: string,
-      publicUrl: string, 
-      imageBuffer: ArrayBuffer | Buffer, 
-      meta: { lcb: number, impressions: number, rejections: number, textModel: string, imageModel: string, geometry?: any }
-  ): Promise<IconStats>;
   
   saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public', ownerName?: string): Promise<string>;
   getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null>;
@@ -370,12 +361,6 @@ export class FirebaseDataService implements DataService {
 
         if (shouldEnqueue) {
             try {
-                const functions = require('firebase-admin').functions; // Lazy load if needed or use imported
-                // Note: getFunctions() is not imported. I need to check imports.
-                // 'firebase-admin' exports `getFunctions`? No, `firebase-admin/functions` or `admin.functions()`.
-                // In this file `db` comes from `./firebase-admin`.
-                // Let's assume `import { getFunctions } from 'firebase-admin/functions';` is needed.
-                // I will add the import next. For now using fully qualified if possible or valid JS.
                 const { getFunctions } = require('firebase-admin/functions');
                 const queue = getFunctions().taskQueue('processIconTask');
                 await queue.enqueue({ ingredientName: stdName });
@@ -997,43 +982,6 @@ export class FirebaseDataService implements DataService {
       };
   }
 
-  async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any) {
-      let finalUrl = publicUrl;
-      let finalPath = '';
-      let finalId = meta.iconId || randomUUID();
-
-      // 1. Upload if buffer provided
-      if (imageBuffer) {
-          const result = await this.uploadIcon(ingredientName, imageBuffer, { ...meta, iconId: finalId });
-          finalUrl = result.url;
-          finalPath = result.path;
-          finalId = result.iconId;
-      } else {
-          // Fallback if no buffer (shouldn't happen in generation flow, but for safety)
-          const shortId = finalId.substring(0, 8);
-          const kebabName = ingredientName.trim().replace(/\s+/g, '-');
-          finalPath = `icons/${kebabName}-${shortId}.png`;
-      }
-
-      // 2. Publish
-      const newIcon: any = {
-          id: finalId,
-          path: finalPath,
-          url: finalUrl,
-          score: meta.lcb || 0,
-          impressions: meta.impressions || 0,
-          rejections: meta.rejections || 0,
-          visualDescription,
-          fullPrompt,
-          created_at: new Date().toISOString()
-      };
-      
-      if (meta.geometry) {
-          newIcon.metadata = meta.geometry;
-      }
-
-      return this.publishIcon(ingredientId, ingredientName, newIcon);
-  }
 
   async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
     const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
@@ -1653,26 +1601,6 @@ export class MemoryDataService implements DataService {
         return { iconId: id, iconUrl: iconData.url, metadata: iconData.metadata };
     }
 
-    async saveIcon(ingredientId: string, ingredientName: string, visualDescription: string, fullPrompt: string, publicUrl: string, imageBuffer: ArrayBuffer | Buffer, meta: any): Promise<IconStats> {
-        const result = await this.uploadIcon(ingredientName, imageBuffer, meta);
-        
-        const newIcon = {
-            id: result.iconId,
-            url: result.url,
-            path: result.path,
-            score: meta.lcb,
-            impressions: meta.impressions,
-            rejections: meta.rejections,
-            created_at: Date.now(),
-            visualDescription,
-            fullPrompt,
-            textModel: meta.textModel,
-            imageModel: meta.imageModel,
-            metadata: meta.geometry
-        };
-
-        return this.publishIcon(ingredientId, ingredientName, newIcon);
-    }
 
     async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
         const icons = memoryStore.getAllIcons().filter(i => i.url === iconUrl);

@@ -97,7 +97,8 @@ export function generateRecipePrompt(recipeText: string): string {
   const BLOCK_END = "```";
 
   return `
-You are an expert recipe parser. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+You are an expert recipe parser and creator. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+If the instructions are brief or unclear, do your best to fill in the gaps with reasonable assumptions.
 
 ### Core Philosophy: The State-Flow Pattern
 1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
@@ -114,7 +115,7 @@ _title_\n and estimated
 _baseServes_\n (number) from the text.
 
 ### Schema
-Return ONLY raw JSON complying with this TypeScript interface:
+Return ONLY raw JSON complying with this TypeScript interface. No Comments:
 
 ${BLOCK_START}
 ${SCHEMA_INTERFACE}

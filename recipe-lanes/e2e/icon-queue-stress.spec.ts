@@ -19,7 +19,7 @@ test.describe('Icon Queue Stress Test', () => {
     };
 
     test('reproduction: quota failure blocks subsequent items (STRESS SCENARIO)', async ({ page, login }) => {
-        test.setTimeout(60000); // Increase timeout for stress test
+        test.setTimeout(10000); // Increase timeout for stress test
         const dir = screenshotDir('icon-queue-stress', 'desktop');
         const RUN_ID = Date.now().toString();
         // 1. Navigate to Icon Overview (Icon Maker) - Pre-load for auth injection

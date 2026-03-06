@@ -200,8 +200,13 @@ export class MockAIService implements AIService {
     const lowerPrompt = prompt.toLowerCase();
     
     if (lowerPrompt.includes('force_quota_error')) {
-         console.log('[MockAIService] Simulating Quota Error...');
-         throw new Error('Quota exceeded (simulated)');
+      console.log('[MockAIService] Simulating Quota Error...');
+      throw new Error('Quota exceeded (simulated)');
+    }
+    
+    if (lowerPrompt.includes('slow')) {
+      //sleep for 5 sec to simulate image generation.
+      await new Promise(resolve => setTimeout(resolve, 5000));
     }
     
     // Find matching ingredient. Sort by length desc to match "Fry An Egg" before "Egg"

@@ -41,7 +41,8 @@ export interface DataService {
   publishIcon(
       ingredientId: string, 
       ingredientName: string, 
-      iconData: any
+      iconData: any,
+      transaction?: any
   ): Promise<IconStats>;
 
   
@@ -77,6 +78,9 @@ export interface DataService {
   imagineRecipeWithIcon(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<any>;
   setRecipeWithIcon(data: any, transaction?: any): Promise<void>;
   assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<void>;
+  
+  imagineIngredientWithIcon(ingredientId: string, ingredientName: string, iconData: any, transaction?: any): Promise<any>;
+  setIngredientWithIcon(data: any, transaction?: any): Promise<void>;
   
   submitFeedback(data: { message: string, url: string, email?: string, graphJson?: string, userId?: string }): Promise<void>;
   
@@ -985,24 +989,71 @@ export class FirebaseDataService implements DataService {
       return { url: file.publicUrl(), path: fileName, iconId };
   }
 
-  async publishIcon(ingredientId: string, ingredientName: string, iconData: any): Promise<IconStats> {
+  async imagineIngredientWithIcon(ingredientId: string, ingredientName: string, iconData: any, transaction?: any): Promise<any> {
       const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
       
-      await db.runTransaction(async (t) => {
-          const doc = await t.get(docRef);
-          let icons = [];
-          if (doc.exists) {
-              icons = doc.data()?.icons || [];
+      let doc;
+      if (transaction) {
+          doc = await transaction.get(docRef);
+      } else {
+          doc = await docRef.get();
+      }
+
+      let icons = [];
+      let isNew = false;
+
+      if (doc.exists) {
+          icons = doc.data()?.icons || [];
+      } else {
+          isNew = true;
+      }
+      
+      icons.push(iconData);
+      icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+      if (icons.length > 50) icons = icons.slice(0, 50);
+
+      return { docRef, icons, isNew, ingredientName };
+  }
+
+  async setIngredientWithIcon(data: any, transaction?: any): Promise<void> {
+      const { docRef, icons, isNew, ingredientName } = data;
+      
+      if (transaction) {
+          if (isNew) {
+              transaction.set(docRef, { 
+                  name: ingredientName, 
+                  icons,
+                  created_at: FieldValue.serverTimestamp(),
+                  updated_at: FieldValue.serverTimestamp() 
+              });
           } else {
-              t.set(docRef, { name: ingredientName, created_at: FieldValue.serverTimestamp() });
+              transaction.update(docRef, { icons, updated_at: FieldValue.serverTimestamp() });
           }
-          
-          icons.push(iconData);
-          icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
-          if (icons.length > 50) icons = icons.slice(0, 50);
-          
-          t.update(docRef, { icons, updated_at: FieldValue.serverTimestamp() });
-      });
+      } else {
+          if (isNew) {
+              await docRef.set({ 
+                  name: ingredientName, 
+                  icons,
+                  created_at: FieldValue.serverTimestamp(),
+                  updated_at: FieldValue.serverTimestamp() 
+              });
+          } else {
+              await docRef.update({ icons, updated_at: FieldValue.serverTimestamp() });
+          }
+      }
+  }
+
+  async publishIcon(ingredientId: string, ingredientName: string, iconData: any, transaction?: any): Promise<IconStats> {
+      const operation = async (t: any) => {
+          const data = await this.imagineIngredientWithIcon(ingredientId, ingredientName, iconData, t);
+          await this.setIngredientWithIcon(data, t);
+      };
+
+      if (transaction) {
+          await operation(transaction);
+      } else {
+          await db.runTransaction(operation);
+      }
 
       return { 
           iconId: iconData.id, 
@@ -1010,6 +1061,7 @@ export class FirebaseDataService implements DataService {
           metadata: iconData.metadata 
       };
   }
+
 
 
   async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
@@ -1694,6 +1746,14 @@ export class MemoryDataService implements DataService {
         console.log('[MemoryDataService] Feedback submitted:', data);
     }
 
+    async imagineIngredientWithIcon(ingredientId: string, ingredientName: string, iconData: any, transaction?: any): Promise<any> {
+        return { ingredientId, ingredientName, iconData };
+    }
+
+    async setIngredientWithIcon(data: any, transaction?: any): Promise<void> {
+        console.log(`[MemoryDataService] setIngredientWithIcon: ${data.ingredientName}`);
+    }
+    
     async listDebugFiles(): Promise<any[]> {
         const icons = await this.getAllIcons();
         return icons.map((icon: any) => ({

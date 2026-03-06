@@ -78,34 +78,56 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
         } else {
             ingredientDocId = await dataService.createIngredient(ingredientName);
         }
-        await db.runTransaction(async (t) => {
+        await db.runTransaction(async (transaction) => {
             // Read the queue doc to get the ABSOLUTE LATEST list of recipe IDs
-            const queueDoc = await t.get(docRef);
+            const queueDoc = await transaction.get(docRef);
             if (!queueDoc.exists) {
                 console.log(`[Queue-${ingredientName}] Queue doc missing, aborting recipe update.`);
                 return; 
             }
             const latestRecipeIds: string[] = queueDoc.data()?.recipes || [];
             console.log(`[Queue-${ingredientName}] in transaction Publishing to Firestore...`);
-            const result = await dataService.publishIcon(ingredientDocId, ingredientName, iconData);
+            // const result = await dataService.publishIcon(ingredientDocId, ingredientName, iconData);
+            const ingredientData = await dataService.imagineIngredientWithIcon(ingredientDocId, ingredientName, iconData, transaction);
+
+            
+            // TODO fix the types so that we don't need this silly mapping.
+            let result = { 
+                iconId: iconData.id, 
+                iconUrl: iconData.url, 
+                metadata: iconData.metadata 
+            }
         
-            console.log(`[Queue-${ingredientName}] ✅ Success. Icon ID: ${result.iconId}`);
+            console.log(`[Queue-${ingredientName}] ✅ Success. Icon ID: ${iconData.id}`);
             const iconResult =  {
                 ...result,
                 prompt: iconData.fullPrompt,
                 lcb: iconData.score
             };
+
+            const recipeDataObj: Record<string, any> = {};
+            for (const rId of latestRecipeIds) {
+                const data = await dataService.imagineRecipeWithIcon(rId, ingredientName, iconResult, transaction);
+                recipeDataObj[rId] = data;
+            }
+
+            // END READS.
+
+            // if it gets a bad read/write, it will throw.
+            //start emulator and dev:emulator make some slow stuff and try to find where the bad read/write is.
+
             console.log(`[Queue-${ingredientName}] Committing to recipes...`);
+            await dataService.setIngredientWithIcon(ingredientData, transaction);
 
             // Update all linked recipes using the atomic helper
             console.log(`[Queue-${ingredientName}] Updating ${latestRecipeIds.length} recipes...`);
 
             for (const rId of latestRecipeIds) {
-                await dataService.assignIconToRecipe(rId, ingredientName, iconResult, t);
+                await dataService.setRecipeWithIcon(recipeDataObj[rId], transaction);
             }
 
             // Delete the queue item
-            t.delete(docRef);
+            transaction.delete(docRef);
             console.log(`[Queue-${ingredientName}] Successfully updated ${latestRecipeIds.length} recipes and deleted queue item.`);
         });
 

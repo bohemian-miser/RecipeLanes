@@ -59,6 +59,8 @@ I've just added an index to firestore.indexes.json, how do i deploy?
  firebase use recipe-lanes-staging && firebase deploy --only firestore:indexes
 
 
+// How to run an individual test
+npx playwright test e2e/concurrent-creations.spec.ts
 
 
 

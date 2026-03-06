@@ -16,7 +16,7 @@
  */
 
 import React, { memo } from 'react';
-import { Handle } from 'reactflow';
+import { Handle, Position } from 'reactflow';
 // NodeProps not exported in this version
 // import { NodeProps } from 'reactflow';
 
@@ -26,7 +26,7 @@ export const MicroNode: React.FC<any> = ({ data, selected }) => {
   
   return (
     <div className="group relative flex items-center justify-center w-3 h-3">
-            <Handle type="target" position="top" className="!bg-transparent !w-full !h-full !border-0 top-0 left-0 transform-none rounded-none" />
+            <Handle type="target" position={Position.Top} className="!bg-transparent !w-full !h-full !border-0 top-0 left-0 transform-none rounded-none" />
       
       <div className={`w-3 h-3 rounded-full ${color} shadow-sm border border-white/50 hover:scale-150 transition-transform cursor-pointer`} />
 
@@ -35,7 +35,7 @@ export const MicroNode: React.FC<any> = ({ data, selected }) => {
           {data.visualDescription || data.text.substring(0, 30)}
       </div>
 
-      <Handle type="source" position="bottom" className="!bg-transparent !w-1 !h-1 !border-0" />
+      <Handle type="source" position={Position.Bottom} className="!bg-transparent !w-1 !h-1 !border-0" />
     </div>
   );
 };

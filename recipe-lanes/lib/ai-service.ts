@@ -132,6 +132,43 @@ export class MockAIService implements AIService {
     // Generic fallback for E2E tests - Try to extract ingredient from prompt
     // Prompt usually contains: "convert the following cooking instructions... Input Recipe ... "
     // Handle both quoted and unquoted inputs, and varying newlines
+    const potatoesMatch = prompt.match(/test (\d+) potato(?: suffix (.+))?/i);
+    if (potatoesMatch) {
+         const count = parseInt(potatoesMatch[1], 10);
+         const suffix = potatoesMatch[2] ? ` ${potatoesMatch[2].trim()}` : '';
+         const nodes = [];
+         const inputs = [];
+         
+         for (let i = 1; i <= count; i++) {
+             nodes.push({ 
+                 id: `p${i}`, 
+                 laneId: "l1", 
+                 text: `Potato ${i}${suffix}`, 
+                 type: "ingredient", 
+                 visualDescription: `Potato ${i}${suffix}` 
+             });
+             inputs.push(`p${i}`);
+         }
+         
+         nodes.push({
+             id: "mash",
+             laneId: "l2",
+             text: "Mash",
+             type: "action",
+             inputs: inputs,
+             visualDescription: "Mashing"
+         });
+
+         return JSON.stringify({
+            title: `Potato Feast (${count})`,
+            lanes: [
+                { id: "l1", label: "Prep", type: "prep" },
+                { id: "l2", label: "Cook", type: "cook" }
+            ],
+            nodes
+        });
+    }
+
     const match = prompt.match(/Input Recipe\s*\n\s*(["']?)([\s\S]*)\1\s*$/);
     let inputDerived = match ? match[2].trim() : "Mock Ingredient 1";
     // Extra cleanup if regex missed something (e.g. mismatched quotes or just one quote captured)

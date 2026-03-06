@@ -40,8 +40,12 @@ export const processIconTask = onTaskDispatched({
     },
     memory: "1GiB",
     timeoutSeconds: 300, // 5 minutes sufficient for one icon
-},async (req) => {
-    const { ingredientName } = req.data;
+}, async (req) => {
+    await processIconTaskHandler(req.data);
+});
+
+export const processIconTaskHandler = async (data: { ingredientName: string }) => {
+    const { ingredientName } = data;
     console.log(`[Task-${ingredientName}] 🚀 Started`);
 
     if (!ingredientName) {
@@ -138,4 +142,4 @@ export const processIconTask = onTaskDispatched({
         // Return success to ACK the task and stop retries
         return; 
     }
-});
+};

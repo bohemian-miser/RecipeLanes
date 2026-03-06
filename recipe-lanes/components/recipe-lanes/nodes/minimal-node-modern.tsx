@@ -16,7 +16,7 @@
  */
 
 import React from 'react';
-import { Handle, Position } from 'reactflow';
+import { Handle } from 'reactflow';
 import { RefreshCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { getNodeIconUrl, getNodeIconMetadata } from '../../../lib/recipe-lanes/model-utils';
@@ -70,8 +70,8 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                                 >
                                     {/* Icon Container */}
                                     <div className={`relative ${iconClass} z-10 transition-transform duration-300 hover:scale-110 ${selected || isPivotMode ? 'drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : ''}`}>
-                                        <Handle id="target" type="target" position={Position.Top} className="!bg-transparent !w-1 !h-1 !border-0 top-2 left-1/2" />
-                                        <Handle id="source" type="source" position={Position.Bottom} className="!bg-transparent !w-1 !h-1 !border-0 bottom-2 left-1/2" />
+                                        <Handle id="target" type="target" position="top" className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                <Handle id="source" type="source" position="bottom" className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                                         
                                         {iconUrl ? (
                                             <img 
@@ -122,8 +122,8 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                 >
                     {/* Icon Container */}
                     <div className={`relative ${iconClass} z-10 transition-transform duration-300 hover:scale-110 ${selected || isPivotMode ? 'drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : ''}`}>
-                        <Handle id="target" type="target" position={Position.Top} className="!bg-transparent !w-1 !h-1 !border-0 top-2 left-1/2" />
-                        <Handle id="source" type="source" position={Position.Bottom} className="!bg-transparent !w-1 !h-1 !border-0 bottom-2 left-1/2" />
+                        <Handle id="target" type="target" position="top" className="!bg-transparent !w-1 !h-1 !border-0 top-2 left-1/2" />
+                        <Handle id="source" type="source" position="bottom" className="!bg-transparent !w-1 !h-1 !border-0 bottom-2 left-1/2" />
                         
                         {iconUrl ? (
                             <img 
@@ -201,8 +201,8 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 
               {/* Icon */}
               <div className={`relative w-28 h-28 z-10 flex items-center justify-center transition-transform group-hover:scale-110 ${selected || isPivotMode ? 'drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : ''}`}>
-                  <Handle id="target" type="target" position={Position.Top} className="!bg-transparent !w-1 !h-1 !border-0 top-2" />
-                  <Handle id="source" type="source" position={Position.Bottom} className="!bg-transparent !w-1 !h-1 !border-0 bottom-2" />
+                  <Handle id="target" type="target" position="top" className="!bg-transparent !w-1 !h-1 !border-0 top-2" />
+                  <Handle id="source" type="source" position="bottom" className="!bg-transparent !w-1 !h-1 !border-0 bottom-2" />
                   
                   {iconUrl ? (
                       <img 

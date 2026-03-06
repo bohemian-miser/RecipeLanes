@@ -16,9 +16,10 @@
  */
 
 import React, { memo } from 'react';
-import { NodeProps } from 'reactflow';
+// NodeProps not exported in this version
+// import { NodeProps } from 'reactflow';
 
-const LaneNode = ({ data }: NodeProps) => {
+const LaneNode = ({ data }: any) => {
   return (
     <div 
         className="w-full h-full border-r-2 border-zinc-200 border-dashed relative group"

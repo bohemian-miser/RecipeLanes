@@ -16,7 +16,7 @@
  */
 
 import React from 'react';
-import Position, { Handle } from 'reactflow';
+import { Handle } from 'reactflow';
 import { RefreshCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { getNodeIconUrl } from '../../../lib/recipe-lanes/model-utils';
@@ -80,8 +80,8 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
         >
             {/* Icon Container */}
             <div className={`relative ${containerSize} flex-shrink-0 flex items-center justify-center transition-all duration-200 z-10 ${selected || isPivotMode ? 'border-2 border-dashed border-blue-500 rounded-lg bg-blue-50/10' : ''} ${isPivotMode ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`}>
-                <Handle id="target" type="target" position={Position.Top} className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                <Handle id="source" type="source" position={Position.Top} className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                <Handle id="target" type="target" position="top" className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                <Handle id="source" type="source" position="top" className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
 
                 {iconUrl ? (
                     <img 

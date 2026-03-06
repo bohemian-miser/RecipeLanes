@@ -15,7 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { Position, Node } from 'reactflow';
+// import { Position, Node } from 'reactflow';
+type Node = any;
 import { getNodeIconMetadata } from './model-utils';
 
 // Helper to get center
@@ -233,27 +234,28 @@ export function getEdgeParams(
     const dy = c2.y - c1.y;
     
     // Dynamic Handle Position for Bezier Curves
-    let sourcePos = Position.Bottom;
-    let targetPos = Position.Top;
+    // Dynamic Handle Position for Bezier Curves
+    let sourcePos = 'bottom';
+    let targetPos = 'top';
 
     // Simple Quadrant Check
     if (Math.abs(dx) > Math.abs(dy)) {
         // Horizontal Dominant
         if (dx > 0) {
-            sourcePos = Position.Right;
-            targetPos = Position.Left;
+            sourcePos = 'right';
+            targetPos = 'left';
         } else {
-            sourcePos = Position.Left;
-            targetPos = Position.Right;
+            sourcePos = 'left';
+            targetPos = 'right';
         }
     } else {
         // Vertical Dominant
         if (dy > 0) {
-            sourcePos = Position.Bottom;
-            targetPos = Position.Top;
+            sourcePos = 'bottom';
+            targetPos = 'top';
         } else {
-            sourcePos = Position.Top;
-            targetPos = Position.Bottom;
+            sourcePos = 'top';
+            targetPos = 'bottom';
         }
     }
 

@@ -16,12 +16,26 @@
  */
 
 import React, { useCallback, memo } from 'react';
-import EdgeProps, MarkerType, { useStore, getStraightPath, getBezierPath, getSmoothStepPath } from 'reactflow';
+import { useStore, getStraightPath, getBezierPath, getSmoothStepPath } from 'reactflow';
+
+// Define minimalist EdgeProps to satisfy usage, or just use any
+interface EdgeProps {
+  id: string;
+  source: string;
+  target: string;
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
+  markerEnd?: string;
+  style?: React.CSSProperties;
+  data?: any;
+}
 import { getEdgeParams } from '../../../lib/recipe-lanes/graph-utils';
 
 function FloatingEdge({ id, source, target, markerEnd, style, data, sourceX, sourceY, targetX, targetY }: EdgeProps) {
-  const sourceNode = useStore(useCallback((store) => store.nodeInternals.get(source), [source]));
-  const targetNode = useStore(useCallback((store) => store.nodeInternals.get(target), [target]));
+  const sourceNode = useStore(useCallback((store: any) => store.nodeInternals.get(source), [source]));
+  const targetNode = useStore(useCallback((store: any) => store.nodeInternals.get(target), [target]));
 
   if (!sourceNode || !targetNode) {
     return null;

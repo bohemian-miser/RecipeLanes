@@ -32,16 +32,16 @@ export function clearNodeIcon(node: RecipeNode) {
 }
 
 export function hasNodeIcon(node: RecipeNode): boolean {
-    return !!node.icon && !!node.icon.iconUrl;
+    return !!node.icon && !!node.icon.url;
 }
 
 // Helper to bridge old code if needed, but prefer using IconStats directly
 export function getNodeIconUrl(node: RecipeNode): string | undefined {
-    return node.icon?.iconUrl;
+    return node.icon?.url;
 }
 
 export function getNodeIconId(node: RecipeNode): string | undefined {
-    return node.icon?.iconId;
+    return node.icon?.id;
 }
 
 export function getNodeIconMetadata(node: RecipeNode) {
@@ -55,8 +55,8 @@ export function getNodeIconStatus(node: RecipeNode) {
 export function applyIconToNode(node: RecipeNode, icon: IconStats) {
     // Only propagate essential visual/reference data, avoiding stale stats
     const cleanIcon: IconStats = {
-        iconId: icon.iconId,
-        iconUrl: icon.iconUrl,
+        id: icon.id,
+        url: icon.url,
         metadata: icon.metadata,
         status: icon.status
     };

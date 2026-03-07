@@ -24,9 +24,10 @@ export interface Lane {
 }
 
 export interface IconStats {
-    iconId: string;
-    iconUrl: string;
+    id: string;
+    url: string;
     score?: number;
+    prompt?: string;
     impressions?: number;
     rejections?: number;
     metadata?: {

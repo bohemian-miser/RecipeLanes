@@ -101,24 +101,11 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
 
             const ingredientData = await dataService.imagineIngredientWithIcon(ingredientDocId, ingredientName, iconDataWithStats, transaction);
 
-            
-            // TODO fix the types so that we don't need this silly mapping.
-            let result = { 
-                iconId: iconData.id, 
-                iconUrl: iconData.url, 
-                metadata: iconData.metadata 
-            }
-        
             console.log(`[Queue-${ingredientName}] ✅ Success. Icon ID: ${iconData.id}`);
-            const iconResult =  {
-                ...result,
-                prompt: iconData.fullPrompt,
-                lcb: initialScore // Use the initial score we calculated
-            };
 
             const recipeDataObj: Record<string, any> = {};
             for (const rId of latestRecipeIds) {
-                const data = await dataService.imagineRecipeWithIcon(rId, ingredientName, iconResult, transaction);
+                const data = await dataService.imagineRecipeWithIcon(rId, ingredientName, iconDataWithStats, transaction);
                 recipeDataObj[rId] = data;
             }
 

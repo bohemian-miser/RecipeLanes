@@ -162,7 +162,7 @@ export class FirebaseDataService implements DataService {
           // Update Impressions (Once per recipe update)
           if (ingDoc.exists) {
               icons = ingDoc.data()?.icons || [];
-              const iconIndex = icons.findIndex((i: any) => i.id === icon.iconId);
+              const iconIndex = icons.findIndex((i: any) => i.id === icon.id);
               
               if (iconIndex !== -1) {
                   icons[iconIndex].impressions = (icons[iconIndex].impressions || 0) + 1;
@@ -221,8 +221,8 @@ export class FirebaseDataService implements DataService {
           if (snap.exists) {
               const data = snap.data();
               // Legacy support: if 'completed' status still used
-              if (data?.status === 'completed' && data.iconId && data.iconUrl) {
-                  return { iconId: data.iconId, iconUrl: data.iconUrl };
+              if (data?.status === 'completed' && data.id && data.url) {
+                  return { id: data.id, url: data.url };
               }
               if (data?.status === 'failed') {
                   throw new Error(data.error || 'Generation failed');
@@ -240,7 +240,7 @@ export class FirebaseDataService implements DataService {
                       // Assuming icons are sorted or we take first
                       // DataService.saveIcon sorts by score, so first is best
                       const best = data.icons[0]; 
-                      return { iconId: best.id, iconUrl: best.url };
+                      return { id: best.id, url: best.url };
                   }
               }
               // If neither queue nor ingredient exists, it might not be queued yet or deleted entirely.
@@ -257,10 +257,10 @@ export class FirebaseDataService implements DataService {
      */
     private nodeNeedsProcessing(node: any, recipeRejections: any): boolean {
         if (!node.visualDescription) return false;
-        if (!node.icon || !node.icon.iconId) return true;
+        if (!node.icon || !node.icon.id) return true;
         
         const stdName = standardizeIngredientName(node.visualDescription as string);
-        const isRejected = recipeRejections[stdName]?.includes(node.icon.iconId);
+        const isRejected = recipeRejections[stdName]?.includes(node.icon.id);
         return !!isRejected;
     }
 
@@ -301,8 +301,8 @@ export class FirebaseDataService implements DataService {
                 console.log(`[FirebaseDataService] attemptUpdateFromCache: Cache HIT for "${stdName}" in recipe ${recipeId}`);
                 // Assuming assignIconToRecipe is already implemented elsewhere in your class
                 await this.assignIconToRecipe(recipeId, stdName, { 
-                    iconId: bestIcon.id, 
-                    iconUrl: bestIcon.url, 
+                    id: bestIcon.id, 
+                    url: bestIcon.url, 
                     metadata: bestIcon.metadata 
                 });
             } else {
@@ -893,7 +893,7 @@ export class FirebaseDataService implements DataService {
           title,
           createdAt: data.created_at?.toDate?.()?.toISOString() || null,
           nodeCount: data.graph?.nodes?.length || 0,
-          previewIcon: data.graph?.nodes?.find((n: any) => getNodeIconUrl(n))?.icon?.iconUrl,
+          previewIcon: data.graph?.nodes?.find((n: any) => getNodeIconUrl(n))?.icon?.url,
           ownerId: data.ownerId,
           ownerName: data.ownerName,
           visibility: data.visibility || 'unlisted',
@@ -1056,8 +1056,8 @@ export class FirebaseDataService implements DataService {
       }
 
       return { 
-          iconId: iconData.id, 
-          iconUrl: iconData.url, 
+          id: iconData.id, 
+          url: iconData.url, 
           metadata: iconData.metadata 
       };
   }
@@ -1157,7 +1157,7 @@ export class FirebaseDataService implements DataService {
           if (snap.exists) cacheMap.set(snap.id, snap.data());
       });
 
-      const updatesByRecipe = new Map<string, Map<string, { iconId: string, iconUrl: string, metadata?: any }>>();
+      const updatesByRecipe = new Map<string, Map<string, { id: string, url: string, metadata?: any }>>();
 
       for (const item of items) {
           const name = standardizeIngredientName(item.ingredientName);
@@ -1171,8 +1171,8 @@ export class FirebaseDataService implements DataService {
                   const isRejected = rejected.has(icon.id) || rejected.has('url:' + icon.url);
                   if (!isRejected) {
                       foundIcon = { 
-                          iconId: icon.id, 
-                          iconUrl: icon.url || null,
+                          id: icon.id, 
+                          url: icon.url || null,
                           score: icon.score,
                           impressions: icon.impressions,
                           rejections: icon.rejections,
@@ -1188,9 +1188,9 @@ export class FirebaseDataService implements DataService {
               const docSnap = await docRef.get();
               const existingData = docSnap.data();
 
-              if (existingData?.status === 'completed' && existingData.iconId) {
-                  if (!rejected.has(existingData.iconId)) {
-                      foundIcon = { iconId: existingData.iconId, iconUrl: existingData.iconUrl || null, metadata: existingData.metadata };
+              if (existingData?.status === 'completed' && existingData.id) {
+                  if (!rejected.has(existingData.id)) {
+                      foundIcon = { id: existingData.id, url: existingData.url || null, metadata: existingData.metadata };
                   }
               }
               
@@ -1223,7 +1223,7 @@ export class FirebaseDataService implements DataService {
                   if (!updatesByRecipe.has(item.recipeId)) {
                       updatesByRecipe.set(item.recipeId, new Map());
                   }
-                  updatesByRecipe.get(item.recipeId)!.set(name, { iconId: foundIcon.iconId, iconUrl: foundIcon.iconUrl, metadata: foundIcon.metadata });
+                  updatesByRecipe.get(item.recipeId)!.set(name, { id: foundIcon.id, url: foundIcon.url, metadata: foundIcon.metadata });
               }
           }
       }
@@ -1247,7 +1247,7 @@ export class FirebaseDataService implements DataService {
                       const nName = standardizeIngredientName(n.visualDescription);
                       if (updates.has(nName)) {
                           const update = updates.get(nName)!;
-                          if (getNodeIconId(n) !== update.iconId) {
+                          if (getNodeIconId(n) !== update.id) {
                               applyIconToNode(n, update);
                               changed = true;
                           }
@@ -1328,7 +1328,7 @@ export class MemoryDataService implements DataService {
                 metadata: dummyMeta
             });
             
-            hits.set(stdName, { iconId, iconUrl: mockUrl, score: 0, impressions: 0, rejections: 0, metadata: dummyMeta });
+            hits.set(stdName, { id: iconId, url: mockUrl, score: 0, impressions: 0, rejections: 0, metadata: dummyMeta });
         }
         return hits;
     }
@@ -1627,7 +1627,7 @@ export class MemoryDataService implements DataService {
             title,
             createdAt: new Date(r.created_at).toISOString(),
             nodeCount: r.graph.nodes.length,
-            previewIcon: r.graph.nodes.find((n: any) => getNodeIconUrl(n))?.icon?.iconUrl,
+            previewIcon: r.graph.nodes.find((n: any) => getNodeIconUrl(n))?.icon?.url,
             ownerId: r.ownerId,
             ownerName: r.ownerName,
             visibility: r.visibility,
@@ -1679,7 +1679,7 @@ export class MemoryDataService implements DataService {
             marked_for_deletion: false
         });
         
-        return { iconId: id, iconUrl: iconData.url, metadata: iconData.metadata };
+        return { id: id, url: iconData.url, metadata: iconData.metadata };
     }
 
 

@@ -16,90 +16,152 @@
  */
 
 
-import { generateAndStoreIcon, generateIconData } from './icon-generator';
-import {  DB_COLLECTION_QUEUE } from '../../lib/config';
+import { generateIconData } from './icon-generator';
+import { DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from "../../lib/config";
 import { getDataService } from '../../lib/data-service';
 import { db } from '../../lib/firebase-admin';
 
 // --- Helper Functions ---
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import {  FieldValue } from "firebase-admin/firestore";
+
+
 
 // const db = getFirestore();
 
-export const processIconQueue = onDocumentCreated({ 
-    document: `${DB_COLLECTION_QUEUE}/{ingredientName}`, 
-    timeoutSeconds: 600, 
+export const processIconTask = onTaskDispatched({
+    retryConfig: {
+        maxAttempts: 5,
+        minBackoffSeconds: 60,
+    },
+    rateLimits: {
+        maxConcurrentDispatches: 1,
+        maxDispatchesPerSecond: 1,
+    },
     memory: "1GiB",
-    maxInstances: 10
-}, async (event) => {
-    if (!event.data) return;
-    
-    const ingredientName = event.params.ingredientName;
-    const docRef = event.data.ref;
+    timeoutSeconds: 300, // 5 minutes sufficient for one icon
+}, async (req) => {
+    await processIconTaskHandler(req.data);
+});
+
+export const processIconTaskHandler = async (data: { ingredientName: string }) => {
+    const { ingredientName } = data;
+    console.log(`[Task-${ingredientName}] 🚀 Started`);
+
+    if (!ingredientName) {
+        console.error("No ingredientName provided");
+        return;
+    }
+
+    const docRef = db.collection(DB_COLLECTION_QUEUE).doc(ingredientName);
 
     try {
         // 1. Immediately set to processing (No transaction needed since it's onCreated)
         console.log(`[Queue-${ingredientName}] Started`);
-        await docRef.update({ status: 'processing' });
+        await docRef.update({
+            status: "processing",
+            updated_at: FieldValue.serverTimestamp(),
+        });
 
         // 2. Generate the icon (This takes time, clients might still be adding recipes to the queue doc)
-        // const iconResult = await generateAndStoreIcon({ ingredientName });
         const { iconData } = await generateIconData(ingredientName);
-        
-        // sleep for 1 min when testing race conditions.
-        // await new Promise(resolve => setTimeout(resolve, 30000));
+
+        // 3. Publish & Assign (Transaction)
         console.log(`[Queue-${ingredientName}] Publishing to Firestore...`);
-        await db.runTransaction(async (t) => {
-            // Find or Create Ingredient Group
-            const dataService = getDataService();
-            let ingredientDocId;
-            const match = await dataService.getIngredientByName(ingredientName);
-            
-            if (match) {
-                ingredientDocId = match.id;
-            } else {
-                ingredientDocId = await dataService.createIngredient(ingredientName);
+        let ingredientDocId;
+        const dataService = getDataService();
+
+        // Find or Create Ingredient Group.
+        const match = await dataService.getIngredientByName(ingredientName);
+        if (match) {
+            ingredientDocId = match.id;
+        } else {
+            ingredientDocId = await dataService.createIngredient(ingredientName);
+        }
+        await db.runTransaction(async (transaction) => {
+            // Read the queue doc to get the ABSOLUTE LATEST list of recipe IDs
+            const queueDoc = await transaction.get(docRef);
+            if (!queueDoc.exists) {
+                console.log(`[Queue-${ingredientName}] Queue doc missing, aborting recipe update.`);
+                return; 
             }
-    
+            const latestRecipeIds: string[] = queueDoc.data()?.recipes || [];
             console.log(`[Queue-${ingredientName}] in transaction Publishing to Firestore...`);
-            const result = await dataService.publishIcon(ingredientDocId, ingredientName, iconData);
+            // const result = await dataService.publishIcon(ingredientDocId, ingredientName, iconData);
+            const ingredientData = await dataService.imagineIngredientWithIcon(ingredientDocId, ingredientName, iconData, transaction);
+
+            
+            // TODO fix the types so that we don't need this silly mapping.
+            let result = { 
+                iconId: iconData.id, 
+                iconUrl: iconData.url, 
+                metadata: iconData.metadata 
+            }
         
-            console.log(`[Queue-${ingredientName}] ✅ Success. Icon ID: ${result.iconId}`);
+            console.log(`[Queue-${ingredientName}] ✅ Success. Icon ID: ${iconData.id}`);
             const iconResult =  {
                 ...result,
                 prompt: iconData.fullPrompt,
                 lcb: iconData.score
             };
+
+            const recipeDataObj: Record<string, any> = {};
+            for (const rId of latestRecipeIds) {
+                const data = await dataService.imagineRecipeWithIcon(rId, ingredientName, iconResult, transaction);
+                recipeDataObj[rId] = data;
+            }
+
+            // END READS.
+
+            // if it gets a bad read/write, it will throw.
+            //start emulator and dev:emulator make some slow stuff and try to find where the bad read/write is.
+
             console.log(`[Queue-${ingredientName}] Committing to recipes...`);
-
-            // 3. Final Transaction: Update recipes and delete queue
-            // Read the queue doc to get the ABSOLUTE LATEST list of recipe IDs
-            const queueDoc = await t.get(docRef);
-            if (!queueDoc.exists) return; 
-
-            const latestRecipeIds: string[] = queueDoc.data()?.recipes || [];
+            await dataService.setIngredientWithIcon(ingredientData, transaction);
 
             // Update all linked recipes using the atomic helper
             console.log(`[Queue-${ingredientName}] Updating ${latestRecipeIds.length} recipes...`);
-            // const dataService = getDataService();
-            
+
             for (const rId of latestRecipeIds) {
-                await dataService.assignIconToRecipe(rId, ingredientName, iconResult);
+                await dataService.setRecipeWithIcon(recipeDataObj[rId], transaction);
             }
 
             // Delete the queue item
-            t.delete(docRef);
+            transaction.delete(docRef);
             console.log(`[Queue-${ingredientName}] Successfully updated ${latestRecipeIds.length} recipes and deleted queue item.`);
         });
 
-    } catch (e: any) {
-        console.error(`[Queue-${ingredientName}] Failed:`, e);
-        // Best-effort status update on failure
+    } catch (error: any) {
+        console.error(`[Queue-${ingredientName}] 💥 Failed:`, error);
+        
+        // Handle Permanent vs Transient
+        // Quota errors (429) or 5xx -> Throw to retry
+        const isTransient = error.code === 429 || error.status === 429 || error.code === 503 || error.status === 503 || error.message?.includes('quota');
+        
+        if (isTransient) {
+            await docRef.update({ status: 'retrying', last_error: error.message }).catch(() => {});
+            throw error; // Trigger Cloud Task Retry
+        }
+        
+        // Permanent Error (Policy, 400, etc)
         await docRef.update({ 
             status: 'failed', 
-            error: e.message, 
-            updated_at: FieldValue.serverTimestamp() 
+            error: error.message,
+            updated_at: FieldValue.serverTimestamp()
         }).catch(() => {});
+        
+        // Propagate failure to recipes so UI shows Red X
+        // We need to read recipes again or assume we have them?
+        // Better to read again to be safe.
+        const qDoc = await docRef.get();
+        const recipes = qDoc.data()?.recipes || [];
+        const dataService = getDataService();
+        
+        for (const rId of recipes) {
+            await dataService.failRecipeIcon(rId, ingredientName, error.message);
+        }
+        
+        // Return success to ACK the task and stop retries
+        return; 
     }
-});
+};

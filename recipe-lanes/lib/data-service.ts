@@ -1309,10 +1309,28 @@ export class MemoryDataService implements DataService {
         
         for (const item of items) {
             const stdName = standardizeIngredientName(item.ingredientName);
+            const rejected = new Set(item.rejectedIds || []);
             
+            // Check cache first in memory
+            const existingIcons = memoryStore.getIconsByName(stdName);
+            const bestIcon = existingIcons.find(i => !rejected.has(i.id));
+
+            if (bestIcon) {
+                hits.set(stdName, { 
+                    id: bestIcon.id, 
+                    url: bestIcon.url, 
+                    score: bestIcon.popularity_score, 
+                    impressions: bestIcon.impressions, 
+                    rejections: bestIcon.rejections, 
+                    metadata: bestIcon.metadata 
+                });
+                continue;
+            }
+
+            // Fallback to generating new mock
             // Ensure ingredient exists for lookup
-            const existing = memoryStore.getIngredients().find(i => i.name === stdName);
-            if (!existing) {
+            const existingIng = memoryStore.getIngredients().find(i => i.name === stdName);
+            if (!existingIng) {
                 memoryStore.addIngredient({ name: stdName, created_at: Date.now() });
             }
 
@@ -1340,7 +1358,9 @@ export class MemoryDataService implements DataService {
         const nodesToProcess = recipe.graph.nodes.filter(n => {
             if (!n.visualDescription) return false;
             // In memory, we just force update or check if missing
-            return !getNodeIconId(n);
+            const id = getNodeIconId(n);
+            const url = getNodeIconUrl(n);
+            return !id && !url;
         });
 
         if (nodesToProcess.length === 0) return;

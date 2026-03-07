@@ -10,6 +10,7 @@
     "lint": "eslint",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "./scripts/test-unit.sh",
+    "test:watch": "node --import tsx --test --watch tests/*.test.ts",
     "test:integration": "export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 && export PATH=$JAVA_HOME/bin:$PATH && export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/service-account.json && env-cmd -f .env.test npm install --prefix functions && env-cmd -f .env.test npm run build --prefix functions && env-cmd -f .env.test npx firebase emulators:exec --only auth,firestore,storage,functions --project local-project-id 'npx tsx tests/functions-metadata.test.ts'",
     "test:e2e": "./scripts/test-e2e.sh",
     "mcp": "npx tsx scripts/mcp-server.ts",

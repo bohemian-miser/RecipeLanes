@@ -1,30 +1,17 @@
-/*
- * Copyright (C) 2026 Bohemian Miser <https://substack.com/@bohemianmiser>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published
- * by the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
-import 'dotenv/config';
-// import { createVisualRecipeAction, getOrCreateIconAction } from '../app/actions';
+import { describe, it, beforeEach } from 'node:test';
+import assert from 'node:assert';
 import { setAIService, MockAIService } from '../lib/ai-service';
 import { setDataService, MemoryDataService, getDataService } from '../lib/data-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
+import { createVisualRecipeAction } from '../app/actions';
+import { getNodeIconUrl } from '../lib/recipe-lanes/model-utils';
 
-// Custom Mock for this test
+// Mock Next.js headers/cookies/navigation
+// We need to mock these before importing actions that use them
+// But since we use setAuthService(MockAuthService), we might bypass some.
+
 class CustomMockAIService extends MockAIService {
-    async generateText(prompt: string): Promise<string> {
-        // Return a graph with Carrot and Onion
+    async generateText(): Promise<string> {
         return JSON.stringify({
             title: "Carrot and Onion",
             lanes: [{ id: "lane1", label: "Board", type: "prep" }],
@@ -36,75 +23,47 @@ class CustomMockAIService extends MockAIService {
     }
 }
 
-// Explicitly use Mocks for tests
-setAIService(new CustomMockAIService());
-setAuthService(new MockAuthService());
+describe('Optimistic Flow (Memory)', () => {
+    let service: any;
 
-async function testOptimisticFlow() {
-  console.log('\n=== SKIP Testing Optimistic Return + Background Trigger Flow ===');
-//   const dataService = getDataService();
+    beforeEach(() => {
+        setDataService(new MemoryDataService());
+        setAIService(new CustomMockAIService());
+        setAuthService(new MockAuthService());
+        service = getDataService();
+    });
 
-//   // 1. Pre-seed Cache with an Icon for "Carrot"
-//   console.log('[Setup] Seeding cache for "Carrot"...');
-//   const seedRes = await getOrCreateIconAction("Carrot");
-//   if ('error' in seedRes) throw new Error("Seed failed");
-//   const carrotUrl = seedRes.iconUrl;
-//   console.log(` -> Seeded Carrot: ${carrotUrl}`);
+    it('should use cached icons optimistically', async () => {
+        // 1. Seed Cache for Carrot
+        const carrotIcon = {
+            id: 'icon-carrot',
+            url: 'http://test/carrot.png',
+            score: 1.0,
+            metadata: { center: { x: 0.5, y: 0.5 }, bbox: { x: 0, y: 0, w: 1, h: 1 } }
+        };
+        await service.publishIcon('carrot', 'Carrot', carrotIcon);
 
-//   // 2. Call createVisualRecipeAction with "Carrot and Onion"
-//   // Expect: Carrot has icon, Onion is null
-//   console.log('\n[Action] Calling createVisualRecipeAction("Chop 1 Carrot and 1 Onion")...');
-//   const result = await createVisualRecipeAction("Chop 1 Carrot and 1 Onion");
-  
-//   if (result.error) throw new Error(result.error);
-//   if (!result.id) throw new Error("No graph returned");
-  // get the graph  
+        // 2. Create Recipe
+        const result = await createVisualRecipeAction("1 Carrot and 1 Onion");
+        assert.ok(result.id, "Recipe should be created");
 
-  
-//   const nodes = result.graph.nodes.filter(n => n.type === 'ingredient');
-//   console.log(` -> Graph has ${nodes.length} ingredients.`);
+        // 3. Verify
+        const saved = await service.getRecipe(result.id);
+        assert.ok(saved, "Recipe should be retrievable");
 
-//   // Assertions
-//   const carrotNode = nodes.find(n => n.text.toLowerCase().includes('carrot'));
-//   const onionNode = nodes.find(n => n.text.toLowerCase().includes('onion'));
+        const carrotNode = saved.graph.nodes.find((n: any) => n.visualDescription === 'Carrot');
+        const onionNode = saved.graph.nodes.find((n: any) => n.visualDescription === 'Onion');
 
-//   if (!carrotNode) throw new Error("Carrot node missing");
-//   if (!onionNode) throw new Error("Onion node missing");
+        assert.ok(carrotNode, "Carrot node missing");
+        assert.ok(onionNode, "Onion node missing");
 
-//   // Carrot should have icon (Optimistic Cache Hit)
-//   if (carrotNode.iconUrl === carrotUrl) {
-//       console.log('SUCCESS: Carrot has cached icon URL.');
-//   } else {
-//       console.error(`FAILURE: Carrot icon mismatch. Got: ${carrotNode.iconUrl}`);
-//   }
+        // Carrot should HAVE the cached icon URL
+        assert.strictEqual(getNodeIconUrl(carrotNode), carrotIcon.url);
 
-//   // Onion should NOT have icon (Optimistic Cache Miss)
-//   if (!onionNode.iconUrl && !onionNode.iconId) {
-//       console.log('SUCCESS: Onion has NO icon (Optimistic null).');
-//   } else {
-//       console.error(`FAILURE: Onion has icon prematurely: ${onionNode.iconUrl}`);
-//   }
-
-//   // 3. Verify Save
-//   if (result.id) {
-//       console.log(`SUCCESS: Recipe Saved with ID: ${result.id}`);
-//       const saved = await dataService.getRecipe(result.id);
-//       if (saved) {
-//           console.log(' -> Recipe exists in DB.');
-//           if (saved.graph.nodes.find(n => n.text.includes('Onion'))?.iconUrl === undefined) {
-//                console.log(' -> DB matches return state (Onion is empty).');
-//           }
-//       } else {
-//           console.error('FAILURE: Recipe not found in DB.');
-//       }
-//   } else {
-//       console.error('FAILURE: No Recipe ID returned.');
-//   }
-
-//   // Note: We cannot easily test the Cloud Function trigger here as it requires the Emulator or Deployed environment.
-//   // We trust the integration test/manual verification for the background worker.
-  
-//   console.log('Optimistic Flow Test Complete.');
-}
-
-testOptimisticFlow();
+        // Onion should NOT have an icon yet (it was just queued)
+        // MemoryDataService.resolveRecipeIcons automatically assigns mock icons for queued items 
+        // to simulate the async process finishing instantly in memory.
+        // Let's verify it got SOME icon.
+        assert.ok(getNodeIconUrl(onionNode), "Onion should have a generated mock icon");
+    });
+});

@@ -95,6 +95,9 @@ export async function create_recipe(page: Page, text: string, dir: string) {
     await screenshot(page, dir, 'recipe-entered');
     await page.locator('button:has(svg.lucide-arrow-right)').click();
     await screenshot(page, dir, 'create-clicked');
+    
+    // Wait for navigation
+    await page.waitForURL(/id=/);
 }
 
 export async function wait_for_graph(page: Page, dir?: string) {

@@ -16,15 +16,15 @@
  */
 
 
-type Node = { id: string; type?: string };
+type GraphNode = { id: string; type?: string };
 type Edge = { id: string; source: string; target: string };
 
 class GraphManager {
-    nodes: Node[];
+    nodes: GraphNode[];
     edges: Edge[];
-    history: { nodes: Node[], edges: Edge[] }[] = [];
+    history: { nodes: GraphNode[], edges: Edge[] }[] = [];
 
-    constructor(nodes: Node[], edges: Edge[]) {
+    constructor(nodes: GraphNode[], edges: Edge[]) {
         this.nodes = nodes;
         this.edges = edges;
     }
@@ -36,7 +36,7 @@ class GraphManager {
         });
     }
 
-    deleteNode(nodeId: string) {
+    deleteGraphNode(nodeId: string) {
         console.log(`[Logic] Deleting node: ${nodeId}`);
         this.takeSnapshot();
         
@@ -110,7 +110,7 @@ function runScrambledEggsTest() {
     // Net change: -1.
     // Result: 7 edges.
     
-    mgr.deleteNode("whisk");
+    mgr.deleteGraphNode("whisk");
     
     console.log(`Edges after delete: ${mgr.getEdgeCount()} (Expected 7)`);
     if (mgr.getEdgeCount() !== 7) throw new Error("Delete logic failed");

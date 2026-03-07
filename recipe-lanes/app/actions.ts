@@ -192,8 +192,8 @@ export async function getOrCreateIconAction(
         if (hits.has(ingredient)) {
             const hit = hits.get(ingredient)!;
             return {
-                iconId: hit.iconId,
-                iconUrl: hit.iconUrl,
+                id: hit.id,
+                url: hit.url,
                 isNew: false,
                 popularityScore: hit.score || 0,
                 visualDescription: ingredient
@@ -203,8 +203,8 @@ export async function getOrCreateIconAction(
         const completion = await service.waitForQueue(ingredient);
         if (completion) {
              return {
-                iconId: completion.iconId,
-                iconUrl: completion.iconUrl,
+                id: completion.id,
+                url: completion.url,
                 isNew: true,
                 popularityScore: 0,
                 visualDescription: ingredient

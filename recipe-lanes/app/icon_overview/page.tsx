@@ -19,7 +19,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { IngredientForm } from '@/components/ingredient-form';
-import { IconDisplay, Icon } from '@/components/icon-display';
+import { IconDisplay } from '@/components/icon-display';
 import { SharedGallery } from '@/components/shared-gallery';
 import { QueueMonitor } from '@/components/queue-monitor';
 import { LogoutButton } from '@/components/logout-button';
@@ -32,10 +32,11 @@ import { db } from '@/lib/firebase-client';
 import { DB_COLLECTION_RECIPES } from '@/lib/config';
 import { standardizeIngredientName } from '@/lib/utils';
 import { getNodeIconUrl, getNodeIconId } from '@/lib/recipe-lanes/model-utils';
+import { RecipeNode } from '@/lib/recipe-lanes/types';
 
 export default function Home() {
   const { user, loading: authLoading, signIn } = useAuth();
-  const [icons, setIcons] = useState<Icon[]>([]);
+  const [nodes, setNodes] = useState<RecipeNode[]>([]);
   const [recipeId, setRecipeId] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
   
@@ -96,21 +97,9 @@ export default function Home() {
         const graph = data?.graph;
         console.log('Graph Nodes:', graph?.nodes?.length || 0);
             if (graph && Array.isArray(graph.nodes)) {
-                // Map nodes to Icons
-                // Reverse to show newest first? Or preserve order?
-                // Typically newest first is better for "adding" items.
-                // But the graph order is append.
-                // Let's reverse it for the display.
-                const newIcons: Icon[] = [...graph.nodes].reverse().map((n: any) => ({
-                    id: n.id,
-                    ingredient: standardizeIngredientName(n.visualDescription || n.text),
-                    iconUrl: getNodeIconUrl(n) || '',
-                    isPending: !getNodeIconUrl(n) && !getNodeIconId(n), // Pending if no URL/ID
-                    popularityScore: 0, // Not tracked in node
-                    // @ts-ignore - Storing iconId for reroll logic
-                    iconId: getNodeIconId(n)
-                }));
-                setIcons(newIcons);
+                // Reverse to show newest first
+                const newNodes: RecipeNode[] = [...graph.nodes].reverse();
+                setNodes(newNodes);
             }
         }
     });
@@ -152,31 +141,27 @@ export default function Home() {
     }
   };
 
-  const handleReroll = async (iconToReroll: Icon) => {
-    if (rerollingIds.has(iconToReroll.id)) return;
+  const handleReroll = async (nodeToReroll: RecipeNode) => {
+    if (rerollingIds.has(nodeToReroll.id)) return;
     if (!recipeId) return;
     
     setRerollingIds(prev => {
         const next = new Set(prev);
-        next.add(iconToReroll.id);
+        next.add(nodeToReroll.id);
         return next;
     });
     
     try {
-        // @ts-ignore - accessing hidden iconId
-        const currentIconId = iconToReroll.iconId;
+        const currentIconId = getNodeIconId(nodeToReroll);
+        const ingredient = standardizeIngredientName(nodeToReroll.visualDescription || nodeToReroll.text);
 
         const result = await rejectIcon(
             recipeId,
-            iconToReroll.ingredient,
+            ingredient,
             currentIconId
         );
 
-        if (result.error) throw new Error(result.error); // rejectIcon returns {success: true} usually, or throws?
-        // It returns { success: true } or void?
-        // In actions.ts it returns { success: true }.
-        
-        // Listener will update the UI
+        if (result.error) throw new Error(result.error); 
 
     } catch (err: any) {
         setError(err.message || 'Failed to reroll item.');
@@ -184,22 +169,14 @@ export default function Home() {
     } finally {
         setRerollingIds(prev => {
             const next = new Set(prev);
-            next.delete(iconToReroll.id);
+            next.delete(nodeToReroll.id);
             return next;
         });
     }
   };
 
-  const handleInventoryDelete = async (iconId: string) => {
-     // TODO: Implement node deletion if needed
-     // For now, client-side filtering or just ignore?
-     // The user said "don't have all the other stuff", so maybe deletion isn't critical
-     // or should be implemented via action.
-     // Let's implement a simple node deletion action if I had time, 
-     // but for now let's just hide it locally or skip it.
-     // Actually, let's just filter it locally for this "hack" view, 
-     // knowing it comes back on refresh.
-     setIcons(prev => prev.filter(i => i.id !== iconId));
+  const handleInventoryDelete = async (nodeId: string, ingredientName: string) => {
+     setNodes(prev => prev.filter(n => n.id !== nodeId));
   };
 
   if (authLoading || initializing) {
@@ -275,7 +252,7 @@ export default function Home() {
           <QueueMonitor />
 
           <IconDisplay
-            icons={icons}
+            nodes={nodes}
             onReroll={handleReroll}
             onDelete={handleInventoryDelete}
             rerollingIds={rerollingIds}

@@ -32,6 +32,6 @@ export async function POST(req: NextRequest) {
   const mockUrl = `https://placehold.co/64x64/png?text=${encodeURIComponent(ingredient)}`;
 
   return NextResponse.json({ 
-    iconUrl: mockUrl 
+    url: mockUrl 
   });
 }

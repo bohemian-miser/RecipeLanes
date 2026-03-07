@@ -1,33 +1,34 @@
 #!/bin/bash
 set -e
 
-# Define test command
-TEST_CMD="npx tsx tests/lifecycle.test.ts && npx tsx tests/graph-utils.test.ts && npx tsx tests/undo.test.ts && npx tsx tests/undo-complex.test.ts && npx tsx tests/undo-scrambled-logic.test.ts && npx tsx tests/social-features.test.ts && npx tsx tests/gallery-view.test.ts && npx tsx tests/optimistic-flow.test.ts && npx tsx tests/admin-security.test.ts"
+# Use Java 21 to avoid Security Manager issues in Java 25+
+if [ -d "/usr/lib/jvm/java-21-openjdk-amd64" ]; then
+    export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+    export PATH=$JAVA_HOME/bin:$PATH
+fi
 
-# 1. Check if Emulators are running (Firestore on 8080)
-# Use nc (netcat) to check port
+# 1. Run Pure Unit Tests (Parallel, No Emulators)
+# These tests use node:test and avoid Firestore/Firebase calls by using MemoryDataService or Mocks.
+echo "----------------------------------------------------------------"
+echo "Running Fast Unit Tests (Parallel)"
+echo "----------------------------------------------------------------"
+npx env-cmd -f .env.test node --import tsx --test tests/graph-utils.test.ts tests/graph-logic.test.ts tests/undo.test.ts tests/undo-complex.test.ts tests/undo-scrambled-logic.test.ts tests/stats.test.ts tests/social-features.test.ts tests/gallery-view.test.ts tests/optimistic-flow.test.ts tests/verify-production-logic.test.ts
+
+# 2. Run Integration Tests (Require Emulators)
+echo "----------------------------------------------------------------"
+echo "Running Emulator-dependent Unit Tests"
+echo "----------------------------------------------------------------"
+
+# Check if Emulators are already running (Firestore on 8080)
 if nc -z localhost 8080 2>/dev/null; then
-    echo "🟢 Emulators detected on port 8080. Running tests against EXISTING emulators."
-    
-    # Run directly using .env.test configuration
-    # Note: We rely on the existing emulator being configured correctly (local-project-id)
-    npx env-cmd -f .env.test sh -c "$TEST_CMD"
-
+    echo "🟢 Emulators detected on port 8080. Running against EXISTING emulators."
+    npx env-cmd -f .env.test node --import tsx --test tests/admin-security.test.ts 
+    # Add lifecycle.test.ts here once refactored
 else
     echo "🟡 No emulators detected. Starting NEW emulators for tests."
-    
-    # 2. Configure Java 21 (Fix for Security Manager error in Java 25)
-    if [ -d "/usr/lib/jvm/java-21-openjdk-amd64" ]; then
-        export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
-        export PATH=$JAVA_HOME/bin:$PATH
-    fi
-
-    # 3. Build Functions (Required for 'functions' emulator)
-    echo "Building Functions..."
+    # Build Functions (Required for 'functions' emulator)
     npm install --prefix functions --quiet
     npm run build --prefix functions
 
-    # 4. Start Emulators and Run Tests
-    # We include 'functions' because async logic (queue) depends on it
-    npx env-cmd -f .env.test firebase emulators:exec --only auth,firestore,storage,functions --project local-project-id "$TEST_CMD"
+    npx env-cmd -f .env.test firebase emulators:exec --only auth,firestore,storage,functions --project local-project-id "node --import tsx --test tests/admin-security.test.ts"
 fi

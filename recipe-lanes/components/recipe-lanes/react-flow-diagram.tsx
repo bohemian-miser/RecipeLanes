@@ -38,6 +38,7 @@ import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import { getNodeIconUrl, getNodeIconId, applyIconToNode } from '../../lib/recipe-lanes/model-utils';
+import { calculateBridgeEdges } from '../../lib/recipe-lanes/graph-logic';
 import MinimalNode from './nodes/minimal-node';
 import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
@@ -181,24 +182,18 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         console.log(`[DiagramInner] handleDeleteNode called for ${nodeId}`);
         takeSnapshot();
         const currentEdges = getEdges();
-        const incoming = currentEdges.filter((ed: any) => ed.target === nodeId);
-        const outgoing = currentEdges.filter((ed: any) => ed.source === nodeId);
         
-        const newEdgesList = currentEdges.filter((ed: any) => ed.source !== nodeId && ed.target !== nodeId);
-        
-        incoming.forEach((inEdge: any) => {
-            outgoing.forEach((outEdge: any) => {
-                newEdgesList.push({
-                    id: `${inEdge.source}-${outEdge.target}`,
-                    source: inEdge.source,
-                    target: outEdge.target,
-                    type: 'floating',
-                    data: { variant: edgeStyle },
-                    style: { stroke: '#9ca3af', strokeWidth: 1.5 },
-                    markerEnd: { type: MarkerType.ArrowClosed, color: '#9ca3af', width: 20, height: 20 }
-                });
-            });
+        const edgeFactory = (source: string, target: string) => ({
+            id: `${source}-${target}`,
+            source,
+            target,
+            type: 'floating',
+            data: { variant: edgeStyle },
+            style: { stroke: '#9ca3af', strokeWidth: 1.5 },
+            markerEnd: { type: MarkerType.ArrowClosed, color: '#9ca3af', width: 20, height: 20 }
         });
+
+        const newEdgesList = calculateBridgeEdges(nodeId, currentEdges, edgeFactory);
         
         setEdges(newEdgesList);
         setNodes(nds => nds.filter(n => n.id !== nodeId));

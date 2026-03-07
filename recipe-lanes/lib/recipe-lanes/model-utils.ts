@@ -48,12 +48,17 @@ export function getNodeIconMetadata(node: RecipeNode) {
     return node.icon?.metadata;
 }
 
+export function getNodeIconStatus(node: RecipeNode) {
+    return node.icon?.status;
+}
+
 export function applyIconToNode(node: RecipeNode, icon: IconStats) {
     // Only propagate essential visual/reference data, avoiding stale stats
     const cleanIcon: IconStats = {
         iconId: icon.iconId,
         iconUrl: icon.iconUrl,
-        metadata: icon.metadata
+        metadata: icon.metadata,
+        status: icon.status
     };
     setNodeIcon(node, cleanIcon);
     return node;

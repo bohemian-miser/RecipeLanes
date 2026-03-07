@@ -91,7 +91,14 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                         style={{ imageRendering: 'pixelated' }}
                     />
                 ) : (
-                    <span className="text-5xl drop-shadow-sm">{isIngredient ? '🥕' : '🍳'}</span>
+                    data.icon?.status === 'failed' ? (
+                       <div className="flex flex-col items-center justify-center text-red-500">
+                           <X className="w-5 h-5 mb-0.5" />
+                           <span className="text-[8px] font-bold uppercase leading-none">Failed</span>
+                       </div>
+                    ) : (
+                       <span className={`text-5xl drop-shadow-sm ${data.icon?.status === 'processing' || data.icon?.status === 'pending' ? 'animate-pulse opacity-50' : ''}`}>{isIngredient ? '🥕' : '🍳'}</span>
+                    )
                 )}
                 
                 {/* Reroll Button */}

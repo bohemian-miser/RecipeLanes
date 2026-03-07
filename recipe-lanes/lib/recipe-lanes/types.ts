@@ -33,6 +33,7 @@ export interface IconStats {
         center: { x: number, y: number };
         bbox: { x: number, y: number, w: number, h: number };
     };
+    status?: 'pending' | 'processing' | 'failed';
 }
 
 export interface RecipeNode {

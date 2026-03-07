@@ -1,32 +1,15 @@
-/*
- * Copyright (C) 2026 Bohemian Miser <https://substack.com/@bohemianmiser>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published
- * by the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+import { describe, it } from 'node:test';
+import assert from 'node:assert';
+import { calculateBridgeEdges, MinimalEdge } from '../lib/recipe-lanes/graph-logic';
 
-import { getEdgeParams } from '../lib/recipe-lanes/graph-utils';
-
-// Mock types
 type Node = { id: string; type?: string };
-type Edge = { id: string; source: string; target: string };
 
 class GraphManager {
     nodes: Node[];
-    edges: Edge[];
-    history: { nodes: Node[], edges: Edge[] }[] = [];
+    edges: MinimalEdge[];
+    history: { nodes: Node[], edges: MinimalEdge[] }[] = [];
 
-    constructor(nodes: Node[], edges: Edge[]) {
+    constructor(nodes: Node[], edges: MinimalEdge[]) {
         this.nodes = nodes;
         this.edges = edges;
     }
@@ -40,24 +23,9 @@ class GraphManager {
 
     deleteNode(nodeId: string) {
         this.takeSnapshot();
-        
-        const incoming = this.edges.filter(e => e.target === nodeId);
-        const outgoing = this.edges.filter(e => e.source === nodeId);
-        
-        const newEdges = this.edges.filter(e => e.source !== nodeId && e.target !== nodeId);
-        
-        incoming.forEach(inEdge => {
-            outgoing.forEach(outEdge => {
-                newEdges.push({ 
-                    id: `${inEdge.source}-${outEdge.target}-bridge`, 
-                    source: inEdge.source, 
-                    target: outEdge.target 
-                });
-            });
-        });
-        
+        const factory = (s: string, t: string) => ({ id: `${s}-${t}-bridge`, source: s, target: t });
+        this.edges = calculateBridgeEdges(nodeId, this.edges, factory);
         this.nodes = this.nodes.filter(n => n.id !== nodeId);
-        this.edges = newEdges;
     }
 
     undo() {
@@ -70,30 +38,17 @@ class GraphManager {
 
     verifyState(expectedNodes: string[], expectedEdges: string[]) {
         const nodeIds = this.nodes.map(n => n.id).sort();
-        const edgeIds = this.edges.map(e => e.id).sort();
         const expNodes = expectedNodes.sort();
-        const expEdges = expectedEdges.sort(); 
+        assert.deepStrictEqual(nodeIds, expNodes, 'Nodes mismatch');
         
-        if (JSON.stringify(nodeIds) !== JSON.stringify(expNodes)) {
-            throw new Error(`Nodes mismatch. Got ${JSON.stringify(nodeIds)}, expected ${JSON.stringify(expNodes)}`);
-        }
-        
-        // Check edges by source-target pair
         const edgePairs = this.edges.map(e => `${e.source}->${e.target}`).sort();
         const expEdgePairs = expectedEdges.sort();
-        
-        if (JSON.stringify(edgePairs) !== JSON.stringify(expEdgePairs)) {
-             throw new Error(`Edges mismatch. Got ${JSON.stringify(edgePairs)}, expected ${JSON.stringify(expEdgePairs)}`);
-        }
+        assert.deepStrictEqual(edgePairs, expEdgePairs, 'Edges mismatch');
     }
 }
 
-function runTests() {
-    console.log("Running Complex Undo Tests...");
-    
-    // Case 1: Chain
-    {
-        console.log("Case 1: Chain 1->2->3");
+describe('Complex Undo Tests', () => {
+    it('Case 1: Chain 1->2->3', () => {
         const mgr = new GraphManager(
             [{id:'1'}, {id:'2'}, {id:'3'}],
             [{id:'e1', source:'1', target:'2'}, {id:'e2', source:'2', target:'3'}]
@@ -104,12 +59,9 @@ function runTests() {
         
         mgr.undo();
         mgr.verifyState(['1', '2', '3'], ['1->2', '2->3']); 
-        console.log("PASS");
-    }
+    });
 
-    // Case 2: Multi-Delete
-    {
-        console.log("Case 2: Multi-Delete Chain 1->2->3->4");
+    it('Case 2: Multi-Delete Chain 1->2->3->4', () => {
         const mgr = new GraphManager(
             [{id:'1'}, {id:'2'}, {id:'3'}, {id:'4'}],
             [{id:'1-2', source:'1', target:'2'}, {id:'2-3', source:'2', target:'3'}, {id:'3-4', source:'3', target:'4'}]
@@ -126,12 +78,9 @@ function runTests() {
         
         mgr.undo();
         mgr.verifyState(['1', '2', '3', '4'], ['1->2', '2->3', '3->4']);
-        console.log("PASS");
-    }
+    });
 
-    // Case 3: Fan-In / Fan-Out
-    {
-        console.log("Case 3: Fan-In / Fan-Out");
+    it('Case 3: Fan-In / Fan-Out', () => {
         const mgr = new GraphManager(
             [{id:'1'}, {id:'2'}, {id:'3'}, {id:'4'}, {id:'5'}],
             [
@@ -153,12 +102,9 @@ function runTests() {
             ['1', '2', '3', '4', '5'],
             ['1->3', '2->3', '3->4', '3->5']
         );
-        console.log("PASS");
-    }
+    });
 
-    // Case 4: Diamond
-    {
-        console.log("Case 4: Diamond");
+    it('Case 4: Diamond', () => {
         const mgr = new GraphManager(
             [{id:'1'}, {id:'2'}, {id:'3'}, {id:'4'}],
             [
@@ -180,14 +126,5 @@ function runTests() {
             ['1', '2', '3', '4'],
             ['1->2', '1->3', '2->4', '3->4']
         );
-        console.log("PASS");
-    }
-}
-
-try {
-    runTests();
-    console.log("All Complex Undo Tests Passed!");
-} catch (e) {
-    console.error("Test Failed:", e);
-    process.exit(1);
-}
+    });
+});

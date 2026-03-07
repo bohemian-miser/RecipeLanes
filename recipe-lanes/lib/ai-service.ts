@@ -226,7 +226,9 @@ export class MockAIService implements AIService {
              if (fs.existsSync(p)) {
                  console.log(`[MockAIService] Found local icon at: ${p}`);
                  const buffer = fs.readFileSync(p);
-                 return `data:image/png;base64,${buffer.toString('base64')}`;
+                 const uuid = Math.random().toString(36).substring(7);
+                 // Append uuid as a query param so it's a different string URL
+                 return `data:image/png;base64,${buffer.toString('base64')}?reroll=${uuid}`;
              }
          }
          console.warn(`[MockAIService] Icon for ${match} not found in search paths: ${possiblePaths.join(', ')}`);

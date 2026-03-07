@@ -20,6 +20,7 @@ import { generateIconData } from './icon-generator';
 import { DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from "../../lib/config";
 import { getDataService } from '../../lib/data-service';
 import { db } from '../../lib/firebase-admin';
+import { calculateWilsonLCB } from '../../lib/utils';
 
 // --- Helper Functions ---
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
@@ -87,8 +88,18 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
             }
             const latestRecipeIds: string[] = queueDoc.data()?.recipes || [];
             console.log(`[Queue-${ingredientName}] in transaction Publishing to Firestore...`);
-            // const result = await dataService.publishIcon(ingredientDocId, ingredientName, iconData);
-            const ingredientData = await dataService.imagineIngredientWithIcon(ingredientDocId, ingredientName, iconData, transaction);
+            
+            // Set initial impressions based on how many recipes we're updating now
+            const initialImpressions = latestRecipeIds.length;
+            const initialScore = calculateWilsonLCB(initialImpressions, 0);
+            
+            const iconDataWithStats = {
+                ...iconData,
+                impressions: initialImpressions,
+                score: initialScore
+            };
+
+            const ingredientData = await dataService.imagineIngredientWithIcon(ingredientDocId, ingredientName, iconDataWithStats, transaction);
 
             
             // TODO fix the types so that we don't need this silly mapping.
@@ -102,7 +113,7 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
             const iconResult =  {
                 ...result,
                 prompt: iconData.fullPrompt,
-                lcb: iconData.score
+                lcb: initialScore // Use the initial score we calculated
             };
 
             const recipeDataObj: Record<string, any> = {};

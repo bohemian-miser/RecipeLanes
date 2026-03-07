@@ -16,7 +16,7 @@
  */
 
 import React, { memo, useState } from 'react';
-import { NodeProps, useReactFlow } from 'reactflow';
+import { useReactFlow } from 'reactflow';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { useSearchParams } from 'next/navigation';
 import { MinimalNodeClassic } from './minimal-node-classic';
@@ -29,7 +29,9 @@ import { getNodeIconId, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
 // Track rejected URLs for the session to prevent them from reappearing immediately
 const sessionRejectedUrls = new Set<string>();
 
-const MinimalNode = ({ id, data, selected }: NodeProps<RecipeNode & { onDelete?: () => void, onSetLongPress?: (active: boolean) => void, iconTheme?: 'classic' | 'modern' | 'modern_clean' }>) => {
+export const MinimalNode: React.FC<any> = ({ 
+    data, selected, isConnectable, id
+}) => {
   const [isRerolling, setIsRerolling] = useState(false);
   const [prevIconUrl, setPrevIconUrl] = useState(getNodeIconUrl(data));
   

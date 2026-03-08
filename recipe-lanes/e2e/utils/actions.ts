@@ -19,12 +19,12 @@ import { Page, expect, Locator } from '@playwright/test';
 import { screenshot } from './screenshot';
 
 export function get_node(page: Page, text: string): Locator {
-    // Return ANY react-flow node that CONTAINS the text, case-insensitive
-    return page.locator('.react-flow__node').filter({ hasText: new RegExp(text, 'i') });
+    // getByText with exact:false is case-insensitive and handles special characters safely
+    return page.locator('.react-flow__node').filter({ has: page.getByText(text, { exact: false }) }).first();
 }
 
 export async function click_on_node(page: Page, text: string, dir: string) {
-    const node = get_node(page, text).first();
+    const node = get_node(page, text);
     await expect(node).toBeVisible({ timeout: 10000 });
     
     await screenshot(page, dir, `before-click-${text}`);
@@ -34,7 +34,7 @@ export async function click_on_node(page: Page, text: string, dir: string) {
 }
 
 export async function move_node(page: Page, text: string, dx: number, dy: number, dir: string) {
-    const node = get_node(page, text).first();
+    const node = get_node(page, text);
     await expect(node).toBeVisible({ timeout: 10000 });
     const box = await node.boundingBox();
     expect(box).toBeTruthy();

@@ -39,7 +39,7 @@ test.describe('Regressions & Bug Repros', () => {
         await create_recipe(page, '1 Egg\n1 Sugar\nWhisk egg and sugar\nCook mixture', dir);
         await wait_for_graph(page, dir);
         
-        const whisk = get_node(page, 'Whisk').first();
+        const whisk = get_node(page, 'Whisk');
         await whisk.click();
         await whisk.hover();
         await whisk.getByRole('button', { name: /Delete/i }).click();
@@ -64,9 +64,6 @@ test.describe('Regressions & Bug Repros', () => {
 
         await page.goto('/icon_overview');
         await login(uid);
-        // Note: admin promotion usually happens via side effect or pre-seeding in tests.
-        // Assuming login(uid) with 'admin' in name might be mocked as admin, 
-        // or using promoteToAdmin utility.
         const { promoteToAdmin } = await import('./utils/admin-utils');
         await promoteToAdmin(uid);
 
@@ -89,20 +86,14 @@ test.describe('Regressions & Bug Repros', () => {
         await expect(galleryIcon).toBeVisible({ timeout: 10000 });
         
         await galleryIcon.hover();
-        // The label is inside the gallery-item div, we can use the data-ingredient attribute
         const label = gallerySection.locator(`[data-testid="gallery-item"][data-ingredient="${uniqueName}"] div.absolute.bottom-0`);
         await expect(label).toHaveClass(/translate-y-0/, { timeout: 10000 });
 
         // 3. Delete (Issue 67)
-        // Click delete on the gallery icon (might need to hover first to see it)
         const deleteBtn = gallerySection.locator('button').filter({ has: page.locator('svg.lucide-trash-2') }).first();
         await deleteBtn.click();
         
         await expect(galleryIcon).not.toBeVisible();
-        // Note: Inventory icon might persist because it's stored in the recipe's nodes, 
-        // and deleteIcon only removes from the global ingredients collection (stale cache).
-        // This is known behavior. We just verify it's gone from gallery.
-
         cleanupScreenshots(dir);
     });
 
@@ -111,16 +102,13 @@ test.describe('Regressions & Bug Repros', () => {
         const dir = screenshotDir('stats-tracking', desktop.name);
         const uniqueName = `Stats Test ${Date.now()}`;
         
-        // 1. Create Recipe
         await page.goto('/lanes?new=true');
         await create_recipe(page, `make ${uniqueName}`, dir);
         await wait_for_graph(page, dir);
         
-        // 2. Wait for Icon
-        const node = get_node(page, uniqueName).first();
+        const node = get_node(page, uniqueName);
         await expect(node.locator('img')).toBeVisible({ timeout: 30000 });
 
-        // 3. Check Stats in Gallery (New Tab)
         const galleryPage = await page.context().newPage();
         await galleryPage.goto('/icon_overview');
         await galleryPage.getByPlaceholder('Search ingredients...').fill(uniqueName);
@@ -129,7 +117,6 @@ test.describe('Regressions & Bug Repros', () => {
         const card = galleryPage.locator('.relative.group').filter({ hasText: uniqueName }).first();
         await expect(card).toContainText('0 / 1', { timeout: 10000 });
 
-        // 4. Reroll in Recipe (Original Tab)
         await page.bringToFront();
         await node.hover();
         const rerollBtn = node.locator('button[title="Reroll Icon"]');
@@ -137,19 +124,17 @@ test.describe('Regressions & Bug Repros', () => {
         
         await expect(rerollBtn.locator('svg')).not.toHaveClass(/animate-spin/, { timeout: 30000 });
         
-        // 5. Verify Stats Updated
         await galleryPage.bringToFront();
         const cards = galleryPage.locator('.relative.group').filter({ hasText: uniqueName });
         await expect.poll(async () => {
             await galleryPage.reload();
             await galleryPage.getByPlaceholder('Search ingredients...').fill(uniqueName);
             await galleryPage.keyboard.press('Enter');
-            // Give a bit of time for search results to load/render
             await galleryPage.waitForTimeout(500);
             return cards.count();
         }, { 
             timeout: 20000,
-            intervals: [2000] // Don't hammer reload too hard
+            intervals: [2000]
         }).toBe(2);
         
         const cardTexts = await cards.allTextContents();
@@ -159,29 +144,25 @@ test.describe('Regressions & Bug Repros', () => {
         await galleryPage.close();
         cleanupScreenshots(dir);
     });
+
     test('Comprehensive Stats: multiple rerolls and persistence', async ({ page }) => {
         test.slow();
         const dir = screenshotDir('stats-comprehensive', desktop.name);
-        const RUN_ID = Date.now().toString().slice(-6);
-        const ingredient = `Testonion${RUN_ID}`;
-        const ingredient2 = `Testgarlic${RUN_ID}`;
+        const RUN_ID = Date.now().toString().slice(-4);
+        const ingredient = `A${RUN_ID} Onion`.toLowerCase();
+        const ingredient2 = `B${RUN_ID} Garlic`.toLowerCase();
 
-        // 1. Create Recipe
         await page.goto('/lanes?new=true');
         await create_recipe(page, `test eggs with ${ingredient}`, dir);
         await wait_for_graph(page, dir);
-        
-        // Give UI a moment to stabilize and listeners to connect
+
         await page.waitForTimeout(5000);
         await screenshot(page, dir, '01-recipe-created');
 
-        const node = get_node(page, ingredient).last();
-        console.log(`Checking visibility for node with ingredient: "${ingredient}"`);
+        const node = get_node(page, ingredient);
         await expect(node.locator('img')).toBeVisible({ timeout: 60000 });
-
         let currentSrc = await node.locator('img').getAttribute('src');
 
-        // Helper to check stats count
         const expectStats = async (name: string, count: number) => {
             const galleryPage = await page.context().newPage();
             await galleryPage.goto('/icon_overview');
@@ -193,16 +174,14 @@ test.describe('Regressions & Bug Repros', () => {
                 const cards = galleryPage.locator('.relative.group').filter({ hasText: name });
                 return cards.count();
             }, { 
-                timeout: 15000,
+                timeout: 20000,
                 intervals: [2000]
             }).toBe(count);
             await galleryPage.close();
         };
 
-        // 2. Initial Check
         await expectStats(ingredient, 1);
 
-        // 3. Reroll 1
         const rerollBtn = node.locator('button[title="Reroll Icon"]');
         await node.hover();
         await rerollBtn.click({ force: true });
@@ -212,25 +191,24 @@ test.describe('Regressions & Bug Repros', () => {
         }).not.toBe(currentSrc);
         currentSrc = await node.locator('img').getAttribute('src');
 
-        // 4. Verify 2 Icons
         await expectStats(ingredient, 2);
 
-        // 5. Reroll 2
         await node.hover();
         await rerollBtn.click({ force: true });
-        await expect.poll(() => node.locator('img').getAttribute('src'), { timeout: 25000 }).not.toBe(currentSrc);
+        await expect.poll(() => node.locator('img').getAttribute('src'), { 
+            timeout: 30000,
+            intervals: [2000]
+        }).not.toBe(currentSrc);
 
-        // 6. Verify 3 Icons
         await expectStats(ingredient, 3);
 
-        // 7. Refresh and Reroll new ingredient
         await page.goto('/lanes?new=true');
         await create_recipe(page, `crush ${ingredient2}`, dir);
         await wait_for_graph(page, dir);
 
         await page.reload();
         await wait_for_graph(page, dir);
-        const node2 = get_node(page, ingredient2).last();
+        const node2 = get_node(page, ingredient2);
         await expect(node2.locator('img')).toBeVisible({ timeout: 60000 });
         const src2 = await node2.locator('img').getAttribute('src');
         

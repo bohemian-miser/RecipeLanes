@@ -149,8 +149,8 @@ test.describe('Regressions & Bug Repros', () => {
         test.slow();
         const dir = screenshotDir('stats-comprehensive', desktop.name);
         const RUN_ID = Date.now().toString().slice(-4);
-        const ingredient = `A${RUN_ID} Onion`.toLowerCase();
-        const ingredient2 = `B${RUN_ID} Garlic`.toLowerCase();
+        const ingredient = `A${RUN_ID} carb`.toLowerCase();
+        const ingredient2 = `B${RUN_ID} dirt`.toLowerCase();
 
         await page.goto('/lanes?new=true');
         await create_recipe(page, `test eggs with ${ingredient}`, dir);
@@ -162,6 +162,7 @@ test.describe('Regressions & Bug Repros', () => {
         const node = get_node(page, ingredient);
         await expect(node.locator('img')).toBeVisible({ timeout: 60000 });
         let currentSrc = await node.locator('img').getAttribute('src');
+        await screenshot(page, dir, 'ingredient seen');
 
         const expectStats = async (name: string, count: number) => {
             const galleryPage = await page.context().newPage();
@@ -177,18 +178,33 @@ test.describe('Regressions & Bug Repros', () => {
                 timeout: 20000,
                 intervals: [2000]
             }).toBe(count);
+
+            await screenshot(galleryPage, dir, `${ingredient} should have count ${count}`);
             await galleryPage.close();
         };
 
         await expectStats(ingredient, 1);
 
-        const rerollBtn = node.locator('button[title="Reroll Icon"]');
         await node.hover();
+        
+        
+        const rerollBtn = node.locator('button[title="Reroll Icon"]');
+        await screenshot(page, dir, 'before reroll');
+        // Scroll to make the reroll button visible.
+        await page.mouse.wheel(0, 500);
+        await expect(rerollBtn).toBeVisible();
+        await rerollBtn.hover({ force: true });
         await rerollBtn.click({ force: true });
+        await screenshot(page, dir, 'after reroll clicked');
+
+        const spinner = rerollBtn.locator('svg');
+        await expect(spinner).toHaveClass(/animate-spin/);
+        await screenshot(page, dir, 'spinner visible');
         await expect.poll(() => node.locator('img').getAttribute('src'), { 
-            timeout: 45000,
-            intervals: [2000]
+            timeout: 4000,
+            intervals: [1000]
         }).not.toBe(currentSrc);
+
         currentSrc = await node.locator('img').getAttribute('src');
 
         await expectStats(ingredient, 2);

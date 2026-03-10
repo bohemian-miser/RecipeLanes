@@ -19,7 +19,8 @@ import { Page, expect, Locator } from '@playwright/test';
 import { screenshot } from './screenshot';
 
 export function get_node(page: Page, text: string): Locator {
-    return page.locator('.react-flow__node').filter({ hasText: text }).first();
+    // getByText with exact:false is case-insensitive and handles special characters safely
+    return page.locator('.react-flow__node').filter({ has: page.getByText(text, { exact: false }) }).first();
 }
 
 export async function click_on_node(page: Page, text: string, dir: string) {

@@ -59,11 +59,11 @@ done
 # Logic to build the command string
 if [ "$HAS_PATH" = true ]; then
   # If a specific path is provided, ignore --old/--all logic and just run that path
-  CMD="npx playwright test --grep-invert \[OLD\] ${FINAL_ARGS[@]}"
+  CMD="npx playwright test --grep-invert OLD ${FINAL_ARGS[@]}"
 
 elif [ "$MODE" == "only_old" ]; then
   # ONLY run old_tests
-  CMD="npx playwright test --grep \[OLD\] ${FINAL_ARGS[@]}"
+  CMD="npx playwright test --grep OLD ${FINAL_ARGS[@]}"
 
 elif [ "$MODE" == "all" ]; then
   # Run everything
@@ -74,7 +74,7 @@ else
   # Note: Playwright's --grep-invert matches test TITLES. 
   # If you want to exclude a FOLDER, using a config or project is usually safer, 
   # but this follows your requested CMD structure:
-  CMD="npx playwright test --grep-invert \[OLD\] ${FINAL_ARGS[@]}"
+  CMD="npx playwright test --grep-invert OLD ${FINAL_ARGS[@]}"
 fi
 
 # Execute the constructed command

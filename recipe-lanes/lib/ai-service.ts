@@ -73,7 +73,8 @@ export class RealAIService implements AIService {
 export class MockAIService implements AIService {
   async generateText(prompt: string): Promise<string> {
     const lower = prompt.toLowerCase();
-    console.log("[MockAIService] generateText received prompt:", prompt);
+    // TODO only log the interesting bit. Disable for now.
+    // console.log("[MockAIService] generateText received prompt:", prompt);
     if (lower.includes("test eggs")) {
         let extraIngredient = lower.includes("test eggs with ") ? lower.split("test eggs with ")[1].trim() : null;
         

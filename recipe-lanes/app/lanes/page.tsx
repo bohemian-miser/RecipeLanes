@@ -101,7 +101,6 @@ function RecipeLanesContent() {
       if (!graph) return;
       const baseServes = graph.baseServes || 1;
       const scale = newServes / baseServes;
-      
       const newNodes = graph.nodes.map(n => {
           if (n.type === 'ingredient' && n.quantity) {
               const newQty = Math.round((n.quantity * scale) * 100) / 100;

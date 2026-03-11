@@ -34,7 +34,6 @@ export interface DataService {
   uploadIcon(
       ingredientName: string, 
       buffer: ArrayBuffer | Buffer, 
-      contentType: string, 
       metadata: any
   ): Promise<{ url: string, path: string, iconId: string }>;
 

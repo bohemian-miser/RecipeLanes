@@ -19,7 +19,7 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { RefreshCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
-import { getNodeIconUrl, getNodeIconMetadata } from '../../../lib/recipe-lanes/model-utils';
+import { getNodeIconUrl } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
@@ -49,7 +49,6 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
     const isIngredient = data.type === 'ingredient';
     const themeVariant = data.iconTheme || 'modern'; // 'modern' or 'modern_clean'
     const iconUrl = getNodeIconUrl(data);
-    const iconMetadata = getNodeIconMetadata(data);
     
     // Compact size for ingredients (80px), full size for actions/others (120px)
     const containerSize = isIngredient ? { width: 80, height: 80 } : { width: 120, height: 120 };

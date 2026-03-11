@@ -82,6 +82,7 @@ const INITIAL_EDGE_TYPES = {
 };
 
 const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme = 'classic' }, ref) => {
+
     // Cast hooks to avoid implicit any in callbacks
     const [nodes, setNodesRaw, onNodesChange] = useNodesState([]);
     const setNodes = setNodesRaw as React.Dispatch<React.SetStateAction<any[]>>;
@@ -322,7 +323,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         });
 
         const nodeType = 'minimal'; 
-        
+        // TODO: Double check the logic here.
         layout.nodes.forEach(n => {
              const originalNode = graph.nodes.find(gn => gn.id === n.id);
              newNodes.push({
@@ -409,21 +410,34 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                          const dbUrl = getNodeIconUrl(dbNode);
                          const currentUrl = getNodeIconUrl(n.data);
                          
+                         // Always sync text/serves/baseServes from DB prop even if dirty, 
+                         // so that top-level scaling (serves) and background updates (icons) work.
+                         const newData = { 
+                             ...n.data, 
+                             text: dbNode.text,
+                             serves: graph.serves, 
+                             baseServes: graph.baseServes 
+                         };
+                         
                          if (dbUrl && dbUrl !== currentUrl) {
                              changed = true;
-                             const newData = { ...n.data };
                              if (dbNode.icon) {
                                  // Update using the clean icon object from DB
                                  applyIconToNode(newData, dbNode.icon);
                              }
-                             return { 
-                                 ...n, 
-                                 data: newData
-                             };
                          }
+                         
+                         // If serves or text changed, mark as changed to trigger re-render
+                         if (n.data.serves !== graph.serves || n.data.text !== dbNode.text) changed = true;
+
+                         return { 
+                             ...n, 
+                             data: newData
+                         };
                      }
                      return n;
                 });
+                // TODO: Show a visual to confirm this happens when we think it should.
                 return changed ? newNodes : currentNodes;
             });
         } else {

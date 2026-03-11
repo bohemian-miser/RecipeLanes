@@ -25,8 +25,60 @@ set +a
 
 # 4. Construct Test Command
 # Default to running all tests if no args provided
-TEST_ARGS="${@:-}" 
-CMD="npx playwright test $TEST_ARGS"
+# TEST_ARGS="${@:-}" 
+# CMD="npx playwright test $TEST_ARGS"
+
+#!/bin/bash
+#!/bin/bash
+
+# Default state
+MODE="exclude_old"
+FINAL_ARGS=()
+HAS_PATH=false
+
+# Loop through all arguments
+for arg in "$@"; do
+  case $arg in
+    --old)
+      MODE="only_old"
+      ;;
+    --all)
+      MODE="all"
+      ;;
+    # Identify if an argument is a direct path to a file or folder
+    */*|*.ts|*.js)
+      HAS_PATH=true
+      FINAL_ARGS+=("$arg")
+      ;;
+    *)
+      FINAL_ARGS+=("$arg")
+      ;;
+  esac
+done
+
+# Logic to build the command string
+if [ "$HAS_PATH" = true ]; then
+  # If a specific path is provided, ignore --old/--all logic and just run that path
+  CMD="npx playwright test ${FINAL_ARGS[@]}"
+
+elif [ "$MODE" == "only_old" ]; then
+  # ONLY run old_tests
+  CMD="npx playwright test ./e2e/old_tests/* ${FINAL_ARGS[@]}"
+
+elif [ "$MODE" == "all" ]; then
+  # Run everything
+  CMD="npx playwright test ${FINAL_ARGS[@]}"
+
+else
+  # Default: Run everything EXCEPT old_tests
+  # Note: Playwright's --grep-invert matches test TITLES. 
+  # If you want to exclude a FOLDER, using a config or project is usually safer, 
+  # but this follows your requested CMD structure:
+  CMD="npx playwright test --grep-invert ./e2e/old_tests/ ${FINAL_ARGS[@]}"
+fi
+
+# Execute the constructed command
+echo "Running: $CMD"
 
 # 5. Smart Execution
 # lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null ;

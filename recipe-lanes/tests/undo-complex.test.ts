@@ -127,4 +127,43 @@ describe('Complex Undo Tests', () => {
             ['1->2', '1->3', '2->4', '3->4']
         );
     });
+
+    it('should correctly bridge edges when whisk node is deleted', () => {
+        const nodes = [
+            { id: "egg" }, { id: "salt" }, { id: "butter" }, { id: "cheese" },
+            { id: "crack" }, { id: "whisk" }, { id: "melt" }, { id: "cook" }, { id: "final" }
+        ];
+        
+        const edges: MinimalEdge[] = [
+            { id: "e1", source: "egg", target: "crack" },
+            { id: "e2", source: "crack", target: "whisk" },
+            { id: "e3", source: "salt", target: "whisk" },
+            { id: "e4", source: "butter", target: "melt" },
+            { id: "e5", source: "whisk", target: "cook" },
+            { id: "e6", source: "melt", target: "cook" },
+            { id: "e7", source: "cook", target: "final" },
+            { id: "e8", source: "cheese", target: "final" }
+        ];
+
+        const mgr = new GraphManager(nodes, edges);
+        assert.strictEqual(mgr.edges.length, 8);
+
+        // Delete "whisk"
+        mgr.deleteGraphNode("whisk");
+        
+        // Removed: crack->whisk, salt->whisk, whisk->cook (3)
+        // Added: crack->cook, salt->cook (2)
+        // Total: 8 - 3 + 2 = 7
+        assert.strictEqual(mgr.edges.length, 7);
+        
+        const bridges = mgr.edges.filter(e => e.id?.includes("bridge"));
+        assert.strictEqual(bridges.length, 2);
+
+        // Undo
+        mgr.undo();
+        assert.strictEqual(mgr.edges.length, 8);
+        assert.ok(mgr.edges.find(e => e.id === "e2"));
+        assert.ok(mgr.edges.find(e => e.id === "e3"));
+        assert.ok(mgr.edges.find(e => e.id === "e5"));
+    });
 });

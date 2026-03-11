@@ -105,6 +105,7 @@ export async function wait_for_graph(page: Page, dir?: string) {
     const viewport = page.locator('.react-flow__viewport');
     await expect(viewport).toBeVisible({ timeout: 30000 });
     await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 10000 });
+    // await page.mouse.wheel(0, 500); Doesn't do it. Need to hover.
     if (dir) {
         await screenshot(page, dir, 'graph-visible');
     }

@@ -102,6 +102,11 @@ class MemoryStore {
           this.icons = this.icons.filter(i => i.ingredientId !== ingredient.id);
       }
   }
+
+  clear() {
+      this.ingredients = [];
+      this.icons = [];
+  }
 }
 
 export const memoryStore = new MemoryStore();

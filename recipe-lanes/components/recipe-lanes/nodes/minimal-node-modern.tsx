@@ -19,7 +19,7 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { RefreshCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
-import { getNodeIconUrl, getNodeIconMetadata } from '../../../lib/recipe-lanes/model-utils';
+import { getNodeIconUrl } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
@@ -50,22 +50,12 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
     const themeVariant = data.iconTheme || 'modern'; // 'modern' or 'modern_clean'
     const iconUrl = getNodeIconUrl(data);
     
-    const serves = (data as any).serves || (data as any).baseServes || 1;
-    const baseServes = (data as any).baseServes || 1;
-    const scale = serves / baseServes;
-
-    let displayText = data.text;
-    if (isIngredient && data.quantity && scale !== 1) {
-        const scaled = Math.round(data.quantity * scale * 100) / 100;
-        displayText = `${scaled}${data.unit ? data.unit + ' ' : ' '}${data.canonicalName || data.text}`;
-    }
-
     // Compact size for ingredients (80px), full size for actions/others (120px)
     const containerSize = isIngredient ? { width: 80, height: 80 } : { width: 120, height: 120 };
     const iconClass = isIngredient ? 'w-16 h-16' : 'w-24 h-24';
 
     if (isIngredient) {
-        const parsed = parseNodeText(displayText);
+        const parsed = parseNodeText(data.text);
         
         if (themeVariant === 'modern_clean') {
                             // --- MODERN CLEAN (Badge Style) ---
@@ -187,7 +177,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
               <div className="absolute right-[55%] top-1/2 -translate-y-1/2 w-36 flex flex-col items-end text-right z-50 pointer-events-none opacity-90 hover:opacity-100 transition-opacity">
                   <div className="bg-white/90 backdrop-blur-sm border border-zinc-200 shadow-md px-2 py-1.5 rounded-lg">
                       <span className="text-[10px] font-semibold text-zinc-800 leading-snug block whitespace-normal">
-                          {displayText}
+                          {data.text}
                       </span>
                       {(data.duration || data.temperature) && (
                           <div className="flex flex-wrap gap-1 mt-1 justify-end">

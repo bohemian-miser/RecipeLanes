@@ -79,7 +79,6 @@ fi
 
 # Execute the constructed command
 echo "Running: $CMD"
-eval $CMD
 
 # 5. Smart Execution
 # lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null ;

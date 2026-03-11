@@ -17,7 +17,7 @@
 
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth, User, connectAuthEmulator, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, Firestore, connectFirestoreEmulator, doc, setDoc, updateDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, Firestore, connectFirestoreEmulator, doc, setDoc, updateDoc, collection, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
 
@@ -55,15 +55,16 @@ if (firebaseConfig.apiKey) {
 
   googleProvider = new GoogleAuthProvider();
   isInitialized = true;
-   // Expose for E2E testing                                                                                                                                                                                                                           
+  // Expose for E2E testing
+  // TODO: Do not rely on this.
    if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {                                                                                                                                                                       
        (window as any)._firebaseAuth = auth;
        (window as any)._firebaseDb = db;
-       (window as any)._firebaseFirestore = { doc, setDoc, updateDoc, collection, getDocs, query, orderBy, limit };
+       (window as any)._firebaseFirestore = { doc, setDoc, updateDoc, collection, getDocs, query, orderBy, limit, serverTimestamp };
        (window as any)._signInWithCustomToken = signInWithCustomToken;                                                                                                                                                                                 
    }
 } else {
-  console.warn('Firebase Client SDK missing API Key (likely during build). Using mock auth.');
+  console.warn('!!!!!!!!!! Firebase Client SDK missing API Key (likely during build). Using mock auth.');
   // Mock Auth for Build Time
   auth = {
     app: { name: 'mock', options: {} } as FirebaseApp,

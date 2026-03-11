@@ -69,31 +69,26 @@ export async function generateIconData(ingredientName: string) {
     console.log(`[IconGenerator] Uploading to Storage...`);
     const dataService = getDataService();
     
-    // Metadata
+    // Image Metadata.
     const meta = {
-        lcb: 0, 
-        impressions: 0,
-        rejections: 0,
-        textModel: 'unknown',
-        imageModel: 'imagen-3.0', // lies
         geometry: metadata 
     };
 
-    const uploadResult = await dataService.uploadIcon(ingredientName, processedBuffer, 'image/png', meta);
+    const uploadResult = await dataService.uploadIcon(ingredientName, processedBuffer, meta);
 
     // Construct the full Icon object ready for publishing
     const iconData = {
         id: uploadResult.iconId,
         path: uploadResult.path,
         url: uploadResult.url,
-        score: meta.lcb,
-        impressions: meta.impressions,
-        rejections: meta.rejections,
+        score: 0,
+        impressions: 0,
+        rejections: 0,
         visualDescription: ingredientName,
         fullPrompt: prompt,
-        textModel: meta.textModel,
-        imageModel: meta.imageModel,
-        metadata: meta.geometry,
+        textModel: '',
+        imageModel: '',
+        metadata: metadata,
         created_at: new Date().toISOString()
     };
 

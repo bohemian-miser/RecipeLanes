@@ -42,6 +42,16 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
     const textPos = data.textPos || 'bottom';
     const isVertical = textPos === 'top' || textPos === 'bottom';
   
+    const serves = (data as any).serves || (data as any).baseServes || 1;
+    const baseServes = (data as any).baseServes || 1;
+    const scale = serves / baseServes;
+
+    let displayText = data.text;
+    if (data.type === 'ingredient' && data.quantity && scale !== 1) {
+        const scaled = Math.round(data.quantity * scale * 100) / 100;
+        displayText = `${scaled}${data.unit ? data.unit + ' ' : ' '}${data.canonicalName || data.text}`;
+    }
+
     const flexClass = {
         bottom: 'flex-col',
         top: 'flex-col-reverse',
@@ -126,7 +136,7 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                 className={`text-xs leading-tight text-center font-medium text-zinc-800 break-words px-1 z-20 ${isVertical ? 'w-full mt-[-4px]' : 'w-28'}`} 
                 style={{ textShadow: '0 0 4px rgba(255,255,255,0.8), 0 0 2px rgba(255,255,255,1)' }}
             >
-                {data.text}
+                {displayText}
                 {(data.temperature || data.duration) && (
                     <div className="flex flex-col items-center mt-1 space-y-0.5 opacity-80">
                         {data.temperature && <span className="text-[9px] bg-red-100/80 px-1 rounded text-red-800 border border-red-200">{data.temperature}</span>}

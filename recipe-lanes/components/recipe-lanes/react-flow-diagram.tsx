@@ -322,7 +322,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         });
 
         const nodeType = 'minimal'; 
-        
+        // TODO: Double check the logic here.
         layout.nodes.forEach(n => {
              const originalNode = graph.nodes.find(gn => gn.id === n.id);
              newNodes.push({
@@ -409,21 +409,28 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                          const dbUrl = getNodeIconUrl(dbNode);
                          const currentUrl = getNodeIconUrl(n.data);
                          
+                         // Always sync serves/baseServes even if icon hasn't changed
+                         const newData = { ...n.data, serves: graph.serves, baseServes: graph.baseServes };
+                         
                          if (dbUrl && dbUrl !== currentUrl) {
                              changed = true;
-                             const newData = { ...n.data };
                              if (dbNode.icon) {
                                  // Update using the clean icon object from DB
                                  applyIconToNode(newData, dbNode.icon);
                              }
-                             return { 
-                                 ...n, 
-                                 data: newData
-                             };
                          }
+                         
+                         // If serves changed, mark as changed to trigger re-render
+                         if (n.data.serves !== graph.serves) changed = true;
+
+                         return { 
+                             ...n, 
+                             data: newData
+                         };
                      }
                      return n;
                 });
+                // TODO: Show a visual to confirm this happens when we think it should.
                 return changed ? newNodes : currentNodes;
             });
         } else {

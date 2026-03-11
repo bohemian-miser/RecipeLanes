@@ -20,7 +20,7 @@ import { screenshot, screenshotDir, cleanupScreenshots } from '../utils/screensh
 import { deviceConfigs } from '../utils/devices';
 import { create_recipe, wait_for_graph } from '../utils/actions';
 
-test.skip('Comprehensive Feature Tests', () => {
+test.skip('[OLD] Comprehensive Feature Tests', () => {
   
   for (const device of deviceConfigs) {
     if (device.isMobile) continue; // Focus on desktop for complex interactions

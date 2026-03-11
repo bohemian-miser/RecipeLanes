@@ -48,7 +48,7 @@ export async function click_undo_fast(page: Page, dir: string) {
     screenshot(page, dir, `after-undo`);
 }
 
-test.describe('Undo Race Conditions', () => {
+test.describe('[OLD] Undo Race Conditions', () => {
   test.slow();
 
   const desktopDevices = deviceConfigs.filter(d => d.name === 'desktop');

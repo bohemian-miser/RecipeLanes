@@ -21,7 +21,7 @@ import { get_node } from '../utils/actions';
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-test.skip('issue 69: mobile pivot interaction', async ({ page }) => {
+test.skip('[OLD] issue 69: mobile pivot interaction', async ({ page }) => {
   const dir = screenshotDir('issue-69-repro', 'mobile');
   // 1. Setup Graph with Egg -> Mix
   await page.goto('/lanes?new=true');

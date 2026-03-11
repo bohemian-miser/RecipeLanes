@@ -21,7 +21,7 @@ import { create_recipe, wait_for_graph } from '../utils/actions';
 import { promoteToAdmin } from '../utils/admin-utils';
 import { vetRecipeAction } from '../../app/actions';
 
-test.describe('Recipe Vetting', () => {
+test.describe('[OLD] Recipe Vetting', () => {
   
   test('unvetted recipes are hidden from public gallery until approved', async ({ page, login }) => {
     const dir = screenshotDir('vetting-flow', 'desktop');

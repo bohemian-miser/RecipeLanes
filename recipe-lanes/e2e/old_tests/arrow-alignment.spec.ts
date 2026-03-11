@@ -19,7 +19,7 @@ import { test, expect } from '../utils/fixtures';
 import { create_recipe, wait_for_graph, get_node } from '../utils/actions';
 import { screenshotDir, screenshot, cleanupScreenshots } from '../utils/screenshot';
 
-test.describe('Arrow Alignment', () => {
+test.describe('[OLD] Arrow Alignment', () => {
     test('Arrows should point to the visual center of the icon', async ({ page }) => {
         const dir = screenshotDir('arrow-alignment', 'desktop');
         cleanupScreenshots(dir);

@@ -20,7 +20,7 @@ import { screenshot, screenshotDir, cleanupScreenshots } from '../utils/screensh
 import { deviceConfigs } from '../utils/devices';
 
 // TODO: why this no work??
-test.skip('Graph Icon Transition', () => {
+test.skip('[OLD] Graph Icon Transition', () => {
   for (const device of deviceConfigs) {
     if (device.isMobile) continue;
 

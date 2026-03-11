@@ -20,7 +20,7 @@ import { screenshot, screenshotDir, cleanupScreenshots } from '../utils/screensh
 
 
 // Skipping because I broke the retry with the new method.
-test.skip('Pending Creations & Gallery', () => {
+test.skip('[OLD] Pending Creations & Gallery', () => {
   test('should track backlog from Recipe Creation', async ({ page }) => {
     test.setTimeout(60000);
     const dir = screenshotDir('pending-creations', 'desktop');

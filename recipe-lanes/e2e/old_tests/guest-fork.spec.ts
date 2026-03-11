@@ -19,7 +19,7 @@ import { test, expect } from '../utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from '../utils/screenshot';
 import { deviceConfigs } from '../utils/devices';
 
-test.describe('Guest Forking', () => {
+test.describe('[OLD] Guest Forking', () => {
   for (const device of deviceConfigs) {
     if (device.isMobile) continue;
 

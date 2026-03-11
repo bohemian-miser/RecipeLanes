@@ -21,7 +21,7 @@ import { deviceConfigs } from '../utils/devices';
 import { seedCommonIngredients } from '../utils/seed-data';
 import { clearFirestore, clearStorage } from '../utils/admin-utils';
 
-test.describe('Optimistic UI & Background Trigger', () => {
+test.describe('[OLD] Optimistic UI & Background Trigger', () => {
   
   test.beforeEach(async () => {
       // Clear DB and Storage to ensure fresh state (no cached icons for "Mix" etc.)

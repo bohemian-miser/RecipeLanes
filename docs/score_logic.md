@@ -36,18 +36,17 @@ The system prioritizes showing existing high-quality assets before spending mone
         *   If the *best* proven icon has `LCB < 0.40` (garbage collection), OR cache is tiny (< 3 items), allow generation.
         *   Otherwise, keep cycling the cache (force exploration of existing items).
 4.  **Selection:**
-    *   If generating: Create new icon, set `n=1, r=0`.
+    *   If generating: Create new icon. The Cloud Function calculates `n = latestRecipeIds.length` (initial impressions) and `r=0` before publishing.
     *   If using cache: Pick the available icon with the **highest LCB**.
-5.  **Record:** Increment `n` for the selected icon immediately.
+5.  **Record:** Increment `n` for the selected icon immediately when assigning existing items to a recipe.
 
 ## 4. Rejection Handling
 
 When the user clicks "Reroll":
-1.  **Record Rejection:** Increment `r` for the icon being removed.
+1.  **Record Rejection:** Increment `r` for the icon being removed and recalculate LCB.
 2.  **Trigger Loop:** Request a new icon (step 1 above).
 
 ## 5. Storage
 
 Metrics `n` and `r` are stored in:
-1.  **Firestore:** `icons` subcollection fields `impressions` and `rejections`.
-2.  **Storage Metadata:** Custom metadata fields for portability.
+1.  **Firestore:** `icons` subcollection fields `impressions` and `rejections`. The score is stored as `score`.

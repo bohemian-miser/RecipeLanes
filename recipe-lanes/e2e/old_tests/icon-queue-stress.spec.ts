@@ -3,7 +3,7 @@ import { screenshot, screenshotDir } from '../utils/screenshot';
 import * as admin from 'firebase-admin';
 import { DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from '../../lib/config';
 
-test.describe('Icon Queue Stress Test', () => {
+test.describe('[OLD] Icon Queue Stress Test', () => {
     // Unique ID for this test run
     const RUN_ID = Date.now().toString();
 
@@ -19,7 +19,7 @@ test.describe('Icon Queue Stress Test', () => {
     };
 
     // Too many waits.
-    test.skip('reproduction: quota failure blocks subsequent items (STRESS SCENARIO)', async ({ page, login }) => {
+    test.skip('[OLD] reproduction: quota failure blocks subsequent items (STRESS SCENARIO)', async ({ page, login }) => {
         test.setTimeout(10000); // Increase timeout for stress test
         const dir = screenshotDir('icon-queue-stress', 'desktop');
         const RUN_ID = Date.now().toString();

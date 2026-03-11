@@ -19,8 +19,8 @@ import { test, expect } from '../utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from '../utils/screenshot';
 import { create_recipe, wait_for_graph, get_node, move_node } from '../utils/actions';
 
-test.describe('Issue 61: Glitchy Edits', () => {
-  test.skip('Local node move persists against background update', async ({ page, browser, login }) => {
+test.describe('[OLD] Issue 61: Glitchy Edits', () => {
+  test.skip('[OLD] Local node move persists against background update', async ({ page, browser, login }) => {
     const dir = screenshotDir('issue-61-glitch', 'desktop');
     
     // 1. Create Recipe as User A

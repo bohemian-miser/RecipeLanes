@@ -43,12 +43,12 @@ Stores the Recipe Graph and user preferences.
 
 *   **Fields:**
     *   `graph`: RecipeGraph Object
-        *   `nodes`: Array of Nodes (containing `iconUrl`, `iconId`, `visualDescription`)
+        *   `nodes`: Array of Nodes (containing `icon` object of type `IconStats`)
         *   `rejections`: Map<IngredientName, RejectedIconIDs[]> (Persistent User Rejections)
 
 ## Unified Icon Queue
 
-All icon generation requests (whether from the Main Page, Recipe Lanes, or Rerolls) flow through a single entry point:
+All icon generation requests flow through a single entry point:
 
 1.  **Client/Action:** Calls `DataService.queueIcons(items)`.
 2.  **DataService:**
@@ -57,17 +57,18 @@ All icon generation requests (whether from the Main Page, Recipe Lanes, or Rerol
     *   If Cache Miss: Writes to `icon_queue`.
 3.  **Cloud Function (`processIconQueue`):**
     *   Triggers on write to `icon_queue`.
+    *   **Split Transaction Pattern:** Uses a Firestore transaction for initial reads (Ingredient, Queue, Recipes), followed by updates to ensure consistency and prevent race conditions.
     *   Calls AI Service (Vertex AI / Mock) to generate image.
-    *   Saves image to Storage.
-    *   Updates `ingredients_new` (adds icon).
+    *   Saves image to Storage with embedded metadata.
+    *   Updates `ingredients_new` (adds icon with calculated initial impressions).
     *   Updates `feed_icons`.
     *   Updates `recipes` (Backfills pending nodes).
     *   Marks queue item as `completed`.
 
 ## Legacy vs New
-*   **Legacy:** `ingredients/{id}/icons/{iconId}`. Direct generation in Server Actions.
-*   **New:** `ingredients_new/{Name}`. Async Queue.
+*   **Legacy:** `ingredients/{id}/icons/{iconId}`. Direct generation in Server Actions. Mixed `iconId`/`iconUrl` fields in nodes.
+*   **New:** `ingredients_new/{Name}`. Async Queue. Unified `icon: IconStats` object.
 
 ## Testing & Migration
 *   **Migration Script:** `scripts/migrate-ingredients.ts` moves data from V1 to V2.
-*   **Tests:** E2E tests cover the full flow including background worker triggering.
+*   **Tests:** Fast parallel unit tests using `node:test` for logic; streamlined E2E suite for critical UI paths.

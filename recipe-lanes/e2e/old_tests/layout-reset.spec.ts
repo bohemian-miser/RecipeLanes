@@ -20,7 +20,7 @@ import { screenshot, screenshotDir, cleanupScreenshots } from '../utils/screensh
 import { deviceConfigs } from '../utils/devices';
 import { move_node, get_node, create_recipe, wait_for_graph } from '../utils/actions';
 
-test.describe('Layout Reset Behavior', () => {
+test.describe('[OLD] Layout Reset Behavior', () => {
   const desktopDevices = deviceConfigs.filter(d => d.name === 'desktop');
 
   for (const device of desktopDevices) {

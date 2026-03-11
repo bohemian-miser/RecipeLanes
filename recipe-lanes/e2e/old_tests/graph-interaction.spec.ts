@@ -20,7 +20,7 @@ import { screenshot, screenshotDir, cleanupScreenshots} from '../utils/screensho
 import { deviceConfigs } from '../utils/devices';
 import { get_node, delete_node, create_recipe, wait_for_graph } from '../utils/actions';
 
-test.describe('Graph Interaction', () => {
+test.describe('[OLD] Graph Interaction', () => {
   test.slow();
 
   for (const device of deviceConfigs) {

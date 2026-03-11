@@ -19,7 +19,7 @@ import { test, expect } from '../utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from '../utils/screenshot';
 import { deviceConfigs } from '../utils/devices';
 
-test.describe('Navigation Auth Visibility', () => {
+test.describe('[OLD] Navigation Auth Visibility', () => {
   for (const device of deviceConfigs) {
     test(`${device.name}: Private links visibility toggle`, async ({ page, login }) => {
       const dir = screenshotDir('nav-auth', device.name);

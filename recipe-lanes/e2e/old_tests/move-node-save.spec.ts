@@ -20,7 +20,7 @@ import { screenshot, screenshotDir, cleanupScreenshots} from '../utils/screensho
 import { deviceConfigs } from '../utils/devices';
 import { create_recipe, wait_for_graph, get_node } from '../utils/actions';
 
-test.describe('Graph Persistence', () => {
+test.describe('[OLD] Graph Persistence', () => {
   test.slow();
 
   const desktopDevices = deviceConfigs.filter(d => d.name === 'desktop');

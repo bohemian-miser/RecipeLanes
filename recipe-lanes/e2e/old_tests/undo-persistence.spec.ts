@@ -20,7 +20,7 @@ import { screenshot, screenshotDir, cleanupScreenshots} from '../utils/screensho
 import { deviceConfigs } from '../utils/devices';
 import { move_node, delete_node, click_undo, create_recipe, wait_for_graph, get_node } from '../utils/actions';
 
-test.describe('Undo Persistence Interaction', () => {
+test.describe('[OLD] Undo Persistence Interaction', () => {
   test.slow();
 
   const desktopDevices = deviceConfigs.filter(d => d.name === 'desktop');

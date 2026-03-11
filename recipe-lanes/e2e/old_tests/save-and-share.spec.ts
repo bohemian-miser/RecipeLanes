@@ -20,7 +20,7 @@ import { screenshot, screenshotDir, cleanupScreenshots } from '../utils/screensh
 import { deviceConfigs } from '../utils/devices';
 import { create_recipe, wait_for_graph } from '../utils/actions';
 
-test.describe('Save and Share Functionality', () => {
+test.describe('[OLD] Save and Share Functionality', () => {
   test.slow();
 
   for (const device of deviceConfigs) {

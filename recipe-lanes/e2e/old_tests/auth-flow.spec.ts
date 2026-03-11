@@ -20,7 +20,7 @@ import { test, expect } from '../utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from '../utils/screenshot';
 import { deviceConfigs } from '../utils/devices';
 
-test.describe('Authentication Flow', () => {
+test.describe('[OLD] Authentication Flow', () => {
   for (const device of deviceConfigs) {
     test(`${device.name}: Login and Logout (Emulator)`, async ({ page, login }) => {
       const dir = screenshotDir('auth-flow', device.name);

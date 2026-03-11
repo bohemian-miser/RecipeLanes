@@ -21,7 +21,7 @@ import { deviceConfigs } from '../utils/devices';
 import * as admin from 'firebase-admin';
 import '../utils/admin-utils'; // Ensure admin is initialized
 
-test.describe('Feedback Modal', () => {
+test.describe('[OLD] Feedback Modal', () => {
   for (const device of deviceConfigs) {
     if (device.isMobile) continue;
 

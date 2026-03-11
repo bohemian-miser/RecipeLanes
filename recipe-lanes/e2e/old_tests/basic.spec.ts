@@ -19,7 +19,7 @@ import { test, expect } from '../utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from '../utils/screenshot';
 import { deviceConfigs } from '../utils/devices';
 
-test.describe('Basic Sanity', () => {
+test.describe('[OLD] Basic Sanity', () => {
   for (const device of deviceConfigs) {
     test(`${device.name}: has title and loads`, async ({ page }) => {
       const dir = screenshotDir('basic-sanity', device.name);

@@ -19,7 +19,7 @@ import { test, expect } from '../utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from '../utils/screenshot';
 import { deviceConfigs } from '../utils/devices';
 
-test.describe('Lanes Icon Generation', () => {
+test.describe('[OLD] Lanes Icon Generation', () => {
   for (const device of deviceConfigs) {
     if (device.isMobile) continue;
 

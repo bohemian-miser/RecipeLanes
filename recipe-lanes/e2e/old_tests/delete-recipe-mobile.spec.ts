@@ -20,7 +20,7 @@ import { screenshot, screenshotDir, cleanupScreenshots } from '../utils/screensh
 import { deviceConfigs } from '../utils/devices';
 import { create_recipe } from '../utils/actions';
 
-test.describe('Mobile Recipe Deletion', () => {
+test.describe('[OLD] Mobile Recipe Deletion', () => {
   for (const device of deviceConfigs) {
     if (!device.isMobile) continue; // Only mobile
 

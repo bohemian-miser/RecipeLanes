@@ -21,7 +21,7 @@ import { screenshotDir, screenshot, cleanupScreenshots } from '../utils/screensh
 import { deviceConfigs } from '../utils/devices';
 import fs from 'fs';
 
-test.describe('Download Feature', () => {
+test.describe('[OLD] Download Feature', () => {
   for (const device of deviceConfigs) {
     test(`${device.name}: should download recipe as PNG`, async ({ page }) => {
         test.slow();

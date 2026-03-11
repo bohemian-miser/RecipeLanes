@@ -19,7 +19,7 @@ import { test, expect } from '../utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from '../utils/screenshot';
 import { deviceConfigs } from '../utils/devices';
 
-test.describe('UI Features', () => {
+test.describe('[OLD] UI Features', () => {
 
   for (const device of deviceConfigs) {
     test(`${device.name}: Tap Select Branch`, async ({ page }) => {

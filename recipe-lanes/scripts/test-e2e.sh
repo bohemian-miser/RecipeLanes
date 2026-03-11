@@ -74,7 +74,7 @@ else
   # Note: Playwright's --grep-invert matches test TITLES. 
   # If you want to exclude a FOLDER, using a config or project is usually safer, 
   # but this follows your requested CMD structure:
-  CMD="npx playwright test --grep-invert \"old_tests\" ${FINAL_ARGS[@]}"
+  CMD="npx playwright test --grep-invert ./e2e/old_tests/ ${FINAL_ARGS[@]}"
 fi
 
 # Execute the constructed command

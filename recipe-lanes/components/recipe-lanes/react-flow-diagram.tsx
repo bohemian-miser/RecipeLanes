@@ -82,6 +82,7 @@ const INITIAL_EDGE_TYPES = {
 };
 
 const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme = 'classic' }, ref) => {
+
     // Cast hooks to avoid implicit any in callbacks
     const [nodes, setNodesRaw, onNodesChange] = useNodesState([]);
     const setNodes = setNodesRaw as React.Dispatch<React.SetStateAction<any[]>>;
@@ -409,8 +410,14 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                          const dbUrl = getNodeIconUrl(dbNode);
                          const currentUrl = getNodeIconUrl(n.data);
                          
-                         // Always sync serves/baseServes even if icon hasn't changed
-                         const newData = { ...n.data, serves: graph.serves, baseServes: graph.baseServes };
+                         // Always sync text/serves/baseServes from DB prop even if dirty, 
+                         // so that top-level scaling (serves) and background updates (icons) work.
+                         const newData = { 
+                             ...n.data, 
+                             text: dbNode.text,
+                             serves: graph.serves, 
+                             baseServes: graph.baseServes 
+                         };
                          
                          if (dbUrl && dbUrl !== currentUrl) {
                              changed = true;
@@ -420,8 +427,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                              }
                          }
                          
-                         // If serves changed, mark as changed to trigger re-render
-                         if (n.data.serves !== graph.serves) changed = true;
+                         // If serves or text changed, mark as changed to trigger re-render
+                         if (n.data.serves !== graph.serves || n.data.text !== dbNode.text) changed = true;
 
                          return { 
                              ...n, 

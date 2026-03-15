@@ -31,6 +31,7 @@ import {  FieldValue } from "firebase-admin/firestore";
 // const db = getFirestore();
 
 export const processIconTask = onTaskDispatched({
+    serviceAccount: `icon-processor@${process.env.GCLOUD_PROJECT}.iam.gserviceaccount.com`,
     retryConfig: {
         maxAttempts: 5,
         minBackoffSeconds: 60,

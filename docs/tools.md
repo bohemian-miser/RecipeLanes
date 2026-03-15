@@ -83,5 +83,18 @@ TODO: Have a list of these that need to be run when setting up a new project.
 gcloud services enable cloudtasks.googleapis.com --project=recipe-lanes-staging
 gcloud services enable cloudtasks.googleapis.com --project=recipe-lanes
 
+### Service Account & IAM Management
+Manage least-privilege service accounts for backend tasks.
+
+*   **List Service Accounts:** `gcloud iam service-accounts list --project <project-id>`
+*   **Check IAM Policy:** `gcloud projects get-iam-policy <project-id> --filter="bindings.members:serviceAccount:<email>"`
+*   **Setup Icon Processor SA:** `./scripts/setup-icon-processor-sa.sh <project-id>`
+    *   Creates `icon-processor` SA and grants roles: `datastore.user`, `storage.objectAdmin`, `aiplatform.user`, `logging.logWriter`, `cloudtrace.agent`, `iam.serviceAccountTokenCreator`, `cloudtasks.enqueuer`.
+
+### Cloud Functions & Run Investigation
+*   **Describe Function:** `gcloud functions describe <name> --gen2 --region us-central1 --project <project-id>`
+*   **Describe Cloud Run:** `gcloud run services describe <service-name> --region us-central1 --project <project-id>`
+*   **Update Service Account:** `gcloud run services update <service-name> --service-account <email> --region us-central1 --project <project-id>`
+
 ### Delete functions when you remove them from code.
 firebase functions:delete processIconQueue --region us-central1

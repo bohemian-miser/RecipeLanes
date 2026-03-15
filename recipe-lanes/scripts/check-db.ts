@@ -21,7 +21,7 @@ import { db } from '../lib/firebase-admin';
 async function checkIngredients() {
   console.log('Listing all ingredients...');
   try {
-      const snapshot = await db.collection('ingredients').get();
+      const snapshot = await db.collection('ingredients_new').get();
       
       if (snapshot.empty) {
           console.log('No ingredients found in Firestore.');

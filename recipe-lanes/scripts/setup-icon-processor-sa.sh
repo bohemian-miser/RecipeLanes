@@ -26,7 +26,29 @@ else
     echo "Service account ${SA_NAME} already exists."
 fi
 
-# 2. Grant Required Roles
+# Function to check and add role
+check_and_add_role() {
+    local MEMBER=$1
+    local ROLE=$2
+    
+    # Check if role exists
+    EXISTING=$(gcloud projects get-iam-policy "${PROJECT_ID}" \
+        --flatten="bindings[].members" \
+        --filter="bindings.role:${ROLE} AND bindings.members:${MEMBER}" \
+        --format="value(bindings.role)" 2>/dev/null || true)
+    
+    if [ "$EXISTING" == "$ROLE" ]; then
+        echo "Role ${ROLE} already have necessary permissions for ${MEMBER}"
+    else
+        echo "Adding ${ROLE} to ${MEMBER}..."
+        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+            --member="${MEMBER}" \
+            --role="${ROLE}" \
+            --condition=None >/dev/null
+    fi
+}
+
+# 2. Grant Required Roles to Icon Processor
 ROLES=(
     "roles/datastore.user"
     "roles/storage.objectAdmin"
@@ -35,17 +57,18 @@ ROLES=(
     "roles/cloudtrace.agent"
     "roles/iam.serviceAccountTokenCreator"
     "roles/cloudtasks.enqueuer"
+    "roles/run.invoker"
 )
 
-echo "Granting roles..."
+echo "Verifying icon-processor roles..."
 for ROLE in "${ROLES[@]}"; do
-    echo "Adding ${ROLE}..."
-    gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-        --member="serviceAccount:${SA_ID}" \
-        --role="${ROLE}" \
-        --condition=None >/dev/null
+    check_and_add_role "serviceAccount:${SA_ID}" "${ROLE}"
 done
+
+# 3. Grant Run Invoker to the App Hosting account
+APP_HOSTING_SA="firebase-app-hosting-compute@${PROJECT_ID}.iam.gserviceaccount.com"
+echo "Verifying App Hosting SA roles..."
+check_and_add_role "serviceAccount:${APP_HOSTING_SA}" "roles/run.invoker"
 
 echo "✅ Service Account Setup Complete!"
 echo "ID: ${SA_ID}"
-echo "Important: Remember to update your Cloud Function configuration to use this identity."

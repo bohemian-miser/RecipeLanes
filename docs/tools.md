@@ -77,6 +77,51 @@ gcloud run services list --project recipe-lanes-staging
 gcloud run services logs read skipping-down --limit=50 --project recipe-lanes-staging
 gcloud config set run/region asia-southeast1
 
+
+
+
+Latest logs from backend
+ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=processicontask" --project recipe-lanes --limit 20 --format="table(timestamp, textPayload)"
+
+### Icon Queue Forensics
+If icons are failing to generate (showing Red X or stuck pending):
+
+1.  **Check Firestore for Failed Entries:**
+    Run the forensic query script to see error messages and check if linked recipes still exist:
+    ```bash
+    cd recipe-lanes && ./node_modules/.bin/tsx scripts/forensics-query.ts
+    ```
+    *Note: "Recipe not found" means a recipe was deleted while its icon was being generated.*
+
+2.  **Repair the Queue:**
+    Remove references to non-existent recipes (orphans) that are blocking processing:
+    ```bash
+    cd recipe-lanes && ./node_modules/.bin/tsx scripts/repair-queue.ts --dry-run
+    ```
+
+3.  **Search Logs for Specific Errors:**
+    Find the exact stack trace for a failure (e.g., for "Basil Leaf"):
+    ```bash
+    gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=processicontask AND textPayload:\"Basil Leaf\"" --project recipe-lanes --limit 10
+    ```
+
+### Backups (Firestore)
+Always backup before running major repair or migration scripts.
+
+*   **Manual Export:**
+    *   *Note: Bucket MUST be in the same region as the DB (e.g., australia-southeast1).*
+    ```bash
+    # Create regional bucket
+    gsutil mb -p recipe-lanes -l australia-southeast1 gs://recipe-lanes-backups
+    # Run export
+    gcloud firestore export gs://recipe-lanes-backups --project recipe-lanes
+    ```
+
+*   **Native Scheduled Backups:**
+    ```bash
+    gcloud firestore backups schedules create --project=recipe-lanes --database='(default)' --retention=7d --recurrence=daily
+    ```
+
 ### Enabling Cloud Tasks
 TODO: Have a list of these that need to be run when setting up a new project.
 
@@ -96,5 +141,12 @@ Manage least-privilege service accounts for backend tasks.
 *   **Describe Cloud Run:** `gcloud run services describe <service-name> --region us-central1 --project <project-id>`
 *   **Update Service Account:** `gcloud run services update <service-name> --service-account <email> --region us-central1 --project <project-id>`
 
+### Logging & Monitoring
+*   **Read Service Logs:** `gcloud run services logs read <service-name> --project <project-id>`
+*   **Audit SA Activity:** `gcloud logging read "protoPayload.authenticationInfo.principalEmail='<sa-email>'" --project <project-id> --limit 50`
+    *   *Note: Shows what the SA is doing (e.g., writing to Firestore, uploading to Storage).*
+
 ### Delete functions when you remove them from code.
 firebase functions:delete processIconQueue --region us-central1
+
+

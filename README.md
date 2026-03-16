@@ -27,6 +27,7 @@ Professional/Commercial: For established publishers or high-volume sales.
 To request a quote or discuss licensing terms, please contact: commercial@recipelanes.com
 
 Alternatively, I'm very open to collaboration and PR's, you can also reach out at https://substack.com/@bohemianmiser.
+
 ---
 
 ### 🎨 AI Icons & Global Cache

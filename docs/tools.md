@@ -122,6 +122,34 @@ Always backup before running major repair or migration scripts.
     gcloud firestore backups schedules create --project=recipe-lanes --database='(default)' --retention=7d --recurrence=daily
     ```
 
+### Recipe Database Maintenance
+Useful scripts for monitoring and cleaning the database.
+
+*   **List Latest Recipes:**
+    Show the most recently created recipes with author and link.
+    ```bash
+    cd recipe-lanes && ./node_modules/.bin/tsx scripts/list-latest-recipes.ts 20
+    # For staging:
+    cd recipe-lanes && ./node_modules/.bin/tsx scripts/list-latest-recipes.ts 10 --staging
+    ```
+
+*   **List Icons:**
+    Show icons across all ingredients.
+    ```bash
+    # Sort by most recent
+    cd recipe-lanes && ./node_modules/.bin/tsx scripts/list-icons.ts
+    # Sort by popularity (how many recipes they are in)
+    cd recipe-lanes && ./node_modules/.bin/tsx scripts/list-icons.ts --popularity
+    # Staging
+    cd recipe-lanes && ./node_modules/.bin/tsx scripts/list-icons.ts --staging
+    ```
+
+*   **Cleanup Debug Recipes:**
+    Delete all recipes titled "debug recipe".
+    ```bash
+    cd recipe-lanes && ./node_modules/.bin/tsx scripts/cleanup-debug-recipes.ts --dry-run
+    ```
+
 ### Enabling Cloud Tasks
 TODO: Have a list of these that need to be run when setting up a new project.
 

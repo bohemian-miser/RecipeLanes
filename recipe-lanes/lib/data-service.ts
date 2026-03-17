@@ -743,7 +743,14 @@ export class FirebaseDataService implements DataService {
       if (userId) data.ownerId = userId;
       if (ownerName) data.ownerName = ownerName;
       if (visibility) data.visibility = visibility;
-      if (graph.title) data.title = graph.title;
+      
+      // Ensure title is synced both at top level and inside graph
+      if (graph.title) {
+          data.title = graph.title;
+      } else if (data.title) {
+          graph.title = data.title;
+      }
+
       if (graph.sourceId) data.sourceId = graph.sourceId;
 
       if (existingId) {
@@ -775,6 +782,10 @@ export class FirebaseDataService implements DataService {
         const data = doc.data()!;
         const graph = data.graph as RecipeGraph;
         if (data.visibility) graph.visibility = data.visibility as any; 
+        
+        // Ensure title is bridged
+        if (data.title && !graph.title) graph.title = data.title;
+        if (graph.title && !data.title) data.title = graph.title;
   
         let ownerName = data.ownerName;
         
@@ -892,7 +903,7 @@ export class FirebaseDataService implements DataService {
           title,
           createdAt: data.created_at?.toDate?.()?.toISOString() || null,
           nodeCount: data.graph?.nodes?.length || 0,
-          previewIcon: data.graph?.nodes?.find((n: any) => getNodeIconUrl(n))?.icon?.url,
+          previewIcon: (data.graph?.nodes || []).map(getNodeIconUrl).findLast((u: string | undefined) => !!u),
           ownerId: data.ownerId,
           ownerName: data.ownerName,
           visibility: data.visibility || 'unlisted',
@@ -1646,7 +1657,7 @@ export class MemoryDataService implements DataService {
             title,
             createdAt: new Date(r.created_at).toISOString(),
             nodeCount: r.graph.nodes.length,
-            previewIcon: r.graph.nodes.find((n: any) => getNodeIconUrl(n))?.icon?.url,
+            previewIcon: r.graph.nodes.map(getNodeIconUrl).findLast((u: string | undefined) => !!u),
             ownerId: r.ownerId,
             ownerName: r.ownerName,
             visibility: r.visibility,

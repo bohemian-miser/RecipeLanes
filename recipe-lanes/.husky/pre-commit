@@ -1,3 +1,21 @@
 #!/bin/sh
+
+# Get list of staged files
+STAGED_FILES=$(git diff --cached --name-only)
+
+# If no files are staged, just exit
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+# Check if any file is NOT in the ignore list
+# We use grep -v to find files that DON'T match the ignore patterns
+NON_IGNORE_FILES=$(echo "$STAGED_FILES" | grep -vE '^(\.github/|recipe-lanes/\.husky/|docs/|recipe-lanes/scripts/|README\.md|LICENSE|CONTRIBUTING\.md)')
+
+if [ -z "$NON_IGNORE_FILES" ]; then
+  echo "Non-code changes detected. Skipping presubmit checks."
+  exit 0
+fi
+
 echo "Running presubmit checks (Build & Test)..."
 cd recipe-lanes && npm run verify

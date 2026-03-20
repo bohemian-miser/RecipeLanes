@@ -6,7 +6,6 @@
 
 ## 🔗 Quick Links
 - **Live Site:** [recipelanes.com](http://recipelanes.com)
-- **Staging:** [staging.recipelanes.com](https://staging.recipelanes.com)
 - **Screenshots & Demos:** [Browse all assets in /docs/screenshots](./docs/screenshots)
 - **Architecture:** [Detailed System Design](./docs/ARCHITECTURE.md)
 

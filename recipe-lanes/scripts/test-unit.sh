@@ -12,7 +12,7 @@ fi
 echo "----------------------------------------------------------------"
 echo "Running Fast Unit Tests (Parallel)"
 echo "----------------------------------------------------------------"
-npx env-cmd -f .env.test node --import tsx --test tests/graph.test.ts tests/data.test.ts tests/image-processing.test.ts tests/verify-production-logic.test.ts
+npx env-cmd -f .env.test node --import tsx --test tests/graph.test.ts tests/data.test.ts tests/image-processing.test.ts tests/verify-production-logic.test.ts tests/title-persistence.test.ts
 
 # 2. Run Integration Tests (Require Emulators)
 echo "----------------------------------------------------------------"
@@ -20,7 +20,7 @@ echo "Running Emulator-dependent Unit Tests"
 echo "----------------------------------------------------------------"
 
 # Check if Emulators are already running (Firestore on 8080)
-if nc -z localhost 8080 2>/dev/null; then
+if curl -s --connect-timeout 1 http://127.0.0.1:8080 > /dev/null 2>&1; then
     echo "🟢 Emulators detected on port 8080. Running against EXISTING emulators."
     npx env-cmd -f .env.test node --import tsx --test tests/admin-security.test.ts tests/lifecycle.test.ts tests/functions-metadata.test.ts
 else

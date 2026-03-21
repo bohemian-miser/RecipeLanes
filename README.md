@@ -8,6 +8,7 @@
 - **Live Site:** [recipelanes.com](http://recipelanes.com)
 - **Screenshots & Demos:** [Browse all assets in /docs/screenshots](./docs/screenshots)
 - **Architecture:** [Detailed System Design](./docs/ARCHITECTURE.md)
+- **Deploying a new instance:** [DEPLOYMENT.md](./docs/DEPLOYMENT.md)
 
 ---
 
@@ -81,25 +82,79 @@ To request a quote or discuss licensing terms, please contact: commercial@recipe
 
 ## 🚀 Getting Started
 
+### Prerequisites
+- **Node.js 20**
+- **Java 21+** — required by firebase-tools (versions before 21 are rejected). On Debian/Ubuntu the default apt package is usually Java 17, so install explicitly:
+  - Debian/Ubuntu (x86): `sudo apt install openjdk-21-jdk`
+  - Debian/Ubuntu (arm64/Raspberry Pi): install [Temurin 21](https://adoptium.net/installation/linux/) from the Adoptium repo
+  - macOS: `brew install openjdk@21`
+
 ### Installation
 Update these instructions if it goes out of date or doesn't work. Feel free to file bugs.
 
 1.  Clone the repository:
     ```bash
     git clone https://github.com/your-username/RecipeLanes.git
-    cd recipe-lanes
+    cd RecipeLanes/recipe-lanes
     ```
 2.  Install dependencies:
     ```bash
     npm install
-    cd functions && npm install && cd ..
+    npm install --prefix functions
     ```
-3.  Set up your `.env` with Firebase and Vertex AI credentials.
+3.  Create `mock-service-account.json` in `recipe-lanes/` — this file is gitignored and must be created manually. For local emulator development, the credentials are never validated so a stub is fine:
+    ```json
+    {
+      "type": "service_account",
+      "project_id": "local-project-id",
+      "private_key_id": "mock-key-id",
+      "private_key": "-----BEGIN RSA PRIVATE KEY-----\nMOCK\n-----END RSA PRIVATE KEY-----\n",
+      "client_email": "firebase-adminsdk@local-project-id.iam.gserviceaccount.com",
+      "client_id": "000000000000000000000",
+      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+      "token_uri": "https://oauth2.googleapis.com/token"
+    }
+    ```
 
-### Running Locally
+### One-time Firebase setup
+Enable the webframeworks experiment (required by the hosting config, only needs to be done once per machine):
 ```bash
-npm run dev
+npx firebase experiments:enable webframeworks
 ```
+
+You may see a warning about not being logged in — this is fine for local emulator use and can be ignored.
+
+### Running Locally with Emulators
+The app runs against Firebase Emulators locally — no real Firebase project needed. Use two terminals:
+
+```bash
+# Terminal 1 — start Firebase emulators (auth, firestore, storage, functions, tasks)
+npm run emulators
+
+# Terminal 2 — start Next.js dev server pointed at emulators
+npm run dev:emulators
+```
+
+App: http://localhost:8001 — Firebase Emulator UI: http://localhost:4000
+
+### Running against Staging
+To run the frontend locally pointed at the real staging backend (`npm run dev:staging`), you need:
+
+1. A service account key — Firebase Console → staging project → Project Settings → Service Accounts → Generate new private key. Save as `service-account-staging.json` in `recipe-lanes/` (already gitignored).
+2. A `.env.staging` file (gitignored, create manually):
+   ```
+   NEXT_PUBLIC_USE_FIREBASE_EMULATOR=false
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=recipe-lanes-staging
+   NEXT_PUBLIC_FIREBASE_API_KEY=...
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+   NEXT_PUBLIC_FIREBASE_APP_ID=...
+   GOOGLE_APPLICATION_CREDENTIALS=./service-account-staging.json
+   ```
+   The `NEXT_PUBLIC_*` values are in the Firebase Console under Project Settings → General → Your apps. Then run:
+   ```bash
+   npm run dev:staging
+   ```
 
 ### Testing
 ```bash

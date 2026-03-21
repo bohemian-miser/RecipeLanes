@@ -1,9 +1,12 @@
 #!/bin/bash
 set -e
 
-# Use Java 21 to avoid Security Manager issues in Java 25+
+# Use Java 21+ (required by firebase-tools)
 if [ -d "/usr/lib/jvm/java-21-openjdk-amd64" ]; then
     export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+    export PATH=$JAVA_HOME/bin:$PATH
+elif [ -d "/usr/lib/jvm/temurin-21-jdk-arm64" ]; then
+    export JAVA_HOME=/usr/lib/jvm/temurin-21-jdk-arm64
     export PATH=$JAVA_HOME/bin:$PATH
 fi
 

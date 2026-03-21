@@ -186,6 +186,31 @@ test.describe('Regressions & Bug Repros', () => {
         cleanupScreenshots(dir);
     });
 
+    test('Title edit persists after reload', async ({ page, login }) => {
+        const dir = screenshotDir('title-persistence', desktop.name);
+        await page.setViewportSize(desktop.viewport);
+
+        await page.goto('/lanes?new=true');
+        await login('title-test-user');
+        await create_recipe(page, 'scrambled eggs', dir);
+        await wait_for_graph(page, dir);
+        await expect(page).toHaveURL(/id=/);
+        const recipeUrl = page.url();
+
+        // Edit the title inline
+        await page.locator('header h1').click();
+        await page.locator('header input').clear();
+        await page.locator('header input').fill('My Renamed Recipe');
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(1000); // allow save to complete
+
+        // Reload and verify title persisted
+        await page.goto(recipeUrl);
+        await expect(page.locator('header h1')).toHaveText('My Renamed Recipe', { timeout: 10000 });
+
+        cleanupScreenshots(dir);
+    });
+
     test('Comprehensive Stats: multiple rerolls and persistence', async ({ page }) => {
         test.slow();
         const dir = screenshotDir('stats-comprehensive', desktop.name);

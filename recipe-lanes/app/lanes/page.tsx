@@ -70,6 +70,7 @@ function RecipeLanesContent() {
 
   const diagramRef = useRef<ReactFlowDiagramHandle>(null);
   const isForking = useRef(false);
+  const titleBeforeEdit = useRef('');
 
   const isOwner = !ownerId || (!!user && user.uid === ownerId);
 
@@ -416,18 +417,19 @@ function RecipeLanesContent() {
 
   const handleTitleChange = async (newTitle: string) => {
       setEditingTitle(false);
-      if (newTitle === recipeTitle) return; 
+      if (newTitle === titleBeforeEdit.current) return;
       setRecipeTitle(newTitle);
-      
+
       if (graph) {
           const newGraph = { ...graph, title: newTitle };
           setGraph(newGraph);
-          
+
           const isOwner = user && user.uid === ownerId;
           const currentId = searchParams.get('id');
 
           if (isOwner && currentId) {
-               await saveRecipeAction(newGraph, currentId);
+               const res = await saveRecipeAction(newGraph, currentId);
+               if (res.error) showNotification("Failed to save title: " + res.error);
           } else if (user) {
                showNotification("Saving a copy to your profile...");
                const currentId = searchParams.get('id');
@@ -584,9 +586,9 @@ const handleVisualize = async () => {
                             autoFocus
                         />
                     ) : (
-                        <div 
+                        <div
                             className="flex items-center gap-2 cursor-pointer truncate"
-                            onClick={() => setEditingTitle(true)}
+                            onClick={() => { titleBeforeEdit.current = recipeTitle; setEditingTitle(true); }}
                         >
                             <h1 className="text-sm font-bold text-zinc-100 truncate">
                                 {recipeTitle || 'Untitled Recipe'}

@@ -82,7 +82,7 @@ echo "Running: $CMD"
 
 # 5. Smart Execution
 # lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null ;
-if nc -z localhost 8080 2>/dev/null; then
+if curl -s --connect-timeout 1 http://127.0.0.1:8080 > /dev/null 2>&1; then
     echo "🟢 Emulators detected on port 8080. Running tests against EXISTING emulators."
     
     # We assume functions are already running/built in the existing emulator session

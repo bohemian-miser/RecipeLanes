@@ -41,7 +41,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npx next dev -p 8002',
+    command: 'rm -rf .next-test && npx next dev -p 8002',
     url: 'http://localhost:8002',
     reuseExistingServer: true,
     timeout: 120 * 1000,

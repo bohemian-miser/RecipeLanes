@@ -23,6 +23,13 @@ export interface Lane {
   type: 'prep' | 'cook' | 'serve';
 }
 
+export interface SearchTerm {
+  text: string
+  embedding?: number[]
+  source: 'hyde_from_img' | 'user_desc' | 'llm_vision'
+  addedAt: number
+}
+
 export interface IconStats {
     id: string;
     url: string;
@@ -35,6 +42,7 @@ export interface IconStats {
         bbox: { x: number, y: number, w: number, h: number };
     };
     status?: 'pending' | 'processing' | 'failed';
+    searchTerms?: SearchTerm[];
 }
 
 export interface RecipeNode {
@@ -45,6 +53,12 @@ export interface RecipeNode {
   
   // Icon Data
   icon?: IconStats;
+  iconShortlist?: IconStats[];
+  iconQuery?: {
+    queryUsed: string;
+    method: string;
+    outcome?: 'accepted' | 'rerolled_past' | 'regenerated';
+  };
 
   type: 'ingredient' | 'action';
   inputs?: string[]; // IDs of nodes that flow into this one

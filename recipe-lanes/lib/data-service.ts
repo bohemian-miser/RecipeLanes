@@ -87,10 +87,20 @@ export interface DataService {
   getUnvettedRecipes(limit: number): Promise<any[]>;
   
   failRecipeIcon(recipeId: string, ingredientName: string, errorMsg: string): Promise<void>;
+
+  searchIconsByEmbedding(queryVec: number[], limit: number): Promise<IconStats[]>;
 }
 
 // --- Firebase Implementation ---
-export class FirebaseDataService implements DataService { 
+export class FirebaseDataService implements DataService {
+  _db = db; // allows test patching
+
+  async searchIconsByEmbedding(queryVec: number[], limit: number): Promise<IconStats[]> {
+    const snap = await this._db.collection('icon_index')
+      .findNearest('embedding', queryVec, { limit, distanceMeasure: 'COSINE' as const })
+      .get();
+    return snap.docs.map((doc: any) => doc.data() as IconStats);
+  }
 
   async vetRecipe(recipeId: string, isVetted: boolean): Promise<void> {
       await db.collection(DB_COLLECTION_RECIPES).doc(recipeId).update({
@@ -1797,6 +1807,10 @@ export class MemoryDataService implements DataService {
           mediaLink: icon.url,
           publicUrl: icon.url
       }));
+    }
+
+    async searchIconsByEmbedding(_queryVec: number[], _limit: number): Promise<IconStats[]> {
+        return [];
     }
 }
 

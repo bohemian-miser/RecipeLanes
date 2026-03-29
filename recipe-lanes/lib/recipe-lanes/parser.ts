@@ -31,6 +31,7 @@ const RecipeGraphSchema = z.object({
     laneId: z.string(),
     text: z.string(),
     visualDescription: z.string(),
+    hydeQueries: z.array(z.string()).optional(),
     type: z.enum(['ingredient', 'action']),
     inputs: z.array(z.string()).optional(),
     temperature: z.string().optional(),
@@ -84,6 +85,7 @@ interface RecipeGraph {
     laneId: string; // Must match a lane.id
     text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
     visualDescription: string; // Detailed prompt for pixel-art icon
+    hydeQueries: string[]; // 12 image-search terms for this node's icon (see below)
     type: 'ingredient' | 'action';
     inputs?: string[]; // IDs of previous nodes flowing into this one
     temperature?: string; // e.g. "Medium Heat" (for actions)
@@ -137,6 +139,12 @@ These are cached, so simplicity and consistency is key.
      - "A pat of butter melting in a non stick frying pan" -> "butter in pan"
 
 2. **ACTION Nodes (The "State"):
+
+### hydeQueries Guidelines (CRITICAL)
+For every node, generate exactly 12 search terms that describe what its pixel-art icon looks like. Icons are 64×64 pixel art, colorful, white background, for a recipe card infographic. Provide:
+- 4 short tags (1–3 words, e.g. "oven mitt", "red glove")
+- 4 medium phrases (4–6 words, e.g. "red oven mitt icon", "cooking glove pixel art")
+- 4 longer visual descriptions (7–12 words, e.g. "red oven mitt with white heart and flame pixel art")
 
 ### Input Recipe
 "${recipeText}"

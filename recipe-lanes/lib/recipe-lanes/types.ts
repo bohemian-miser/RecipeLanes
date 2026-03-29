@@ -59,6 +59,7 @@ export interface RecipeNode {
     method: string;
     outcome?: 'accepted' | 'rerolled_past' | 'regenerated';
   };
+  hydeQueries?: string[];
 
   type: 'ingredient' | 'action';
   inputs?: string[]; // IDs of nodes that flow into this one

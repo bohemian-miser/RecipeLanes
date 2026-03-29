@@ -19,7 +19,7 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { RefreshCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
-import { getNodeIconUrl } from '../../../lib/recipe-lanes/model-utils';
+import { getNodeIconUrl, isIconSearchMatched } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
@@ -34,12 +34,15 @@ interface MinimalNodeViewProps {
     };
 }
 
-export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({ 
-    data, selected, isRerolling, isPivotMode, handlers 
+export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
+    data, selected, isRerolling, isPivotMode, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
     const iconUrl = getNodeIconUrl(data);
     const textPos = data.textPos || 'bottom';
+
+    // Show a subtle indicator when icon was found via search, not exact-name match
+    const isSearchMatched = isIconSearchMatched(data);
     const isVertical = textPos === 'top' || textPos === 'bottom';
   
     const flexClass = {
@@ -112,13 +115,22 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                 </button>
 
                 {/* Delete Button */}
-                <button 
+                <button
                     onClick={handlers.onDelete}
                     className={`nodrag absolute -top-2 -left-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-red-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}
                     title="Delete Step"
                 >
                     <X className="w-3 h-3" />
                 </button>
+
+                {/* Search-match confidence dot */}
+                {isSearchMatched && (
+                    <span
+                        className="absolute bottom-0 right-0 w-[5px] h-[5px] rounded-full bg-amber-400 pointer-events-none z-20"
+                        title="Icon matched by search"
+                        data-testid="search-match-indicator"
+                    />
+                )}
             </div>
 
             {/* Text Container - Scaled Up */}

@@ -19,7 +19,7 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { RefreshCw, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
-import { getNodeIconUrl } from '../../../lib/recipe-lanes/model-utils';
+import { getNodeIconUrl, isIconSearchMatched } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
@@ -43,13 +43,16 @@ const parseNodeText = (text: string) => {
     return { qty: '', unit: '', name: text };
 };
 
-export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({ 
-    data, selected, isRerolling, isPivotMode, handlers 
+export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
+    data, selected, isRerolling, isPivotMode, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
     const themeVariant = data.iconTheme || 'modern'; // 'modern' or 'modern_clean'
     const iconUrl = getNodeIconUrl(data);
-    
+
+    // Show a subtle indicator when icon was found via search, not exact-name match
+    const isSearchMatched = isIconSearchMatched(data);
+
     // Compact size for ingredients (80px), full size for actions/others (120px)
     const containerSize = isIngredient ? { width: 80, height: 80 } : { width: 120, height: 120 };
     const iconClass = isIngredient ? 'w-16 h-16' : 'w-24 h-24';
@@ -99,6 +102,15 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                                 <X className="w-3 h-3" />
                             </button>
                         </div>
+
+                        {/* Search-match confidence dot */}
+                        {isSearchMatched && (
+                            <span
+                                className="absolute bottom-0 right-0 w-[5px] h-[5px] rounded-full bg-amber-400 pointer-events-none z-20"
+                                title="Icon matched by search"
+                                data-testid="search-match-indicator"
+                            />
+                        )}
                     </div>
 
                     {/* Pill Text (Name Only) - Wrapped */}
@@ -144,6 +156,15 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                                 <X className="w-3 h-3" />
                             </button>
                         </div>
+
+                        {/* Search-match confidence dot */}
+                        {isSearchMatched && (
+                            <span
+                                className="absolute bottom-0 right-0 w-[5px] h-[5px] rounded-full bg-amber-400 pointer-events-none z-20"
+                                title="Icon matched by search"
+                                data-testid="search-match-indicator"
+                            />
+                        )}
                     </div>
 
                     {/* Inline Pill (Qty + Name) - Wrapped */}
@@ -223,6 +244,15 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                           <X className="w-3 h-3" />
                       </button>
                   </div>
+
+                  {/* Search-match confidence dot */}
+                  {isSearchMatched && (
+                      <span
+                          className="absolute bottom-0 right-0 w-[5px] h-[5px] rounded-full bg-amber-400 pointer-events-none z-20"
+                          title="Icon matched by search"
+                          data-testid="search-match-indicator"
+                      />
+                  )}
               </div>
           </div>
         );

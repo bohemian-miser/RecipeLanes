@@ -63,3 +63,35 @@ export function applyIconToNode(node: RecipeNode, icon: IconStats) {
     setNodeIcon(node, cleanIcon);
     return node;
 }
+
+/**
+ * Returns true when the node's icon was resolved via search rather than an
+ * exact name match.  Used by UI components to show a confidence indicator.
+ */
+export function isIconSearchMatched(node: RecipeNode): boolean {
+    return !!node.iconQuery && node.iconQuery.method !== 'exact_name';
+}
+
+/**
+ * Returns the 0-based index of the node's current icon within its shortlist,
+ * or -1 when the current icon is not present in the shortlist (or when either
+ * field is absent).
+ */
+export function currentShortlistIndex(node: RecipeNode): number {
+    if (!node.iconShortlist || !node.icon?.id) return -1;
+    return node.iconShortlist.findIndex(s => s.id === node.icon!.id);
+}
+
+/**
+ * Returns the next shortlist entry after the node's current icon, or null
+ * when the shortlist is exhausted (meaning the caller should fall through to
+ * the Firestore reroll path).
+ */
+export function nextShortlistIcon(node: RecipeNode): IconStats | null {
+    const shortlist = node.iconShortlist;
+    if (!shortlist || shortlist.length === 0) return null;
+    const idx = currentShortlistIndex(node);
+    const nextIdx = idx + 1;
+    if (nextIdx < shortlist.length) return shortlist[nextIdx];
+    return null;
+}

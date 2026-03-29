@@ -24,17 +24,17 @@ import { MinimalNodeModern } from './minimal-node-modern';
 import { functions } from '@/lib/firebase-client';
 import { httpsCallable } from 'firebase/functions';
 import { rejectIcon } from '@/app/actions';
-import { getNodeIconId, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
+import { getNodeIconId, getNodeIconUrl, nextShortlistIcon } from '@/lib/recipe-lanes/model-utils';
 
 // Track rejected URLs for the session to prevent them from reappearing immediately
 const sessionRejectedUrls = new Set<string>();
 
-export const MinimalNode: React.FC<any> = ({ 
+export const MinimalNode: React.FC<any> = ({
     data, selected, isConnectable, id
 }) => {
   const [isRerolling, setIsRerolling] = useState(false);
   const [prevIconUrl, setPrevIconUrl] = useState(getNodeIconUrl(data));
-  
+
   const currentIconUrl = getNodeIconUrl(data);
   if (currentIconUrl !== prevIconUrl) {
       setPrevIconUrl(currentIconUrl);
@@ -57,7 +57,7 @@ export const MinimalNode: React.FC<any> = ({
           setIsPivotMode(true);
           if (data.onSetLongPress) data.onSetLongPress(true);
           if (navigator.vibrate) navigator.vibrate(50);
-      }, 300); 
+      }, 300);
   };
 
   const handleTouchEnd = () => {
@@ -65,7 +65,7 @@ export const MinimalNode: React.FC<any> = ({
           clearTimeout(longPressTimer.current);
           longPressTimer.current = null;
       }
-      setTimeout(() => setIsPivotMode(false), 500); 
+      setTimeout(() => setIsPivotMode(false), 500);
   };
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -75,15 +75,37 @@ export const MinimalNode: React.FC<any> = ({
 
   const handleReroll = async (e: React.MouseEvent) => {
       e.stopPropagation();
+
+      // --- Shortlist cycling: try next entry before hitting Firestore ---
+      const nextIcon = nextShortlistIcon(data);
+      if (nextIcon) {
+          // Apply next shortlist entry optimistically in ReactFlow state
+          setNodes((nds: any[]) => nds.map((n: any) => {
+              if (n.id !== id) return n;
+              return {
+                  ...n,
+                  data: {
+                      ...n.data,
+                      icon: { id: nextIcon.id, url: nextIcon.url, metadata: nextIcon.metadata },
+                      iconQuery: n.data.iconQuery
+                          ? { ...n.data.iconQuery, outcome: 'rerolled_past' as const }
+                          : undefined,
+                  },
+              };
+          }));
+          return;
+      }
+      // nextIcon is null — shortlist exhausted or absent, fall through to Firestore path
+
       setIsRerolling(true);
       const ingredientName = data.visualDescription || data.text;
       try {
         const result = await rejectIcon(
-            recipeId || '', 
+            recipeId || '',
             ingredientName,
             getNodeIconId(data) || '',
         );
-        
+
         if (result && !result.success) {
             console.error("Reroll failed:", result.error);
             setIsRerolling(false);

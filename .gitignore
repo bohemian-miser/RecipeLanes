@@ -1,5 +1,13 @@
 debug/
 
+# Generated analysis / embedding caches (large, reproducible)
+recipe-lanes/scripts/action-icon-data.json
+recipe-lanes/scripts/.action-embeddings-cache.json
+recipe-lanes/scripts/.action-image-embeddings-cache.npy
+recipe-lanes/scripts/action-icon-explorer.html
+recipe-lanes/scripts/ie_data/
+reports/scripts/__pycache__/
+
 # gemini-cli settings
 .gemini/
 *.log

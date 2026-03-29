@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RecipeLanes — Icon Search</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; min-height: 100%;
+    background: #12121f;
+    color: #e0e0f0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ---- Banner ---- */
+  #banner {
+    background: linear-gradient(135deg, #1a1a3a 0%, #1e2040 100%);
+    border-bottom: 1px solid #2a2a4a;
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  #banner-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #c0c0ff;
+    letter-spacing: 0.02em;
+  }
+  #banner-title span { color: #6a8eff; }
+
+  #banner-subtitle {
+    font-size: 13px;
+    color: #7070a0;
+    margin-left: auto;
+  }
+
+  /* ---- Search area ---- */
+  #search-area {
+    max-width: 720px;
+    margin: 48px auto 36px;
+    padding: 0 24px;
+    text-align: center;
+  }
+
+  #search-area h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #b0b0f0;
+    margin-bottom: 8px;
+    letter-spacing: 0.01em;
+  }
+
+  #search-area p {
+    font-size: 13px;
+    color: #6060a0;
+    margin-bottom: 28px;
+  }
+
+  #search-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  #search-input {
+    flex: 1;
+    padding: 14px 18px;
+    background: #1a1a2e;
+    border: 1px solid #3a3a6a;
+    border-radius: 10px;
+    color: #e0e0f0;
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #search-input::placeholder { color: #4a4a70; }
+  #search-input:focus { border-color: #6a6aee; }
+
+  #search-btn {
+    padding: 14px 24px;
+    background: #4a4aee;
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+  #search-btn:hover { background: #6060ff; }
+  #search-btn:active { transform: scale(0.97); }
+  #search-btn:disabled {
+    background: #2a2a5a;
+    color: #5555aa;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* ---- Status / spinner ---- */
+  #status-area {
+    max-width: 720px;
+    margin: 0 auto 24px;
+    padding: 0 24px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .spinner {
+    width: 28px; height: 28px;
+    border: 3px solid #2a2a4a;
+    border-top-color: #6a6aee;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #status-text {
+    font-size: 13px;
+    color: #7070b0;
+  }
+
+  #error-msg {
+    background: #2a1a1a;
+    border: 1px solid #6a3030;
+    border-radius: 8px;
+    padding: 12px 18px;
+    color: #e08080;
+    font-size: 13px;
+    text-align: center;
+    max-width: 600px;
+    width: 100%;
+  }
+
+  /* ---- Results grid ---- */
+  #results-header {
+    max-width: 1200px;
+    margin: 0 auto 16px;
+    padding: 0 24px;
+    font-size: 13px;
+    color: #6060a0;
+  }
+  #results-header strong { color: #a0a0d0; }
+
+  #results-grid {
+    max-width: 1200px;
+    margin: 0 auto 60px;
+    padding: 0 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+
+  /* ---- Icon card ---- */
+  .icon-card {
+    background: #1a1a2e;
+    border: 1px solid #2a2a4a;
+    border-radius: 12px;
+    padding: 16px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .icon-card:hover {
+    border-color: #4a4a7a;
+    background: #1e1e35;
+  }
+
+  .icon-rank {
+    align-self: flex-start;
+    font-size: 11px;
+    color: #4a4a6a;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .icon-thumb {
+    width: 88px;
+    height: 88px;
+    object-fit: contain;
+    border-radius: 8px;
+    background: #252540;
+    flex-shrink: 0;
+  }
+  .icon-thumb.error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    color: #3a3a5a;
+  }
+
+  .icon-desc {
+    font-size: 12px;
+    color: #c0c0e0;
+    text-align: center;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+
+  .icon-count {
+    font-size: 11px;
+    color: #6060a0;
+  }
+  .icon-count strong {
+    color: #9090c0;
+  }
+
+  /* ---- Similarity bar ---- */
+  .sim-bar-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .sim-bar-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .sim-bar-label span:first-child {
+    font-size: 10px;
+    color: #5050808;
+    color: #505080;
+    letter-spacing: 0.04em;
+  }
+  .sim-bar-label span:last-child {
+    font-size: 11px;
+    font-weight: 700;
+    color: #a0a0d0;
+  }
+  .sim-bar-track {
+    height: 4px;
+    background: #252545;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .sim-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 500px) {
+    #banner { padding: 14px 16px; }
+    #search-area { margin-top: 28px; padding: 0 14px; }
+    #results-grid { padding: 0 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  }
+</style>
+</head>
+<body>
+
+<div id="banner">
+  <div id="banner-title">RecipeLanes <span>Icon Search</span></div>
+  <div id="banner-subtitle">Nearest-neighbour semantic search over 2 000 action icons</div>
+</div>
+
+<div id="search-area">
+  <h2>Find an icon by description</h2>
+  <p>Describe the cooking action or visual concept you're looking for.</p>
+  <div id="search-row">
+    <input
+      id="search-input"
+      type="text"
+      placeholder="Describe an action, e.g. butter melting in a saucepan..."
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <button id="search-btn">Search</button>
+  </div>
+</div>
+
+<div id="status-area"></div>
+
+<div id="results-header" style="display:none"></div>
+<div id="results-grid"></div>
+
+<script>
+const API = 'http://localhost:8766/search';
+
+const input   = document.getElementById('search-input');
+const btn     = document.getElementById('search-btn');
+const status  = document.getElementById('status-area');
+const header  = document.getElementById('results-header');
+const grid    = document.getElementById('results-grid');
+
+// Enter key triggers search
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+});
+btn.addEventListener('click', doSearch);
+
+// ---- Similarity colour: green (1.0) → yellow (0.7) → red (0.0) ----
+function simColor(sim) {
+  // Map 0–1 to hue 0 (red) → 120 (green), lightness 50%
+  const hue = Math.round(sim * 120);
+  return `hsl(${hue}, 70%, 50%)`;
+}
+
+function formatSim(sim) {
+  return (sim * 100).toFixed(1) + '%';
+}
+
+function setStatus(html) {
+  status.innerHTML = html;
+}
+
+function clearStatus() {
+  status.innerHTML = '';
+}
+
+async function doSearch() {
+  const q = input.value.trim();
+  if (!q) {
+    input.focus();
+    return;
+  }
+
+  btn.disabled = true;
+  header.style.display = 'none';
+  grid.innerHTML = '';
+
+  setStatus(`
+    <div class="spinner"></div>
+    <span id="status-text">Embedding query and searching…</span>
+  `);
+
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: q }),
+    });
+
+    if (!res.ok) {
+      let msg = `Server error ${res.status}`;
+      try {
+        const err = await res.json();
+        if (err.error) msg = err.error;
+      } catch (_) {}
+      throw new Error(msg);
+    }
+
+    const results = await res.json();
+    clearStatus();
+    renderResults(results, q);
+  } catch (err) {
+    setStatus(`<div id="error-msg">
+      <strong>Search failed:</strong> ${escHtml(err.message)}<br>
+      <span style="font-size:12px;color:#c06060;">Make sure the server is running at http://localhost:8766</span>
+    </div>`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderResults(results, query) {
+  if (!results || results.length === 0) {
+    setStatus('<span id="status-text">No results found.</span>');
+    return;
+  }
+
+  header.style.display = '';
+  header.innerHTML = `Showing <strong>${results.length}</strong> nearest neighbours for <strong>${escHtml('"' + query + '"')}</strong>`;
+
+  grid.innerHTML = '';
+
+  results.forEach((item, i) => {
+    const card = document.createElement('div');
+    card.className = 'icon-card';
+
+    const rank = document.createElement('div');
+    rank.className = 'icon-rank';
+    rank.textContent = `#${i + 1}`;
+
+    const img = document.createElement('img');
+    img.className = 'icon-thumb';
+    img.alt = item.desc;
+    img.src = `http://localhost:8766/ie_data/icons/thumb/${encodeURIComponent(item.id)}.png`;
+    img.onerror = function() {
+      this.style.display = 'none';
+      const placeholder = document.createElement('div');
+      placeholder.className = 'icon-thumb error';
+      placeholder.textContent = '?';
+      card.insertBefore(placeholder, this.nextSibling);
+    };
+
+    const desc = document.createElement('div');
+    desc.className = 'icon-desc';
+    desc.textContent = item.desc;
+
+    const count = document.createElement('div');
+    count.className = 'icon-count';
+    count.innerHTML = `Used <strong>${item.count.toLocaleString()}</strong> time${item.count !== 1 ? 's' : ''}`;
+
+    // Similarity bar
+    const simWrap = document.createElement('div');
+    simWrap.className = 'sim-bar-wrap';
+
+    const simLabel = document.createElement('div');
+    simLabel.className = 'sim-bar-label';
+    simLabel.innerHTML = `
+      <span>SIMILARITY</span>
+      <span style="color:${simColor(item.similarity)}">${formatSim(item.similarity)}</span>
+    `;
+
+    const simTrack = document.createElement('div');
+    simTrack.className = 'sim-bar-track';
+
+    const simFill = document.createElement('div');
+    simFill.className = 'sim-bar-fill';
+    simFill.style.width = (item.similarity * 100).toFixed(1) + '%';
+    simFill.style.background = simColor(item.similarity);
+
+    simTrack.appendChild(simFill);
+    simWrap.appendChild(simLabel);
+    simWrap.appendChild(simTrack);
+
+    card.appendChild(rank);
+    card.appendChild(img);
+    card.appendChild(desc);
+    card.appendChild(count);
+    card.appendChild(simWrap);
+    grid.appendChild(card);
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

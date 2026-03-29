@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RecipeLanes — Archetype Icon Demo</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; min-height: 100%;
+    background: #12121f;
+    color: #e0e0f0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ---- Loading / Error ---- */
+  #loading-screen {
+    position: fixed; inset: 0;
+    background: #12121f;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 14px;
+    z-index: 100;
+    font-size: 15px; color: #8888cc;
+  }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid #2a2a4a;
+    border-top-color: #6a6aee;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading-screen.hidden { display: none; }
+
+  #error-screen {
+    position: fixed; inset: 0;
+    background: #12121f;
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 12px;
+    z-index: 100;
+    color: #cc6666; font-size: 14px; text-align: center; padding: 24px;
+  }
+  #error-screen.visible { display: flex; }
+
+  /* ---- Banner ---- */
+  #banner {
+    background: linear-gradient(135deg, #1a1a3a 0%, #1e2040 100%);
+    border-bottom: 1px solid #2a2a4a;
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  #banner-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #c0c0ff;
+    letter-spacing: 0.02em;
+  }
+  #banner-title span {
+    color: #6a8eff;
+  }
+
+  #banner-stats {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .stat-pill {
+    background: #252545;
+    border: 1px solid #3a3a6a;
+    border-radius: 20px;
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .stat-pill .stat-label {
+    font-size: 12px;
+    color: #7070a0;
+  }
+  .stat-pill .stat-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: #a0e0a0;
+  }
+  .stat-pill .stat-value.savings {
+    color: #60d0a0;
+    font-size: 15px;
+  }
+  .stat-pill .stat-value.coverage {
+    color: #80b0ff;
+  }
+
+  /* ---- K selector ---- */
+  #k-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 14px 28px;
+    background: #161626;
+    border-bottom: 1px solid #2a2a4a;
+  }
+
+  #k-selector .k-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6060a0;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-right: 4px;
+    white-space: nowrap;
+  }
+
+  .k-btn {
+    background: #1e1e38;
+    border: 1px solid #3a3a6a;
+    border-radius: 6px;
+    color: #8080c0;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+    font-family: inherit;
+  }
+  .k-btn:hover {
+    background: #252545;
+    border-color: #5050a0;
+    color: #c0c0ff;
+  }
+  .k-btn.active {
+    background: #2a2a50;
+    border-color: #6a8eff;
+    color: #6a8eff;
+    box-shadow: 0 0 0 2px rgba(106,142,255,0.2);
+  }
+
+  /* ---- Main layout ---- */
+  #main {
+    display: flex;
+    gap: 0;
+    min-height: calc(100vh - 80px);
+  }
+
+  /* ---- Left panel: archetype library ---- */
+  #left-panel {
+    flex: 0 0 58%;
+    min-width: 0;
+    border-right: 1px solid #2a2a4a;
+    padding: 24px 28px;
+    overflow-y: auto;
+  }
+
+  #left-panel h2 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #8888cc;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+
+  #left-panel .panel-subtitle {
+    font-size: 12px;
+    color: #505080;
+    margin-bottom: 20px;
+  }
+
+  /* Archetype grid */
+  #archetype-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 14px;
+  }
+
+  .archetype-card {
+    background: #1a1a2e;
+    border: 1px solid #2a2a4a;
+    border-radius: 10px;
+    padding: 12px 8px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    position: relative;
+  }
+  .archetype-card:hover {
+    background: #20203a;
+    border-color: #4a4a8a;
+    transform: translateY(-1px);
+  }
+  .archetype-card.highlighted {
+    border-color: #6a8eff;
+    background: #1c1c40;
+    box-shadow: 0 0 0 2px rgba(106,142,255,0.25), 0 4px 20px rgba(106,142,255,0.15);
+  }
+
+  .archetype-icon-wrap {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .archetype-icon-wrap img {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    display: block;
+    object-fit: cover;
+  }
+
+  .archetype-icon-placeholder {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: #252545;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    color: #505080;
+  }
+
+  .archetype-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: #a0a0d0;
+    text-align: center;
+    line-height: 1.3;
+    max-width: 100%;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .archetype-count {
+    font-size: 10px;
+    color: #505080;
+    background: #12121f;
+    padding: 1px 8px;
+    border-radius: 10px;
+    border: 1px solid #2a2a4a;
+    white-space: nowrap;
+  }
+
+  .archetype-match-badge {
+    position: absolute;
+    top: -6px; right: -6px;
+    background: #6a8eff;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 2px 6px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    display: none;
+  }
+  .archetype-card.highlighted .archetype-match-badge {
+    display: block;
+  }
+
+  /* ---- Right panel: how it works ---- */
+  #right-panel {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  #right-panel h2 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #8888cc;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+
+  #right-panel .panel-subtitle {
+    font-size: 12px;
+    color: #505080;
+    margin-bottom: 0;
+  }
+
+  /* Search box */
+  #search-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 10px 14px;
+    background: #1a1a2e;
+    border: 1px solid #3a3a6a;
+    border-radius: 8px;
+    color: #e0e0f0;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+    font-family: inherit;
+  }
+  #search-input:focus {
+    border-color: #6a6aee;
+    box-shadow: 0 0 0 2px rgba(106,106,238,0.15);
+  }
+  #search-input::placeholder {
+    color: #404070;
+  }
+
+  #search-hint {
+    font-size: 11px;
+    color: #404070;
+  }
+
+  /* Match result */
+  #match-result {
+    background: #1a1a2e;
+    border: 1px solid #2a2a4a;
+    border-radius: 10px;
+    padding: 18px;
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+  }
+  #match-result.visible { display: flex; }
+
+  #match-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  #match-icon-wrap {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #match-icon-wrap img {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  #match-icon-placeholder {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: #252545;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    color: #505080;
+  }
+
+  #match-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  #match-cluster-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #c0c0ff;
+    margin-bottom: 4px;
+  }
+
+  #match-savings {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(96,208,160,0.12);
+    border: 1px solid rgba(96,208,160,0.3);
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #60d0a0;
+    margin-bottom: 8px;
+  }
+
+  #match-score-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #match-score-bar-wrap .score-label {
+    font-size: 11px;
+    color: #505080;
+    white-space: nowrap;
+  }
+  #match-score-bar {
+    flex: 1;
+    height: 4px;
+    background: #2a2a4a;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  #match-score-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4a6aee, #6a8eff);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+  #match-score-pct {
+    font-size: 11px;
+    color: #6a8eff;
+    white-space: nowrap;
+    min-width: 32px;
+  }
+
+  /* Similar descriptions */
+  #match-similars {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  #match-similars .similars-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #505080;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 2px;
+  }
+
+  .similar-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 7px 10px;
+    background: #12121f;
+    border: 1px solid #1e1e3a;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #9090c0;
+    line-height: 1.4;
+  }
+  .similar-item::before {
+    content: '';
+    display: block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #4a4a7a;
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+
+  /* Empty state */
+  #empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 32px 16px;
+    color: #404070;
+    text-align: center;
+    flex: 1;
+  }
+  #empty-state .empty-icon {
+    font-size: 36px;
+    opacity: 0.5;
+  }
+  #empty-state .empty-text {
+    font-size: 13px;
+    line-height: 1.6;
+    max-width: 280px;
+  }
+
+  /* How it works explainer */
+  #explainer {
+    background: #151528;
+    border: 1px solid #252545;
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #explainer h3 {
+    font-size: 12px;
+    font-weight: 700;
+    color: #6060a0;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .explainer-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .explainer-step {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 12px;
+    color: #7070a0;
+    line-height: 1.5;
+  }
+  .step-num {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #252545;
+    color: #6a6aee;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  /* ---- Cluster modal ---- */
+  #cluster-modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.72);
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    z-index: 200;
+    padding: 40px 20px;
+    overflow-y: auto;
+  }
+  #cluster-modal.visible {
+    display: flex;
+  }
+
+  #cluster-modal-inner {
+    background: #1a1a2e;
+    border: 1px solid #3a3a6a;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 820px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+  }
+
+  #cluster-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid #2a2a4a;
+    flex-shrink: 0;
+  }
+
+  #cluster-modal-color-dot {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  #cluster-modal-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #c0c0ff;
+    flex: 1;
+    min-width: 0;
+  }
+
+  #cluster-modal-meta {
+    font-size: 12px;
+    color: #505080;
+    white-space: nowrap;
+  }
+
+  #cluster-modal-close {
+    background: #252545;
+    border: 1px solid #3a3a6a;
+    border-radius: 6px;
+    color: #8080c0;
+    font-size: 13px;
+    padding: 4px 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.12s, color 0.12s;
+    flex-shrink: 0;
+  }
+  #cluster-modal-close:hover {
+    background: #2e2e58;
+    color: #c0c0ff;
+  }
+
+  #cluster-modal-body {
+    overflow-y: auto;
+    padding: 20px 22px;
+    flex: 1;
+  }
+
+  #cluster-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 12px;
+  }
+
+  .modal-icon-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .modal-icon-img {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    background: #252545;
+    flex-shrink: 0;
+  }
+
+  .modal-icon-placeholder {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: #252545;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    color: #505080;
+    flex-shrink: 0;
+  }
+
+  .modal-icon-desc {
+    font-size: 10px;
+    color: #7070a0;
+    text-align: center;
+    line-height: 1.3;
+    max-width: 88px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+  }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }
+
+  @media (max-width: 900px) {
+    #main { flex-direction: column; }
+    #left-panel { flex: none; border-right: none; border-bottom: 1px solid #2a2a4a; }
+    #archetype-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+    #banner { padding: 16px 20px; }
+    #left-panel, #right-panel { padding: 20px; }
+    #k-selector { padding: 12px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <div>Loading icon data...</div>
+</div>
+
+<div id="error-screen">
+  <div style="font-size:28px">&#9888;</div>
+  <div id="error-msg-text">Failed to load viz_data.json</div>
+  <div style="font-size:12px;color:#666">Make sure the server is running: <code>python3 -m http.server 8765</code> from the scripts/ directory</div>
+</div>
+
+<!-- Summary banner -->
+<div id="banner">
+  <div>
+    <div id="banner-title">RecipeLanes — <span>Archetype Icon Library</span></div>
+    <div style="font-size:12px;color:#505080;margin-top:3px" id="banner-subtitle">Cost reduction proposal: archetype clusters replace per-node AI generation for free tier</div>
+  </div>
+  <div id="banner-stats">
+    <div class="stat-pill">
+      <span class="stat-label">Archetype coverage</span>
+      <span class="stat-value coverage" id="stat-coverage">—</span>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-label">Saved per 100 recipes</span>
+      <span class="stat-value savings" id="stat-savings">—</span>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-label">Max savings per recipe</span>
+      <span class="stat-value" id="stat-per-recipe" style="color:#e0c060">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- K selector -->
+<div id="k-selector">
+  <span class="k-label">Clusters (k):</span>
+</div>
+
+<!-- Two-column layout -->
+<div id="main">
+
+  <!-- Left: archetype grid -->
+  <div id="left-panel">
+    <h2>Archetype Library</h2>
+    <div class="panel-subtitle" id="left-subtitle">Representative icons — one per cluster. Click any card to see all icons in that cluster.</div>
+    <div id="archetype-grid"></div>
+  </div>
+
+  <!-- Right: live search -->
+  <div id="right-panel">
+    <div>
+      <h2>How It Works</h2>
+      <div class="panel-subtitle">Type any action description to find the nearest archetype icon.</div>
+    </div>
+
+    <div id="search-section">
+      <input
+        type="text"
+        id="search-input"
+        placeholder="e.g. Brown butter in a skillet over medium heat..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <div id="search-hint">Scored by keyword overlap against the top descriptions in each cluster</div>
+    </div>
+
+    <div id="match-result">
+      <div id="match-header">
+        <div id="match-icon-wrap">
+          <div id="match-icon-placeholder">?</div>
+        </div>
+        <div id="match-info">
+          <div id="match-cluster-name">—</div>
+          <div id="match-savings">&#10003; Would save $0.04</div>
+          <div id="match-score-bar-wrap">
+            <span class="score-label">Match confidence</span>
+            <div id="match-score-bar"><div id="match-score-fill" style="width:0%"></div></div>
+            <span id="match-score-pct">0%</span>
+          </div>
+        </div>
+      </div>
+      <div id="match-similars">
+        <div class="similars-label">Top similar descriptions in this cluster</div>
+        <div id="similar-list"></div>
+      </div>
+    </div>
+
+    <div id="empty-state">
+      <div class="empty-icon">&#128269;</div>
+      <div class="empty-text">
+        Type an action description above — it will be matched to the nearest archetype icon using keyword scoring.
+      </div>
+    </div>
+
+    <div id="explainer">
+      <h3>Cost model</h3>
+      <div class="explainer-steps">
+        <div class="explainer-step">
+          <div class="step-num">1</div>
+          <div>Each recipe action node currently generates a <strong style="color:#c0c0ff">custom AI icon at $0.04</strong> per call. With 82.7% unique descriptions, the cache rarely helps.</div>
+        </div>
+        <div class="explainer-step">
+          <div class="step-num">2</div>
+          <div>Text embeddings of 2,000 unique action descriptions were clustered into <strong style="color:#c0c0ff">archetypes</strong> using K-means + UMAP. Each archetype covers a coherent visual theme.</div>
+        </div>
+        <div class="explainer-step">
+          <div class="step-num">3</div>
+          <div>For <strong style="color:#c0c0ff">free-tier users</strong>, the nearest archetype icon is served instead of generating a new one — zero marginal cost per node.</div>
+        </div>
+        <div class="explainer-step">
+          <div class="step-num">4</div>
+          <div>At ~15 action nodes per recipe and the measured coverage rate, the savings compound quickly across thousands of free-tier recipes per month.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Cluster icon modal -->
+<div id="cluster-modal">
+  <div id="cluster-modal-inner">
+    <div id="cluster-modal-header">
+      <div id="cluster-modal-color-dot"></div>
+      <div id="cluster-modal-title">—</div>
+      <div id="cluster-modal-meta"></div>
+      <button id="cluster-modal-close" type="button">Close</button>
+    </div>
+    <div id="cluster-modal-body">
+      <div id="cluster-modal-grid"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// Cluster palette — matches icon-explorer.html
+const COLORS = [
+  '#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f',
+  '#edc948','#b07aa1','#ff9da7','#9c755f','#bab0ac',
+  '#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd',
+  '#8c564b','#e377c2','#bcbd22','#17becf','#393b79',
+  '#637939','#8c6d31','#843c39','#7b4173','#aec7e8'
+];
+
+// Available k values (order matches button row)
+const K_VALUES = [10, 15, 20, 25, 30, 40];
+const K_DEFAULT = 25;
+
+// ---------------------------------------------------------------------------
+// Geometry helpers
+// ---------------------------------------------------------------------------
+
+function dist2(a, b) {
+  return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
+}
+
+function centroid(indices, items) {
+  let sx = 0, sy = 0;
+  for (const i of indices) {
+    sx += items[i].umap_text[0];
+    sy += items[i].umap_text[1];
+  }
+  return [sx / indices.length, sy / indices.length];
+}
+
+// ---------------------------------------------------------------------------
+// Tokeniser for keyword scoring
+// ---------------------------------------------------------------------------
+
+function tokenise(str) {
+  return str.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2);
+}
+
+// Stopwords — common cooking words that don't discriminate clusters
+const STOP = new Set([
+  'the','and','with','for','into','over','from','that','this',
+  'are','has','have','been','then','some','all','each','its','out',
+  'add','put','pour','place','set','use','keep','let','make','take',
+  'get','cut','mix','stir','cook','heat','pan','pot','bowl','dish',
+  'hot','cold','warm','fresh','large','small','medium','thin','thick',
+  'water','oil','salt','pepper','cup','cups','tablespoon','teaspoon',
+  'tbsp','tsp','minutes','minute','seconds','hour','hours'
+]);
+
+function tokens(str) {
+  return tokenise(str).filter(w => !STOP.has(w));
+}
+
+// Score query against a set of reference descriptions
+// Returns [0,1] normalized score
+function scoreQuery(queryToks, refDescriptions) {
+  if (queryToks.length === 0) return 0;
+  const querySet = new Set(queryToks);
+  let totalScore = 0;
+  for (const desc of refDescriptions) {
+    const dToks = tokens(desc);
+    if (dToks.length === 0) continue;
+    const dSet = new Set(dToks);
+    let hits = 0;
+    for (const t of querySet) {
+      if (dSet.has(t)) hits++;
+    }
+    // Jaccard-ish: intersect / union
+    const union = new Set([...querySet, ...dSet]).size;
+    if (union > 0) totalScore += hits / union;
+  }
+  // Normalize by number of reference descriptions used
+  return totalScore / refDescriptions.length;
+}
+
+// ---------------------------------------------------------------------------
+// Build cluster per-item map, find representatives & top-k descriptions
+// ---------------------------------------------------------------------------
+
+function buildClusterData(items, kData) {
+  const labels = kData.labels;
+  const names = kData.names;
+  const K = new Set(labels.filter(l => l !== null && l !== undefined)).size;
+
+  // Group item indices by cluster
+  const groups = {};
+  for (const label of labels) {
+    if (label !== null && label !== undefined && !(label in groups)) {
+      groups[label] = [];
+    }
+  }
+  for (let i = 0; i < labels.length; i++) {
+    const c = labels[i];
+    if (c !== undefined && c !== null) groups[c].push(i);
+  }
+
+  const clusters = [];
+  const clusterIds = Object.keys(groups).map(Number).sort((a, b) => a - b);
+
+  for (const c of clusterIds) {
+    const indices = groups[c] || [];
+    const name = (names && names[String(c)]) || `Cluster ${c + 1}`;
+    const color = COLORS[c % COLORS.length];
+
+    // Find centroid
+    const ctr = centroid(indices, items);
+
+    // Representative: item closest to centroid that has thumb_b64
+    const withThumb = indices.filter(i => items[i].thumb_b64);
+    const search = withThumb.length > 0 ? withThumb : indices;
+    const rep = search.length > 0
+      ? search.reduce((best, i) =>
+          dist2(items[i].umap_text, ctr) < dist2(items[best].umap_text, ctr) ? i : best
+        , search[0])
+      : null;
+
+    // Count total weighted occurrences (sum of counts)
+    const totalCount = indices.reduce((s, i) => s + (items[i].count || 1), 0);
+
+    // Top-10 descriptions by count (for search scoring) — use diverse sample
+    const top10 = [...indices]
+      .sort((a, b) => (items[b].count || 1) - (items[a].count || 1))
+      .slice(0, 10);
+    const topDescs = top10.map(i => items[i].desc);
+
+    // Top-3 for display
+    const top3Descs = topDescs.slice(0, 3);
+
+    clusters.push({ c, name, color, rep, indices, totalCount, topDescs, top3Descs });
+  }
+
+  return clusters;
+}
+
+// ---------------------------------------------------------------------------
+// Banner stats
+// ---------------------------------------------------------------------------
+
+function computeStats(items, clusters) {
+  const totalCount = items.reduce((s, it) => s + (it.count || 1), 0);
+  const coveredCount = clusters.reduce((s, cl) => s + cl.totalCount, 0);
+  const coverage = coveredCount / totalCount;
+
+  const coveragePct = Math.round(coverage * 100);
+
+  // Savings: max $0.04 × 15 nodes = $0.60/recipe; scale by coverage
+  const maxSavingsPerRecipe = 0.04 * 15;
+  const savingsPerRecipe = maxSavingsPerRecipe * coverage;
+  const savingsPer100 = (savingsPerRecipe * 100).toFixed(2);
+
+  return { coveragePct, savingsPerRecipe, savingsPer100 };
+}
+
+// ---------------------------------------------------------------------------
+// Render archetype grid
+// ---------------------------------------------------------------------------
+
+function renderGrid(clusters, items, onCardClick) {
+  const grid = document.getElementById('archetype-grid');
+  grid.innerHTML = '';
+
+  for (const cl of clusters) {
+    const card = document.createElement('div');
+    card.className = 'archetype-card';
+    card.dataset.cluster = cl.c;
+
+    const matchBadge = document.createElement('div');
+    matchBadge.className = 'archetype-match-badge';
+    matchBadge.textContent = 'Match';
+    card.appendChild(matchBadge);
+
+    // Icon
+    const iconWrap = document.createElement('div');
+    iconWrap.className = 'archetype-icon-wrap';
+    iconWrap.style.background = cl.color + '33';
+    iconWrap.style.boxShadow = `0 0 0 3px ${cl.color}55, 0 0 14px ${cl.color}33`;
+
+    if (cl.rep !== null && items[cl.rep].thumb_b64) {
+      const img = document.createElement('img');
+      img.src = items[cl.rep].thumb_b64;
+      img.alt = cl.name;
+      img.loading = 'lazy';
+      iconWrap.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'archetype-icon-placeholder';
+      ph.style.background = cl.color + '22';
+      ph.style.color = cl.color;
+      ph.textContent = '\u25c8';
+      iconWrap.appendChild(ph);
+    }
+    card.appendChild(iconWrap);
+
+    // Name
+    const nameEl = document.createElement('div');
+    nameEl.className = 'archetype-name';
+    nameEl.textContent = cl.name;
+    card.appendChild(nameEl);
+
+    // Count
+    const countEl = document.createElement('div');
+    countEl.className = 'archetype-count';
+    countEl.textContent = `${cl.indices.length} variants`;
+    card.appendChild(countEl);
+
+    card.addEventListener('click', () => onCardClick(cl));
+    grid.appendChild(card);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cluster icon modal
+// ---------------------------------------------------------------------------
+
+function openClusterModal(cl, items) {
+  const modal = document.getElementById('cluster-modal');
+  const title = document.getElementById('cluster-modal-title');
+  const meta = document.getElementById('cluster-modal-meta');
+  const dot = document.getElementById('cluster-modal-color-dot');
+  const grid = document.getElementById('cluster-modal-grid');
+
+  title.textContent = cl.name;
+  meta.textContent = `${cl.indices.length} variants`;
+  dot.style.background = cl.color;
+  dot.style.boxShadow = `0 0 0 2px ${cl.color}66`;
+
+  // Build icon grid — sort by count descending
+  const sorted = [...cl.indices].sort((a, b) => (items[b].count || 1) - (items[a].count || 1));
+
+  grid.innerHTML = '';
+  for (const idx of sorted) {
+    const item = items[idx];
+    const cell = document.createElement('div');
+    cell.className = 'modal-icon-cell';
+
+    if (item.thumb_b64) {
+      const img = document.createElement('img');
+      img.className = 'modal-icon-img';
+      img.src = item.thumb_b64;
+      img.alt = item.desc || '';
+      img.loading = 'lazy';
+      cell.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'modal-icon-placeholder';
+      ph.style.background = cl.color + '22';
+      ph.style.color = cl.color;
+      ph.textContent = '\u25c8';
+      cell.appendChild(ph);
+    }
+
+    const desc = document.createElement('div');
+    desc.className = 'modal-icon-desc';
+    const rawDesc = item.desc || '';
+    desc.textContent = rawDesc.length > 30 ? rawDesc.slice(0, 30) + '\u2026' : rawDesc;
+    desc.title = rawDesc;
+    cell.appendChild(desc);
+
+    grid.appendChild(cell);
+  }
+
+  modal.classList.add('visible');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeClusterModal() {
+  document.getElementById('cluster-modal').classList.remove('visible');
+  document.body.style.overflow = '';
+}
+
+// ---------------------------------------------------------------------------
+// Search logic
+// ---------------------------------------------------------------------------
+
+function findBestCluster(query, clusters) {
+  const qToks = tokens(query);
+  if (qToks.length === 0) return null;
+
+  let best = null;
+  let bestScore = -1;
+
+  for (const cl of clusters) {
+    // Score using top-10 descriptions as reference
+    const score = scoreQuery(qToks, cl.topDescs);
+    if (score > bestScore) {
+      bestScore = score;
+      best = cl;
+    }
+  }
+
+  return { cluster: best, score: bestScore, maxPossible: 1.0 };
+}
+
+// ---------------------------------------------------------------------------
+// Update match result panel
+// ---------------------------------------------------------------------------
+
+function showMatch(cl, score, items) {
+  const resultEl = document.getElementById('match-result');
+  const emptyEl = document.getElementById('empty-state');
+
+  resultEl.classList.add('visible');
+  emptyEl.style.display = 'none';
+
+  // Icon
+  const iconWrap = document.getElementById('match-icon-wrap');
+  const placeholder = document.getElementById('match-icon-placeholder');
+  iconWrap.style.background = cl.color + '33';
+  iconWrap.style.boxShadow = `0 0 0 3px ${cl.color}55, 0 0 18px ${cl.color}44`;
+
+  // Remove old img if any
+  const oldImg = iconWrap.querySelector('img');
+  if (oldImg) oldImg.remove();
+  placeholder.style.display = 'none';
+
+  if (cl.rep !== null && items[cl.rep].thumb_b64) {
+    const img = document.createElement('img');
+    img.src = items[cl.rep].thumb_b64;
+    img.alt = cl.name;
+    iconWrap.appendChild(img);
+    placeholder.style.display = 'none';
+  } else {
+    placeholder.style.display = 'flex';
+    placeholder.style.background = cl.color + '22';
+    placeholder.style.color = cl.color;
+    placeholder.textContent = '\u25c8';
+  }
+
+  // Cluster name
+  document.getElementById('match-cluster-name').textContent = cl.name;
+
+  // Score bar
+  const pct = Math.min(100, Math.round(score * 500)); // scale up for UX — raw score is small
+  document.getElementById('match-score-fill').style.width = pct + '%';
+  document.getElementById('match-score-pct').textContent = pct + '%';
+
+  // Similar descriptions
+  const similarList = document.getElementById('similar-list');
+  similarList.innerHTML = '';
+  for (const desc of cl.top3Descs) {
+    const el = document.createElement('div');
+    el.className = 'similar-item';
+    el.textContent = desc;
+    similarList.appendChild(el);
+  }
+
+  // Highlight matching card in grid
+  document.querySelectorAll('.archetype-card').forEach(card => {
+    card.classList.toggle('highlighted', parseInt(card.dataset.cluster) === cl.c);
+  });
+
+  // Scroll matching card into view
+  const matchCard = document.querySelector(`.archetype-card[data-cluster="${cl.c}"]`);
+  if (matchCard) {
+    matchCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function showClusterInSearch(cl, items) {
+  // When a card is clicked from the left panel, populate the search and show result
+  const searchEl = document.getElementById('search-input');
+  searchEl.value = cl.top3Descs[0] || cl.name;
+  showMatch(cl, 0.9, items);
+}
+
+function clearMatch() {
+  document.getElementById('match-result').classList.remove('visible');
+  document.getElementById('empty-state').style.display = '';
+  document.querySelectorAll('.archetype-card').forEach(card => {
+    card.classList.remove('highlighted');
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Bootstrap
+// ---------------------------------------------------------------------------
+
+async function init() {
+  const loadEl = document.getElementById('loading-screen');
+  const errEl = document.getElementById('error-screen');
+
+  let data;
+  try {
+    const resp = await fetch('ie_data/viz_data.json');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    data = await resp.json();
+  } catch (err) {
+    loadEl.classList.add('hidden');
+    errEl.classList.add('visible');
+    document.getElementById('error-msg-text').textContent = `Failed to load viz_data.json: ${err.message}`;
+    return;
+  }
+
+  const items = data.items;
+  const rawClusters = data.clusters;
+
+  // Determine which k values are actually available in the data
+  const availableKs = K_VALUES.filter(k => rawClusters[`k${k}`] != null);
+  const activeK = availableKs.includes(K_DEFAULT) ? K_DEFAULT : (availableKs[0] || null);
+
+  if (!activeK) {
+    loadEl.classList.add('hidden');
+    errEl.classList.add('visible');
+    document.getElementById('error-msg-text').textContent = 'No cluster data found in viz_data.json';
+    return;
+  }
+
+  // State
+  let currentK = activeK;
+  let currentClusters = buildClusterData(items, rawClusters[`k${currentK}`]);
+  let debounceTimer = null;
+
+  // ---------------------------------------------------------------------------
+  // K selector buttons
+  // ---------------------------------------------------------------------------
+  const kSelector = document.getElementById('k-selector');
+  const kBtnMap = {};
+
+  for (const k of availableKs) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'k-btn';
+    btn.textContent = `k=${k}`;
+    btn.dataset.k = k;
+    if (k === activeK) btn.classList.add('active');
+    btn.addEventListener('click', () => {
+      if (k === currentK) return;
+      currentK = k;
+      // Update button states
+      for (const [kv, b] of Object.entries(kBtnMap)) {
+        b.classList.toggle('active', Number(kv) === currentK);
+      }
+      // Rebuild cluster data for new k
+      currentClusters = buildClusterData(items, rawClusters[`k${currentK}`]);
+      // Update subtitle
+      document.getElementById('left-subtitle').textContent =
+        `${currentClusters.length} representative icons — one per cluster. Click any card to see all icons in that cluster.`;
+      // Re-render grid with new clusters
+      renderGrid(currentClusters, items, cl => {
+        showClusterInSearch(cl, items);
+        openClusterModal(cl, items);
+      });
+      // Update banner stats
+      updateBanner(items, currentClusters, currentK);
+      // Re-run current search against new clusters
+      const q = document.getElementById('search-input').value.trim();
+      if (q.length >= 3) {
+        const result = findBestCluster(q, currentClusters);
+        if (result && result.cluster) {
+          showMatch(result.cluster, result.score, items);
+        } else {
+          clearMatch();
+        }
+      } else {
+        clearMatch();
+      }
+    });
+    kBtnMap[k] = btn;
+    kSelector.appendChild(btn);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Banner update helper
+  // ---------------------------------------------------------------------------
+  function updateBanner(items, clusters, k) {
+    const stats = computeStats(items, clusters);
+    document.getElementById('stat-coverage').textContent = `${stats.coveragePct}%`;
+    document.getElementById('stat-savings').textContent = `$${stats.savingsPer100}`;
+    document.getElementById('stat-per-recipe').textContent = `$${stats.savingsPerRecipe.toFixed(2)}`;
+    document.getElementById('banner-subtitle').textContent =
+      `Cost reduction proposal: ${clusters.length} cluster archetypes (k=${k}) replace per-node AI generation for free tier`;
+  }
+
+  // Initial render
+  updateBanner(items, currentClusters, currentK);
+  document.getElementById('left-subtitle').textContent =
+    `${currentClusters.length} representative icons — one per cluster. Click any card to see all icons in that cluster.`;
+
+  renderGrid(currentClusters, items, cl => {
+    showClusterInSearch(cl, items);
+    openClusterModal(cl, items);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Modal close handlers
+  // ---------------------------------------------------------------------------
+  document.getElementById('cluster-modal-close').addEventListener('click', closeClusterModal);
+
+  document.getElementById('cluster-modal').addEventListener('click', e => {
+    // Close on backdrop click (outside the inner panel)
+    if (e.target === document.getElementById('cluster-modal')) {
+      closeClusterModal();
+    }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeClusterModal();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Search
+  // ---------------------------------------------------------------------------
+  const searchInput = document.getElementById('search-input');
+
+  searchInput.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const q = searchInput.value.trim();
+    if (q.length < 3) {
+      clearMatch();
+      return;
+    }
+    debounceTimer = setTimeout(() => {
+      const result = findBestCluster(q, currentClusters);
+      if (result && result.cluster) {
+        showMatch(result.cluster, result.score, items);
+      } else {
+        clearMatch();
+      }
+    }, 120);
+  });
+
+  // Hide loading
+  loadEl.classList.add('hidden');
+}
+
+init().catch(err => {
+  console.error('init error:', err);
+  document.getElementById('loading-screen').classList.add('hidden');
+  const errEl = document.getElementById('error-screen');
+  errEl.classList.add('visible');
+  document.getElementById('error-msg-text').textContent = String(err);
+});
+</script>
+
+</body>
+</html>

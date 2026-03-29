@@ -1,0 +1,6 @@
+numpy
+matplotlib
+rank_bm25
+Pillow
+transformers
+torch

@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RecipeLanes — LLM Re-ranking Demo</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; min-height: 100%;
+    background: #12121f;
+    color: #e0e0f0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ---- Banner ---- */
+  #banner {
+    background: linear-gradient(135deg, #1a1a3a 0%, #1e2040 100%);
+    border-bottom: 1px solid #2a2a4a;
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  #banner-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #c0c0ff;
+    letter-spacing: 0.02em;
+  }
+  #banner-title span { color: #6a8eff; }
+
+  #banner-subtitle {
+    font-size: 13px;
+    color: #7070a0;
+    margin-left: auto;
+  }
+
+  /* ---- Search area ---- */
+  #search-area {
+    max-width: 800px;
+    margin: 40px auto 24px;
+    padding: 0 24px;
+    text-align: center;
+  }
+
+  #search-area h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #b0b0f0;
+    margin-bottom: 8px;
+    letter-spacing: 0.01em;
+  }
+
+  #search-area p {
+    font-size: 13px;
+    color: #6060a0;
+    margin-bottom: 24px;
+  }
+
+  #search-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  #search-input {
+    flex: 1;
+    padding: 14px 18px;
+    background: #1a1a2e;
+    border: 1px solid #3a3a6a;
+    border-radius: 10px;
+    color: #e0e0f0;
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #search-input::placeholder { color: #4a4a70; }
+  #search-input:focus { border-color: #6a6aee; }
+
+  #search-btn {
+    padding: 14px 24px;
+    background: #4a4aee;
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+  #search-btn:hover { background: #6060ff; }
+  #search-btn:active { transform: scale(0.97); }
+  #search-btn:disabled {
+    background: #2a2a5a;
+    color: #5555aa;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* ---- Prompt collapsible ---- */
+  #prompt-section {
+    max-width: 800px;
+    margin: 16px auto 0;
+    padding: 0 24px;
+  }
+
+  #prompt-toggle {
+    background: none;
+    border: 1px solid #2a2a4a;
+    border-radius: 8px;
+    color: #6060a0;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 7px 14px;
+    transition: border-color 0.15s, color 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #prompt-toggle:hover {
+    border-color: #4a4a7a;
+    color: #9090c0;
+  }
+  #prompt-toggle .arrow {
+    display: inline-block;
+    transition: transform 0.2s;
+    font-size: 10px;
+  }
+  #prompt-toggle.open .arrow { transform: rotate(90deg); }
+
+  #prompt-box {
+    display: none;
+    margin-top: 10px;
+    background: #0e0e1a;
+    border: 1px solid #2a2a4a;
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  #prompt-box.visible { display: block; }
+
+  #prompt-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #5050a0;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  #prompt-text {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 11.5px;
+    color: #9090c0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.6;
+  }
+
+  /* ---- Status / spinner ---- */
+  #status-area {
+    max-width: 1600px;
+    margin: 28px auto 0;
+    padding: 0 24px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .spinner {
+    width: 22px; height: 22px;
+    border: 3px solid #2a2a4a;
+    border-top-color: #6a6aee;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #status-text {
+    font-size: 13px;
+    color: #7070b0;
+  }
+
+  #error-msg {
+    background: #2a1a1a;
+    border: 1px solid #6a3030;
+    border-radius: 8px;
+    padding: 12px 18px;
+    color: #e08080;
+    font-size: 13px;
+    text-align: center;
+    max-width: 640px;
+    width: 100%;
+  }
+
+  /* ---- Four-panel layout ---- */
+  #panels {
+    max-width: 1600px;
+    margin: 24px auto 60px;
+    padding: 0 24px;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  .panel {
+    background: #1a1a2e;
+    border: 1px solid #2a2a4a;
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-header {
+    padding: 14px 18px 12px;
+    border-bottom: 1px solid #2a2a4a;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .panel-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #9090d0;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .panel-subtitle {
+    font-size: 11px;
+    color: #4a4a7a;
+  }
+
+  /* Timing badge in panel header */
+  .timing-badge {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #5050a0;
+    background: rgba(80, 80, 160, 0.15);
+    border: 1px solid #2a2a4a;
+    border-radius: 5px;
+    padding: 2px 7px;
+    white-space: nowrap;
+  }
+
+  /* Scrollable ranked list */
+  .ranked-list {
+    padding: 8px 0;
+    overflow-y: auto;
+    max-height: 2400px; /* tall enough for 30 rows; scroll kicks in if viewport is short */
+  }
+
+  /* Loading skeleton rows */
+  .skeleton-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 14px;
+    border-bottom: 1px solid #1e1e32;
+  }
+  .skeleton-row:last-child { border-bottom: none; }
+
+  .sk-rank {
+    width: 24px; height: 14px;
+    background: #252545;
+    border-radius: 4px;
+    flex-shrink: 0;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  .sk-thumb {
+    width: 56px; height: 56px;
+    background: #252545;
+    border-radius: 8px;
+    flex-shrink: 0;
+    animation: pulse 1.2s ease-in-out infinite;
+    animation-delay: 0.1s;
+  }
+  .sk-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .sk-line {
+    height: 10px;
+    background: #252545;
+    border-radius: 4px;
+    animation: pulse 1.2s ease-in-out infinite;
+    animation-delay: 0.2s;
+  }
+  .sk-line.short { width: 55%; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+
+  /* ---- Result row ---- */
+  .result-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 14px;
+    border-bottom: 1px solid #1e1e32;
+    transition: background 0.12s;
+  }
+  .result-row:last-child { border-bottom: none; }
+  .result-row:hover { background: #1e1e38; }
+
+  .row-rank {
+    width: 28px;
+    text-align: right;
+    font-size: 12px;
+    font-weight: 700;
+    color: #4a4a7a;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .row-thumb {
+    width: 56px;
+    height: 56px;
+    object-fit: contain;
+    border-radius: 8px;
+    background: #252540;
+    flex-shrink: 0;
+  }
+  .row-thumb-placeholder {
+    width: 56px;
+    height: 56px;
+    border-radius: 8px;
+    background: #252540;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #3a3a5a;
+    font-size: 20px;
+  }
+
+  .row-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .row-desc {
+    font-size: 12.5px;
+    color: #c0c0e0;
+    line-height: 1.35;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .row-meta {
+    font-size: 11px;
+    color: #505080;
+    margin-top: 3px;
+  }
+  .row-meta strong { color: #7070a0; }
+
+  .row-sim {
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    min-width: 40px;
+    text-align: right;
+  }
+
+  /* ---- Rank change badge ---- */
+  .rank-badge {
+    flex-shrink: 0;
+    width: 40px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    border-radius: 6px;
+    padding: 3px 0;
+  }
+  .rank-badge.up {
+    color: #50e090;
+    background: rgba(50, 180, 100, 0.12);
+  }
+  .rank-badge.down {
+    color: #e06060;
+    background: rgba(200, 60, 60, 0.12);
+  }
+  .rank-badge.same {
+    color: #505080;
+    background: rgba(80, 80, 140, 0.10);
+  }
+
+  /* CLIP unavailable notice */
+  .clip-unavailable {
+    padding: 24px 18px;
+    text-align: center;
+    color: #4a4a70;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .clip-unavailable strong {
+    display: block;
+    color: #6060a0;
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 1100px) {
+    #panels { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 640px) {
+    #panels { grid-template-columns: 1fr; }
+    #banner { padding: 14px 16px; }
+    #search-area, #prompt-section { padding: 0 14px; }
+    #panels { padding: 0 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="banner">
+  <div id="banner-title">RecipeLanes <span>Search Comparison</span></div>
+  <div id="banner-subtitle">Embedding · BM25 · CLIP · LLM Re-ranking over 2,000 action icons</div>
+</div>
+
+<div id="search-area">
+  <h2>Search &amp; Re-rank</h2>
+  <p>Describe a cooking action. Compare Embedding, BM25, CLIP, and LLM re-ranking side by side.</p>
+  <div id="search-row">
+    <input
+      id="search-input"
+      type="text"
+      placeholder="e.g. butter melting in a pan, folding egg whites, finely diced onion..."
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <button id="search-btn">Search</button>
+  </div>
+</div>
+
+<div id="prompt-section">
+  <button id="prompt-toggle">
+    <span class="arrow">&#9654;</span>
+    Show LLM prompt
+  </button>
+  <div id="prompt-box">
+    <div id="prompt-label">Prompt sent to Gemini 2.5-flash</div>
+    <pre id="prompt-text">Run a search to see the prompt used for re-ranking.</pre>
+  </div>
+</div>
+
+<div id="status-area"></div>
+
+<div id="panels" style="display:none">
+  <div class="panel" id="panel-before">
+    <div class="panel-header">
+      <span class="panel-title">Embedding</span>
+      <span class="panel-subtitle">Top 30 cosine sim</span>
+      <span class="timing-badge" id="timing-embed"></span>
+    </div>
+    <div class="ranked-list" id="list-before"></div>
+  </div>
+  <div class="panel" id="panel-bm25">
+    <div class="panel-header">
+      <span class="panel-title">BM25</span>
+      <span class="panel-subtitle">Top 30 keyword score</span>
+      <span class="timing-badge" id="timing-bm25"></span>
+    </div>
+    <div class="ranked-list" id="list-bm25"></div>
+  </div>
+  <div class="panel" id="panel-clip">
+    <div class="panel-header">
+      <span class="panel-title">SigLIP2</span>
+      <span class="panel-subtitle">Text&#8594;image embedding</span>
+      <span class="timing-badge" id="timing-clip"></span>
+    </div>
+    <div class="ranked-list" id="list-clip"></div>
+  </div>
+  <div class="panel" id="panel-hyde">
+    <div class="panel-header">
+      <span class="panel-title">HyDE Icon</span>
+      <span class="panel-subtitle">Pre-computed query embeddings</span>
+      <span class="timing-badge" id="timing-hyde"></span>
+    </div>
+    <div class="ranked-list" id="list-hyde"></div>
+  </div>
+  <div class="panel" id="panel-qexp">
+    <div class="panel-header">
+      <span class="panel-title">Query Expand</span>
+      <span class="panel-subtitle" id="qexp-subtitle">LLM terms → plain embeds</span>
+      <span class="timing-badge" id="timing-qexp"></span>
+    </div>
+    <div class="ranked-list" id="list-qexp"></div>
+  </div>
+  <div class="panel" id="panel-qexp-hyde">
+    <div class="panel-header">
+      <span class="panel-title">Expand + HyDE</span>
+      <span class="panel-subtitle">LLM terms → HyDE embeds</span>
+      <span class="timing-badge" id="timing-qexp-hyde"></span>
+    </div>
+    <div class="ranked-list" id="list-qexp-hyde"></div>
+  </div>
+  <div class="panel" id="panel-after">
+    <div class="panel-header">
+      <span class="panel-title">LLM Re-ranked</span>
+      <span class="panel-subtitle">Reordered by Gemini 2.5-flash</span>
+      <span class="timing-badge" id="timing-llm"></span>
+    </div>
+    <div class="ranked-list" id="list-after"></div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8767/search';
+const THUMB_BASE = 'http://localhost:8767/ie_data/icons/thumb/';
+
+const input        = document.getElementById('search-input');
+const btn          = document.getElementById('search-btn');
+const statusArea   = document.getElementById('status-area');
+const panels       = document.getElementById('panels');
+const listBefore   = document.getElementById('list-before');
+const listBm25     = document.getElementById('list-bm25');
+const listClip     = document.getElementById('list-clip');
+const listHyde     = document.getElementById('list-hyde');
+const listQexp     = document.getElementById('list-qexp');
+const listQexpHyde = document.getElementById('list-qexp-hyde');
+const listAfter    = document.getElementById('list-after');
+const promptToggle = document.getElementById('prompt-toggle');
+const promptBox    = document.getElementById('prompt-box');
+const promptText   = document.getElementById('prompt-text');
+
+const timingEmbed = document.getElementById('timing-embed');
+const timingBm25  = document.getElementById('timing-bm25');
+const timingClip  = document.getElementById('timing-clip');
+const timingHyde  = document.getElementById('timing-hyde');
+const timingQexp     = document.getElementById('timing-qexp');
+const timingQexpHyde = document.getElementById('timing-qexp-hyde');
+const timingLlm      = document.getElementById('timing-llm');
+const qexpSubtitle = document.getElementById('qexp-subtitle');
+
+// ---- Prompt collapsible ----
+promptToggle.addEventListener('click', () => {
+  const open = promptBox.classList.toggle('visible');
+  promptToggle.classList.toggle('open', open);
+  promptToggle.querySelector('.arrow').style.transform = open ? 'rotate(90deg)' : '';
+});
+
+// ---- Enter key triggers search ----
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+});
+btn.addEventListener('click', doSearch);
+
+// ---- Colour helpers ----
+function simColor(sim) {
+  const hue = Math.round(sim * 120);
+  return `hsl(${hue}, 70%, 55%)`;
+}
+
+function formatSim(sim) {
+  return (sim * 100).toFixed(1) + '%';
+}
+
+// BM25 scores aren't bounded 0-1, so colour by relative rank
+function bm25Color(score, maxScore) {
+  if (maxScore <= 0) return '#7070a0';
+  const ratio = score / maxScore;
+  const hue = Math.round(ratio * 120);
+  return `hsl(${hue}, 70%, 55%)`;
+}
+
+// ---- Status helpers ----
+function setStatus(html) {
+  statusArea.innerHTML = html;
+}
+
+function clearStatus() {
+  statusArea.innerHTML = '';
+}
+
+// ---- Timing badge helper ----
+function setTiming(el, ms) {
+  if (ms === undefined || ms === null) {
+    el.textContent = '';
+    return;
+  }
+  el.textContent = ms + 'ms';
+}
+
+// ---- Skeleton loaders ----
+function renderSkeletons(container, count) {
+  container.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const row = document.createElement('div');
+    row.className = 'skeleton-row';
+    row.innerHTML = `
+      <div class="sk-rank"></div>
+      <div class="sk-thumb"></div>
+      <div class="sk-lines">
+        <div class="sk-line"></div>
+        <div class="sk-line short"></div>
+      </div>
+    `;
+    container.appendChild(row);
+  }
+}
+
+// ---- Main search ----
+async function doSearch() {
+  const q = input.value.trim();
+  if (!q) { input.focus(); return; }
+
+  btn.disabled = true;
+  panels.style.display = '';
+
+  // Reset timing badges
+  [timingEmbed, timingBm25, timingClip, timingHyde, timingQexp, timingQexpHyde, timingLlm].forEach(el => el.textContent = '');
+
+  // Show skeletons in all columns while loading
+  renderSkeletons(listBefore, 30);
+  renderSkeletons(listBm25, 30);
+  renderSkeletons(listClip, 30);
+  renderSkeletons(listHyde, 30);
+  renderSkeletons(listQexp, 30);
+  renderSkeletons(listQexpHyde, 30);
+  renderSkeletons(listAfter, 30);
+
+  setStatus(`
+    <div class="spinner"></div>
+    <span id="status-text">Embedding query, running BM25 &amp; CLIP, and re-ranking&hellip;</span>
+  `);
+
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: q }),
+    });
+
+    if (!res.ok) {
+      let msg = `Server error ${res.status}`;
+      try {
+        const err = await res.json();
+        if (err.error) msg = err.error;
+      } catch (_) {}
+      throw new Error(msg);
+    }
+
+    const data = await res.json();
+    clearStatus();
+    render(data);
+  } catch (err) {
+    listBefore.innerHTML = '';
+    listBm25.innerHTML = '';
+    listClip.innerHTML = '';
+    listHyde.innerHTML = '';
+    listQexp.innerHTML = '';
+    listQexpHyde.innerHTML = '';
+    listAfter.innerHTML = '';
+    panels.style.display = 'none';
+    setStatus(`<div id="error-msg">
+      <strong>Search failed:</strong> ${escHtml(err.message)}<br>
+      <span style="font-size:12px;color:#c06060;">Make sure the server is running at http://localhost:8767</span>
+    </div>`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function render(data) {
+  // Update prompt box
+  if (data.prompt) {
+    promptText.textContent = data.prompt;
+  }
+
+  // Timing badges
+  if (data.timings) {
+    setTiming(timingEmbed, data.timings.embed_ms);
+    setTiming(timingBm25,  data.timings.bm25_ms);
+    setTiming(timingClip,  data.timings.clip_ms);
+    setTiming(timingHyde,  data.timings.hyde_ms);
+    setTiming(timingQexp,     data.timings.qexp_ms);
+    setTiming(timingQexpHyde, data.timings.qexp_ms);  // same call, no extra cost
+    setTiming(timingLlm,      data.timings.llm_ms);
+  }
+
+  if (data.expanded_terms && data.expanded_terms.length) {
+    qexpSubtitle.textContent = data.expanded_terms.join(' · ');
+  }
+
+  renderList(listBefore, data.before, { showBadge: false, scoreKey: 'similarity', formatScore: s => formatSim(s), scoreColor: s => simColor(s) });
+  renderBm25List(listBm25, data.bm25);
+  renderClipList(listClip, data.clip);
+  renderHydeList(listHyde, data.hyde);
+  renderList(listQexp,     data.qexp      || [], { showBadge: false, scoreKey: 'similarity', formatScore: s => formatSim(s), scoreColor: s => simColor(s) });
+  renderHydeList(listQexpHyde, data.qexp_hyde || []);
+  renderList(listAfter,        data.after,      { showBadge: true,  scoreKey: 'similarity', formatScore: s => formatSim(s), scoreColor: s => simColor(s) });
+}
+
+function renderList(container, items, opts) {
+  container.innerHTML = '';
+  items.forEach((item, i) => {
+    const row = buildRow(item, i, opts);
+    container.appendChild(row);
+  });
+}
+
+function renderBm25List(container, items) {
+  container.innerHTML = '';
+  if (!items || items.length === 0) {
+    container.innerHTML = '<div class="clip-unavailable"><strong>No BM25 results</strong>No matching tokens found.</div>';
+    return;
+  }
+  const maxScore = items[0].score;
+  items.forEach((item, i) => {
+    const row = buildRow(item, i, {
+      showBadge: false,
+      scoreKey: 'score',
+      formatScore: s => s.toFixed(2),
+      scoreColor: s => bm25Color(s, maxScore),
+    });
+    container.appendChild(row);
+  });
+}
+
+function renderClipList(container, items) {
+  container.innerHTML = '';
+  if (items === null || items === undefined) {
+    container.innerHTML = '<div class="clip-unavailable"><strong>SigLIP2 unavailable</strong>The SigLIP2 model could not be loaded. Start the server with the recipeviz venv to enable this column.</div>';
+    return;
+  }
+  items.forEach((item, i) => {
+    const row = buildRow(item, i, {
+      showBadge: false,
+      scoreKey: 'similarity',
+      formatScore: s => formatSim(s),
+      scoreColor: s => simColor(s),
+    });
+    container.appendChild(row);
+  });
+}
+
+function renderHydeList(container, items) {
+  container.innerHTML = '';
+  if (!items || items.length === 0) {
+    container.innerHTML = '<div class="clip-unavailable"><strong>HyDE unavailable</strong>No HyDE data loaded.</div>';
+    return;
+  }
+  items.forEach((item, i) => {
+    const row = buildRow(item, i, {
+      showBadge: false,
+      scoreKey: 'similarity',
+      formatScore: s => formatSim(s),
+      scoreColor: s => simColor(s),
+    });
+    // Add a subtle highlight for icons that have HyDE embeddings
+    if (item.hyde) {
+      row.style.borderLeft = '3px solid #6a8eff';
+    }
+    container.appendChild(row);
+  });
+}
+
+function buildRow(item, i, opts) {
+  const { showBadge, scoreKey, formatScore, scoreColor } = opts;
+
+  const row = document.createElement('div');
+  row.className = 'result-row';
+
+  // Rank number
+  const rankEl = document.createElement('div');
+  rankEl.className = 'row-rank';
+  rankEl.textContent = `${i + 1}`;
+
+  // Thumbnail
+  const img = document.createElement('img');
+  img.className = 'row-thumb';
+  img.alt = item.desc;
+  img.src = THUMB_BASE + encodeURIComponent(item.id) + '.png';
+  img.onerror = function() {
+    const ph = document.createElement('div');
+    ph.className = 'row-thumb-placeholder';
+    ph.textContent = '?';
+    row.replaceChild(ph, this);
+  };
+
+  // Info block
+  const info = document.createElement('div');
+  info.className = 'row-info';
+
+  const desc = document.createElement('div');
+  desc.className = 'row-desc';
+  desc.textContent = item.desc;
+
+  const meta = document.createElement('div');
+  meta.className = 'row-meta';
+  meta.innerHTML = `Used <strong>${item.count.toLocaleString()}</strong> time${item.count !== 1 ? 's' : ''}`;
+
+  info.appendChild(desc);
+  info.appendChild(meta);
+
+  // Score
+  const scoreVal = item[scoreKey];
+  const simEl = document.createElement('div');
+  simEl.className = 'row-sim';
+  simEl.style.color = scoreColor(scoreVal);
+  simEl.textContent = formatScore(scoreVal);
+
+  row.appendChild(rankEl);
+  row.appendChild(img);
+  row.appendChild(info);
+  row.appendChild(simEl);
+
+  // Rank change badge (LLM column only)
+  if (showBadge && item.rank_before !== undefined) {
+    const delta = item.rank_before - i;  // positive = moved up
+    const badge = document.createElement('div');
+    badge.className = 'rank-badge';
+    if (delta > 0) {
+      badge.classList.add('up');
+      badge.textContent = '\u2191' + delta;
+    } else if (delta < 0) {
+      badge.classList.add('down');
+      badge.textContent = '\u2193' + Math.abs(delta);
+    } else {
+      badge.classList.add('same');
+      badge.textContent = '=';
+    }
+    row.appendChild(badge);
+  }
+
+  return row;
+}
+
+function escHtml(s) {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>

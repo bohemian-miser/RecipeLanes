@@ -19,6 +19,7 @@
 import { generateIconData } from './icon-generator';
 import { DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from "../../lib/config";
 import { getDataService } from '../../lib/data-service';
+import { getAIService } from '../../lib/ai-service';
 import { db } from '../../lib/firebase-admin';
 import { calculateWilsonLCB } from '../../lib/utils';
 
@@ -71,6 +72,7 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
         // 3. Publish & Assign (Transaction)
         console.log(`[Queue-${ingredientName}] Publishing to Firestore...`);
         let ingredientDocId;
+        let rawHydeQueries: string[] = [];
         const dataService = getDataService();
 
         // Find or Create Ingredient Group.
@@ -85,14 +87,14 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
             const queueDoc = await transaction.get(docRef);
             if (!queueDoc.exists) {
                 console.log(`[Queue-${ingredientName}] Queue doc missing, aborting recipe update.`);
-                return; 
+                return;
             }
             const queueDocData = queueDoc.data();
             const latestRecipeIds: string[] = queueDocData?.recipes || [];
             console.log(`[Queue-${ingredientName}] in transaction Publishing to Firestore...`);
 
             // Convert hydeQueries from queue doc into SearchTerm[]
-            const rawHydeQueries: string[] = queueDocData?.hydeQueries || [];
+            rawHydeQueries = queueDocData?.hydeQueries || [];
             const searchTerms = rawHydeQueries.map((text: string) => ({
                 text,
                 source: 'hyde_from_img' as const,
@@ -139,6 +141,16 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
             transaction.delete(docRef);
             console.log(`[Queue-${ingredientName}] Successfully updated ${latestRecipeIds.length} recipes and deleted queue item.`);
         });
+
+        // Write to icon_index for embedding search (non-fatal)
+        try {
+            const embeddingTexts = rawHydeQueries.length > 0 ? rawHydeQueries : [ingredientName];
+            const embedding = await getAIService().embedTexts(embeddingTexts);
+            await dataService.writeIconToIndex(iconData.id, ingredientName, iconData.url, embedding);
+            console.log(`[Queue-${ingredientName}] icon_index written for icon ${iconData.id}`);
+        } catch (e) {
+            console.warn(`[Queue-${ingredientName}] icon_index write failed (non-fatal):`, e);
+        }
 
     } catch (error: any) {
         console.error(`[Queue-${ingredientName}] 💥 Failed:`, error);

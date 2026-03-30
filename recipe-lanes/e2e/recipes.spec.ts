@@ -31,7 +31,7 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
     const saveBtn = page.locator('button').filter({ has: page.locator('svg.lucide-save') }).first();
     await expect(saveBtn).toBeEnabled({ timeout: 10000 });
     await saveBtn.click();
-    await expect(page.getByText('Log in to save recipe')).toBeVisible();
+    await expect(page.getByText('Recipe not saved to account')).toBeVisible();
 
     // 3. New
     await page.locator('button[title="Create New"]').click();

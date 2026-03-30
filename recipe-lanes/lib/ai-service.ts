@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { ai, textModel, imageModelName } from './genkit';
+import { ai, textModel, imageModelName, embeddingModel } from './genkit';
 import * as fs from 'fs';
 import * as path from 'path';
 import { processIcon } from '../functions/src/image-processing';
@@ -23,6 +23,8 @@ import { processIcon } from '../functions/src/image-processing';
 export interface AIService {
   generateText(prompt: string): Promise<string>;
   generateImage(prompt: string): Promise<string>;
+  /** Returns a single averaged embedding vector for the given texts. */
+  embedTexts(texts: string[]): Promise<number[]>;
 }
 
 export class RealAIService implements AIService {
@@ -67,6 +69,22 @@ export class RealAIService implements AIService {
         console.error("Real AI Image Generation failed:", e);
         throw e;
     }
+  }
+
+  async embedTexts(texts: string[]): Promise<number[]> {
+    if (texts.length === 0) return [];
+    const results = await Promise.all(
+        texts.map(t => ai.embed({ embedder: embeddingModel, content: t }))
+    );
+    // Each ai.embed call returns Embedding[] — one entry per content item.
+    // We passed a single string so take index 0 and extract the number[].
+    const vecs = results.map(r => r[0].embedding);
+    const dim = vecs[0].length;
+    const avg = new Array(dim).fill(0) as number[];
+    for (const vec of vecs) {
+        for (let i = 0; i < dim; i++) avg[i] += vec[i] / vecs.length;
+    }
+    return avg;
   }
 }
 
@@ -238,6 +256,19 @@ export class MockAIService implements AIService {
     const url = `https://placehold.co/64x64/png?text=Mock+${encodeURIComponent(prompt.slice(0, 10))}&uuid=${uuid}`;
     console.log(`[MockAIService] Returning mock URL: ${url}`);
     return url;
+  }
+
+  async embedTexts(texts: string[]): Promise<number[]> {
+    if (texts.length === 0) return [];
+    // Deterministic 4-dim mock embedding derived from input text
+    const combined = texts.join(' ').toLowerCase();
+    const h = combined.split('').reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) & 0xffff, 0);
+    return [
+      ((h & 0xff) / 255),
+      (((h >> 4) & 0xff) / 255),
+      (((h >> 8) & 0xff) / 255),
+      (((h >> 12) & 0xff) / 255),
+    ];
   }
 }
 

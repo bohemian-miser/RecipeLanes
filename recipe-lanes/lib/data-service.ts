@@ -20,7 +20,7 @@ import { memoryStore, IconData, IngredientData } from './store';
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
 import type { RecipeGraph, IconStats } from './recipe-lanes/types';
-import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
+import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined, calculateWilsonLCB } from './utils';
 import { applyIconToNode, clearNodeIcon, getNodeIconId, getNodeIconUrl, hasNodeIcon } from './recipe-lanes/model-utils';
 
@@ -89,6 +89,7 @@ export interface DataService {
   failRecipeIcon(recipeId: string, ingredientName: string, errorMsg: string): Promise<void>;
 
   searchIconsByEmbedding(queryVec: number[], limit: number): Promise<IconStats[]>;
+  writeIconToIndex(iconId: string, ingredientName: string, url: string, embedding: number[]): Promise<void>;
 }
 
 // --- Firebase Implementation ---
@@ -100,6 +101,16 @@ export class FirebaseDataService implements DataService {
       .findNearest('embedding', queryVec, { limit, distanceMeasure: 'COSINE' as const })
       .get();
     return snap.docs.map((doc: any) => doc.data() as IconStats);
+  }
+
+  async writeIconToIndex(iconId: string, ingredientName: string, url: string, embedding: number[]): Promise<void> {
+    await db.collection(DB_COLLECTION_ICON_INDEX).doc(iconId).set({
+      icon_id: iconId,
+      ingredient_name: ingredientName,
+      url,
+      embedding,
+      created_at: FieldValue.serverTimestamp()
+    });
   }
 
   async vetRecipe(recipeId: string, isVetted: boolean): Promise<void> {
@@ -1863,6 +1874,10 @@ export class MemoryDataService implements DataService {
 
     async searchIconsByEmbedding(_queryVec: number[], _limit: number): Promise<IconStats[]> {
         return [];
+    }
+
+    async writeIconToIndex(_iconId: string, _ingredientName: string, _url: string, _embedding: number[]): Promise<void> {
+        // no-op in memory mode
     }
 }
 

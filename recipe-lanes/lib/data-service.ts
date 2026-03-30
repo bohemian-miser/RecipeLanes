@@ -98,9 +98,13 @@ export class FirebaseDataService implements DataService {
 
   async searchIconsByEmbedding(queryVec: number[], limit: number): Promise<IconStats[]> {
     const snap = await this._db.collection('icon_index')
-      .findNearest('embedding', queryVec, { limit, distanceMeasure: 'COSINE' as const })
+      .findNearest('embedding', FieldValue.vector(queryVec), { limit, distanceMeasure: 'COSINE' as const })
       .get();
-    return snap.docs.map((doc: any) => doc.data() as IconStats);
+    console.log(`[searchIconsByEmbedding] findNearest returned ${snap.docs.length} docs`);
+    return snap.docs.map((doc: any) => {
+      const d = doc.data();
+      return { id: d.icon_id, url: d.url, prompt: d.ingredient_name } as IconStats;
+    });
   }
 
   async writeIconToIndex(iconId: string, ingredientName: string, url: string, embedding: number[]): Promise<void> {
@@ -108,9 +112,10 @@ export class FirebaseDataService implements DataService {
       icon_id: iconId,
       ingredient_name: ingredientName,
       url,
-      embedding,
+      embedding: FieldValue.vector(embedding),
       created_at: FieldValue.serverTimestamp()
     });
+    console.log(`[writeIconToIndex] wrote ${iconId} (${ingredientName}), dim=${embedding.length}`);
   }
 
   async vetRecipe(recipeId: string, isVetted: boolean): Promise<void> {

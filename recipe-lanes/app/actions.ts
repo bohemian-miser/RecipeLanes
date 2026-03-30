@@ -457,8 +457,11 @@ export async function vetRecipeAction(recipeId: string, isVetted: boolean) {
 export async function searchIconCandidatesAction(query: string): Promise<{ candidates: IconStats[], error?: string }> {
   if (!query.trim()) return { candidates: [] };
   try {
+    console.log(`[searchIconCandidatesAction] query="${query}"`);
     const embedding = await getAIService().embedTexts([query]);
+    console.log(`[searchIconCandidatesAction] embedding dim=${embedding.length}`);
     const candidates = await getDataService().searchIconsByEmbedding(embedding, 12);
+    console.log(`[searchIconCandidatesAction] got ${candidates.length} candidates`);
     return { candidates };
   } catch (e: any) {
     console.error('[searchIconCandidatesAction] failed:', e);

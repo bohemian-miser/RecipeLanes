@@ -34,7 +34,7 @@ test.describe('Icon Systems (Consolidated)', () => {
     await page.keyboard.press('Enter');
     
     const galleryIcon = gallerySection.getByAltText(new RegExp(unique, 'i')).first();
-    await expect(galleryIcon).toBeVisible({ timeout: 15000 });
+    await expect(galleryIcon).toBeVisible({ timeout: 30000 });
     
     // Hover for label
     await galleryIcon.hover();

@@ -447,11 +447,15 @@ export async function vetRecipeAction(recipeId: string, isVetted: boolean) {
 }
 
 export async function searchIconCandidatesAction(query: string): Promise<{ candidates: IconStats[], error?: string }> {
-  // Stub: icon_index not yet populated in Firestore.
-  // When A2 (backfill) is complete, this will call:
-  //   dataService.searchIconsByEmbedding(embeddedVec, 12)
-  // For now return empty candidates so the UI shell works.
-  return { candidates: [] };
+  if (!query.trim()) return { candidates: [] };
+  try {
+    const embedding = await getAIService().embedTexts([query]);
+    const candidates = await getDataService().searchIconsByEmbedding(embedding, 12);
+    return { candidates };
+  } catch (e: any) {
+    console.error('[searchIconCandidatesAction] failed:', e);
+    return { candidates: [], error: e.message };
+  }
 }
 
 export async function getUnvettedRecipesAction(limit: number = 20) {

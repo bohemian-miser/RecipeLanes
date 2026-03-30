@@ -72,7 +72,7 @@ export interface DataService {
   
   // New Methods for Refactor
   resolveRecipeIcons(recipeId: string): Promise<void>;
-  addNodeToRecipe(recipeId: string, ingredientName: string, laneId?: string): Promise<{ success: boolean, nodeId?: string, error?: string }>;
+  addNodeToRecipe(recipeId: string, ingredientName: string, laneId?: string, hydeQueries?: string[]): Promise<{ success: boolean, nodeId?: string, error?: string }>;
   rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string): Promise<{ success: boolean, error?: string }>;
   imagineRecipeWithIcon(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<any>;
   setRecipeWithIcon(data: any, transaction?: any): Promise<void>;
@@ -573,20 +573,20 @@ export class FirebaseDataService implements DataService {
         await Promise.all(queuePromises);
     }
 
-  async addNodeToRecipe(recipeId: string, ingredientName: string, laneId: string = 'lane-1'): Promise<{ success: boolean, nodeId?: string, error?: string }> {
+  async addNodeToRecipe(recipeId: string, ingredientName: string, laneId: string = 'lane-1', hydeQueries?: string[]): Promise<{ success: boolean, nodeId?: string, error?: string }> {
       try {
         const stdName = standardizeIngredientName(ingredientName);
         const nodeId = 'node-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-        
+
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
-        
+
         await db.runTransaction(async (t) => {
              const doc = await t.get(recipeRef);
              if (!doc.exists) throw new Error("Recipe not found");
              const data = doc.data();
              const graph = data?.graph;
-             
-             const newNode = {
+
+             const newNode: any = {
                 id: nodeId,
                 laneId: laneId,
                 text: stdName,
@@ -594,7 +594,10 @@ export class FirebaseDataService implements DataService {
                 type: 'ingredient',
                 x: 0, y: 0
             };
-            
+            if (hydeQueries && hydeQueries.length > 0) {
+                newNode.hydeQueries = hydeQueries;
+            }
+
             const newNodes = [...(graph.nodes || []), newNode];
             t.update(recipeRef, { "graph.nodes": newNodes });
         });
@@ -1466,7 +1469,7 @@ export class MemoryDataService implements DataService {
         });
     }
 
-    async addNodeToRecipe(recipeId: string, ingredientName: string, laneId: string = 'lane-1'): Promise<{ success: boolean, nodeId?: string, error?: string }> {
+    async addNodeToRecipe(recipeId: string, ingredientName: string, laneId: string = 'lane-1', _hydeQueries?: string[]): Promise<{ success: boolean, nodeId?: string, error?: string }> {
         const recipe = this.recipes.get(recipeId);
         if (!recipe) return { success: false, error: 'Recipe not found' };
         

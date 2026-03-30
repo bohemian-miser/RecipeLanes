@@ -21,7 +21,7 @@ import { getAIService } from '@/lib/ai-service';
 import { getDataService } from '@/lib/data-service';
 import { getAuthService } from '@/lib/auth-service';
 import { z } from 'zod';
-import { generateRecipePrompt, parseRecipeGraph, extractServes } from '@/lib/recipe-lanes/parser';
+import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQueriesPrompt, parseHydeQueries } from '@/lib/recipe-lanes/parser';
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import type { RecipeGraph, IconStats } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
@@ -76,7 +76,15 @@ export async function createDebugRecipeAction() {
 }
 
 export async function addIngredientNodeAction(recipeId: string, ingredientName: string) {
-    return getDataService().addNodeToRecipe(recipeId, ingredientName);
+    // Generate HyDE queries so the icon_index entry gets rich search terms
+    let hydeQueries: string[] = [];
+    try {
+        const raw = await getAIService().generateText(generateHydeQueriesPrompt(ingredientName));
+        hydeQueries = parseHydeQueries(raw);
+    } catch (e) {
+        console.warn('[addIngredientNodeAction] HyDE query generation failed (non-fatal):', e);
+    }
+    return getDataService().addNodeToRecipe(recipeId, ingredientName, undefined, hydeQueries);
 }
 
 /* TODO: REPLACE these with just calling resolveIcons when we make a new recipe instead of relying on the cloud function */

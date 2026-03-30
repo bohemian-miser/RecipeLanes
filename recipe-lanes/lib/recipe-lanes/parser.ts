@@ -141,14 +141,40 @@ These are cached, so simplicity and consistency is key.
 2. **ACTION Nodes (The "State"):
 
 ### hydeQueries Guidelines (CRITICAL)
-For every node, generate exactly 12 search terms that describe what its pixel-art icon looks like. Icons are 64×64 pixel art, colorful, white background, for a recipe card infographic. Provide:
+For every node, generate exactly 12 search terms that describe what its 64×64 icon looks like (colorful, white background, recipe card). Provide:
 - 4 short tags (1–3 words, e.g. "oven mitt", "red glove")
-- 4 medium phrases (4–6 words, e.g. "red oven mitt icon", "cooking glove pixel art")
-- 4 longer visual descriptions (7–12 words, e.g. "red oven mitt with white heart and flame pixel art")
+- 4 medium phrases (4–6 words, e.g. "red oven mitt icon", "cooking glove recipe")
+- 4 longer visual descriptions (7–12 words, e.g. "red oven mitt with white heart and flame, simple icon")
 
 ### Input Recipe
 "${recipeText}"
 `;
+}
+
+/**
+ * Prompt for generating HyDE search terms for a single ingredient/node name.
+ * Used when generating icons outside the recipe flow (e.g. icon_overview direct generation).
+ */
+export function generateHydeQueriesPrompt(ingredientName: string): string {
+  return `Generate exactly 12 search terms describing a 64×64 icon for "${ingredientName}" on a white background, for a recipe card.
+Return ONLY a raw JSON array of 12 strings. No explanation, no markdown:
+- 4 short tags (1–3 words, e.g. "cracked egg", "raw egg")
+- 4 medium phrases (4–6 words, e.g. "cracked egg icon", "whole egg cooking")
+- 4 longer visual descriptions (7–12 words, e.g. "cracked raw egg on white background, simple icon")`;
+}
+
+/**
+ * Parses the LLM response from generateHydeQueriesPrompt into a string[].
+ * Returns [] on any parse failure so callers can proceed without queries.
+ */
+export function parseHydeQueries(aiResponse: string): string[] {
+  try {
+    let json = aiResponse.trim();
+    if (json.startsWith('```')) json = json.replace(/^```(json)?/, '').replace(/```$/, '').trim();
+    const parsed = JSON.parse(json);
+    if (Array.isArray(parsed) && parsed.every(s => typeof s === 'string')) return parsed;
+  } catch {}
+  return [];
 }
 
 export function parseRecipeGraph(aiResponse: string): RecipeGraph {

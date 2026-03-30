@@ -35,6 +35,7 @@ import { standardizeIngredientName } from '@/lib/utils';
 import { getNodeIconUrl, getNodeIconId } from '@/lib/recipe-lanes/model-utils';
 import { RecipeNode, IconStats } from '@/lib/recipe-lanes/types';
 import { IconDetailModal } from '@/components/icon-detail-modal';
+import { IconOverviewModal } from '@/components/icon-overview-modal';
 
 export default function Home() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -45,6 +46,7 @@ export default function Home() {
   const [rerollingIds, setRerollingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<RecipeNode | null>(null);
+  const [selectedGalleryIcon, setSelectedGalleryIcon] = useState<{ icon: IconStats; ingredientName: string } | null>(null);
 
   const [mode, setMode] = useState<'forge' | 'search'>('forge');
   const [searchCandidates, setSearchCandidates] = useState<IconStats[]>([]);
@@ -322,11 +324,22 @@ export default function Home() {
             />
           )}
 
-          {mode === 'forge' && <SharedGallery />}
+          {mode === 'forge' && (
+            <SharedGallery
+              onIconClick={(icon, ingredientName) => setSelectedGalleryIcon({ icon, ingredientName })}
+            />
+          )}
         </div>
       </main>
 
       <IconDetailModal node={selectedNode} onClose={() => setSelectedNode(null)} />
+      {selectedGalleryIcon && (
+        <IconOverviewModal
+          icon={selectedGalleryIcon.icon}
+          ingredientName={selectedGalleryIcon.ingredientName}
+          onClose={() => setSelectedGalleryIcon(null)}
+        />
+      )}
     </div>
   );
 }

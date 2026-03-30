@@ -11,6 +11,7 @@ test.describe('Icon Systems (Consolidated)', () => {
   });
 
   test('Icon Lifecycle: Generation, Gallery & Stats', async ({ page, login }) => {
+    test.slow(); // icon generation + gallery propagation can exceed 30s
     const dir = screenshotDir('icons-lifecycle', desktop.name);
     const unique = `Cycle Egg ${Date.now()}`;
     const uid = 'admin-cycle';

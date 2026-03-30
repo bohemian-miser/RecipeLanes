@@ -110,7 +110,48 @@ The test environment sets `MOCK_AI=true`.
 3.  **Console Logs:** The `debugLogAction` in `app/actions.ts` allows the client to log directly to the server terminal, which appears in the Playwright output.
 4.  **Timeouts:** If testing async logic (like "Auto-fork"), insert `await page.waitForTimeout(2000)` to ensure background processes (like `useEffect` hooks) have time to run before you assert or perform the next action.
 
-## 5. Infrastructure Details
+## 5. Pre-commit Hook & Committing
+
+The pre-commit hook runs the full suite (`npm run build && npm test`) before every commit.
+On the Pi this can be flaky if the environment isn't warm. Follow this sequence to commit reliably:
+
+**1. Ensure emulators are fresh**
+```bash
+# Kill stale emulators if they've been running under load for a long time
+fuser -k 9099/tcp 8080/tcp 9199/tcp 5001/tcp 9300/tcp 2>/dev/null || true
+npm run emulators &
+# Wait until you see "All emulators ready" in the log AND functions loaded (no "Failed to load")
+tail -f /tmp/emulators.log
+```
+
+**2. Pre-warm the dev server with the correct env**
+The e2e tests require the Next.js dev server to be configured to use emulators.
+`playwright.config.ts` loads `.env.test` and passes those vars to the webServer process,
+but only when Playwright starts the server itself. If you pre-start it manually, you must
+source `.env.test` first — otherwise the browser's Firebase SDK won't find the emulators
+and all auth-dependent tests will fail with `signInWithCustomToken` errors.
+
+```bash
+# Always pre-warm like this (not just `npx next dev -p 8002`):
+rm -rf .next-test
+set -a && source .env.test && set +a
+GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/mock-service-account.json DIST_DIR=.next-test npx next dev -p 8002 &
+```
+
+Wait for it to respond (`curl http://localhost:8002`) before committing.
+`reuseExistingServer: true` in `playwright.config.ts` means Playwright will reuse this server,
+avoiding the cold-start during the hook.
+
+**3. Known flakes**
+A handful of tests are sensitive to Pi resource pressure:
+- `Icon Backlog & Automated Recipe Flow` — waits for icon generation via Cloud Tasks; times out when emulator is stressed
+- `Core Graph: Pan, Delete, Undo & Sidebar` — screenshot can fail mid-navigation
+- `Gallery: Search & Vetting (Admin)` — same screenshot race
+
+If 1–2 of these fail, the commit is fine to retry immediately with the server still warm.
+If many tests fail with auth errors, the server was started without `.env.test` vars — restart it.
+
+## 6. Infrastructure Details
 
 *   **Authentication:**
     *   **Prod:** Uses Firebase Auth + Session Cookies.

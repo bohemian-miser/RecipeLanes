@@ -23,7 +23,7 @@ import { getAuthService } from '@/lib/auth-service';
 import { z } from 'zod';
 import { generateRecipePrompt, parseRecipeGraph, extractServes } from '@/lib/recipe-lanes/parser';
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
-import type { RecipeGraph } from '@/lib/recipe-lanes/types';
+import type { RecipeGraph, IconStats } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
 import { applyIconToNode, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
@@ -444,6 +444,14 @@ export async function vetRecipeAction(recipeId: string, isVetted: boolean) {
     } catch (e: any) {
         return { error: e.message };
     }
+}
+
+export async function searchIconCandidatesAction(query: string): Promise<{ candidates: IconStats[], error?: string }> {
+  // Stub: icon_index not yet populated in Firestore.
+  // When A2 (backfill) is complete, this will call:
+  //   dataService.searchIconsByEmbedding(embeddedVec, 12)
+  // For now return empty candidates so the UI shell works.
+  return { candidates: [] };
 }
 
 export async function getUnvettedRecipesAction(limit: number = 20) {

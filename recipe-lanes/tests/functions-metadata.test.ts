@@ -22,17 +22,19 @@ import { createVisualRecipeAction } from '../app/actions';
 import { setAIService, MockAIService } from '../lib/ai-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
 
-// Use Mocks for parsing to ensure deterministic test
+// Use Mocks for parsing to ensure deterministic test.
+// "Butter" is used as the ingredient because MockAIService has a local Butter.png,
+// preventing the Functions emulator from making an external HTTP fetch for the image.
 class MetadataMockAIService extends MockAIService {
     async generateText(prompt: string): Promise<string> {
-        const match = prompt.match(/Fry 1 (Metadata-Test-Ham-\d+)/i);
-        const name = match ? match[1] : "Metadata-Test-Ham";
-        
+        const match = prompt.match(/Fry 1 (Metadata-Test-Butter-\d+)/i);
+        const name = match ? match[1] : "Metadata-Test-Butter";
+
         return JSON.stringify({
             title: "Metadata Test",
             lanes: [{ id: "l1", label: "Prep", type: "prep" }],
             nodes: [
-                { id: "n1", laneId: "l1", text: "1 Ham", visualDescription: name, type: "ingredient" }
+                { id: "n1", laneId: "l1", text: "1 Butter", visualDescription: name, type: "ingredient" }
             ]
         });
     }
@@ -43,7 +45,7 @@ setAuthService(new MockAuthService());
 describe('Cloud Function Metadata', () => {
     it('should populate icon metadata in storage correctly', async () => {
         const uniqueId = Date.now();
-        const ingredientName = `Metadata-Test-Ham-${uniqueId}`;
+        const ingredientName = `Metadata-Test-Butter-${uniqueId}`;
         const recipeText = `Fry 1 ${ingredientName}`;
 
         // 1. Create Recipe
@@ -51,10 +53,13 @@ describe('Cloud Function Metadata', () => {
         if (!result.id) throw new Error("Failed to create recipe");
         const recipeId = result.id;
 
-        // 2. Poll until Background Worker updates the icon
+        // 2. Poll until Background Worker updates the icon.
+        // Poll every 500 ms for up to 60 s (120 attempts) to handle a slow emulator
+        // on low-power hardware without timing out before the function completes.
         let iconUrl: string | null = null;
         let attempts = 0;
-        const maxAttempts = 30;
+        const maxAttempts = 120;
+        const pollIntervalMs = 500;
 
         while (attempts < maxAttempts) {
             const doc = await db.collection('recipes').doc(recipeId).get();
@@ -66,11 +71,11 @@ describe('Cloud Function Metadata', () => {
                 break;
             }
 
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, pollIntervalMs));
             attempts++;
         }
 
-        assert.ok(iconUrl, "Background worker timed out or failed to update icons.");
+        assert.ok(iconUrl, `Background worker did not update icons within ${(maxAttempts * pollIntervalMs) / 1000}s.`);
 
         // 3. Verify Storage Metadata
         let filePath: string;

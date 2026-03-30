@@ -274,10 +274,10 @@ export class FirebaseDataService implements DataService {
     }
 
     /**
-     * Attempts to resolve missing icons from the cache. 
+     * Attempts to resolve missing icons from the cache.
      * Returns the list of standard names that were cache misses and still need processing.
      */
-    private async attemptUpdateFromCache(recipeId: string, nodes: any[], recipeRejections: any): Promise<string[]> {
+    private async attemptUpdateFromCache(recipeId: string, nodes: any[], recipeRejections: any, hydeQueriesMap?: Map<string, string[]>): Promise<string[]> {
         const stdNamesNeedingIcons = Array.from(new Set(
             nodes.map(n => standardizeIngredientName(String(n.visualDescription)))
         )) as string[];
@@ -287,7 +287,7 @@ export class FirebaseDataService implements DataService {
         // Fetch cached ingredients
         const ingRefs = stdNamesNeedingIcons.map(name => db.collection(DB_COLLECTION_INGREDIENTS).doc(name));
         const ingSnaps = await db.getAll(...ingRefs);
-        
+
         const ingMap = new Map<string, any>();
         ingSnaps.forEach(s => {
             if (s.exists) ingMap.set(s.id, s.data());
@@ -303,17 +303,23 @@ export class FirebaseDataService implements DataService {
 
             if (ingData?.icons && Array.isArray(ingData.icons)) {
                 const sortedIcons = [...ingData.icons].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
-                bestIcon = sortedIcons.find(icon => !rejectedIds.has(icon.id) && !icon.marked_for_deletion);
+                bestIcon = sortedIcons.find((icon: any) => !rejectedIds.has(icon.id) && !icon.marked_for_deletion);
             }
 
             if (bestIcon) {
                 console.log(`[FirebaseDataService] attemptUpdateFromCache: Cache HIT for "${stdName}" in recipe ${recipeId}`);
-                // Assuming assignIconToRecipe is already implemented elsewhere in your class
-                await this.assignIconToRecipe(recipeId, stdName, { 
-                    id: bestIcon.id, 
-                    url: bestIcon.url, 
-                    metadata: bestIcon.metadata 
+                await this.assignIconToRecipe(recipeId, stdName, {
+                    id: bestIcon.id,
+                    url: bestIcon.url,
+                    metadata: bestIcon.metadata
                 });
+                // Merge hydeQueries into the icon's searchTerms on cache hit
+                const hydeQueries = hydeQueriesMap?.get(stdName);
+                if (hydeQueries && hydeQueries.length > 0) {
+                    await this.mergeSearchTermsIntoIcon(stdName, bestIcon.id, hydeQueries).catch(e =>
+                        console.warn(`[attemptUpdateFromCache] mergeSearchTermsIntoIcon failed for "${stdName}":`, e)
+                    );
+                }
             } else {
                 console.log(`[FirebaseDataService] attemptUpdateFromCache: Cache MISS for "${stdName}"`);
                 cacheMisses.push(stdName);
@@ -322,10 +328,36 @@ export class FirebaseDataService implements DataService {
 
         return cacheMisses;
     }
+
+    /**
+     * Merges new hydeQueries into the searchTerms of an icon stored inside the ingredient doc's icons[] array.
+     * Skips any text already present. Writes the full updated icons[] array back.
+     */
+    private async mergeSearchTermsIntoIcon(stdName: string, iconId: string, hydeQueries: string[]): Promise<void> {
+        const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName);
+        await db.runTransaction(async (t) => {
+            const doc = await t.get(docRef);
+            if (!doc.exists) return;
+            const icons: any[] = doc.data()?.icons || [];
+            const idx = icons.findIndex((i: any) => i.id === iconId);
+            if (idx === -1) return;
+
+            const icon = icons[idx];
+            const existingTexts = new Set<string>((icon.searchTerms || []).map((st: any) => st.text));
+            const newTerms = hydeQueries
+                .filter(q => !existingTexts.has(q))
+                .map(q => ({ text: q, source: 'hyde_from_img' as const, addedAt: Date.now() }));
+
+            if (newTerms.length === 0) return;
+
+            icons[idx] = { ...icon, searchTerms: [...(icon.searchTerms || []), ...newTerms] };
+            t.update(docRef, { icons });
+        });
+    }
         /**
      * Safely adds an ingredient to the queue via a transaction.
      */
-    private async queueIconForGeneration(recipeId: string, stdName: string): Promise<void> {
+    private async queueIconForGeneration(recipeId: string, stdName: string, hydeQueries?: string[]): Promise<void> {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
         const queueRef = db.collection(DB_COLLECTION_QUEUE).doc(stdName);
 
@@ -353,12 +385,16 @@ export class FirebaseDataService implements DataService {
             // 2. Handle Queue Document Creation / Updating
             if (!queueDoc.exists) {
                 // Create new pending entry
-                transaction.set(queueRef, {
+                const newQueueDoc: any = {
                     status: 'pending',
                     created_at: FieldValue.serverTimestamp(),
                     recipes: [recipeId],
                     recipeCount: 1
-                });
+                };
+                if (hydeQueries && hydeQueries.length > 0) {
+                    newQueueDoc.hydeQueries = hydeQueries;
+                }
+                transaction.set(queueRef, newQueueDoc);
                 doEnqueue = true;
                 console.log(`[Transaction] Created new queue entry for "${stdName}"`);
             } else {
@@ -366,13 +402,18 @@ export class FirebaseDataService implements DataService {
                 // TODO: handle failed icon.
                 const existingData = queueDoc.data();
                 const existingRecipes = existingData?.recipes || [];
-                
+
+                const updatePayload: any = {};
                 if (!existingRecipes.includes(recipeId)) {
-                    transaction.update(queueRef, {
-                        recipes: FieldValue.arrayUnion(recipeId),
-                        recipeCount: FieldValue.increment(1)
-                    });
+                    updatePayload.recipes = FieldValue.arrayUnion(recipeId);
+                    updatePayload.recipeCount = FieldValue.increment(1);
                     console.log(`[Transaction] Added recipe ${recipeId} to existing queue for "${stdName}"`);
+                }
+                if (hydeQueries && hydeQueries.length > 0) {
+                    updatePayload.hydeQueries = FieldValue.arrayUnion(...hydeQueries);
+                }
+                if (Object.keys(updatePayload).length > 0) {
+                    transaction.update(queueRef, updatePayload);
                 }
             }
 
@@ -475,35 +516,46 @@ export class FirebaseDataService implements DataService {
         console.log(`[FirebaseDataService] resolveRecipeIcons: ${recipeId}`);
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
         const doc = await recipeRef.get();
-        
+
         if (!doc.exists) {
             console.error(`Recipe ${recipeId} not found.`);
             return;
         }
-        
+
         const data = doc.data();
         if (!data?.graph || !Array.isArray(data.graph.nodes)) return;
 
         const recipeRejections = data.graph.rejections || {};
 
         // 1. Initial check: Filter nodes that need processing
-        const nodesToProcess = data.graph.nodes.filter((n: any) => 
+        const nodesToProcess = data.graph.nodes.filter((n: any) =>
             this.nodeNeedsProcessing(n, recipeRejections)
         );
-        
+
         if (nodesToProcess.length === 0) return;
         console.log(`Processing ${nodesToProcess.length} nodes for recipe ${recipeId}`);
 
+        // Build merged hydeQueries map: stdName -> string[]
+        const hydeQueriesMap = new Map<string, string[]>();
+        for (const node of nodesToProcess) {
+            if (!node.visualDescription) continue;
+            const stdName = standardizeIngredientName(String(node.visualDescription));
+            const nodeQueries: string[] = node.hydeQueries || [];
+            const existing = hydeQueriesMap.get(stdName) || [];
+            const merged = Array.from(new Set([...existing, ...nodeQueries]));
+            hydeQueriesMap.set(stdName, merged);
+        }
+
         // 2. Attempt to resolve from cache
-        const unresolvedNames = await this.attemptUpdateFromCache(recipeId, nodesToProcess, recipeRejections);
+        const unresolvedNames = await this.attemptUpdateFromCache(recipeId, nodesToProcess, recipeRejections, hydeQueriesMap);
 
         if (unresolvedNames.length === 0) return;
 
         // 3. Queue remaining misses via transactions
         console.log(`Queueing ${unresolvedNames.length} ingredients for generation...`);
-        
-        const queuePromises = unresolvedNames.map(stdName => 
-            this.queueIconForGeneration(recipeId, stdName)
+
+        const queuePromises = unresolvedNames.map(stdName =>
+            this.queueIconForGeneration(recipeId, stdName, hydeQueriesMap.get(stdName))
         );
 
         // Run transactions concurrently

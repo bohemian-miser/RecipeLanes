@@ -29,9 +29,10 @@ interface IconDisplayProps {
   rerollingIds: Set<string>;
   error: string | null;
   highlightedIconId: string | null;
+  onIconClick?: (node: RecipeNode) => void;
 }
 
-export function IconDisplay({ nodes, onReroll, onDelete, rerollingIds, error, highlightedIconId }: IconDisplayProps) {
+export function IconDisplay({ nodes, onReroll, onDelete, rerollingIds, error, highlightedIconId, onIconClick }: IconDisplayProps) {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
 
   // Group nodes by ingredient
@@ -119,13 +120,32 @@ export function IconDisplay({ nodes, onReroll, onDelete, rerollingIds, error, hi
                                  <span className="text-[8px] text-yellow-500 font-mono animate-pulse uppercase">Forging...</span>
                                </div>
                              ) : (
-                               iconUrl && <img 
-                                 src={iconUrl} 
-                                 alt={ingredient}
-                                 title={node.visualDescription || ingredient}
-                                 className={`w-full h-full object-contain rendering-pixelated ${isRerolling ? 'opacity-50 grayscale' : ''}`}
-                                 style={{ imageRendering: 'pixelated' }}
-                               />
+                               iconUrl && (
+                                 onIconClick ? (
+                                   <button
+                                     type="button"
+                                     className="w-full h-full cursor-pointer focus:outline-none"
+                                     onClick={(e) => { e.stopPropagation(); onIconClick(node); }}
+                                     title="View details"
+                                   >
+                                     <img
+                                       src={iconUrl}
+                                       alt={ingredient}
+                                       title={node.visualDescription || ingredient}
+                                       className={`w-full h-full object-contain rendering-pixelated ${isRerolling ? 'opacity-50 grayscale' : ''}`}
+                                       style={{ imageRendering: 'pixelated' }}
+                                     />
+                                   </button>
+                                 ) : (
+                                   <img
+                                     src={iconUrl}
+                                     alt={ingredient}
+                                     title={node.visualDescription || ingredient}
+                                     className={`w-full h-full object-contain rendering-pixelated ${isRerolling ? 'opacity-50 grayscale' : ''}`}
+                                     style={{ imageRendering: 'pixelated' }}
+                                   />
+                                 )
+                               )
                              )}
                           </div>
                           <div className="flex w-full items-center justify-between gap-2">

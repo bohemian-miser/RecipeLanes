@@ -20,11 +20,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { IngredientForm } from '@/components/ingredient-form';
 import { IconDisplay } from '@/components/icon-display';
+import { IconSearchCandidates } from '@/components/icon-search-candidates';
 import { SharedGallery } from '@/components/shared-gallery';
 import { QueueMonitor } from '@/components/queue-monitor';
 import { LogoutButton } from '@/components/logout-button';
 import { useAuth } from '@/components/auth-provider';
-import { createDebugRecipeAction, addIngredientNodeAction, rejectIcon, deleteRecipeAction } from '@/app/actions';
+import { createDebugRecipeAction, addIngredientNodeAction, rejectIcon, deleteRecipeAction, searchIconCandidatesAction } from '@/app/actions';
 import { ChefHat, Globe, Plus, Github } from 'lucide-react';
 import Link from 'next/link';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -32,7 +33,8 @@ import { db } from '@/lib/firebase-client';
 import { DB_COLLECTION_RECIPES } from '@/lib/config';
 import { standardizeIngredientName } from '@/lib/utils';
 import { getNodeIconUrl, getNodeIconId } from '@/lib/recipe-lanes/model-utils';
-import { RecipeNode } from '@/lib/recipe-lanes/types';
+import { RecipeNode, IconStats } from '@/lib/recipe-lanes/types';
+import { IconDetailModal } from '@/components/icon-detail-modal';
 
 export default function Home() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -42,6 +44,12 @@ export default function Home() {
   
   const [rerollingIds, setRerollingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [selectedNode, setSelectedNode] = useState<RecipeNode | null>(null);
+
+  const [mode, setMode] = useState<'forge' | 'search'>('forge');
+  const [searchCandidates, setSearchCandidates] = useState<IconStats[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   // Use a ref to track if we've already created a recipe to prevent double-creation in strict mode
   const recipeCreated = useRef(false);
@@ -138,6 +146,27 @@ export default function Home() {
     } catch (e: any) {
         console.error(e);
         setError("Failed to add item.");
+    }
+  };
+
+  const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const query = formData.get('ingredient') as string;
+    if (!query) return;
+
+    event.currentTarget.reset();
+    setIsSearching(true);
+    try {
+      const result = await searchIconCandidatesAction(query);
+      setSearchCandidates(result.candidates);
+      setSearchQuery(query);
+    } catch (e: any) {
+      console.error(e);
+      setSearchCandidates([]);
+      setSearchQuery(query);
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -242,27 +271,62 @@ export default function Home() {
             <p className="text-lg text-zinc-400 font-mono">
               Convert text to pixel-art assets.
             </p>
+            <div className="flex items-center justify-center gap-6 pt-2">
+              <button
+                onClick={() => setMode('forge')}
+                className={`font-mono text-sm uppercase tracking-wider pb-1 transition-colors ${
+                  mode === 'forge'
+                    ? 'text-yellow-500 border-b-2 border-yellow-500'
+                    : 'text-zinc-500 border-b-2 border-transparent hover:text-zinc-300'
+                }`}
+              >
+                Forge
+              </button>
+              <button
+                onClick={() => setMode('search')}
+                className={`font-mono text-sm uppercase tracking-wider pb-1 transition-colors ${
+                  mode === 'search'
+                    ? 'text-yellow-500 border-b-2 border-yellow-500'
+                    : 'text-zinc-500 border-b-2 border-transparent hover:text-zinc-300'
+                }`}
+              >
+                Search
+              </button>
+            </div>
           </section>
 
           <IngredientForm
-            onSubmit={handleSubmit}
+            onSubmit={mode === 'forge' ? handleSubmit : handleSearch}
             isLoading={false}
           />
 
-          <QueueMonitor />
+          {mode === 'search' && (
+            <IconSearchCandidates
+              query={searchQuery}
+              candidates={searchCandidates}
+              isSearching={isSearching}
+            />
+          )}
 
-          <IconDisplay
-            nodes={nodes}
-            onReroll={handleReroll}
-            onDelete={handleInventoryDelete}
-            rerollingIds={rerollingIds}
-            error={error}
-            highlightedIconId={null}
-          />
+          {mode === 'forge' && <QueueMonitor />}
 
-          <SharedGallery />
+          {mode === 'forge' && (
+            <IconDisplay
+              nodes={nodes}
+              onReroll={handleReroll}
+              onDelete={handleInventoryDelete}
+              rerollingIds={rerollingIds}
+              error={error}
+              highlightedIconId={null}
+              onIconClick={setSelectedNode}
+            />
+          )}
+
+          {mode === 'forge' && <SharedGallery />}
         </div>
       </main>
+
+      <IconDetailModal node={selectedNode} onClose={() => setSelectedNode(null)} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import {
     isIconSearchMatched,
     currentShortlistIndex,
     nextShortlistIcon,
+    advanceShortlistIndex,
 } from '../lib/recipe-lanes/model-utils';
 import type { RecipeNode, IconStats } from '../lib/recipe-lanes/types';
 
@@ -69,17 +70,17 @@ describe('isIconSearchMatched', () => {
 });
 
 // ---------------------------------------------------------------------------
-// currentShortlistIndex
+// currentShortlistIndex — reads node.shortlistIndex directly
 // ---------------------------------------------------------------------------
 
 describe('currentShortlistIndex', () => {
 
     it('returns -1 when iconShortlist is absent', () => {
-        const node: RecipeNode = { ...baseNode(), icon: makeIcon('a') };
+        const node: RecipeNode = { ...baseNode(), shortlistIndex: 0 };
         assert.strictEqual(currentShortlistIndex(node), -1);
     });
 
-    it('returns -1 when icon is absent', () => {
+    it('returns -1 when shortlistIndex is absent', () => {
         const node: RecipeNode = {
             ...baseNode(),
             iconShortlist: [makeIcon('a'), makeIcon('b')],
@@ -87,23 +88,37 @@ describe('currentShortlistIndex', () => {
         assert.strictEqual(currentShortlistIndex(node), -1);
     });
 
-    it('returns the correct index when the current icon is in the shortlist', () => {
+    it('returns node.shortlistIndex when present', () => {
         const icons = [makeIcon('a'), makeIcon('b'), makeIcon('c')];
         const node: RecipeNode = {
             ...baseNode(),
             icon: makeIcon('b'),
             iconShortlist: icons,
+            shortlistIndex: 1,
         };
         assert.strictEqual(currentShortlistIndex(node), 1);
     });
 
-    it('returns -1 when the current icon id is not present in the shortlist', () => {
+    it('returns 0 when shortlistIndex is explicitly 0', () => {
         const node: RecipeNode = {
             ...baseNode(),
-            icon: makeIcon('z'),
+            icon: makeIcon('a'),
             iconShortlist: [makeIcon('a'), makeIcon('b')],
+            shortlistIndex: 0,
         };
-        assert.strictEqual(currentShortlistIndex(node), -1);
+        assert.strictEqual(currentShortlistIndex(node), 0);
+    });
+
+    it('returns the stored shortlistIndex regardless of which icon is current', () => {
+        // Unlike the old scan-based approach, the index is authoritative
+        const icons = [makeIcon('a'), makeIcon('b'), makeIcon('c')];
+        const node: RecipeNode = {
+            ...baseNode(),
+            icon: makeIcon('c'),
+            iconShortlist: icons,
+            shortlistIndex: 2,
+        };
+        assert.strictEqual(currentShortlistIndex(node), 2);
     });
 });
 
@@ -114,7 +129,7 @@ describe('currentShortlistIndex', () => {
 describe('nextShortlistIcon', () => {
 
     it('returns null when iconShortlist is absent', () => {
-        const node: RecipeNode = { ...baseNode(), icon: makeIcon('a') };
+        const node: RecipeNode = { ...baseNode(), icon: makeIcon('a'), shortlistIndex: 0 };
         assert.strictEqual(nextShortlistIcon(node), null);
     });
 
@@ -123,6 +138,7 @@ describe('nextShortlistIcon', () => {
             ...baseNode(),
             icon: makeIcon('a'),
             iconShortlist: [],
+            shortlistIndex: 0,
         };
         assert.strictEqual(nextShortlistIcon(node), null);
     });
@@ -133,44 +149,47 @@ describe('nextShortlistIcon', () => {
             ...baseNode(),
             icon: makeIcon('a'),
             iconShortlist: icons,
+            shortlistIndex: 0,
         };
         const next = nextShortlistIcon(node);
         assert.ok(next !== null, 'should return a next icon');
         assert.strictEqual(next!.id, 'b');
     });
 
-    it('returns null when the current icon is already the last shortlist entry', () => {
+    it('returns null when shortlistIndex is already at the last entry', () => {
         const icons = [makeIcon('a'), makeIcon('b'), makeIcon('c')];
         const node: RecipeNode = {
             ...baseNode(),
             icon: makeIcon('c'),
             iconShortlist: icons,
+            shortlistIndex: 2,
         };
         assert.strictEqual(nextShortlistIcon(node), null,
             'shortlist is exhausted — should fall through to Firestore path');
     });
 
-    it('returns the first shortlist entry when the current icon is not in the shortlist', () => {
-        // idx === -1, so nextIdx === 0 which is valid
+    it('returns shortlist[1] when shortlistIndex is absent (defaults to 0)', () => {
+        // shortlistIndex ?? 0, so nextIdx = 1
         const icons = [makeIcon('x'), makeIcon('y')];
         const node: RecipeNode = {
             ...baseNode(),
-            icon: makeIcon('unknown'),
+            icon: makeIcon('x'),
             iconShortlist: icons,
         };
         const next = nextShortlistIcon(node);
         assert.ok(next !== null);
-        assert.strictEqual(next!.id, 'x');
+        assert.strictEqual(next!.id, 'y');
     });
 
     it('cycles through the full shortlist before returning null', () => {
         const icons = [makeIcon('a'), makeIcon('b'), makeIcon('c')];
 
-        // Simulate cycling by advancing the node each step
+        // Simulate cycling by advancing shortlistIndex on each step
         let node: RecipeNode = {
             ...baseNode(),
             icon: makeIcon('a'),
             iconShortlist: icons,
+            shortlistIndex: 0,
         };
 
         const visited: string[] = [node.icon!.id];
@@ -178,11 +197,48 @@ describe('nextShortlistIcon', () => {
         let next = nextShortlistIcon(node);
         while (next !== null) {
             visited.push(next.id);
-            node = { ...node, icon: next };
+            node = { ...node, icon: next, shortlistIndex: (node.shortlistIndex ?? 0) + 1 };
             next = nextShortlistIcon(node);
         }
 
         assert.deepStrictEqual(visited, ['a', 'b', 'c'],
             'should cycle through all shortlist entries before exhausting');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// advanceShortlistIndex — returns the next index value to store on the node
+// ---------------------------------------------------------------------------
+
+describe('advanceShortlistIndex', () => {
+
+    it('returns 1 when shortlistIndex is 0', () => {
+        const node: RecipeNode = {
+            ...baseNode(),
+            iconShortlist: [makeIcon('a'), makeIcon('b')],
+            shortlistIndex: 0,
+        };
+        assert.strictEqual(advanceShortlistIndex(node), 1);
+    });
+
+    it('returns 1 when shortlistIndex is absent (defaults to 0)', () => {
+        const node: RecipeNode = {
+            ...baseNode(),
+            iconShortlist: [makeIcon('a'), makeIcon('b')],
+        };
+        assert.strictEqual(advanceShortlistIndex(node), 1);
+    });
+
+    it('returns the incremented index for any starting value', () => {
+        const icons = [makeIcon('a'), makeIcon('b'), makeIcon('c'), makeIcon('d')];
+        for (let i = 0; i < icons.length; i++) {
+            const node: RecipeNode = {
+                ...baseNode(),
+                iconShortlist: icons,
+                shortlistIndex: i,
+            };
+            assert.strictEqual(advanceShortlistIndex(node), i + 1,
+                `expected ${i + 1} when shortlistIndex is ${i}`);
+        }
     });
 });

@@ -74,12 +74,13 @@ export function isIconSearchMatched(node: RecipeNode): boolean {
 
 /**
  * Returns the 0-based index of the node's current icon within its shortlist,
- * or -1 when the current icon is not present in the shortlist (or when either
- * field is absent).
+ * reading from the explicit shortlistIndex field.  Returns -1 when the
+ * shortlist or shortlistIndex is absent.
  */
 export function currentShortlistIndex(node: RecipeNode): number {
-    if (!node.iconShortlist || !node.icon?.id) return -1;
-    return node.iconShortlist.findIndex(s => s.id === node.icon!.id);
+    if (!node.iconShortlist) return -1;
+    if (node.shortlistIndex === undefined) return -1;
+    return node.shortlistIndex;
 }
 
 /**
@@ -90,8 +91,15 @@ export function currentShortlistIndex(node: RecipeNode): number {
 export function nextShortlistIcon(node: RecipeNode): IconStats | null {
     const shortlist = node.iconShortlist;
     if (!shortlist || shortlist.length === 0) return null;
-    const idx = currentShortlistIndex(node);
-    const nextIdx = idx + 1;
+    const nextIdx = (node.shortlistIndex ?? 0) + 1;
     if (nextIdx < shortlist.length) return shortlist[nextIdx];
     return null;
+}
+
+/**
+ * Returns the next index value to be stored on the node after advancing past
+ * the current shortlist entry.
+ */
+export function advanceShortlistIndex(node: RecipeNode): number {
+    return (node.shortlistIndex ?? 0) + 1;
 }

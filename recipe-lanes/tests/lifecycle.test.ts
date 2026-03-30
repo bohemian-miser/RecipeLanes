@@ -36,7 +36,9 @@ async function getNodeIcon(recipeId: string, nodeId: string) {
 
 describe('Recipe & Icon Lifecycle', () => {
     it('should follow the full creation and reroll flow', async () => {
-        const ingredient = "Integration-Burger-" + Date.now();
+        // Use "Egg" so MockAIService matches a known ingredient with a local PNG,
+        // avoiding an external HTTP fetch inside the Functions emulator.
+        const ingredient = "Integration-Egg-" + Date.now();
         const service = getDataService();
 
         // 1. Create Debug Recipe
@@ -50,15 +52,16 @@ describe('Recipe & Icon Lifecycle', () => {
         const nodeId = r2.nodeId;
 
         // 3. Resolve (Wait for Cloud Function)
-        await service.waitForQueue(ingredient);
-        
+        // Allow up to 60 s — the emulator can be slow on low-power hardware.
+        await service.waitForQueue(ingredient, 60_000);
+
         let current = await getNodeIcon(recipeId, nodeId);
         assert.ok(current.iconUrl, "Failed to generate Icon A");
         const urlA = current.iconUrl;
 
         // 4. Reroll
         await rejectIcon(recipeId, ingredient, current.iconId!);
-        await service.waitForQueue(ingredient);
+        await service.waitForQueue(ingredient, 60_000);
 
         current = await getNodeIcon(recipeId, nodeId);
         assert.ok(current.iconUrl, "Failed to generate Icon B");

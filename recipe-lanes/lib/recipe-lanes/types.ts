@@ -54,6 +54,7 @@ export interface RecipeNode {
   // Icon Data
   icon?: IconStats;
   iconShortlist?: IconStats[];
+  shortlistIndex?: number;  // current position in iconShortlist, 0-based
   iconQuery?: {
     queryUsed: string;
     method: string;

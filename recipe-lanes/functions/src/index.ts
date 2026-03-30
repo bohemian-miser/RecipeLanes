@@ -87,17 +87,27 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
                 console.log(`[Queue-${ingredientName}] Queue doc missing, aborting recipe update.`);
                 return; 
             }
-            const latestRecipeIds: string[] = queueDoc.data()?.recipes || [];
+            const queueDocData = queueDoc.data();
+            const latestRecipeIds: string[] = queueDocData?.recipes || [];
             console.log(`[Queue-${ingredientName}] in transaction Publishing to Firestore...`);
-            
+
+            // Convert hydeQueries from queue doc into SearchTerm[]
+            const rawHydeQueries: string[] = queueDocData?.hydeQueries || [];
+            const searchTerms = rawHydeQueries.map((text: string) => ({
+                text,
+                source: 'hyde_from_img' as const,
+                addedAt: Date.now()
+            }));
+
             // Set initial impressions based on how many recipes we're updating now
             const initialImpressions = latestRecipeIds.length;
             const initialScore = calculateWilsonLCB(initialImpressions, 0);
-            
-            const iconDataWithStats = {
+
+            const iconDataWithStats: any = {
                 ...iconData,
                 impressions: initialImpressions,
-                score: initialScore
+                score: initialScore,
+                ...(searchTerms.length > 0 ? { searchTerms } : {})
             };
 
             const ingredientData = await dataService.imagineIngredientWithIcon(ingredientDocId, ingredientName, iconDataWithStats, transaction);

@@ -87,6 +87,7 @@ export const MinimalNode: React.FC<any> = ({
                   data: {
                       ...n.data,
                       icon: { id: nextIcon.id, url: nextIcon.url, metadata: nextIcon.metadata },
+                      shortlistIndex: (data.shortlistIndex ?? 0) + 1,
                       iconQuery: n.data.iconQuery
                           ? { ...n.data.iconQuery, outcome: 'rerolled_past' as const }
                           : undefined,

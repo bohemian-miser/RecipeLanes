@@ -57,8 +57,9 @@ test.describe('Regressions & Bug Repros', () => {
     });
 
     test('Issue 66/67: Shared Gallery hover and delete', async ({ page, login }) => {
+        test.slow(); // Icon generation + gallery checks can exceed 30s with queue backlog
         const dir = screenshotDir('issue-66-67', desktop.name);
-        const uniqueName = `Regress-${Date.now()}`;
+        const uniqueName = `Regress Egg ${Date.now()}`;
         const uid = 'admin-user';
 
         await page.goto('/icon_overview');
@@ -99,7 +100,7 @@ test.describe('Regressions & Bug Repros', () => {
     test('Stats Tracking: impressions and rejections', async ({ page }) => {
         test.slow();
         const dir = screenshotDir('stats-tracking', desktop.name);
-        const uniqueName = `Stats Test ${Date.now()}`;
+        const uniqueName = `Stats Egg ${Date.now()}`;
         
         await page.goto('/lanes?new=true');
         await create_recipe(page, `make ${uniqueName}`, dir);
@@ -215,8 +216,8 @@ test.describe('Regressions & Bug Repros', () => {
         test.slow();
         const dir = screenshotDir('stats-comprehensive', desktop.name);
         const RUN_ID = Date.now().toString().slice(-4);
-        const ingredient = `A${RUN_ID} carb`.toLowerCase();
-        const ingredient2 = `B${RUN_ID} dirt`.toLowerCase();
+        const ingredient = `A${RUN_ID} Egg`.toLowerCase();
+        const ingredient2 = `B${RUN_ID} Flour`.toLowerCase();
 
         await page.goto('/lanes?new=true');
         await create_recipe(page, `test eggs with ${ingredient}`, dir);

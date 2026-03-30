@@ -12,7 +12,7 @@ test.describe('Icon Systems (Consolidated)', () => {
 
   test('Icon Lifecycle: Generation, Gallery & Stats', async ({ page, login }) => {
     const dir = screenshotDir('icons-lifecycle', desktop.name);
-    const unique = `Cycle-${Date.now()}`;
+    const unique = `Cycle Egg ${Date.now()}`;
     const uid = 'admin-cycle';
 
     // 1. Generation (Maker)
@@ -59,11 +59,12 @@ test.describe('Icon Systems (Consolidated)', () => {
   });
 
   test('Icon Backlog & Automated Recipe Flow', async ({ page, login }) => {
+    test.slow(); // Icon generation + backlog retry pipeline can take >30s on Pi
     const dir = screenshotDir('icons-backlog-auto', desktop.name);
-    
+
     // 1. Automated flow (Recipe creation)
     await page.goto('/lanes?new=true');
-    const autoIng = `Auto-${Date.now()}`;
+    const autoIng = `Auto Egg ${Date.now()}`;
     await create_recipe(page, `test ${autoIng}`, dir);
     await wait_for_graph(page, dir);
     const node = get_node(page, autoIng);
@@ -72,9 +73,18 @@ test.describe('Icon Systems (Consolidated)', () => {
     // 2. Backlog Management
     await page.goto('/icon_overview');
     await login('backlog-user');
-    const failItem = `Fail-${Date.now()}`;
+    const failItem = `Fail Egg ${Date.now()}`;
     
     await page.waitForFunction(() => (window as any)._firebaseDb && (window as any)._firebaseFirestore);
+    // Clear existing queue items so our test item sorts to page 1 of QueueMonitor
+    await page.evaluate(async () => {
+        const { _firebaseDb, _firebaseFirestore } = window as any;
+        const { collection, getDocs, deleteDoc, doc } = _firebaseFirestore;
+        const snap = await getDocs(collection(_firebaseDb, 'icon_queue'));
+        for (const d of snap.docs) {
+            await deleteDoc(doc(_firebaseDb, 'icon_queue', d.id));
+        }
+    });
     await page.evaluate(async ({ name }) => {
         const { _firebaseDb, _firebaseFirestore } = window as any;
         const { doc, setDoc, serverTimestamp } = _firebaseFirestore;
@@ -85,8 +95,9 @@ test.describe('Icon Systems (Consolidated)', () => {
 
     const row = page.locator('[data-testid="backlog-item"]').filter({ hasText: failItem });
     await expect(row).toBeVisible({ timeout: 20000 });
+    await page.waitForTimeout(2000); // Let QueueMonitor settle after any background icon processing
     await row.getByLabel('Retry').click();
-    await expect(row).not.toBeVisible({ timeout: 20000 });
+    await expect(row).not.toBeVisible({ timeout: 30000 });
     
     cleanupScreenshots(dir);
   });

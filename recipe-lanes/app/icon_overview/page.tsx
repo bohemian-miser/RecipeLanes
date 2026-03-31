@@ -307,6 +307,7 @@ export default function Home() {
               query={searchQuery}
               candidates={searchCandidates}
               isSearching={isSearching}
+              onIconClick={(candidate) => setSelectedGalleryIcon({ icon: candidate, ingredientName: candidate.prompt ?? candidate.id })}
             />
           )}
 
@@ -324,11 +325,9 @@ export default function Home() {
             />
           )}
 
-          {mode === 'forge' && (
-            <SharedGallery
-              onIconClick={(icon, ingredientName) => setSelectedGalleryIcon({ icon, ingredientName })}
-            />
-          )}
+          <SharedGallery
+            onIconClick={(icon, ingredientName) => setSelectedGalleryIcon({ icon, ingredientName })}
+          />
         </div>
       </main>
 

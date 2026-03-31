@@ -22,9 +22,10 @@ interface IconSearchCandidatesProps {
   query: string;
   candidates: IconStats[];
   isSearching: boolean;
+  onIconClick?: (candidate: IconStats) => void;
 }
 
-export function IconSearchCandidates({ query, candidates, isSearching }: IconSearchCandidatesProps) {
+export function IconSearchCandidates({ query, candidates, isSearching, onIconClick }: IconSearchCandidatesProps) {
   if (isSearching) {
     return (
       <div className="w-full border-4 border-zinc-700 bg-zinc-800 p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)]">
@@ -59,6 +60,7 @@ export function IconSearchCandidates({ query, candidates, isSearching }: IconSea
           <div
             key={candidate.id}
             className="flex flex-col items-center gap-2 p-2 border-2 border-zinc-700 bg-zinc-900 hover:border-yellow-500 transition-colors cursor-pointer"
+            onClick={() => onIconClick?.(candidate)}
           >
             {candidate.url ? (
               // eslint-disable-next-line @next/next/no-img-element

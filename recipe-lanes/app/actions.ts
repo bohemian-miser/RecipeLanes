@@ -45,6 +45,18 @@ export async function rejectIcon(recipeId: string, ingredientName: string, curre
     try {
         const session = await getAuthService().verifyAuth();
         const userId = session?.uid;
+        const embedFn = getAIService().embedTexts.bind(getAIService());
+        return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId, embedFn);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function forgeIconAction(recipeId: string, ingredientName: string, currentIconId?: string) {
+    try {
+        const session = await getAuthService().verifyAuth();
+        const userId = session?.uid;
+        // Forge: reject current and queue brand-new generation (no index search — skip embedFn)
         return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId);
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -84,7 +96,11 @@ export async function addIngredientNodeAction(recipeId: string, ingredientName: 
     } catch (e) {
         console.warn('[addIngredientNodeAction] HyDE query generation failed (non-fatal):', e);
     }
-    return getDataService().addNodeToRecipe(recipeId, ingredientName, undefined, hydeQueries);
+    const result = await getDataService().addNodeToRecipe(recipeId, ingredientName, undefined, hydeQueries);
+    if (result.success) {
+        await getDataService().resolveRecipeIcons(recipeId, getAIService().embedTexts.bind(getAIService()));
+    }
+    return result;
 }
 
 /* TODO: REPLACE these with just calling resolveIcons when we make a new recipe instead of relying on the cloud function */
@@ -172,7 +188,7 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
         const id = await getDataService().saveRecipe(graph, targetId, userId, visibility);
 
         console.log('[createVisualRecipeAction] Resolving icons');
-        await getDataService().resolveRecipeIcons(id);
+        await getDataService().resolveRecipeIcons(id, getAIService().embedTexts.bind(getAIService()));
         
         console.log(`[createVisualRecipeAction] ✅ Complete. ID: ${id}`);
         return {id} ;

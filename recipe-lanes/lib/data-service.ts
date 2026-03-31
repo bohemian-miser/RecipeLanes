@@ -71,9 +71,9 @@ export interface DataService {
   waitForQueue(ingredientName: string, timeoutMs?: number): Promise<IconStats | null>;
   
   // New Methods for Refactor
-  resolveRecipeIcons(recipeId: string): Promise<void>;
+  resolveRecipeIcons(recipeId: string, embedFn?: (texts: string[]) => Promise<number[]>): Promise<void>;
   addNodeToRecipe(recipeId: string, ingredientName: string, laneId?: string, hydeQueries?: string[]): Promise<{ success: boolean, nodeId?: string, error?: string }>;
-  rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string): Promise<{ success: boolean, error?: string }>;
+  rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, embedFn?: (texts: string[]) => Promise<number[]>): Promise<{ success: boolean, error?: string }>;
   imagineRecipeWithIcon(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<any>;
   setRecipeWithIcon(data: any, transaction?: any): Promise<void>;
   assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<void>;
@@ -528,7 +528,60 @@ export class FirebaseDataService implements DataService {
         });
     }
 
-    async resolveRecipeIcons(recipeId: string): Promise<void> {
+    /**
+     * Search icon_index for matches and assign icon + shortlist to matching recipe nodes.
+     * Returns names that had no search results (still need generation).
+     */
+    private async resolveFromIndex(
+        recipeId: string,
+        unresolvedNames: string[],
+        hydeQueriesMap: Map<string, string[]>,
+        embedFn: (texts: string[]) => Promise<number[]>
+    ): Promise<string[]> {
+        const stillUnresolved: string[] = [];
+        for (const stdName of unresolvedNames) {
+            try {
+                const queries = hydeQueriesMap.get(stdName);
+                const textsToEmbed = queries && queries.length > 0 ? queries : [stdName];
+                const vec = await embedFn(textsToEmbed);
+                const results = await this.searchIconsByEmbedding(vec, 8);
+                if (results.length > 0) {
+                    await this.assignShortlistToRecipe(recipeId, stdName, results);
+                    console.log(`[resolveFromIndex] "${stdName}" → ${results.length} candidates from index`);
+                } else {
+                    stillUnresolved.push(stdName);
+                }
+            } catch (e) {
+                console.warn(`[resolveFromIndex] search failed for "${stdName}":`, e);
+                stillUnresolved.push(stdName);
+            }
+        }
+        return stillUnresolved;
+    }
+
+    /**
+     * Writes the first search result as the node's icon and the full results as its shortlist.
+     */
+    private async assignShortlistToRecipe(recipeId: string, stdName: string, results: IconStats[]): Promise<void> {
+        const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+        await db.runTransaction(async (t) => {
+            const doc = await t.get(recipeRef);
+            if (!doc.exists) return;
+            const nodes: any[] = doc.data()?.graph?.nodes || [];
+            let changed = false;
+            nodes.forEach((n: any) => {
+                if (n.visualDescription && standardizeIngredientName(String(n.visualDescription)) === stdName) {
+                    applyIconToNode(n, results[0]);
+                    n.iconShortlist = results;
+                    n.shortlistIndex = 0;
+                    changed = true;
+                }
+            });
+            if (changed) t.update(recipeRef, { 'graph.nodes': nodes });
+        });
+    }
+
+    async resolveRecipeIcons(recipeId: string, embedFn?: (texts: string[]) => Promise<number[]>): Promise<void> {
         console.log(`[FirebaseDataService] resolveRecipeIcons: ${recipeId}`);
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
         const doc = await recipeRef.get();
@@ -562,20 +615,24 @@ export class FirebaseDataService implements DataService {
             hydeQueriesMap.set(stdName, merged);
         }
 
-        // 2. Attempt to resolve from cache
+        // 2. Attempt to resolve from cache (exact name match in ingredients_new)
         const unresolvedNames = await this.attemptUpdateFromCache(recipeId, nodesToProcess, recipeRejections, hydeQueriesMap);
 
         if (unresolvedNames.length === 0) return;
 
-        // 3. Queue remaining misses via transactions
-        console.log(`Queueing ${unresolvedNames.length} ingredients for generation...`);
+        // 2b. Try to resolve from index via embedding search
+        let stillUnresolved = unresolvedNames;
+        if (embedFn) {
+            stillUnresolved = await this.resolveFromIndex(recipeId, unresolvedNames, hydeQueriesMap, embedFn);
+        }
 
-        const queuePromises = unresolvedNames.map(stdName =>
+        if (stillUnresolved.length === 0) return;
+
+        // 3. Queue remaining for generation
+        console.log(`Queueing ${stillUnresolved.length} ingredients for generation...`);
+        await Promise.all(stillUnresolved.map(stdName =>
             this.queueIconForGeneration(recipeId, stdName, hydeQueriesMap.get(stdName))
-        );
-
-        // Run transactions concurrently
-        await Promise.all(queuePromises);
+        ));
     }
 
   async addNodeToRecipe(recipeId: string, ingredientName: string, laneId: string = 'lane-1', hydeQueries?: string[]): Promise<{ success: boolean, nodeId?: string, error?: string }> {
@@ -615,7 +672,7 @@ export class FirebaseDataService implements DataService {
       }
   }
 
-  async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string): Promise<{ success: boolean, error?: string }> {
+  async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, embedFn?: (texts: string[]) => Promise<number[]>): Promise<{ success: boolean, error?: string }> {
       try {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
         let iconIdToReject = currentIconId;
@@ -663,7 +720,7 @@ export class FirebaseDataService implements DataService {
             this.recordRejection(iconIdToReject, ingredientName, stdName).catch(console.error);
         }
 
-        await this.resolveRecipeIcons(recipeId);
+        await this.resolveRecipeIcons(recipeId, embedFn);
         return { success: true };
       } catch (e: any) {
           return { success: false, error: e.message };
@@ -1442,7 +1499,7 @@ export class MemoryDataService implements DataService {
         return hits;
     }
 
-    async resolveRecipeIcons(recipeId: string): Promise<void> {
+    async resolveRecipeIcons(recipeId: string, _embedFn?: (texts: string[]) => Promise<number[]>): Promise<void> {
         const recipe = this.recipes.get(recipeId);
         if (!recipe) return;
         
@@ -1494,7 +1551,7 @@ export class MemoryDataService implements DataService {
         return { success: true, nodeId };
     }
 
-    async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string): Promise<{ success: boolean, error?: string }> {
+    async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, _embedFn?: (texts: string[]) => Promise<number[]>): Promise<{ success: boolean, error?: string }> {
         const recipe = this.recipes.get(recipeId);
         if (!recipe) return { success: false, error: 'Recipe not found' };
         

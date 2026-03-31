@@ -17,7 +17,7 @@
 
 import React from 'react';
 import { Handle, Position } from 'reactflow';
-import { RefreshCw, X } from 'lucide-react';
+import { RefreshCw, X, Hammer } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { getNodeIconUrl, isIconSearchMatched } from '../../../lib/recipe-lanes/model-utils';
 
@@ -25,9 +25,11 @@ interface MinimalNodeViewProps {
     data: RecipeNode;
     selected?: boolean;
     isRerolling: boolean;
+    isForging: boolean;
     isPivotMode: boolean;
     handlers: {
         onReroll: (e: React.MouseEvent) => void;
+        onForge: (e: React.MouseEvent) => void;
         onDelete: (e: React.MouseEvent) => void;
         onTouchStart: () => void;
         onTouchEnd: () => void;
@@ -35,7 +37,7 @@ interface MinimalNodeViewProps {
 }
 
 export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
-    data, selected, isRerolling, isPivotMode, handlers
+    data, selected, isRerolling, isForging, isPivotMode, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
     const iconUrl = getNodeIconUrl(data);
@@ -105,13 +107,23 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                 )}
                 
                 {/* Reroll Button */}
-                <button 
+                <button
                     onClick={handlers.onReroll}
-                    disabled={isRerolling}
+                    disabled={isRerolling || isForging}
                     className={`nodrag absolute -top-2 -right-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-blue-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isRerolling ? '!opacity-100 block cursor-not-allowed' : ''}`}
-                    title="Reroll Icon"
+                    title="Cycle shortlist"
                 >
                     <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin text-blue-500' : ''}`} />
+                </button>
+
+                {/* Forge Button */}
+                <button
+                    onClick={handlers.onForge}
+                    disabled={isRerolling || isForging}
+                    className={`nodrag absolute -bottom-2 -right-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-amber-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isForging ? '!opacity-100 block cursor-not-allowed' : ''}`}
+                    title="Forge new icon"
+                >
+                    <Hammer className={`w-3 h-3 ${isForging ? 'text-amber-500' : ''}`} />
                 </button>
 
                 {/* Delete Button */}

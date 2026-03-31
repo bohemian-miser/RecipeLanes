@@ -17,7 +17,7 @@
 
 import React from 'react';
 import { Handle, Position } from 'reactflow';
-import { RefreshCw, X } from 'lucide-react';
+import { RefreshCw, X, Hammer } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { getNodeIconUrl, isIconSearchMatched } from '../../../lib/recipe-lanes/model-utils';
 
@@ -25,9 +25,11 @@ interface MinimalNodeViewProps {
     data: RecipeNode;
     selected?: boolean;
     isRerolling: boolean;
+    isForging: boolean;
     isPivotMode: boolean;
     handlers: {
         onReroll: (e: React.MouseEvent) => void;
+        onForge: (e: React.MouseEvent) => void;
         onDelete: (e: React.MouseEvent) => void;
         onTouchStart: () => void;
         onTouchEnd: () => void;
@@ -44,7 +46,7 @@ const parseNodeText = (text: string) => {
 };
 
 export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
-    data, selected, isRerolling, isPivotMode, handlers
+    data, selected, isRerolling, isForging, isPivotMode, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
     const themeVariant = data.iconTheme || 'modern'; // 'modern' or 'modern_clean'
@@ -95,8 +97,11 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 
                         {/* Controls */}
                         <div className="absolute -top-2 -right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                            <button onClick={handlers.onReroll} disabled={isRerolling} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500">
+                            <button onClick={handlers.onReroll} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500">
                                 <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin' : ''}`} />
+                            </button>
+                            <button onClick={handlers.onForge} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-amber-500" title="Forge new icon">
+                                <Hammer className={`w-3 h-3 ${isForging ? 'text-amber-500' : ''}`} />
                             </button>
                             <button onClick={handlers.onDelete} className="bg-white/80 rounded-full p-1 shadow hover:text-red-500">
                                 <X className="w-3 h-3" />
@@ -149,8 +154,11 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 
                         {/* Controls */}
                         <div className="absolute -top-2 -right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                            <button onClick={handlers.onReroll} disabled={isRerolling} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500">
+                            <button onClick={handlers.onReroll} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500">
                                 <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin' : ''}`} />
+                            </button>
+                            <button onClick={handlers.onForge} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-amber-500" title="Forge new icon">
+                                <Hammer className={`w-3 h-3 ${isForging ? 'text-amber-500' : ''}`} />
                             </button>
                             <button onClick={handlers.onDelete} className="bg-white/80 rounded-full p-1 shadow hover:text-red-500">
                                 <X className="w-3 h-3" />
@@ -237,8 +245,11 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 
                   {/* Controls */}
                   <div className="absolute top-0 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                      <button onClick={handlers.onReroll} disabled={isRerolling} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500">
+                      <button onClick={handlers.onReroll} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500" title="Cycle shortlist">
                           <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin' : ''}`} />
+                      </button>
+                      <button onClick={handlers.onForge} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-amber-500" title="Forge new icon">
+                          <Hammer className={`w-3 h-3 ${isForging ? 'text-amber-500' : ''}`} />
                       </button>
                       <button onClick={handlers.onDelete} className="bg-white/80 rounded-full p-1 shadow hover:text-red-500">
                           <X className="w-3 h-3" />

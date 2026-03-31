@@ -23,7 +23,7 @@ import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
 import { functions } from '@/lib/firebase-client';
 import { httpsCallable } from 'firebase/functions';
-import { rejectIcon } from '@/app/actions';
+import { rejectIcon, forgeIconAction } from '@/app/actions';
 import { getNodeIconId, getNodeIconUrl, nextShortlistIcon } from '@/lib/recipe-lanes/model-utils';
 
 // Track rejected URLs for the session to prevent them from reappearing immediately
@@ -33,14 +33,15 @@ export const MinimalNode: React.FC<any> = ({
     data, selected, isConnectable, id
 }) => {
   const [isRerolling, setIsRerolling] = useState(false);
+  const [isForging, setIsForging] = useState(false);
   const [prevIconUrl, setPrevIconUrl] = useState(getNodeIconUrl(data));
 
   const currentIconUrl = getNodeIconUrl(data);
   if (currentIconUrl !== prevIconUrl) {
       setPrevIconUrl(currentIconUrl);
-      // Only stop rerolling if we received a valid URL (ignore clearing updates)
-      if (isRerolling && currentIconUrl) {
+      if ((isRerolling || isForging) && currentIconUrl) {
           setIsRerolling(false);
+          setIsForging(false);
       }
   }
 
@@ -76,10 +77,14 @@ export const MinimalNode: React.FC<any> = ({
   const handleReroll = async (e: React.MouseEvent) => {
       e.stopPropagation();
 
-      // --- Shortlist cycling: try next entry before hitting Firestore ---
-      const nextIcon = nextShortlistIcon(data);
-      if (nextIcon) {
-          // Apply next shortlist entry optimistically in ReactFlow state
+      const shortlist: any[] = data.iconShortlist || [];
+      const currentIdx = data.shortlistIndex ?? 0;
+      const nextIdx = currentIdx + 1;
+
+      if (shortlist.length > 1) {
+          // Cycle through shortlist, wrapping at the end
+          const wrappedIdx = nextIdx < shortlist.length ? nextIdx : 0;
+          const nextIcon = shortlist[wrappedIdx];
           setNodes((nds: any[]) => nds.map((n: any) => {
               if (n.id !== id) return n;
               return {
@@ -87,50 +92,56 @@ export const MinimalNode: React.FC<any> = ({
                   data: {
                       ...n.data,
                       icon: { id: nextIcon.id, url: nextIcon.url, metadata: nextIcon.metadata },
-                      shortlistIndex: (data.shortlistIndex ?? 0) + 1,
-                      iconQuery: n.data.iconQuery
-                          ? { ...n.data.iconQuery, outcome: 'rerolled_past' as const }
-                          : undefined,
+                      shortlistIndex: wrappedIdx,
                   },
               };
           }));
           return;
       }
-      // nextIcon is null — shortlist exhausted or absent, fall through to Firestore path
-
+      // No shortlist — reroll fetches from search (rejectIcon with embedFn)
       setIsRerolling(true);
       const ingredientName = data.visualDescription || data.text;
       try {
-        const result = await rejectIcon(
-            recipeId || '',
-            ingredientName,
-            getNodeIconId(data) || '',
-        );
-
-        if (result && !result.success) {
-            console.error("Reroll failed:", result.error);
-            setIsRerolling(false);
-            // Optionally alert the user here, but for now we just stop the spinner
-        }
-        // Success state update handled by prop change from Firestore listener
+          const result = await rejectIcon(recipeId || '', ingredientName, getNodeIconId(data) || '');
+          if (result && !result.success) {
+              console.error("Reroll failed:", result.error);
+              setIsRerolling(false);
+          }
       } catch (err) {
           console.error("Reroll exception:", err);
           setIsRerolling(false);
       }
   };
 
+  const handleForge = async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setIsForging(true);
+      const ingredientName = data.visualDescription || data.text;
+      try {
+          const result = await forgeIconAction(recipeId || '', ingredientName, getNodeIconId(data) || '');
+          if (result && !result.success) {
+              console.error("Forge failed:", result.error);
+              setIsForging(false);
+          }
+      } catch (err) {
+          console.error("Forge exception:", err);
+          setIsForging(false);
+      }
+  };
+
   const handlers = {
       onReroll: handleReroll,
+      onForge: handleForge,
       onDelete: handleDelete,
       onTouchStart: handleTouchStart,
       onTouchEnd: handleTouchEnd
   };
 
   if (iconTheme === 'modern' || iconTheme === 'modern_clean') {
-      return <MinimalNodeModern data={data} selected={selected} isRerolling={isRerolling} isPivotMode={isPivotMode} handlers={handlers} />;
+      return <MinimalNodeModern data={data} selected={selected} isRerolling={isRerolling} isForging={isForging} isPivotMode={isPivotMode} handlers={handlers} />;
   }
 
-  return <MinimalNodeClassic data={data} selected={selected} isRerolling={isRerolling} isPivotMode={isPivotMode} handlers={handlers} />;
+  return <MinimalNodeClassic data={data} selected={selected} isRerolling={isRerolling} isForging={isForging} isPivotMode={isPivotMode} handlers={handlers} />;
 };
 
 export default memo(MinimalNode);

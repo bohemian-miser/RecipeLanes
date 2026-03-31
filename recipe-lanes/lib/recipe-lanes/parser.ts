@@ -155,12 +155,22 @@ For every node, generate exactly 12 search terms that describe what its 64×64 i
  * Prompt for generating HyDE search terms for a single ingredient/node name.
  * Used when generating icons outside the recipe flow (e.g. icon_overview direct generation).
  */
-export function generateHydeQueriesPrompt(ingredientName: string): string {
+export function generateHydeQueriesPrompt(ingredientName: string, nodeType: 'ingredient' | 'action' = 'ingredient'): string {
+  const isAction = nodeType === 'action';
+  const shortEx = isAction ? '"pan with sauce", "sizzling skillet"' : '"cracked egg", "raw egg"';
+  const medEx = isAction ? '"onions frying in pan icon", "saucepan with boiling liquid"' : '"cracked egg icon", "whole egg cooking"';
+  const longEx = isAction
+    ? '"overhead view of frying pan with golden onions and steam, simple icon"'
+    : '"cracked raw egg on white background, simple icon"';
+  const extra = isAction
+    ? '\nFor action icons: ≥2 terms must name the vessel/container (pan, pot, bowl) and ≥2 must describe a visible state cue (steam, bubbles, browning, sizzling).'
+    : '\nFor ingredient icons: ≥2 terms must describe colour/shape/texture WITHOUT naming the ingredient (e.g. "white oval grain", "purple layered crescent").';
+
   return `Generate exactly 12 search terms describing a 64×64 icon for "${ingredientName}" on a white background, for a recipe card.
 Return ONLY a raw JSON array of 12 strings. No explanation, no markdown:
-- 4 short tags (1–3 words, e.g. "cracked egg", "raw egg")
-- 4 medium phrases (4–6 words, e.g. "cracked egg icon", "whole egg cooking")
-- 4 longer visual descriptions (7–12 words, e.g. "cracked raw egg on white background, simple icon")`;
+- 4 short tags covering DIFFERENT angles: (1) ingredient/action name, (2) visual synonym or colour, (3) prep/cooking state, (4) category label. (e.g. ${shortEx})
+- 4 medium phrases — one semantic (what it IS), one visual (what it LOOKS LIKE), one contextual (how it's used), one categorical. (e.g. ${medEx})
+- 4 longer visual descriptions covering shape/colour/texture, icon style, use context, and an alternative appearance. (e.g. ${longEx})${extra}`;
 }
 
 /**

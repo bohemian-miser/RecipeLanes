@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { parseRecipeGraph, generateRecipePrompt } from '../lib/recipe-lanes/parser';
+import { parseRecipeGraph, generateRecipePrompt, generateHydeQueriesPrompt, parseHydeQueries } from '../lib/recipe-lanes/parser';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -114,6 +114,143 @@ describe('generateRecipePrompt', () => {
       prompt.includes('hydeQueries'),
       'prompt should mention hydeQueries in the schema',
     );
+  });
+
+});
+
+// ---------------------------------------------------------------------------
+// generateHydeQueriesPrompt — nodeType parameter
+// ---------------------------------------------------------------------------
+
+describe('generateHydeQueriesPrompt', () => {
+
+  it('defaults to ingredient behaviour when nodeType is omitted', () => {
+    const prompt = generateHydeQueriesPrompt('carrot');
+    // Ingredient-specific instruction is present
+    assert.ok(
+      prompt.includes('colour') || prompt.includes('color') || prompt.includes('shape') || prompt.includes('texture'),
+      'default prompt should contain colour/shape/texture instruction',
+    );
+    // Vessel/state cue instruction (action-specific) should NOT be present
+    assert.ok(
+      !prompt.includes('vessel') && !prompt.includes('container'),
+      'default prompt should not contain vessel/container instruction',
+    );
+  });
+
+  it('ingredient nodeType includes colour/shape instruction', () => {
+    const prompt = generateHydeQueriesPrompt('lemon', 'ingredient');
+    assert.ok(
+      prompt.includes('colour') || prompt.includes('color') || prompt.includes('shape') || prompt.includes('texture'),
+      'ingredient prompt should contain colour/shape/texture instruction',
+    );
+    assert.ok(
+      !prompt.includes('vessel') && !prompt.includes('container'),
+      'ingredient prompt should not contain vessel/container instruction',
+    );
+  });
+
+  it('action nodeType includes vessel/state cue instruction', () => {
+    const prompt = generateHydeQueriesPrompt('sauté onions', 'action');
+    assert.ok(
+      prompt.includes('vessel') || prompt.includes('container'),
+      'action prompt should contain vessel/container instruction',
+    );
+    // Steam/bubbles/browning/sizzling state cues
+    assert.ok(
+      prompt.includes('steam') || prompt.includes('bubbles') || prompt.includes('browning') || prompt.includes('sizzling'),
+      'action prompt should contain visible state cue terms',
+    );
+  });
+
+  it('action nodeType does NOT contain ingredient-specific colour/shape instruction', () => {
+    const prompt = generateHydeQueriesPrompt('boil pasta', 'action');
+    // The ingredient-specific extra line is only added for ingredient type
+    assert.ok(
+      !prompt.includes('WITHOUT naming the ingredient'),
+      'action prompt should not contain ingredient-specific colour/shape instruction',
+    );
+  });
+
+  it('ingredient nodeType does NOT contain action vessel instruction', () => {
+    const prompt = generateHydeQueriesPrompt('egg', 'ingredient');
+    assert.ok(
+      !prompt.includes('name the vessel'),
+      'ingredient prompt should not contain vessel-naming instruction',
+    );
+  });
+
+  it('embeds the ingredient name in the returned prompt', () => {
+    const prompt = generateHydeQueriesPrompt('black pepper', 'ingredient');
+    assert.ok(
+      prompt.includes('black pepper'),
+      'prompt should include the ingredient name',
+    );
+  });
+
+  it('returns a string for both nodeType values', () => {
+    assert.strictEqual(typeof generateHydeQueriesPrompt('egg', 'ingredient'), 'string');
+    assert.strictEqual(typeof generateHydeQueriesPrompt('fry', 'action'), 'string');
+  });
+
+});
+
+// ---------------------------------------------------------------------------
+// parseHydeQueries — edge cases
+// ---------------------------------------------------------------------------
+
+describe('parseHydeQueries', () => {
+
+  it('parses a valid raw JSON array', () => {
+    const input = JSON.stringify(['egg', 'cracked egg', 'white egg', 'raw egg']);
+    const result = parseHydeQueries(input);
+    assert.ok(Array.isArray(result), 'result must be an array');
+    assert.strictEqual(result.length, 4);
+    assert.strictEqual(result[0], 'egg');
+  });
+
+  it('strips markdown json fence and parses successfully', () => {
+    const inner = JSON.stringify(['a', 'b', 'c']);
+    const fenced = '```json\n' + inner + '\n```';
+    const result = parseHydeQueries(fenced);
+    assert.deepStrictEqual(result, ['a', 'b', 'c']);
+  });
+
+  it('strips plain markdown fence (no language tag)', () => {
+    const inner = JSON.stringify(['x', 'y']);
+    const fenced = '```\n' + inner + '\n```';
+    const result = parseHydeQueries(fenced);
+    assert.deepStrictEqual(result, ['x', 'y']);
+  });
+
+  it('returns [] for invalid JSON', () => {
+    const result = parseHydeQueries('not valid json at all');
+    assert.deepStrictEqual(result, []);
+  });
+
+  it('returns [] for an empty string', () => {
+    const result = parseHydeQueries('');
+    assert.deepStrictEqual(result, []);
+  });
+
+  it('returns [] when parsed value is not an array', () => {
+    const result = parseHydeQueries(JSON.stringify({ key: 'value' }));
+    assert.deepStrictEqual(result, []);
+  });
+
+  it('returns [] when array contains non-string elements', () => {
+    const result = parseHydeQueries(JSON.stringify([1, 2, 3]));
+    assert.deepStrictEqual(result, []);
+  });
+
+  it('returns the exact strings in the same order', () => {
+    const terms = [
+      'diced onion',
+      'chopped onion golden',
+      'translucent onion in pan sauteed',
+    ];
+    const result = parseHydeQueries(JSON.stringify(terms));
+    assert.deepStrictEqual(result, terms);
   });
 
 });

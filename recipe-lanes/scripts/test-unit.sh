@@ -12,7 +12,7 @@ fi
 echo "----------------------------------------------------------------"
 echo "Running Fast Unit Tests (Parallel)"
 echo "----------------------------------------------------------------"
-npx env-cmd -f .env.test node --import tsx --test tests/graph.test.ts tests/data.test.ts tests/image-processing.test.ts tests/verify-production-logic.test.ts tests/title-persistence.test.ts tests/icon-search.test.ts
+npx env-cmd -f .env.test node --import tsx --test tests/graph.test.ts tests/data.test.ts tests/image-processing.test.ts tests/verify-production-logic.test.ts tests/title-persistence.test.ts tests/icon-search.test.ts tests/parser.test.ts tests/icon-shortlist.test.ts tests/icon-pipeline.test.ts
 
 # 2. Run Integration Tests (Require Emulators)
 echo "----------------------------------------------------------------"

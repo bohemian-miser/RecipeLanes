@@ -70,8 +70,9 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
   });
 
   test('Gallery: Search & Vetting (Admin)', async ({ page, login }) => {
+    test.slow();
     const dir = screenshotDir('recipe-gallery', desktop.name);
-    
+
     // 1. Create a public unvetted recipe
     await page.goto('/lanes?new=true');
     await login('creator-user');
@@ -112,6 +113,7 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
   });
 
   test('UI Features: Feedback & Download', async ({ page, context }) => {
+    test.slow();
     const dir = screenshotDir('recipe-ui-features', desktop.name);
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     

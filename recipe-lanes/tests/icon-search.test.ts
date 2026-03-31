@@ -165,19 +165,20 @@ describe('FirebaseDataService.searchIconsByEmbedding', () => {
         const limit = 5;
 
         // Capture calls made on the fake Firestore collection
-        const capturedArgs: { fieldPath?: string, queryVector?: number[], limit?: number } = {};
+        const capturedArgs: { fieldPath?: string, queryVector?: any, limit?: number } = {};
 
         const fakeQuerySnapshot = {
             docs: [
                 {
-                    data: () => ({ id: 'icon1', url: 'https://example.com/icon1.png', score: 0.88 }),
+                    // Use icon_id key to match what writeIconToIndex stores
+                    data: () => ({ icon_id: 'icon1', url: 'https://example.com/icon1.png', ingredient_name: 'egg' }),
                     id: 'icon1',
                 },
             ],
         };
 
         const fakeCollection = {
-            findNearest: (fieldPath: string, queryVector: number[], opts: { limit: number }) => {
+            findNearest: (fieldPath: string, queryVector: any, opts: { limit: number }) => {
                 capturedArgs.fieldPath = fieldPath;
                 capturedArgs.queryVector = queryVector;
                 capturedArgs.limit = opts.limit;
@@ -198,8 +199,12 @@ describe('FirebaseDataService.searchIconsByEmbedding', () => {
 
         assert.strictEqual(capturedArgs.fieldPath, 'embedding',
             'findNearest must be called with field path "embedding"');
-        assert.deepStrictEqual(capturedArgs.queryVector, queryVec,
-            'query vector must be passed through unchanged');
+        // The implementation wraps the raw array in FieldValue.vector() before calling findNearest.
+        // Verify that the wrapped value encodes the original vector values.
+        const captured = capturedArgs.queryVector;
+        const capturedValues: number[] = captured?._values ?? Array.from(captured ?? []);
+        assert.deepStrictEqual(capturedValues, queryVec,
+            'query vector values must be forwarded to findNearest (possibly wrapped in FieldValue.vector)');
         assert.strictEqual(capturedArgs.limit, limit,
             'limit must be passed through to findNearest');
 
@@ -208,13 +213,11 @@ describe('FirebaseDataService.searchIconsByEmbedding', () => {
 
     it('maps Firestore documents back to IconStats objects', async () => {
         const fakeDoc = {
+            // Use icon_id (not id) to match the shape written by writeIconToIndex
             data: () => ({
-                id: 'icon42',
+                icon_id: 'icon42',
                 url: 'https://example.com/icon42.png',
-                score: 0.75,
-                prompt: 'a sliced lemon',
-                impressions: 3,
-                rejections: 1,
+                ingredient_name: 'lemon',
             }),
             id: 'icon42',
         };
@@ -235,9 +238,11 @@ describe('FirebaseDataService.searchIconsByEmbedding', () => {
 
         assert.strictEqual(results.length, 1);
         const icon = results[0];
+        // id is mapped from d.icon_id
         assert.strictEqual(icon.id, 'icon42');
         assert.strictEqual(icon.url, 'https://example.com/icon42.png');
-        assert.strictEqual(icon.score, 0.75);
+        // prompt is mapped from d.ingredient_name
+        assert.strictEqual(icon.prompt, 'lemon');
     });
 });
 

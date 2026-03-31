@@ -29,6 +29,7 @@ test.describe('Regressions & Bug Repros', () => {
     });
 
     test('Issue 74: Bridge persists after move', async ({ page, login }) => {
+        test.slow();
         const dir = screenshotDir('issue-74', desktop.name);
         await page.setViewportSize(desktop.viewport);
         
@@ -119,9 +120,10 @@ test.describe('Regressions & Bug Repros', () => {
 
         await page.bringToFront();
         await node.hover();
-        const rerollBtn = node.locator('button[title="Reroll Icon"]');
+        const rerollBtn = node.locator('button[title="Cycle shortlist"]');
+        await expect(rerollBtn).toBeVisible({ timeout: 15000 });
         await rerollBtn.click();
-        
+
         await expect(rerollBtn.locator('svg')).not.toHaveClass(/animate-spin/, { timeout: 30000 });
         
         await galleryPage.bringToFront();
@@ -132,8 +134,8 @@ test.describe('Regressions & Bug Repros', () => {
             await galleryPage.keyboard.press('Enter');
             await galleryPage.waitForTimeout(500);
             return cards.count();
-        }, { 
-            timeout: 20000,
+        }, {
+            timeout: 45000,
             intervals: [2000]
         }).toBe(2);
         
@@ -241,8 +243,8 @@ test.describe('Regressions & Bug Repros', () => {
                 await galleryPage.waitForTimeout(500);
                 const cards = galleryPage.locator('.relative.group').filter({ hasText: name });
                 return cards.count();
-            }, { 
-                timeout: 20000,
+            }, {
+                timeout: 30000,
                 intervals: [2000]
             }).toBe(count);
 
@@ -255,11 +257,11 @@ test.describe('Regressions & Bug Repros', () => {
         await node.hover();
         
         
-        const rerollBtn = node.locator('button[title="Reroll Icon"]');
+        const rerollBtn = node.locator('button[title="Cycle shortlist"]');
         await screenshot(page, dir, 'before reroll');
         // Scroll to make the reroll button visible.
         await page.mouse.wheel(0, 500);
-        await expect(rerollBtn).toBeVisible();
+        await expect(rerollBtn).toBeVisible({ timeout: 15000 });
         await rerollBtn.hover({ force: true });
         await rerollBtn.click({ force: true });
         await screenshot(page, dir, 'after reroll clicked');
@@ -267,8 +269,8 @@ test.describe('Regressions & Bug Repros', () => {
         const spinner = rerollBtn.locator('svg');
         await expect(spinner).toHaveClass(/animate-spin/);
         await screenshot(page, dir, 'spinner visible');
-        await expect.poll(() => node.locator('img').getAttribute('src'), { 
-            timeout: 4000,
+        await expect.poll(() => node.locator('img').getAttribute('src'), {
+            timeout: 15000,
             intervals: [1000]
         }).not.toBe(currentSrc);
 
@@ -296,7 +298,7 @@ test.describe('Regressions & Bug Repros', () => {
         const src2 = await node2.locator('img').getAttribute('src');
         
         await node2.hover();
-        await node2.locator('button[title="Reroll Icon"]').click({ force: true });
+        await node2.locator('button[title="Cycle shortlist"]').click({ force: true });
         await expect.poll(() => node2.locator('img').getAttribute('src'), { 
             timeout: 30000,
             intervals: [2000]

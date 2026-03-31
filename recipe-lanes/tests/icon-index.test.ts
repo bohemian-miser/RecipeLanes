@@ -77,9 +77,11 @@ describe('icon_index population', () => {
             'ingredient_name must be a non-empty string');
         assert.ok(typeof indexDoc.url === 'string' && indexDoc.url.length > 0,
             'url must be a non-empty string');
-        assert.ok(Array.isArray(indexDoc.embedding) && indexDoc.embedding.length > 0,
-            'embedding must be a non-empty array');
-        assert.ok(indexDoc.embedding.every((v: any) => typeof v === 'number'),
+        // Firestore stores VectorValue, not a plain array — use toArray() to inspect it
+        const embeddingArr = indexDoc.embedding?.toArray?.();
+        assert.ok(Array.isArray(embeddingArr) && embeddingArr.length > 0,
+            'embedding must be a non-empty VectorValue');
+        assert.ok(embeddingArr.every((v: any) => typeof v === 'number'),
             'all embedding values must be numbers');
         assert.ok(indexDoc.created_at !== undefined, 'created_at must be set');
     });

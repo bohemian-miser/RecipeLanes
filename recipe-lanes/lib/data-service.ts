@@ -536,18 +536,21 @@ export class FirebaseDataService implements DataService {
         recipeId: string,
         unresolvedNames: string[],
         hydeQueriesMap: Map<string, string[]>,
-        embedFn: (texts: string[]) => Promise<number[]>
+        embedFn: (texts: string[]) => Promise<number[]>,
+        recipeRejections: Record<string, string[]> = {}
     ): Promise<string[]> {
         const stillUnresolved: string[] = [];
         for (const stdName of unresolvedNames) {
             try {
+                const rejectedIds = new Set<string>(recipeRejections[stdName] || []);
                 const queries = hydeQueriesMap.get(stdName);
                 const textsToEmbed = queries && queries.length > 0 ? queries : [stdName];
                 const vec = await embedFn(textsToEmbed);
-                const results = await this.searchIconsByEmbedding(vec, 8);
+                const raw = await this.searchIconsByEmbedding(vec, 12);
+                const results = raw.filter(r => !rejectedIds.has(r.id));
                 if (results.length > 0) {
-                    await this.assignShortlistToRecipe(recipeId, stdName, results);
-                    console.log(`[resolveFromIndex] "${stdName}" → ${results.length} candidates from index`);
+                    await this.assignShortlistToRecipe(recipeId, stdName, results.slice(0, 8));
+                    console.log(`[resolveFromIndex] "${stdName}" → ${results.length} candidates (${raw.length - results.length} filtered)`);
                 } else {
                     stillUnresolved.push(stdName);
                 }
@@ -623,7 +626,7 @@ export class FirebaseDataService implements DataService {
         // 2b. Try to resolve from index via embedding search
         let stillUnresolved = unresolvedNames;
         if (embedFn) {
-            stillUnresolved = await this.resolveFromIndex(recipeId, unresolvedNames, hydeQueriesMap, embedFn);
+            stillUnresolved = await this.resolveFromIndex(recipeId, unresolvedNames, hydeQueriesMap, embedFn, recipeRejections);
         }
 
         if (stillUnresolved.length === 0) return;

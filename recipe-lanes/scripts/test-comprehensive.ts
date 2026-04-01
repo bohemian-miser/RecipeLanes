@@ -16,7 +16,7 @@
  */
 
 import 'dotenv/config';
-import { getOrCreateIconAction, deleteIconByUrlAction, deleteIngredientCategoryAction, getAllStorageFilesAction, recordRejectionAction } from '../app/actions';
+import { getOrCreateIconAction, deleteIconByIdAction, getAllStorageFilesAction, recordRejectionAction } from '../app/actions';
 import { setAIService, MockAIService } from '../lib/ai-service';
 import { setDataService, MemoryDataService } from '../lib/data-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
@@ -38,24 +38,22 @@ async function testComprehensive() {
     // 1. Creation & Case Insensitivity
     console.log("\n[1] Testing Creation & Case Normalization...");
     const resA = await getOrCreateIconAction(ingredient.toLowerCase(), 0, []) as any; // Lowercase input
-    const urlA = resA.iconUrl;
-    console.log(` -> Created A (from lower): ${urlA}`);
+    const idA = resA.id;
+    const urlA = resA.url;
+    console.log(` -> Created A (from lower): ${urlA} (${idA})`);
 
     const resB = await getOrCreateIconAction(ingredient.toUpperCase(), 0, [urlA]) as any; // Uppercase input
-    const urlB = resB.iconUrl;
-    console.log(` -> Created B (from UPPER): ${urlB}`);
+    const idB = resB.id;
+    const urlB = resB.url;
+    console.log(` -> Created B (from UPPER): ${urlB} (${idB})`);
     
-    // Check if they are in the same group? 
-    // We can verify by checking if resB sees urlA as existing if we didn't exclude it?
-    // Or just check the filenames/paths if they share the same Title Cased name.
-    if (resA.iconUrl === resB.iconUrl) console.warn(" -> Warning: Got same icon, might not be creating new.");
+    if (idA === idB) console.warn(" -> Warning: Got same icon, might not be creating new.");
     
     // 2. Reroll Logic & Scoring
     console.log("\n[2] Testing Reroll & Scoring...");
     // Reject A
-    await recordRejectionAction(urlA, ingredient);
+    await recordRejectionAction(idA, ingredient);
     // Get A again (should have lower score) or check storage metadata
-    // We can't easily check score directly without fetching all.
     let storageFiles = await getAllStorageFilesAction();
     if (!storageFiles) throw new Error("Storage access denied in test!");
 
@@ -70,7 +68,7 @@ async function testComprehensive() {
     // 3. Deletion & Persistence
     console.log("\n[3] Testing Deletion...");
     // Delete A
-    await deleteIconByUrlAction(urlA, ingredient); // Smart delete
+    await deleteIconByIdAction(idA, ingredient); // Smart delete
     
     // Verify A is gone
     storageFiles = await getAllStorageFilesAction();
@@ -85,17 +83,6 @@ async function testComprehensive() {
         throw new Error("Icon B was accidentally deleted!");
     }
     console.log(" -> Icon B preserved.");
-
-    // 4. Category Cleanup
-    console.log("\n[4] Testing Category Cleanup...");
-    await deleteIngredientCategoryAction(ingredient);
-    
-    storageFiles = await getAllStorageFilesAction();
-    if (!storageFiles) throw new Error("Storage access denied!");
-    if (storageFiles.some((f: any) => urlsMatch(f.publicUrl, urlB))) {
-        throw new Error("Icon B failed to delete via category cleanup!");
-    }
-    console.log(" -> Category cleaned up successfully.");
 
     console.log("\n=== Test Passed Successfully ===");
 

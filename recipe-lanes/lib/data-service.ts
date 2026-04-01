@@ -58,10 +58,10 @@ export interface DataService {
   getStarredRecipes(userId: string): Promise<any[]>;
   getPublicRecipes(limit: number): Promise<any[]>;
 
-  recordRejection(iconUrl: string, ingredientName: string, ingredientId: string): Promise<void>;
+  recordRejection(iconId: string, ingredientName: string, ingredientId: string): Promise<void>;
   recordImpression(ingredientId: string, iconId: string): Promise<void>;
 
-  deleteIcon(iconUrl: string, ingredientName?: string): Promise<void>;
+  deleteIcon(iconId: string, ingredientName?: string): Promise<void>;
   
   listDebugFiles(): Promise<any[]>;
   checkExistingCopies(originalId: string, userId: string): Promise<any[]>;
@@ -1146,7 +1146,7 @@ export class FirebaseDataService implements DataService {
 
 
 
-  async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
+  async recordRejection(iconId: string, ingredientName: string, ingredientId: string) {
     const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
     
     await db.runTransaction(async (t) => {
@@ -1154,8 +1154,8 @@ export class FirebaseDataService implements DataService {
         if (!doc.exists) return;
         const icons = doc.data()?.icons || [];
         
-        // Find by ID, URL or Path. 
-        const index = icons.findIndex((i: any) => i.id === iconUrl || i.url === iconUrl || i.path === iconUrl);
+        // Find by ID primarily, fallback to URL/Path for legacy support
+        const index = icons.findIndex((i: any) => i.id === iconId || i.url === iconId || i.path === iconId);
         if (index !== -1) {
             const icon = icons[index];
             icon.rejections = (icon.rejections || 0) + 1;
@@ -1171,30 +1171,31 @@ export class FirebaseDataService implements DataService {
     });
   }
 
-  async deleteIcon(iconUrl: string, ingredientName?: string) {
+  async deleteIcon(iconId: string, ingredientName?: string) {
       if (!ingredientName) return; 
       const stdName = standardizeIngredientName(ingredientName);
       const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName);
       
-      let deletedId: string | null = null;
-
-      await db.runTransaction(async (t) => {
+      const deletedPath = await db.runTransaction(async (t) => {
           const doc = await t.get(docRef);
-          if (!doc.exists) return;
+          if (!doc.exists) return null;
           const icons = doc.data()?.icons || [];
-          const iconToDelete = icons.find((i: any) => i.url === iconUrl || i.path === iconUrl);
+          const iconToDelete = icons.find((i: any) => i.id === iconId || i.url === iconId || i.path === iconId);
           
           if (iconToDelete) {
-              deletedId = iconToDelete.id;
+              const deletedId = iconToDelete.id;
+              const path = iconToDelete.path || iconToDelete.url || null;
               const newIcons = icons.filter((i: any) => i.id !== deletedId);
               t.update(docRef, { icons: newIcons });
+              return path;
           }
+          return null;
       });
       
-      if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
-          let path = iconUrl;
-          if (iconUrl.includes('/o/')) {
-              const match = iconUrl.match(new RegExp('/o/([^?]+)'));
+      if (typeof deletedPath === 'string' && process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
+          let path: string = deletedPath;
+          if (deletedPath.includes('/o/')) {
+              const match = deletedPath.match(new RegExp('/o/([^?]+)'));
               if (match) path = decodeURIComponent(match[1]);
           }
           if (path) {
@@ -1239,7 +1240,7 @@ export class FirebaseDataService implements DataService {
           if (snap.exists) cacheMap.set(snap.id, snap.data());
       });
 
-      const updatesByRecipe = new Map<string, Map<string, { id: string, url: string, metadata?: any }>>();
+      const updatesByRecipe = new Map<string, Map<string, { id: string, url?: string, path?: string, metadata?: any }>>();
 
       for (const item of items) {
           const name = standardizeIngredientName(item.ingredientName);
@@ -1305,7 +1306,7 @@ export class FirebaseDataService implements DataService {
                   if (!updatesByRecipe.has(item.recipeId)) {
                       updatesByRecipe.set(item.recipeId, new Map());
                   }
-                  updatesByRecipe.get(item.recipeId)!.set(name, { id: foundIcon.id, url: foundIcon.url, metadata: foundIcon.metadata });
+                  updatesByRecipe.get(item.recipeId)!.set(name, { id: foundIcon.id, url: foundIcon.url, path: foundIcon.path, metadata: foundIcon.metadata });
               }
           }
       }
@@ -1785,8 +1786,8 @@ export class MemoryDataService implements DataService {
     }
 
 
-    async recordRejection(iconUrl: string, ingredientName: string, ingredientId: string) {
-        const icons = memoryStore.getAllIcons().filter(i => i.url === iconUrl);
+    async recordRejection(iconId: string, ingredientName: string, ingredientId: string) {
+        const icons = memoryStore.getAllIcons().filter(i => i.id === iconId || i.url === iconId);
         for (const icon of icons) {
             const n = (icon.impressions || 0);
             const r = (icon.rejections || 0) + 1;
@@ -1795,8 +1796,8 @@ export class MemoryDataService implements DataService {
         }
     }
 
-    async deleteIcon(iconUrl: string, ingredientName?: string) {
-        memoryStore.deleteIcon(iconUrl);
+    async deleteIcon(iconId: string, ingredientName?: string) {
+        memoryStore.deleteIcon(iconId);
     }
 
 

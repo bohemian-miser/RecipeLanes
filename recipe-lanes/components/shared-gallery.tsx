@@ -18,7 +18,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getPagedIconsAction, deleteIconByUrlAction } from '@/app/actions';
+import { getPagedIconsAction, deleteIconByIdAction } from '@/app/actions';
 import { Search, ChevronLeft, ChevronRight, Loader2, Trash2, Sparkles } from 'lucide-react';
 import { IconStats } from '@/lib/recipe-lanes/types';
 
@@ -55,12 +55,12 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
     return () => clearTimeout(timer);
   }, [page, search]);
 
-  const handleDelete = async (url: string, ingredient: string) => {
+  const handleDelete = async (id: string, ingredient: string) => {
     //   if (!confirm('Are you sure you want to delete this icon?')) return;
       try {
-          const res = await deleteIconByUrlAction(url, ingredient);
+          const res = await deleteIconByIdAction(id, ingredient);
           if (res.success) {
-              setIcons(prev => prev.filter(i => i.url !== url));
+              setIcons(prev => prev.filter(i => i.id !== id));
               setTotal(t => t - 1);
           } else {
               alert('Delete failed: ' + res.error);
@@ -112,7 +112,7 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
                    </div>
                    
                    <button 
-                       onClick={(e) => { e.stopPropagation(); handleDelete(icon.url, icon.ingredient_name || icon.visualDescription); }}
+                       onClick={(e) => { e.stopPropagation(); handleDelete(icon.id, icon.ingredient_name || icon.visualDescription); }}
                        className="absolute top-7 right-1 z-20 p-1 bg-red-900/80 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
                        title="Delete Icon"
                    >

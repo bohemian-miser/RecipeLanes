@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
     isIconSearchMatched,
+    getIconMatchType,
     currentShortlistIndex,
     nextShortlistIcon,
     advanceShortlistIndex,
@@ -27,45 +28,88 @@ const baseNode = (): RecipeNode => ({
 });
 
 // ---------------------------------------------------------------------------
-// isIconSearchMatched — confidence indicator logic
+// isIconSearchMatched — reads matchType from current shortlist entry
 // ---------------------------------------------------------------------------
 
 describe('isIconSearchMatched', () => {
 
-    it('returns true when iconQuery exists and method is not exact_name', () => {
+    it('returns true when the current shortlist entry has matchType "search"', () => {
+        const icon: IconStats = { ...makeIcon('a'), matchType: 'search' };
         const node: RecipeNode = {
             ...baseNode(),
-            iconQuery: { queryUsed: 'sliced carrot', method: 'hyde_avg_firestore' },
+            iconShortlist: [icon],
+            shortlistIndex: 0,
         };
         assert.strictEqual(isIconSearchMatched(node), true);
     });
 
-    it('returns false when iconQuery is absent', () => {
-        const node: RecipeNode = { ...baseNode() };
-        assert.strictEqual(isIconSearchMatched(node), false);
-    });
-
-    it('returns false when iconQuery.method is exact_name', () => {
+    it('returns false when the current shortlist entry has matchType "generated"', () => {
+        const icon: IconStats = { ...makeIcon('a'), matchType: 'generated' };
         const node: RecipeNode = {
             ...baseNode(),
-            iconQuery: { queryUsed: 'carrot', method: 'exact_name' },
+            iconShortlist: [icon],
+            shortlistIndex: 0,
         };
         assert.strictEqual(isIconSearchMatched(node), false);
     });
 
-    it('returns true for any non-exact_name method string', () => {
-        const methods = ['siglip', 'clip', 'text_embed', 'hyde_avg_firestore'];
-        for (const method of methods) {
-            const node: RecipeNode = {
-                ...baseNode(),
-                iconQuery: { queryUsed: 'test', method },
-            };
-            assert.strictEqual(
-                isIconSearchMatched(node),
-                true,
-                `expected true for method="${method}"`,
-            );
-        }
+    it('returns false when iconShortlist is absent', () => {
+        const node: RecipeNode = { ...baseNode() };
+        assert.strictEqual(isIconSearchMatched(node), false);
+    });
+
+    it('returns false when the current shortlist entry has no matchType', () => {
+        const node: RecipeNode = {
+            ...baseNode(),
+            iconShortlist: [makeIcon('a')],
+            shortlistIndex: 0,
+        };
+        assert.strictEqual(isIconSearchMatched(node), false);
+    });
+
+    it('reads matchType from the correct shortlistIndex position', () => {
+        const icons: IconStats[] = [
+            { ...makeIcon('a'), matchType: 'generated' },
+            { ...makeIcon('b'), matchType: 'search' },
+        ];
+        const nodeAtGenerated: RecipeNode = { ...baseNode(), iconShortlist: icons, shortlistIndex: 0 };
+        const nodeAtSearch: RecipeNode = { ...baseNode(), iconShortlist: icons, shortlistIndex: 1 };
+        assert.strictEqual(isIconSearchMatched(nodeAtGenerated), false);
+        assert.strictEqual(isIconSearchMatched(nodeAtSearch), true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// getIconMatchType — returns matchType from current shortlist entry
+// ---------------------------------------------------------------------------
+
+describe('getIconMatchType', () => {
+
+    it('returns "search" when current entry has matchType "search"', () => {
+        const icon: IconStats = { ...makeIcon('a'), matchType: 'search' };
+        const node: RecipeNode = { ...baseNode(), iconShortlist: [icon], shortlistIndex: 0 };
+        assert.strictEqual(getIconMatchType(node), 'search');
+    });
+
+    it('returns "generated" when current entry has matchType "generated"', () => {
+        const icon: IconStats = { ...makeIcon('a'), matchType: 'generated' };
+        const node: RecipeNode = { ...baseNode(), iconShortlist: [icon], shortlistIndex: 0 };
+        assert.strictEqual(getIconMatchType(node), 'generated');
+    });
+
+    it('returns undefined when iconShortlist is absent', () => {
+        const node: RecipeNode = { ...baseNode() };
+        assert.strictEqual(getIconMatchType(node), undefined);
+    });
+
+    it('returns undefined when shortlistIndex is absent', () => {
+        const node: RecipeNode = { ...baseNode(), iconShortlist: [makeIcon('a')] };
+        assert.strictEqual(getIconMatchType(node), undefined);
+    });
+
+    it('returns undefined when the entry has no matchType set', () => {
+        const node: RecipeNode = { ...baseNode(), iconShortlist: [makeIcon('a')], shortlistIndex: 0 };
+        assert.strictEqual(getIconMatchType(node), undefined);
     });
 });
 

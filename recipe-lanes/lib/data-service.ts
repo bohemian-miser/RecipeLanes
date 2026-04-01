@@ -173,11 +173,17 @@ export class FirebaseDataService implements DataService {
       let ingredientChanged = false;
       let icons = [];
 
+      const generatedEntry: IconStats = { ...icon, matchType: 'generated' };
       nodes.forEach((n: any) => {
           if (n.visualDescription) {
               const nName = standardizeIngredientName(String(n.visualDescription));
               if (nName === stdName) {
                   applyIconToNode(n, icon);
+                  // Prepend generated icon to shortlist, cap total at 8
+                  const existingShortlist: IconStats[] = n.iconShortlist || [];
+                  const filteredShortlist = existingShortlist.filter((e: any) => e.id !== icon.id);
+                  n.iconShortlist = [generatedEntry, ...filteredShortlist].slice(0, 8);
+                  n.shortlistIndex = 0;
                   recipeChanged = true;
               }
           }
@@ -280,69 +286,10 @@ export class FirebaseDataService implements DataService {
     /**
      * Helper to determine if a single node requires icon processing.
      */
-    private nodeNeedsProcessing(node: any, recipeRejections: any): boolean {
+    private nodeNeedsProcessing(node: any): boolean {
         if (!node.visualDescription) return false;
         if (!node.icon || !node.icon.id) return true;
-        
-        const stdName = standardizeIngredientName(node.visualDescription as string);
-        const isRejected = recipeRejections[stdName]?.includes(node.icon.id);
-        return !!isRejected;
-    }
-
-    /**
-     * Attempts to resolve missing icons from the cache.
-     * Returns the list of standard names that were cache misses and still need processing.
-     */
-    private async attemptUpdateFromCache(recipeId: string, nodes: any[], recipeRejections: any, hydeQueriesMap?: Map<string, string[]>): Promise<string[]> {
-        const stdNamesNeedingIcons = Array.from(new Set(
-            nodes.map(n => standardizeIngredientName(String(n.visualDescription)))
-        )) as string[];
-
-        if (stdNamesNeedingIcons.length === 0) return [];
-
-        // Fetch cached ingredients
-        const ingRefs = stdNamesNeedingIcons.map(name => db.collection(DB_COLLECTION_INGREDIENTS).doc(name));
-        const ingSnaps = await db.getAll(...ingRefs);
-
-        const ingMap = new Map<string, any>();
-        ingSnaps.forEach(s => {
-            if (s.exists) ingMap.set(s.id, s.data());
-        });
-
-        const cacheMisses: string[] = [];
-
-        // Evaluate each needed ingredient
-        for (const stdName of stdNamesNeedingIcons) {
-            const rejectedIds = new Set<string>(recipeRejections[stdName] || []);
-            const ingData = ingMap.get(stdName);
-            let bestIcon = null;
-
-            if (ingData?.icons && Array.isArray(ingData.icons)) {
-                const sortedIcons = [...ingData.icons].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
-                bestIcon = sortedIcons.find((icon: any) => !rejectedIds.has(icon.id) && !icon.marked_for_deletion);
-            }
-
-            if (bestIcon) {
-                console.log(`[FirebaseDataService] attemptUpdateFromCache: Cache HIT for "${stdName}" in recipe ${recipeId}`);
-                await this.assignIconToRecipe(recipeId, stdName, {
-                    id: bestIcon.id,
-                    url: bestIcon.url,
-                    metadata: bestIcon.metadata
-                });
-                // Merge hydeQueries into the icon's searchTerms on cache hit
-                const hydeQueries = hydeQueriesMap?.get(stdName);
-                if (hydeQueries && hydeQueries.length > 0) {
-                    await this.mergeSearchTermsIntoIcon(stdName, bestIcon.id, hydeQueries).catch(e =>
-                        console.warn(`[attemptUpdateFromCache] mergeSearchTermsIntoIcon failed for "${stdName}":`, e)
-                    );
-                }
-            } else {
-                console.log(`[FirebaseDataService] attemptUpdateFromCache: Cache MISS for "${stdName}"`);
-                cacheMisses.push(stdName);
-            }
-        }
-
-        return cacheMisses;
+        return false;
     }
 
     /**
@@ -391,11 +338,10 @@ export class FirebaseDataService implements DataService {
             const freshNode = recipeData?.graph?.nodes?.find(
                 (n: any) => standardizeIngredientName(n.visualDescription) === stdName
             );
-            const rejections = recipeData?.graph?.rejections || {};
 
-            if (!freshNode || !this.nodeNeedsProcessing(freshNode, rejections)) {
+            if (!freshNode || !this.nodeNeedsProcessing(freshNode)) {
                 console.log(`[Transaction] "${stdName}" no longer needs processing. Exiting.`);
-                return; 
+                return;
             }
 
             // 2. Handle Queue Document Creation / Updating
@@ -536,21 +482,18 @@ export class FirebaseDataService implements DataService {
         recipeId: string,
         unresolvedNames: string[],
         hydeQueriesMap: Map<string, string[]>,
-        embedFn: (texts: string[]) => Promise<number[]>,
-        recipeRejections: Record<string, string[]> = {}
+        embedFn: (texts: string[]) => Promise<number[]>
     ): Promise<string[]> {
         const stillUnresolved: string[] = [];
         for (const stdName of unresolvedNames) {
             try {
-                const rejectedIds = new Set<string>(recipeRejections[stdName] || []);
                 const queries = hydeQueriesMap.get(stdName);
                 const textsToEmbed = queries && queries.length > 0 ? queries : [stdName];
                 const vec = await embedFn(textsToEmbed);
-                const raw = await this.searchIconsByEmbedding(vec, 12);
-                const results = raw.filter(r => !rejectedIds.has(r.id));
+                const results = await this.searchIconsByEmbedding(vec, 12);
                 if (results.length > 0) {
                     await this.assignShortlistToRecipe(recipeId, stdName, results.slice(0, 8));
-                    console.log(`[resolveFromIndex] "${stdName}" → ${results.length} candidates (${raw.length - results.length} filtered)`);
+                    console.log(`[resolveFromIndex] "${stdName}" → ${results.length} candidates`);
                 } else {
                     stillUnresolved.push(stdName);
                 }
@@ -567,6 +510,8 @@ export class FirebaseDataService implements DataService {
      */
     private async assignShortlistToRecipe(recipeId: string, stdName: string, results: IconStats[]): Promise<void> {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+        // Tag each entry as coming from a search
+        const taggedResults = results.map(r => ({ ...r, matchType: 'search' as const }));
         await db.runTransaction(async (t) => {
             const doc = await t.get(recipeRef);
             if (!doc.exists) return;
@@ -574,8 +519,8 @@ export class FirebaseDataService implements DataService {
             let changed = false;
             nodes.forEach((n: any) => {
                 if (n.visualDescription && standardizeIngredientName(String(n.visualDescription)) === stdName) {
-                    applyIconToNode(n, results[0]);
-                    n.iconShortlist = results;
+                    applyIconToNode(n, taggedResults[0]);
+                    n.iconShortlist = taggedResults;
                     n.shortlistIndex = 0;
                     changed = true;
                 }
@@ -597,11 +542,9 @@ export class FirebaseDataService implements DataService {
         const data = doc.data();
         if (!data?.graph || !Array.isArray(data.graph.nodes)) return;
 
-        const recipeRejections = data.graph.rejections || {};
-
         // 1. Initial check: Filter nodes that need processing
         const nodesToProcess = data.graph.nodes.filter((n: any) =>
-            this.nodeNeedsProcessing(n, recipeRejections)
+            this.nodeNeedsProcessing(n)
         );
 
         if (nodesToProcess.length === 0) return;
@@ -618,14 +561,12 @@ export class FirebaseDataService implements DataService {
             hydeQueriesMap.set(stdName, merged);
         }
 
-        // 2. Attempt to resolve from cache (exact name match in ingredients_new)
-        const unresolvedNames = await this.attemptUpdateFromCache(recipeId, nodesToProcess, recipeRejections, hydeQueriesMap);
+        // Collect unresolved names (all nodes without icons go directly to index search + generation)
+        const unresolvedNames = Array.from(hydeQueriesMap.keys());
 
-        if (unresolvedNames.length === 0) return;
-
-        // 2b. Try to resolve from index via embedding search (optimistic: show shortlist immediately)
+        // 2. Try to resolve from index via embedding search (optimistic: show shortlist immediately)
         if (embedFn) {
-            await this.resolveFromIndex(recipeId, unresolvedNames, hydeQueriesMap, embedFn, recipeRejections);
+            await this.resolveFromIndex(recipeId, unresolvedNames, hydeQueriesMap, embedFn);
         }
 
         // 3. Queue ALL unresolved ingredients for generation regardless of index results.
@@ -693,25 +634,17 @@ export class FirebaseDataService implements DataService {
 
             const graph = data.graph;
             const nodes = graph.nodes || [];
-            
-            const stdName = standardizeIngredientName(String(ingredientName));
 
-            if (!graph.rejections) graph.rejections = {};
-            if (!graph.rejections[stdName]) graph.rejections[stdName] = [];
-            
-            if (iconIdToReject && !graph.rejections[stdName].includes(iconIdToReject)) {
-                graph.rejections[stdName].push(iconIdToReject);
-            }
+            const stdName = standardizeIngredientName(String(ingredientName));
 
             // Clear ALL nodes matching this ingredient
             nodes.forEach((n: any) => {
                 if (n.visualDescription && standardizeIngredientName(n.visualDescription) === stdName) {
-                                        clearNodeIcon(n);
+                    clearNodeIcon(n);
                 }
             });
-            
+
             t.update(recipeRef, {
-                "graph.rejections": graph.rejections,
                 "graph.nodes": nodes
             });
         });

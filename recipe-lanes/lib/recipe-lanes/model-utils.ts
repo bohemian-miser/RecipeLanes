@@ -65,11 +65,21 @@ export function applyIconToNode(node: RecipeNode, icon: IconStats) {
 }
 
 /**
- * Returns true when the node's icon was resolved via search rather than an
- * exact name match.  Used by UI components to show a confidence indicator.
+ * Returns the matchType of the node's current shortlist entry — 'generated',
+ * 'search', or undefined when no shortlist entry is present.
+ */
+export function getIconMatchType(node: RecipeNode): 'generated' | 'search' | undefined {
+    if (!node.iconShortlist || node.shortlistIndex === undefined) return undefined;
+    return node.iconShortlist[node.shortlistIndex]?.matchType;
+}
+
+/**
+ * Returns true when the node's icon was resolved via search rather than
+ * generation.  Reads from the current shortlist entry's matchType field.
+ * Kept as a one-liner alias so existing callers don't break.
  */
 export function isIconSearchMatched(node: RecipeNode): boolean {
-    return !!node.iconQuery && node.iconQuery.method !== 'exact_name';
+    return getIconMatchType(node) === 'search';
 }
 
 /**

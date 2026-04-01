@@ -21,13 +21,8 @@ import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { useSearchParams } from 'next/navigation';
 import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
-import { functions } from '@/lib/firebase-client';
-import { httpsCallable } from 'firebase/functions';
-import { rejectIcon, forgeIconAction } from '@/app/actions';
-import { getNodeIconId, getNodeIconUrl, nextShortlistIcon } from '@/lib/recipe-lanes/model-utils';
-
-// Track rejected URLs for the session to prevent them from reappearing immediately
-const sessionRejectedUrls = new Set<string>();
+import { forgeIconAction, updateShortlistIndexAction } from '@/app/actions';
+import { getNodeIconId, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
 
 export const MinimalNode: React.FC<any> = ({
     data, selected, isConnectable, id
@@ -78,38 +73,30 @@ export const MinimalNode: React.FC<any> = ({
       e.stopPropagation();
 
       const shortlist: any[] = data.iconShortlist || [];
-      const currentIdx = data.shortlistIndex ?? 0;
-      const nextIdx = currentIdx + 1;
+      if (shortlist.length === 0) return; // nothing to cycle through
 
-      if (shortlist.length > 1) {
-          // Cycle through shortlist, wrapping at the end
-          const wrappedIdx = nextIdx < shortlist.length ? nextIdx : 0;
-          const nextIcon = shortlist[wrappedIdx];
-          setNodes((nds: any[]) => nds.map((n: any) => {
-              if (n.id !== id) return n;
-              return {
-                  ...n,
-                  data: {
-                      ...n.data,
-                      icon: { id: nextIcon.id, url: nextIcon.url, metadata: nextIcon.metadata },
-                      shortlistIndex: wrappedIdx,
-                  },
-              };
-          }));
-          return;
-      }
-      // No shortlist — reroll fetches from search (rejectIcon with embedFn)
-      setIsRerolling(true);
-      const ingredientName = data.visualDescription || data.text;
+      const currentIdx = data.shortlistIndex ?? 0;
+      const newIdx = (currentIdx + 1) % shortlist.length;
+      const nextIcon = shortlist[newIdx];
+
+      // Optimistically update the local React state
+      setNodes((nds: any[]) => nds.map((n: any) => {
+          if (n.id !== id) return n;
+          return {
+              ...n,
+              data: {
+                  ...n.data,
+                  icon: { id: nextIcon.id, url: nextIcon.url, metadata: nextIcon.metadata },
+                  shortlistIndex: newIdx,
+              },
+          };
+      }));
+
+      // Persist the new index to Firestore
       try {
-          const result = await rejectIcon(recipeId || '', ingredientName, getNodeIconId(data) || '');
-          if (result && !result.success) {
-              console.error("Reroll failed:", result.error);
-              setIsRerolling(false);
-          }
+          await updateShortlistIndexAction(recipeId || '', id, newIdx);
       } catch (err) {
-          console.error("Reroll exception:", err);
-          setIsRerolling(false);
+          console.error("Reroll persist failed:", err);
       }
   };
 

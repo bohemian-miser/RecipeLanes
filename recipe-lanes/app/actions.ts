@@ -470,6 +470,35 @@ export async function vetRecipeAction(recipeId: string, isVetted: boolean) {
     }
 }
 
+/**
+ * Updates a single node's shortlistIndex in Firestore so that reroll cycles
+ * through the shortlist without touching the rejection map or queuing generation.
+ */
+export async function updateShortlistIndexAction(recipeId: string, nodeId: string, newIndex: number): Promise<{ success: boolean; error?: string }> {
+    try {
+        const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+        await db.runTransaction(async (t) => {
+            const doc = await t.get(recipeRef);
+            if (!doc.exists) throw new Error('Recipe not found');
+            const nodes: any[] = doc.data()?.graph?.nodes || [];
+            const node = nodes.find((n: any) => n.id === nodeId);
+            if (!node) throw new Error('Node not found');
+            const shortlist = node.iconShortlist || [];
+            if (shortlist.length === 0) throw new Error('No shortlist on node');
+            const clampedIndex = ((newIndex % shortlist.length) + shortlist.length) % shortlist.length;
+            node.shortlistIndex = clampedIndex;
+            const entry = shortlist[clampedIndex];
+            if (entry) {
+                node.icon = { id: entry.id, url: entry.url, metadata: entry.metadata };
+            }
+            t.update(recipeRef, { 'graph.nodes': nodes });
+        });
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 export async function searchIconCandidatesAction(query: string): Promise<{ candidates: IconStats[], error?: string }> {
   if (!query.trim()) return { candidates: [] };
   try {

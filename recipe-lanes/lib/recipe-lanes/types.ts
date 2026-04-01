@@ -43,6 +43,7 @@ export interface IconStats {
     };
     status?: 'pending' | 'processing' | 'failed';
     searchTerms?: SearchTerm[];
+    matchType?: 'generated' | 'search';
 }
 
 export interface RecipeNode {

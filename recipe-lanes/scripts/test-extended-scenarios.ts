@@ -47,19 +47,20 @@ async function testScenarioA() {
   
   // 1. Generate First
   const res1 = await getOrCreateIconAction(ingredient, 0, []) as any;
-  const url1 = res1.iconUrl;
-  console.log(`[1] Generated: ${url1} (Score: ${res1.popularityScore.toFixed(3)})`);
+  const id1 = res1.id;
+  const url1 = res1.url;
+  console.log(`[1] Generated: ${url1} (${id1}) (Score: ${res1.popularityScore.toFixed(3)})`);
   
   // 2. New Session (Selects existing)
   const res2 = await getOrCreateIconAction(ingredient, 0, []) as any;
-  console.log(`[2] Selected: ${res2.iconUrl} (Score: ${res2.popularityScore.toFixed(3)})`);
+  console.log(`[2] Selected: ${res2.url} (${res2.id}) (Score: ${res2.popularityScore.toFixed(3)})`);
   
-  if (res2.iconUrl !== url1) throw new Error('Did not select existing lucky icon!');
+  if (res2.id !== id1) throw new Error('Did not select existing lucky icon!');
   if (res2.popularityScore <= res1.popularityScore) throw new Error('Score did not increase!');
 
   // 3. New Session Again
   const res3 = await getOrCreateIconAction(ingredient, 0, []) as any;
-  console.log(`[3] Selected: ${res3.iconUrl} (Score: ${res3.popularityScore.toFixed(3)})`);
+  console.log(`[3] Selected: ${res3.url} (${res3.id}) (Score: ${res3.popularityScore.toFixed(3)})`);
   
   if (res3.popularityScore <= res2.popularityScore) throw new Error('Score did not increase on second hit!');
   
@@ -81,32 +82,30 @@ async function testScenarioB() {
   const ingredient = "Test-RejectLoop-" + Date.now();
   console.log(`\n--- Scenario B: The Reject Loop (${ingredient}) ---`);
   
+  const ids: string[] = [];
   const urls: string[] = [];
-  let currentUrl = '';
   
   // 1. Generate & Reject Loop (3 times)
   for (let i = 0; i < 3; i++) {
       const res = await getOrCreateIconAction(ingredient, i, urls) as any; // Pass rejection count and seen list
-      currentUrl = res.iconUrl;
-      if (urls.includes(currentUrl)) throw new Error('Generated duplicate icon in reject loop!');
+      const currentId = res.id;
+      const currentUrl = res.url;
+      if (ids.includes(currentId)) throw new Error('Generated duplicate icon in reject loop!');
+      ids.push(currentId);
       urls.push(currentUrl);
       
-      console.log(`[${i+1}] Generated: ${currentUrl} (Score: ${res.popularityScore.toFixed(3)})`);
+      console.log(`[${i+1}] Generated: ${currentUrl} (${currentId}) (Score: ${res.popularityScore.toFixed(3)})`);
       
       // Reject
-      await recordRejectionAction(currentUrl, ingredient);
+      await recordRejectionAction(currentId, ingredient);
       console.log(`    Rejected.`);
   }
-  
-  // Verify scores dropped
-  // We can check one of them by generating a new session request, 
-  // but simpler to check DB or just trust recordRejectionAction (tested elsewhere).
   
   // 4. Force 4th generation (Gate check)
   // Rejections = 3. 
   const res4 = await getOrCreateIconAction(ingredient, 3, urls) as any;
-  console.log(`[4] Generated (4th): ${res4.iconUrl}`);
-  if (urls.includes(res4.iconUrl)) throw new Error('Gate failed to generate new icon on 4th try');
+  console.log(`[4] Generated (4th): ${res4.url} (${res4.id})`);
+  if (ids.includes(res4.id)) throw new Error('Gate failed to generate new icon on 4th try');
   
   console.log('PASSED Scenario B');
 }
@@ -117,23 +116,25 @@ async function testScenarioC() {
   
   // 1. Generate A
   const resA = await getOrCreateIconAction(ingredient, 0, []) as any;
-  const urlA = resA.iconUrl;
-  console.log(`[1] Generated A: ${urlA} (Score: ${resA.popularityScore.toFixed(3)})`);
+  const idA = resA.id;
+  const urlA = resA.url;
+  console.log(`[1] Generated A: ${urlA} (${idA}) (Score: ${resA.popularityScore.toFixed(3)})`);
   
   // 2. Reject A
-  await recordRejectionAction(urlA, ingredient);
+  await recordRejectionAction(idA, ingredient);
   console.log('    Rejected A.');
   
   // 3. Generate B (In same session, A is seen/rejected)
   const resB = await getOrCreateIconAction(ingredient, 1, [urlA]) as any;
-  const urlB = resB.iconUrl;
-  console.log(`[2] Generated B: ${urlB} (Score: ${resB.popularityScore.toFixed(3)})`);
+  const idB = resB.id;
+  const urlB = resB.url;
+  console.log(`[2] Generated B: ${urlB} (${idB}) (Score: ${resB.popularityScore.toFixed(3)})`);
   
   // 4. New Session - Should pick B (Score ~0.27) over A (Score ~0)
   const resNew = await getOrCreateIconAction(ingredient, 0, []) as any;
-  console.log(`[3] New Session Picked: ${resNew.iconUrl} (Score: ${resNew.popularityScore.toFixed(3)})`);
+  console.log(`[3] New Session Picked: ${resNew.url} (${resNew.id}) (Score: ${resNew.popularityScore.toFixed(3)})`);
   
-  if (resNew.iconUrl !== urlB) throw new Error('Did not pick the better icon (B)!');
+  if (resNew.id !== idB) throw new Error('Did not pick the better icon (B)!');
   
   console.log('PASSED Scenario C');
 }

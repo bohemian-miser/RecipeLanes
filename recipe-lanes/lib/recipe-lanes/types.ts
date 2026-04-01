@@ -43,7 +43,11 @@ export interface IconStats {
     };
     status?: 'pending' | 'processing' | 'failed';
     searchTerms?: SearchTerm[];
-    matchType?: 'generated' | 'search';
+}
+
+export interface ShortlistEntry {
+    icon: IconStats;
+    matchType: 'generated' | 'search';
 }
 
 export interface RecipeNode {
@@ -54,7 +58,7 @@ export interface RecipeNode {
   
   // Icon Data
   icon?: IconStats;
-  iconShortlist?: IconStats[];
+  iconShortlist?: ShortlistEntry[];
   shortlistIndex?: number;  // current position in iconShortlist, 0-based
   iconQuery?: {
     queryUsed: string;

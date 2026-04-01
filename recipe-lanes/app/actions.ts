@@ -25,7 +25,7 @@ import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQuer
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import type { RecipeGraph, IconStats } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
-import { applyIconToNode, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
+import { applyIconToNode, getEntryIcon, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from '@/lib/config';
@@ -489,7 +489,8 @@ export async function updateShortlistIndexAction(recipeId: string, nodeId: strin
             node.shortlistIndex = clampedIndex;
             const entry = shortlist[clampedIndex];
             if (entry) {
-                node.icon = { id: entry.id, url: entry.url, metadata: entry.metadata };
+                const icon = getEntryIcon(entry);
+                node.icon = { id: icon.id, url: icon.url, metadata: icon.metadata };
             }
             t.update(recipeRef, { 'graph.nodes': nodes });
         });

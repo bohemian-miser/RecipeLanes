@@ -22,7 +22,7 @@ import { useSearchParams } from 'next/navigation';
 import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
 import { forgeIconAction, updateShortlistIndexAction } from '@/app/actions';
-import { getNodeIconId, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
+import { getEntryIcon, getNodeIconId, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
 
 export const MinimalNode: React.FC<any> = ({
     data, selected, isConnectable, id
@@ -77,7 +77,8 @@ export const MinimalNode: React.FC<any> = ({
 
       const currentIdx = data.shortlistIndex ?? 0;
       const newIdx = (currentIdx + 1) % shortlist.length;
-      const nextIcon = shortlist[newIdx];
+      const nextEntry = shortlist[newIdx];
+      const nextIcon = getEntryIcon(nextEntry);
 
       // Optimistically update the local React state
       setNodes((nds: any[]) => nds.map((n: any) => {

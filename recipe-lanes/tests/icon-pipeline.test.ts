@@ -11,8 +11,8 @@ import { getDataService, setDataService, MemoryDataService, DataService } from '
 import { memoryStore } from '../lib/store';
 import { setAIService, MockAIService } from '../lib/ai-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
-import { getNodeIconUrl, getNodeIconId } from '../lib/recipe-lanes/model-utils';
-import type { IconStats } from '../lib/recipe-lanes/types';
+import { buildShortlistEntry, getNodeIconUrl, getNodeIconId } from '../lib/recipe-lanes/model-utils';
+import type { IconStats, ShortlistEntry } from '../lib/recipe-lanes/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -361,13 +361,17 @@ describe('resolveFromIndex rejection filtering', () => {
 describe('shortlist wrapping via advanceShortlistIndex', () => {
     it('nextShortlistIcon wraps to start when shortlistIndex reaches the end', async () => {
         // The minimal-node.tsx wrapping logic: wrappedIdx = nextIdx < shortlist.length ? nextIdx : 0
-        const shortlist = [makeIcon('a'), makeIcon('b'), makeIcon('c')];
+        const shortlist: ShortlistEntry[] = [
+            buildShortlistEntry(makeIcon('a'), 'generated'),
+            buildShortlistEntry(makeIcon('b'), 'generated'),
+            buildShortlistEntry(makeIcon('c'), 'generated'),
+        ];
 
         // Simulate the wrapping logic in minimal-node.tsx
         function wrappedNext(currentIdx: number): { icon: IconStats; wrappedIdx: number } {
             const nextIdx = currentIdx + 1;
             const wrappedIdx = nextIdx < shortlist.length ? nextIdx : 0;
-            return { icon: shortlist[wrappedIdx], wrappedIdx };
+            return { icon: shortlist[wrappedIdx].icon, wrappedIdx };
         }
 
         // At index 0 → advances to 1
@@ -387,12 +391,12 @@ describe('shortlist wrapping via advanceShortlistIndex', () => {
     });
 
     it('wrapping with a single-item shortlist always stays at index 0', () => {
-        const shortlist = [makeIcon('only')];
+        const shortlist: ShortlistEntry[] = [buildShortlistEntry(makeIcon('only'), 'generated')];
 
         function wrappedNext(currentIdx: number): { icon: IconStats; wrappedIdx: number } {
             const nextIdx = currentIdx + 1;
             const wrappedIdx = nextIdx < shortlist.length ? nextIdx : 0;
-            return { icon: shortlist[wrappedIdx], wrappedIdx };
+            return { icon: shortlist[wrappedIdx].icon, wrappedIdx };
         }
 
         const step = wrappedNext(0);

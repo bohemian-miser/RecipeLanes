@@ -19,10 +19,10 @@ import { db, storage, isFirebaseEnabled } from './firebase-admin';
 import { memoryStore, IconData, IngredientData } from './store';
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
-import type { RecipeGraph, IconStats } from './recipe-lanes/types';
+import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined, calculateWilsonLCB } from './utils';
-import { applyIconToNode, clearNodeIcon, getNodeIconId, getNodeIconUrl, hasNodeIcon } from './recipe-lanes/model-utils';
+import { applyIconToNode, buildShortlistEntry, clearNodeIcon, getEntryIcon, getNodeIconId, getNodeIconUrl, hasNodeIcon, prependToShortlist } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -173,16 +173,15 @@ export class FirebaseDataService implements DataService {
       let ingredientChanged = false;
       let icons = [];
 
-      const generatedEntry: IconStats = { ...icon, matchType: 'generated' };
+      const generatedEntry: ShortlistEntry = buildShortlistEntry(icon, 'generated');
       nodes.forEach((n: any) => {
           if (n.visualDescription) {
               const nName = standardizeIngredientName(String(n.visualDescription));
               if (nName === stdName) {
                   applyIconToNode(n, icon);
-                  // Prepend generated icon to shortlist, cap total at 8
-                  const existingShortlist: IconStats[] = n.iconShortlist || [];
-                  const filteredShortlist = existingShortlist.filter((e: any) => e.id !== icon.id);
-                  n.iconShortlist = [generatedEntry, ...filteredShortlist].slice(0, 8);
+                  // Prepend generated icon to shortlist (no cap)
+                  const existingShortlist: ShortlistEntry[] = n.iconShortlist || [];
+                  n.iconShortlist = prependToShortlist(existingShortlist, generatedEntry);
                   n.shortlistIndex = 0;
                   recipeChanged = true;
               }
@@ -510,8 +509,8 @@ export class FirebaseDataService implements DataService {
      */
     private async assignShortlistToRecipe(recipeId: string, stdName: string, results: IconStats[]): Promise<void> {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
-        // Tag each entry as coming from a search
-        const taggedResults = results.map(r => ({ ...r, matchType: 'search' as const }));
+        // Wrap each search result in a ShortlistEntry
+        const shortlistEntries: ShortlistEntry[] = results.map(r => buildShortlistEntry(r, 'search'));
         await db.runTransaction(async (t) => {
             const doc = await t.get(recipeRef);
             if (!doc.exists) return;
@@ -519,8 +518,8 @@ export class FirebaseDataService implements DataService {
             let changed = false;
             nodes.forEach((n: any) => {
                 if (n.visualDescription && standardizeIngredientName(String(n.visualDescription)) === stdName) {
-                    applyIconToNode(n, taggedResults[0]);
-                    n.iconShortlist = taggedResults;
+                    applyIconToNode(n, getEntryIcon(shortlistEntries[0]));
+                    n.iconShortlist = shortlistEntries;
                     n.shortlistIndex = 0;
                     changed = true;
                 }

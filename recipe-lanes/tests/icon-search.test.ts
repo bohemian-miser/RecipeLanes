@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import { searchIconsForNode, IconSearchResult } from '../lib/recipe-lanes/icon-search';
 import type { SearchTerm } from '../lib/recipe-lanes/types';
 import type { IconStats } from '../lib/recipe-lanes/types';
+import { buildShortlistEntry } from '../lib/recipe-lanes/model-utils';
 import { FirebaseDataService } from '../lib/data-service';
 
 // ---------------------------------------------------------------------------
@@ -298,10 +299,13 @@ describe('RecipeNode extended fields', () => {
             text: 'Slice carrots',
             visualDescription: 'A carrot being sliced',
             type: 'action',
-            iconShortlist: [makeIcon('icon1'), makeIcon('icon2')],
+            iconShortlist: [
+                buildShortlistEntry(makeIcon('icon1'), 'generated'),
+                buildShortlistEntry(makeIcon('icon2'), 'generated'),
+            ],
         };
         assert.strictEqual(node.iconShortlist?.length, 2);
-        assert.strictEqual(node.iconShortlist?.[0].id, 'icon1');
+        assert.strictEqual(node.iconShortlist?.[0].icon.id, 'icon1');
     });
 
     it('accepts iconQuery on a RecipeNode', () => {

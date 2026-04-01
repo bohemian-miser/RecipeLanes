@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { RecipeNode, IconStats } from './types';
+import { RecipeNode, IconStats, ShortlistEntry } from './types';
 
 export function getNodeIcon(node: RecipeNode): IconStats | undefined {
     return node.icon;
@@ -66,11 +66,13 @@ export function applyIconToNode(node: RecipeNode, icon: IconStats) {
 
 /**
  * Returns the matchType of the node's current shortlist entry — 'generated',
- * 'search', or undefined when no shortlist entry is present.
+ * 'search', or undefined when no shortlist entry is present or shortlistIndex
+ * has not been explicitly set.
  */
 export function getIconMatchType(node: RecipeNode): 'generated' | 'search' | undefined {
     if (!node.iconShortlist || node.shortlistIndex === undefined) return undefined;
-    return node.iconShortlist[node.shortlistIndex]?.matchType;
+    const entry = node.iconShortlist[node.shortlistIndex];
+    return entry ? getEntryMatchType(entry) : undefined;
 }
 
 /**
@@ -94,7 +96,7 @@ export function currentShortlistIndex(node: RecipeNode): number {
 }
 
 /**
- * Returns the next shortlist entry after the node's current icon, or null
+ * Returns the next shortlist icon after the node's current icon, or null
  * when the shortlist is exhausted (meaning the caller should fall through to
  * the Firestore reroll path).
  */
@@ -102,7 +104,7 @@ export function nextShortlistIcon(node: RecipeNode): IconStats | null {
     const shortlist = node.iconShortlist;
     if (!shortlist || shortlist.length === 0) return null;
     const nextIdx = (node.shortlistIndex ?? 0) + 1;
-    if (nextIdx < shortlist.length) return shortlist[nextIdx];
+    if (nextIdx < shortlist.length) return getEntryIcon(shortlist[nextIdx]);
     return null;
 }
 
@@ -112,4 +114,42 @@ export function nextShortlistIcon(node: RecipeNode): IconStats | null {
  */
 export function advanceShortlistIndex(node: RecipeNode): number {
     return (node.shortlistIndex ?? 0) + 1;
+}
+
+// ---------------------------------------------------------------------------
+// ShortlistEntry helpers — the ONLY place that knows ShortlistEntry internals
+// ---------------------------------------------------------------------------
+
+/** Wraps an IconStats + matchType into a ShortlistEntry. */
+export function buildShortlistEntry(icon: IconStats, matchType: 'generated' | 'search'): ShortlistEntry {
+    return { icon, matchType };
+}
+
+/**
+ * Returns the current ShortlistEntry for the node (shortlist[shortlistIndex ?? 0]),
+ * or undefined when no shortlist is present.
+ */
+export function getCurrentEntry(node: RecipeNode): ShortlistEntry | undefined {
+    if (!node.iconShortlist || node.iconShortlist.length === 0) return undefined;
+    return node.iconShortlist[node.shortlistIndex ?? 0];
+}
+
+/** Extracts the IconStats from a ShortlistEntry. */
+export function getEntryIcon(entry: ShortlistEntry): IconStats {
+    return entry.icon;
+}
+
+/** Extracts the matchType from a ShortlistEntry. */
+export function getEntryMatchType(entry: ShortlistEntry): 'generated' | 'search' {
+    return entry.matchType;
+}
+
+/**
+ * Prepends entry to existing shortlist (no cap — caller decides slice limits).
+ * De-duplicates by icon id so that re-generating an already-present icon
+ * doesn't create a duplicate.
+ */
+export function prependToShortlist(existing: ShortlistEntry[], entry: ShortlistEntry): ShortlistEntry[] {
+    const filtered = existing.filter(e => e.icon.id !== entry.icon.id);
+    return [entry, ...filtered];
 }

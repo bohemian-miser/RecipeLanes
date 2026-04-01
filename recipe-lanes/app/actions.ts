@@ -98,7 +98,8 @@ export async function addIngredientNodeAction(recipeId: string, ingredientName: 
     }
     const result = await getDataService().addNodeToRecipe(recipeId, ingredientName, undefined, hydeQueries);
     if (result.success) {
-        await getDataService().resolveRecipeIcons(recipeId, getAIService().embedTexts.bind(getAIService()));
+        getDataService().resolveRecipeIcons(recipeId, getAIService().embedTexts.bind(getAIService()))
+            .catch(e => console.error('[addIngredientNodeAction] resolveRecipeIcons failed:', e));
     }
     return result;
 }
@@ -187,9 +188,10 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
         console.log('[createVisualRecipeAction] 💾 Saving initial recipe...');
         const id = await getDataService().saveRecipe(graph, targetId, userId, visibility);
 
-        console.log('[createVisualRecipeAction] Resolving icons');
-        await getDataService().resolveRecipeIcons(id, getAIService().embedTexts.bind(getAIService()));
-        
+        // Fire-and-forget — embedding + vector search runs in background so page navigates immediately
+        getDataService().resolveRecipeIcons(id, getAIService().embedTexts.bind(getAIService()))
+            .catch(e => console.error('[createVisualRecipeAction] resolveRecipeIcons failed:', e));
+
         console.log(`[createVisualRecipeAction] ✅ Complete. ID: ${id}`);
         return {id} ;
 

@@ -19,6 +19,7 @@ import { db, storage, isFirebaseEnabled } from './firebase-admin';
 import { memoryStore, IconData, IngredientData } from './store';
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
+import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined, calculateWilsonLCB } from './utils';
@@ -1066,8 +1067,21 @@ export class FirebaseDataService implements DataService {
       await file.save(bufferToSave, {
           metadata: { contentType: 'image/png', metadata: { ...metadata, iconId } }
       });
-      
+
       await file.makePublic();
+
+      // Generate and upload 128×128 thumbnail (nearest-neighbour for pixel art)
+      const thumbBuffer = await sharp(bufferToSave)
+          .resize(128, 128, { kernel: sharp.kernel.nearest })
+          .png()
+          .toBuffer();
+      const thumbFileName = fileName.replace(/\.png$/, '.thumb.png');
+      const thumbFile = bucket.file(thumbFileName);
+      await thumbFile.save(thumbBuffer, {
+          metadata: { contentType: 'image/png', metadata: { ...metadata, iconId, isThumb: true } }
+      });
+      await thumbFile.makePublic();
+
       return { url: file.publicUrl(), path: fileName, iconId };
   }
 

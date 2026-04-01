@@ -45,11 +45,21 @@ export function getIconUrl(path: string): string {
     return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedPath}?alt=media`;
 }
 
+/**
+ * Derives the 128×128 thumbnail path from an icon's main storage path.
+ * e.g. icons/Carrot-abc12345.png → icons/Carrot-abc12345.thumb.png
+ */
+export function getThumbPath(path: string): string {
+    return path.replace(/\.png$/, '.thumb.png');
+}
+
 // Helper to bridge old code if needed, but prefer using IconStats directly
 export function getNodeIconUrl(node: RecipeNode): string | undefined {
-    if (!node.icon) return undefined;
-    if (node.icon.url) return node.icon.url;
-    if (node.icon.path) return getIconUrl(node.icon.path);
+    const entry = getCurrentEntry(node);
+    const icon = entry ? getEntryIcon(entry) : node.icon;
+    if (!icon) return undefined;
+    if (icon.path) return getIconUrl(getThumbPath(icon.path));
+    if (icon.url) return icon.url; // fallback for old icons without path
     return undefined;
 }
 

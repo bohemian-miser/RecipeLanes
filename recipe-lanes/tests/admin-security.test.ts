@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { deleteIconByUrlAction } from '../app/actions';
+import { deleteIconByIdAction } from '../app/actions';
 import { setAuthService, AuthSession } from '../lib/auth-service';
 import { db } from '../lib/firebase-admin';
 
@@ -12,7 +12,7 @@ class MockAuth {
 describe('Admin Security', () => {
     it('should block guest from deleting icon', async () => {
         setAuthService(new MockAuth(null));
-        const res = await deleteIconByUrlAction('http://fake.url');
+        const res = await deleteIconByIdAction('fake-id');
         assert.strictEqual(res.success, false);
         assert.strictEqual(res.error, 'Login required');
     });
@@ -22,7 +22,7 @@ describe('Admin Security', () => {
         // Action checks Firestore too
         await db.collection('users').doc('user').set({ isAdmin: false });
         
-        const res = await deleteIconByUrlAction('http://fake.url');
+        const res = await deleteIconByIdAction('fake-id');
         assert.strictEqual(res.success, false);
         assert.strictEqual(res.error, 'Admin required');
     });
@@ -31,8 +31,8 @@ describe('Admin Security', () => {
         setAuthService(new MockAuth({ uid: 'admin', isAdmin: true }));
         await db.collection('users').doc('admin').set({ isAdmin: true });
         
-        const res = await deleteIconByUrlAction('http://fake.url');
-        // We expect it NOT to fail with auth error, though it might fail because URL is fake
+        const res = await deleteIconByIdAction('fake-id');
+        // We expect it NOT to fail with auth error, though it might fail because ID is fake
         assert.notStrictEqual(res.error, 'Admin required');
         assert.notStrictEqual(res.error, 'Login required');
     });

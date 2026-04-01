@@ -397,7 +397,7 @@ export async function debugLogAction(message: string) {
 
 
 // this is for the shared gallery on '/'.
-export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteIconByIdAction(iconId: string, ingredientName?: string): Promise<{ success: boolean; error?: string }> {
     const session = await getAuthService().verifyAuth();
     if (!session) return { success: false, error: 'Login required' };
 
@@ -406,11 +406,25 @@ export async function deleteIconByUrlAction(iconUrl: string, ingredientName?: st
     if (!userDoc.data()?.isAdmin) return { success: false, error: 'Admin required' };
 
      try {
-        await getDataService().deleteIcon(iconUrl, ingredientName);
+        await getDataService().deleteIcon(iconId, ingredientName);
         return { success: true };
     } catch (e: any) {
-        console.error('deleteIconByUrlAction failed:', e);
+        console.error('deleteIconByIdAction failed:', e);
         return { success: false, error: e.message };
+    }
+}
+
+export async function recordRejectionAction(iconId: string, ingredientName: string) {
+    const session = await getAuthService().verifyAuth();
+    if (!session?.isAdmin) return { error: 'Admin required' };
+
+    try {
+        const stdName = standardizeIngredientName(ingredientName);
+        await getDataService().recordRejection(iconId, ingredientName, stdName);
+        return { success: true };
+    } catch (e: any) {
+        console.error('recordRejectionAction failed:', e);
+        return { error: e.message };
     }
 }
 

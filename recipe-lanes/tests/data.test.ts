@@ -32,14 +32,14 @@ describe('Data Service & Actions', () => {
             let icons = await service.getIconsForIngredient('ing1');
             assert.strictEqual(icons[0].impressions, 1);
 
-            await service.recordRejection('u1', 'Ing 1', 'ing1');
+            await service.recordRejection(published.id, 'Ing 1', 'ing1');
             icons = await service.getIconsForIngredient('ing1');
             assert.strictEqual(icons[0].rejections, 1);
         });
 
         it('should handle rerolls', async () => {
-            await service.publishIcon('ing1', 'Ing 1', { url: 'u1', score: 0 });
-            await service.recordRejection('u1', 'Ing 1', 'ing1');
+            const published = await service.publishIcon('ing1', 'Ing 1', { url: 'u1', score: 0 });
+            await service.recordRejection(published.id, 'Ing 1', 'ing1');
             await service.publishIcon('ing1', 'Ing 1', { url: 'u2', score: 0 });
             const icons = await service.getIconsForIngredient('ing1');
             assert.strictEqual(icons.length, 2);

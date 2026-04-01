@@ -16,7 +16,7 @@
  */
 
 import 'dotenv/config';
-import { getOrCreateIconAction, deleteIconByUrlAction, deleteIngredientCategoryAction, getAllStorageFilesAction } from '../app/actions';
+import { getOrCreateIconAction, deleteIconByIdAction, getAllStorageFilesAction } from '../app/actions';
 import { setAIService, MockAIService } from '../lib/ai-service';
 import { setDataService, MemoryDataService } from '../lib/data-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
@@ -38,8 +38,9 @@ async function testDeletionSync() {
     // 1. Create Icon
     const resA = await getOrCreateIconAction(ingredient, 0, []) as any;
     if (resA.error) throw new Error(resA.error);
-    const urlA = resA.iconUrl;
-    console.log(` -> Created Icon: ${urlA}`);
+    const idA = resA.id;
+    const urlA = resA.url;
+    console.log(` -> Created Icon: ${urlA} (${idA})`);
 
     // Wait for consistency
     await new Promise(r => setTimeout(r, 2000));
@@ -47,7 +48,7 @@ async function testDeletionSync() {
     // 2. Delete Icon
     console.log(" -> Deleting icon...");
     // Pass ingredient name to trigger targeted delete
-    const delResA = await deleteIconByUrlAction(urlA, ingredient);
+    const delResA = await deleteIconByIdAction(idA, ingredient);
     if (!delResA.success) throw new Error(delResA.error);
     
     console.log(" -> Deletion command sent.");
@@ -68,19 +69,17 @@ async function testDeletionSync() {
     console.log(" -> Attempting to forge again (should generate NEW, not pick old)...");
     const resB = await getOrCreateIconAction(ingredient, 0, []) as any;
     if (resB.error) throw new Error(resB.error);
-    const urlB = resB.iconUrl;
+    const idB = resB.id;
+    const urlB = resB.url;
     
-    console.log(` -> New Icon URL: ${urlB}`);
+    console.log(` -> New Icon URL: ${urlB} (${idB})`);
 
-    if (urlsMatch(urlA, urlB)) {
+    if (idA === idB) {
         throw new Error("FAILURE: The system picked the DELETED icon! Synchronization is broken.");
     } else {
         console.log("SUCCESS: The system generated a NEW icon. Old one was correctly purged.");
     }
     
-    // Cleanup
-    await deleteIngredientCategoryAction(ingredient);
-
   } catch (e) {
       console.error("TEST FAILED:", e);
       process.exitCode = 1;

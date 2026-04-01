@@ -32,12 +32,25 @@ export function clearNodeIcon(node: RecipeNode) {
 }
 
 export function hasNodeIcon(node: RecipeNode): boolean {
-    return !!node.icon && !!node.icon.url;
+    return !!node.icon && (!!node.icon.url || !!node.icon.path);
+}
+
+/**
+ * Reconstructs the public Firebase Storage URL from a path.
+ * Format: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{encoded-path}?alt=media
+ */
+export function getIconUrl(path: string): string {
+    const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
+    const encodedPath = encodeURIComponent(path);
+    return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedPath}?alt=media`;
 }
 
 // Helper to bridge old code if needed, but prefer using IconStats directly
 export function getNodeIconUrl(node: RecipeNode): string | undefined {
-    return node.icon?.url;
+    if (!node.icon) return undefined;
+    if (node.icon.url) return node.icon.url;
+    if (node.icon.path) return getIconUrl(node.icon.path);
+    return undefined;
 }
 
 export function getNodeIconId(node: RecipeNode): string | undefined {
@@ -57,6 +70,7 @@ export function applyIconToNode(node: RecipeNode, icon: IconStats) {
     const cleanIcon: IconStats = {
         id: icon.id,
         url: icon.url,
+        path: icon.path,
         metadata: icon.metadata,
         status: icon.status
     };

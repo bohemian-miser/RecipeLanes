@@ -79,8 +79,8 @@ class MemoryStore {
     return this.icons;
   }
 
-  updateIconPopularity(iconUrl: string, adjustment: number) {
-    const icon = this.icons.find(i => i.url === iconUrl);
+  updateIconPopularity(iconId: string, adjustment: number) {
+    const icon = this.icons.find(i => i.id === iconId || i.url === iconId);
     if (icon) {
       icon.popularity_score += adjustment;
       // Simple logic: count siblings
@@ -91,8 +91,8 @@ class MemoryStore {
     }
   }
 
-  deleteIcon(url: string) {
-      this.icons = this.icons.filter(i => i.url !== url);
+  deleteIcon(iconId: string) {
+      this.icons = this.icons.filter(i => i.id !== iconId && i.url !== iconId);
   }
 
   deleteIngredient(name: string) {

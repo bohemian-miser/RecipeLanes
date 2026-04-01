@@ -78,13 +78,18 @@ test.describe('Regressions & Bug Repros', () => {
         // 2. Hover (Issue 66)
         const gallerySection = page.locator('div', { hasText: 'Community Collection' }).last().locator('..');
         await gallerySection.scrollIntoViewIfNeeded();
-        
+
+        // Poll until the icon appears in the gallery (Cloud Function may not yet have written it
+        // to ingredients_new when the shortlist assignment first makes the inventory icon visible).
         const searchInput = gallerySection.getByPlaceholder(/Search ingredients/i);
-        await searchInput.fill(uniqueName);
-        await searchInput.press('Enter');
-        
+        await expect.poll(async () => {
+            await searchInput.fill('');
+            await searchInput.fill(uniqueName);
+            await page.waitForTimeout(600); // debounce (300ms) + fetch round-trip
+            return gallerySection.getByAltText(new RegExp(uniqueName, 'i')).count();
+        }, { timeout: 30000, intervals: [2000] }).toBeGreaterThan(0);
+
         const galleryIcon = gallerySection.getByAltText(new RegExp(uniqueName, 'i')).first();
-        await expect(galleryIcon).toBeVisible({ timeout: 10000 });
         
         await galleryIcon.hover();
         const label = gallerySection.locator(`[data-testid="gallery-item"][data-ingredient="${uniqueName}"] div.absolute.bottom-0`);
@@ -112,11 +117,20 @@ test.describe('Regressions & Bug Repros', () => {
 
         const galleryPage = await page.context().newPage();
         await galleryPage.goto('/icon_overview');
-        await galleryPage.getByPlaceholder('Search ingredients...').fill(uniqueName);
-        await galleryPage.keyboard.press('Enter');
-        
-        const card = galleryPage.locator('.relative.group').filter({ hasText: uniqueName }).first();
-        await expect(card).toContainText('0 / 1', { timeout: 10000 });
+
+        // Poll until the icon appears in the gallery. Icon generation runs asynchronously via
+        // Cloud Function — retry the search until the ingredient_new entry is written.
+        const cards = galleryPage.locator('.relative.group').filter({ hasText: uniqueName });
+        await expect.poll(async () => {
+            await galleryPage.reload();
+            await galleryPage.getByPlaceholder('Search ingredients...').fill(uniqueName);
+            await galleryPage.keyboard.press('Enter');
+            await galleryPage.waitForTimeout(1000); // debounce + fetch
+            return cards.count();
+        }, { timeout: 30000, intervals: [2000] }).toBeGreaterThan(0);
+
+        const card = cards.first();
+        await expect(card).toContainText('0 / 1', { timeout: 5000 });
 
         await page.bringToFront();
         await node.hover();
@@ -127,12 +141,11 @@ test.describe('Regressions & Bug Repros', () => {
         await expect(rerollBtn.locator('svg')).not.toHaveClass(/animate-spin/, { timeout: 30000 });
         
         await galleryPage.bringToFront();
-        const cards = galleryPage.locator('.relative.group').filter({ hasText: uniqueName });
         await expect.poll(async () => {
             await galleryPage.reload();
             await galleryPage.getByPlaceholder('Search ingredients...').fill(uniqueName);
             await galleryPage.keyboard.press('Enter');
-            await galleryPage.waitForTimeout(500);
+            await galleryPage.waitForTimeout(1000);
             return cards.count();
         }, {
             timeout: 45000,
@@ -240,7 +253,7 @@ test.describe('Regressions & Bug Repros', () => {
                 await galleryPage.reload();
                 await galleryPage.getByPlaceholder('Search ingredients...').fill(name);
                 await galleryPage.keyboard.press('Enter');
-                await galleryPage.waitForTimeout(500);
+                await galleryPage.waitForTimeout(1500); // debounce (300ms) + fetch + render margin
                 const cards = galleryPage.locator('.relative.group').filter({ hasText: name });
                 return cards.count();
             }, {

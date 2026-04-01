@@ -623,17 +623,16 @@ export class FirebaseDataService implements DataService {
 
         if (unresolvedNames.length === 0) return;
 
-        // 2b. Try to resolve from index via embedding search
-        let stillUnresolved = unresolvedNames;
+        // 2b. Try to resolve from index via embedding search (optimistic: show shortlist immediately)
         if (embedFn) {
-            stillUnresolved = await this.resolveFromIndex(recipeId, unresolvedNames, hydeQueriesMap, embedFn, recipeRejections);
+            await this.resolveFromIndex(recipeId, unresolvedNames, hydeQueriesMap, embedFn, recipeRejections);
         }
 
-        if (stillUnresolved.length === 0) return;
-
-        // 3. Queue remaining for generation
-        console.log(`Queueing ${stillUnresolved.length} ingredients for generation...`);
-        await Promise.all(stillUnresolved.map(stdName =>
+        // 3. Queue ALL unresolved ingredients for generation regardless of index results.
+        // resolveFromIndex provides an optimistic shortlist, but we still need a canonical
+        // generated icon stored in ingredients_new for gallery display and stats tracking.
+        console.log(`Queueing ${unresolvedNames.length} ingredients for generation...`);
+        await Promise.all(unresolvedNames.map(stdName =>
             this.queueIconForGeneration(recipeId, stdName, hydeQueriesMap.get(stdName))
         ));
     }

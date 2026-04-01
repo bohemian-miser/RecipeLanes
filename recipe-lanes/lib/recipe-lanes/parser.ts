@@ -160,17 +160,17 @@ export function generateHydeQueriesPrompt(ingredientName: string, nodeType: 'ing
   const shortEx = isAction ? '"pan with sauce", "sizzling skillet"' : '"cracked egg", "raw egg"';
   const medEx = isAction ? '"onions frying in pan icon", "saucepan with boiling liquid"' : '"cracked egg icon", "whole egg cooking"';
   const longEx = isAction
-    ? '"overhead view of frying pan with golden onions and steam, simple icon"'
-    : '"cracked raw egg on white background, simple icon"';
+    ? '"overhead view of frying pan with golden onions and wisps of steam rising"'
+    : '"cracked raw egg, translucent white with bright yellow yolk, oval form"';
   const extra = isAction
     ? '\nFor action icons: ≥2 terms must name the vessel/container (pan, pot, bowl) and ≥2 must describe a visible state cue (steam, bubbles, browning, sizzling).'
     : '\nFor ingredient icons: ≥2 terms must describe colour/shape/texture WITHOUT naming the ingredient (e.g. "white oval grain", "purple layered crescent").';
 
-  return `Generate exactly 12 search terms describing a 64×64 icon for "${ingredientName}" on a white background, for a recipe card.
+  return `Generate exactly 12 search terms describing a 64×64 pixel-art icon for "${ingredientName}" in a recipe card style.
 Return ONLY a raw JSON array of 12 strings. No explanation, no markdown:
 - 4 short tags covering DIFFERENT angles: (1) ingredient/action name, (2) visual synonym or colour, (3) prep/cooking state, (4) category label. (e.g. ${shortEx})
 - 4 medium phrases — one semantic (what it IS), one visual (what it LOOKS LIKE), one contextual (how it's used), one categorical. (e.g. ${medEx})
-- 4 longer visual descriptions covering shape/colour/texture, icon style, use context, and an alternative appearance. (e.g. ${longEx})${extra}`;
+- 4 longer visual descriptions focusing on shape, colour, texture and visible detail — no style or background references. (e.g. ${longEx})${extra}`;
 }
 
 /**

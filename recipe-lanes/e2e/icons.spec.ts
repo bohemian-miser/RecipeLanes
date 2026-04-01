@@ -31,11 +31,19 @@ test.describe('Icon Systems (Consolidated)', () => {
     // 2. Stats & Gallery Check
     const gallerySection = page.locator('div', { hasText: 'Community Collection' }).last().locator('..');
     await gallerySection.scrollIntoViewIfNeeded();
-    await gallerySection.getByPlaceholder(/Search ingredients/).fill(unique);
-    await page.keyboard.press('Enter');
-    
+
+    // Poll until the icon appears in the gallery. The icon is written to ingredients_new by the
+    // Cloud Function which may complete slightly after the shortlist assignment makes the
+    // inventory icon visible. Retry the search every 2s for up to 30s.
+    const gallerySearchInput = gallerySection.getByPlaceholder(/Search ingredients/);
+    await expect.poll(async () => {
+        await gallerySearchInput.fill('');
+        await gallerySearchInput.fill(unique);
+        await page.waitForTimeout(600); // debounce (300ms) + fetch round-trip
+        return gallerySection.getByAltText(new RegExp(unique, 'i')).count();
+    }, { timeout: 30000, intervals: [2000] }).toBeGreaterThan(0);
+
     const galleryIcon = gallerySection.getByAltText(new RegExp(unique, 'i')).first();
-    await expect(galleryIcon).toBeVisible({ timeout: 30000 });
     
     // Hover for label
     await galleryIcon.hover();

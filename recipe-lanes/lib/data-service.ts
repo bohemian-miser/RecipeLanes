@@ -23,7 +23,7 @@ import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined, calculateWilsonLCB } from './utils';
-import { buildShortlistEntry, getEntryIcon, getNodeIconId, getNodeIconUrl, getNodeIngredientName, hasNodeIcon, prependToShortlist } from './recipe-lanes/model-utils';
+import { buildShortlistEntry, getEntryIcon, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, hasNodeIcon, prependToShortlist } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -555,7 +555,7 @@ export class FirebaseDataService implements DataService {
         for (const node of nodesToProcess) {
             if (!node.visualDescription) continue;
             const stdName = standardizeIngredientName(getNodeIngredientName(node));
-            const nodeQueries: string[] = node.hydeQueries || [];
+            const nodeQueries: string[] = getNodeHydeQueries(node);
             const existing = hydeQueriesMap.get(stdName) || [];
             const merged = Array.from(new Set([...existing, ...nodeQueries]));
             hydeQueriesMap.set(stdName, merged);

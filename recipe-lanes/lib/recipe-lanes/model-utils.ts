@@ -30,6 +30,13 @@ export function getNodeTheme(node: RecipeNode): 'classic' | 'modern' | 'modern_c
     return (node.iconTheme as 'classic' | 'modern' | 'modern_clean') || 'classic';
 }
 
+/**
+ * Returns the HyDE queries for a node, or an empty array when none are present.
+ */
+export function getNodeHydeQueries(node: RecipeNode): string[] {
+    return node.hydeQueries || [];
+}
+
 export function getNodeIcon(node: RecipeNode): IconStats | undefined {
     const entry = getCurrentEntry(node);
     return entry ? getEntryIcon(entry) : undefined;

@@ -563,18 +563,23 @@ export class FirebaseDataService implements DataService {
         // Collect unresolved names (all nodes without icons go directly to index search + generation)
         const unresolvedNames = Array.from(hydeQueriesMap.keys());
 
-        // 2. Try to resolve from index via embedding search (optimistic: show shortlist immediately)
+        // 2. Try to resolve from index via embedding search (threshold=0: any result satisfies).
+        //    Returns names that got zero candidates — these still need generation.
+        let toGenerate = unresolvedNames;
         if (embedFn) {
-            await this.resolveFromIndex(recipeId, unresolvedNames, hydeQueriesMap, embedFn);
+            toGenerate = await this.resolveFromIndex(recipeId, unresolvedNames, hydeQueriesMap, embedFn);
         }
 
-        // 3. Queue ALL unresolved ingredients for generation regardless of index results.
-        // resolveFromIndex provides an optimistic shortlist, but we still need a canonical
-        // generated icon stored in ingredients_new for gallery display and stats tracking.
-        console.log(`Queueing ${unresolvedNames.length} ingredients for generation...`);
-        await Promise.all(unresolvedNames.map(stdName =>
-            this.queueIconForGeneration(recipeId, stdName, hydeQueriesMap.get(stdName))
-        ));
+        // 3. Only queue ingredients that the index couldn't satisfy (zero search results).
+        //    Names with search results have a shortlist and don't need a new icon generated.
+        if (toGenerate.length > 0) {
+            console.log(`Queueing ${toGenerate.length}/${unresolvedNames.length} ingredients for generation (${unresolvedNames.length - toGenerate.length} resolved from index)...`);
+            await Promise.all(toGenerate.map(stdName =>
+                this.queueIconForGeneration(recipeId, stdName, hydeQueriesMap.get(stdName))
+            ));
+        } else {
+            console.log(`All ${unresolvedNames.length} ingredients resolved from index — no generation needed.`);
+        }
     }
 
   async addNodeToRecipe(recipeId: string, ingredientName: string, laneId: string = 'lane-1', hydeQueries?: string[]): Promise<{ success: boolean, nodeId?: string, error?: string }> {

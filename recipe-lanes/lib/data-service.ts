@@ -23,7 +23,7 @@ import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined, calculateWilsonLCB } from './utils';
-import { buildShortlistEntry, getEntryIcon, getIconPath, getIconThumbPath, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, hasNodeIcon, prependToShortlist } from './recipe-lanes/model-utils';
+import { applyIconToNode, buildShortlistEntry, getEntryIcon, getIconPath, getIconThumbPath, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, hasNodeIcon, prependToShortlist } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;

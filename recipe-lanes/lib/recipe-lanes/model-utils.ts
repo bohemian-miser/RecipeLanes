@@ -68,7 +68,7 @@ export function hasNodeIcon(node: RecipeNode): boolean {
     const entry = getCurrentEntry(node);
     if (!entry) return false;
     const icon = getEntryIcon(entry);
-    return !!(icon.url || icon.path || icon.id);
+    return !!(icon.url || icon.id);
 }
 
 /**

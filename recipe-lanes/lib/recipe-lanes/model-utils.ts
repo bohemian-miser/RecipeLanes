@@ -16,6 +16,7 @@
  */
 
 import { RecipeNode, IconStats, ShortlistEntry } from './types';
+import { standardizeIngredientName } from '../utils';
 
 /**
  * Returns the canonical ingredient name for a node — used for icon lookup and standardisation.
@@ -93,7 +94,8 @@ export function getNodeIconUrl(node: RecipeNode): string | undefined {
     const entry = getCurrentEntry(node);
     const icon = entry ? getEntryIcon(entry) : undefined;
     if (!icon?.id) return undefined;
-    const name = node.visualDescription || node.text;
+    // Must use standardizeIngredientName to match the path used at upload time
+    const name = standardizeIngredientName(getNodeIngredientName(node));
     return getIconThumbUrl(icon.id, name);
 }
 

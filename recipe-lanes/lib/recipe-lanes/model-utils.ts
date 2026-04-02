@@ -81,16 +81,6 @@ export function getIconUrl(path: string): string {
     return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedPath}?alt=media`;
 }
 
-export function getIconPath(iconId: string, ingredientName: string): string {
-    const shortId = iconId.substring(0, 8);
-    const kebabName = ingredientName.trim().replace(/\s+/g, '-');
-    return `icons/${kebabName}-${shortId}.png`;
-}
-
-export function getIconThumbPath(iconId: string, ingredientName: string): string {
-    return getIconPath(iconId, ingredientName).replace('.png', '.thumb.png');
-}
-
 export function getIconPublicUrl(iconId: string, ingredientName: string): string {
     return getIconUrl(getIconPath(iconId, ingredientName));
 }

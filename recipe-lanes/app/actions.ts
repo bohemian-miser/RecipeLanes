@@ -25,7 +25,7 @@ import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQuer
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import type { RecipeGraph, IconStats } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
-import { applyIconToNode, getEntryIcon, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
+import { getEntryIcon, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from '@/lib/config';
@@ -319,7 +319,10 @@ export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: stri
     newGraph.nodes.forEach(n => {
         if (!getNodeIconUrl(n)) {
             const old = currentGraph.nodes.find(o => o.id === n.id);
-            if (old && old.icon) applyIconToNode(n, old.icon);
+            if (old && old.iconShortlist) {
+                n.iconShortlist = old.iconShortlist;
+                n.shortlistIndex = old.shortlistIndex;
+            }
         }
     });
 
@@ -504,10 +507,7 @@ export async function updateShortlistIndexAction(recipeId: string, nodeId: strin
             const clampedIndex = ((newIndex % shortlist.length) + shortlist.length) % shortlist.length;
             node.shortlistIndex = clampedIndex;
             const entry = shortlist[clampedIndex];
-            if (entry) {
-                const icon = getEntryIcon(entry);
-                node.icon = { id: icon.id, url: icon.url, metadata: icon.metadata };
-            }
+            // shortlist-only: no node.icon write needed
             t.update(recipeRef, { 'graph.nodes': nodes });
         });
         return { success: true };

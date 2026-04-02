@@ -122,7 +122,6 @@ describe('currentShortlistIndex', () => {
         const entries = [makeEntry('a', 'generated'), makeEntry('b', 'generated'), makeEntry('c', 'generated')];
         const node: RecipeNode = {
             ...baseNode(),
-            icon: makeIcon('b'),
             iconShortlist: entries,
             shortlistIndex: 1,
         };
@@ -132,7 +131,6 @@ describe('currentShortlistIndex', () => {
     it('returns 0 when shortlistIndex is explicitly 0', () => {
         const node: RecipeNode = {
             ...baseNode(),
-            icon: makeIcon('a'),
             iconShortlist: [makeEntry('a', 'generated'), makeEntry('b', 'generated')],
             shortlistIndex: 0,
         };
@@ -144,7 +142,6 @@ describe('currentShortlistIndex', () => {
         const entries = [makeEntry('a', 'generated'), makeEntry('b', 'generated'), makeEntry('c', 'generated')];
         const node: RecipeNode = {
             ...baseNode(),
-            icon: makeIcon('c'),
             iconShortlist: entries,
             shortlistIndex: 2,
         };
@@ -159,14 +156,13 @@ describe('currentShortlistIndex', () => {
 describe('nextShortlistIcon', () => {
 
     it('returns null when iconShortlist is absent', () => {
-        const node: RecipeNode = { ...baseNode(), icon: makeIcon('a'), shortlistIndex: 0 };
+        const node: RecipeNode = { ...baseNode(), shortlistIndex: 0 };
         assert.strictEqual(nextShortlistIcon(node), null);
     });
 
     it('returns null when iconShortlist is empty', () => {
         const node: RecipeNode = {
             ...baseNode(),
-            icon: makeIcon('a'),
             iconShortlist: [],
             shortlistIndex: 0,
         };
@@ -177,7 +173,6 @@ describe('nextShortlistIcon', () => {
         const entries = [makeEntry('a', 'generated'), makeEntry('b', 'generated'), makeEntry('c', 'generated')];
         const node: RecipeNode = {
             ...baseNode(),
-            icon: makeIcon('a'),
             iconShortlist: entries,
             shortlistIndex: 0,
         };
@@ -190,7 +185,6 @@ describe('nextShortlistIcon', () => {
         const entries = [makeEntry('a', 'generated'), makeEntry('b', 'generated'), makeEntry('c', 'generated')];
         const node: RecipeNode = {
             ...baseNode(),
-            icon: makeIcon('c'),
             iconShortlist: entries,
             shortlistIndex: 2,
         };
@@ -203,7 +197,6 @@ describe('nextShortlistIcon', () => {
         const entries = [makeEntry('x', 'generated'), makeEntry('y', 'generated')];
         const node: RecipeNode = {
             ...baseNode(),
-            icon: makeIcon('x'),
             iconShortlist: entries,
         };
         const next = nextShortlistIcon(node);
@@ -217,17 +210,16 @@ describe('nextShortlistIcon', () => {
         // Simulate cycling by advancing shortlistIndex on each step
         let node: RecipeNode = {
             ...baseNode(),
-            icon: makeIcon('a'),
             iconShortlist: entries,
             shortlistIndex: 0,
         };
 
-        const visited: string[] = [node.icon!.id];
+        const visited: string[] = [entries[0].icon.id];
 
         let next = nextShortlistIcon(node);
         while (next !== null) {
             visited.push(next.id);
-            node = { ...node, icon: next, shortlistIndex: (node.shortlistIndex ?? 0) + 1 };
+            node = { ...node, shortlistIndex: (node.shortlistIndex ?? 0) + 1 };
             next = nextShortlistIcon(node);
         }
 

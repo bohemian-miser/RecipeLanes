@@ -37,7 +37,7 @@ import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
-import { getNodeIconUrl, getNodeIconId, applyIconToNode } from '../../lib/recipe-lanes/model-utils';
+import { getNodeIconUrl, getNodeIconId } from '../../lib/recipe-lanes/model-utils';
 import { calculateBridgeEdges } from '../../lib/recipe-lanes/graph-logic';
 import MinimalNode from './nodes/minimal-node';
 import LaneNode from './nodes/lane-node';
@@ -421,9 +421,10 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                          
                          if (dbUrl && dbUrl !== currentUrl) {
                              changed = true;
-                             if (dbNode.icon) {
-                                 // Update using the clean icon object from DB
-                                 applyIconToNode(newData, dbNode.icon);
+                             if (dbNode.iconShortlist) {
+                                 // Update using the shortlist from DB
+                                 newData.iconShortlist = dbNode.iconShortlist;
+                                 newData.shortlistIndex = dbNode.shortlistIndex;
                              }
                          }
                          

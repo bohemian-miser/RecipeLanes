@@ -23,7 +23,7 @@ import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined, calculateWilsonLCB } from './utils';
-import { applyIconToNode, buildShortlistEntry, clearNodeIcon, getEntryIcon, getIconPath, getIconThumbPath, getNodeIconId, getNodeIconUrl, getNodeIngredientName, hasNodeIcon, prependToShortlist } from './recipe-lanes/model-utils';
+import { buildShortlistEntry, getEntryIcon, getIconPath, getIconThumbPath, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, hasNodeIcon, prependToShortlist } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -178,9 +178,8 @@ export class FirebaseDataService implements DataService {
       const generatedEntry: ShortlistEntry = buildShortlistEntry(icon, 'generated');
       nodes.forEach((n: any) => {
           if (n.visualDescription) {
-              const nName = standardizeIngredientName(String(n.visualDescription));
+              const nName = standardizeIngredientName(getNodeIngredientName(n));
               if (nName === stdName) {
-                  applyIconToNode(n, icon);
                   // Prepend generated icon to shortlist (no cap)
                   const existingShortlist: ShortlistEntry[] = n.iconShortlist || [];
                   n.iconShortlist = prependToShortlist(existingShortlist, generatedEntry);
@@ -286,21 +285,11 @@ export class FirebaseDataService implements DataService {
         
     /**
      * Helper to determine if a single node requires icon processing.
-     *
-     * A node does NOT need processing only if:
-     *   - its icon status is explicitly 'complete', OR
-     *   - its shortlist already contains a 'generated' entry
-     *
-     * A search-resolved shortlist (matchType: 'search') does NOT count —
-     * generation must still run so that ingredients_new is written and a
-     * purpose-built icon is added to the shortlist.
      */
     private nodeNeedsProcessing(node: any): boolean {
         if (!node.visualDescription) return false;
-        if (node.icon?.status === 'complete') return false;
-        const shortlist: any[] = node.iconShortlist || [];
-        if (shortlist.some((e: any) => e.matchType === 'generated')) return false;
-        return true;
+        if (!node.iconShortlist || node.iconShortlist.length === 0) return true;
+        return false;
     }
 
     /**
@@ -347,7 +336,7 @@ export class FirebaseDataService implements DataService {
             // 1. "Check again": Validate if this node still needs processing
             const recipeData = recipeDoc.data();
             const freshNode = recipeData?.graph?.nodes?.find(
-                (n: any) => standardizeIngredientName(n.visualDescription) === stdName
+                (n: any) => standardizeIngredientName(getNodeIngredientName(n)) === stdName
             );
 
             if (!freshNode || !this.nodeNeedsProcessing(freshNode)) {
@@ -395,14 +384,17 @@ export class FirebaseDataService implements DataService {
             const nodes = recipeData?.graph?.nodes || [];
             let changed = false;
             nodes.forEach((n: any) => {
-                 if (n.visualDescription && standardizeIngredientName(n.visualDescription) === stdName) {
-                     // Only update if not already set to avoid unnecessary writes? 
+                 if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
+                     // Only update if not already set to avoid unnecessary writes?
                      // Or just force it to pending/processing if it was failed/missing.
-                     if (n.icon?.status !== 'pending' && n.icon?.status !== 'processing') {
-                         n.icon = {
-                             ...(n.icon || {}),
-                             status: 'pending'
-                         };
+                     const curStatus = n.iconShortlist?.[0]?.icon?.status;
+                     if (curStatus !== 'pending' && curStatus !== 'processing') {
+                         if (!n.iconShortlist || n.iconShortlist.length === 0) {
+                             n.iconShortlist = [{ icon: { id: '', status: 'pending' }, matchType: 'generated' }];
+                             n.shortlistIndex = 0;
+                         } else {
+                             n.iconShortlist[0].icon.status = 'pending';
+                         }
                          changed = true;
                      }
                  }
@@ -466,14 +458,12 @@ export class FirebaseDataService implements DataService {
 
             nodes.forEach((n: any) => {
                 if (n.visualDescription) {
-                     const nName = standardizeIngredientName(String(n.visualDescription));
+                     const nName = standardizeIngredientName(getNodeIngredientName(n));
                      if (nName === stdName) {
-                         // Preserve existing icon data if any, but mark as failed
-                         n.icon = {
-                             ...(n.icon || {}),
-                             status: 'failed',
-                             // error: errorMsg // valid to add if we add to type
-                         };
+                         // Mark first shortlist entry as failed, or add a sentinel
+                         if (n.iconShortlist && n.iconShortlist.length > 0) {
+                             n.iconShortlist[0].icon.status = 'failed';
+                         }
                          changed = true;
                      }
                 }
@@ -529,8 +519,7 @@ export class FirebaseDataService implements DataService {
             const nodes: any[] = doc.data()?.graph?.nodes || [];
             let changed = false;
             nodes.forEach((n: any) => {
-                if (n.visualDescription && standardizeIngredientName(String(n.visualDescription)) === stdName) {
-                    applyIconToNode(n, getEntryIcon(shortlistEntries[0]));
+                if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
                     n.iconShortlist = shortlistEntries;
                     n.shortlistIndex = 0;
                     changed = true;
@@ -565,8 +554,8 @@ export class FirebaseDataService implements DataService {
         const hydeQueriesMap = new Map<string, string[]>();
         for (const node of nodesToProcess) {
             if (!node.visualDescription) continue;
-            const stdName = standardizeIngredientName(String(node.visualDescription));
-            const nodeQueries: string[] = node.hydeQueries || [];
+            const stdName = standardizeIngredientName(getNodeIngredientName(node));
+            const nodeQueries: string[] = getNodeHydeQueries(node);
             const existing = hydeQueriesMap.get(stdName) || [];
             const merged = Array.from(new Set([...existing, ...nodeQueries]));
             hydeQueriesMap.set(stdName, merged);
@@ -650,8 +639,9 @@ export class FirebaseDataService implements DataService {
 
             // Clear ALL nodes matching this ingredient
             nodes.forEach((n: any) => {
-                if (n.visualDescription && standardizeIngredientName(n.visualDescription) === stdName) {
-                    clearNodeIcon(n);
+                if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
+                    n.iconShortlist = undefined;
+                    n.shortlistIndex = undefined;
                 }
             });
 
@@ -1064,17 +1054,14 @@ export class FirebaseDataService implements DataService {
   async uploadIcon(ingredientName: string, buffer: ArrayBuffer | Buffer, metadata: any): Promise<{ url: string, path: string, iconId: string }> {
       const isEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
       
-      // Filename: icons/Kebab-ShortID.png
       const iconId = randomUUID();
-      const shortId = iconId.substring(0, 8);
-      const kebabName = ingredientName.trim().replace(/\s+/g, '-');
-      const fileName = `icons/${kebabName}-${shortId}.png`;
+      const fileName = getIconPath(iconId, ingredientName);
 
       const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
       const bucket = storage.bucket(bucketName);
       const file = bucket.file(fileName);
       const bufferToSave = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer as ArrayBuffer);
-      
+
       await file.save(bufferToSave, {
           metadata: { contentType: 'image/png', metadata: { ...metadata, iconId } }
       });
@@ -1086,7 +1073,7 @@ export class FirebaseDataService implements DataService {
           .resize(128, 128, { kernel: sharp.kernel.nearest })
           .png()
           .toBuffer();
-      const thumbFileName = fileName.replace(/\.png$/, '.thumb.png');
+      const thumbFileName = getIconThumbPath(iconId, ingredientName);
       const thumbFile = bucket.file(thumbFileName);
       await thumbFile.save(thumbBuffer, {
           metadata: { contentType: 'image/png', metadata: { ...metadata, iconId, isThumb: true } }
@@ -1352,11 +1339,13 @@ export class FirebaseDataService implements DataService {
               
               nodes.forEach((n: any) => {
                   if (n.visualDescription) {
-                      const nName = standardizeIngredientName(n.visualDescription);
+                      const nName = standardizeIngredientName(getNodeIngredientName(n));
                       if (updates.has(nName)) {
                           const update = updates.get(nName)!;
                           if (getNodeIconId(n) !== update.id) {
-                              applyIconToNode(n, update);
+                              const entry = buildShortlistEntry(update, 'search');
+                              n.iconShortlist = prependToShortlist(n.iconShortlist || [], entry);
+                              n.shortlistIndex = 0;
                               changed = true;
                           }
                       }
@@ -1474,7 +1463,7 @@ export class MemoryDataService implements DataService {
         if (nodesToProcess.length === 0) return;
 
         const items = nodesToProcess.map(n => ({
-            ingredientName: n.visualDescription!,
+            ingredientName: getNodeIngredientName(n),
             recipeId
         }));
 
@@ -1482,10 +1471,12 @@ export class MemoryDataService implements DataService {
         
         recipe.graph.nodes.forEach(n => {
             if (n.visualDescription) {
-                const stdName = standardizeIngredientName(String(n.visualDescription));
+                const stdName = standardizeIngredientName(getNodeIngredientName(n));
                 if (hits.has(stdName)) {
                     const bestIcon = hits.get(stdName)!;
-                    applyIconToNode(n, bestIcon);
+                    const resolvedEntry = buildShortlistEntry(bestIcon, 'generated');
+                    n.iconShortlist = prependToShortlist(n.iconShortlist || [], resolvedEntry);
+                    n.shortlistIndex = 0;
                 }
             }
         });
@@ -1532,11 +1523,12 @@ export class MemoryDataService implements DataService {
         
         // Clear all nodes matching ingredient
         recipe.graph.nodes.forEach(n => {
-            if (n.visualDescription && standardizeIngredientName(n.visualDescription) === stdName) {
-                                    clearNodeIcon(n);
+            if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
+                n.iconShortlist = undefined;
+                n.shortlistIndex = undefined;
             }
         });
-        
+
         await this.resolveRecipeIcons(recipeId);
         return { success: true };
     }
@@ -1832,16 +1824,18 @@ export class MemoryDataService implements DataService {
         
         const stdName = standardizeIngredientName(ingredientName);
         // Clone nodes to avoid mutating state in 'imagine' phase
-        const nodes = recipe.graph.nodes.map(n => ({ ...n, icon: n.icon ? { ...n.icon } : undefined }));
+        const nodes = recipe.graph.nodes.map(n => ({ ...n }));
         let changed = false;
         
         nodes.forEach(n => {
-            if (n.visualDescription && standardizeIngredientName(n.visualDescription) === stdName) {
-                applyIconToNode(n, icon);
+            if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
+                const memEntry2 = buildShortlistEntry(icon, 'generated');
+                n.iconShortlist = prependToShortlist((n.iconShortlist as any) || [], memEntry2);
+                n.shortlistIndex = 0;
                 changed = true;
             }
         });
-        
+
         return { recipeId, nodes, changed, icon, ingredientName };
     }
 

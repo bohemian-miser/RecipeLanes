@@ -62,13 +62,13 @@ describe('Recipe & Icon Lifecycle', () => {
         assert.ok(recipeData, 'recipe should exist');
         const node = recipeData!.graph.nodes.find((n: any) => n.id === nodeId);
         assert.ok(node, 'node should exist');
-        assert.ok(node.icon?.url, 'node should have an icon URL after generation');
+        assert.ok(getNodeIconUrl(node), 'node should have an icon URL after generation');
 
         // 5. Verify the shortlist was populated by the CF (it prepends with matchType "generated")
         //    OR was populated by resolveFromIndex with matchType "search".
         //    Either way, an icon and a non-empty shortlist is the success condition.
         const shortlist = node.iconShortlist || [];
-        assert.ok(shortlist.length > 0 || node.icon?.url,
+        assert.ok(shortlist.length > 0 || getNodeIconUrl(node),
             'node should have either a shortlist or an icon after resolution');
     });
 });

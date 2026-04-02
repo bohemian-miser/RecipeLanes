@@ -19,7 +19,7 @@
 import React, { useState, useMemo } from 'react';
 import { RefreshCw, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { RecipeNode } from '@/lib/recipe-lanes/types';
-import { getNodeIconUrl, getNodeIconId, getNodeIconMetadata, getNodeIconStatus } from '@/lib/recipe-lanes/model-utils';
+import { getNodeIconUrl, getNodeIconId, getNodeIconMetadata, getNodeIconStatus, getNodeIngredientName } from '@/lib/recipe-lanes/model-utils';
 import { standardizeIngredientName } from '@/lib/utils';
 
 interface IconDisplayProps {
@@ -39,7 +39,7 @@ export function IconDisplay({ nodes, onReroll, onDelete, rerollingIds, error, hi
   const groupedNodes = useMemo(() => {
     const groups: Record<string, RecipeNode[]> = {};
     nodes.forEach(node => {
-      const ingredient = standardizeIngredientName(node.visualDescription || node.text);
+      const ingredient = standardizeIngredientName(getNodeIngredientName(node));
       if (!groups[ingredient]) {
         groups[ingredient] = [];
       }
@@ -97,7 +97,7 @@ export function IconDisplay({ nodes, onReroll, onDelete, rerollingIds, error, hi
                {!isCollapsed && (
                  <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
                     {categoryNodes.map((node) => {
-                      const ingredient = standardizeIngredientName(node.visualDescription || node.text);
+                      const ingredient = standardizeIngredientName(getNodeIngredientName(node));
                       const iconUrl = getNodeIconUrl(node);
                       const iconId = getNodeIconId(node);
                       const isPending = !iconUrl && !iconId;
@@ -131,7 +131,7 @@ export function IconDisplay({ nodes, onReroll, onDelete, rerollingIds, error, hi
                                      <img
                                        src={iconUrl}
                                        alt={ingredient}
-                                       title={node.visualDescription || ingredient}
+                                       title={getNodeIngredientName(node)}
                                        className={`w-full h-full object-contain rendering-pixelated ${isRerolling ? 'opacity-50 grayscale' : ''}`}
                                        style={{ imageRendering: 'pixelated' }}
                                      />
@@ -140,7 +140,7 @@ export function IconDisplay({ nodes, onReroll, onDelete, rerollingIds, error, hi
                                    <img
                                      src={iconUrl}
                                      alt={ingredient}
-                                     title={node.visualDescription || ingredient}
+                                     title={getNodeIngredientName(node)}
                                      className={`w-full h-full object-contain rendering-pixelated ${isRerolling ? 'opacity-50 grayscale' : ''}`}
                                      style={{ imageRendering: 'pixelated' }}
                                    />

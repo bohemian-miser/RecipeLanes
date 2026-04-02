@@ -16,13 +16,13 @@
  */
 
 import { Position, Node } from 'reactflow';
-import { getNodeIconMetadata } from './model-utils';
+import { getNodeIconMetadata, getNodeTheme } from './model-utils';
 
 // Helper to get center
 function getCenter(node: Node, handlePos?: { x: number, y: number }) {
     // For MinimalNode, we know exact geometry relative to node position
     if (node.type === 'minimal') {
-        const theme = node.data?.iconTheme || 'classic';
+        const theme = getNodeTheme(node.data);
         const meta = getNodeIconMetadata(node.data); // { center: {x,y}, bbox: ... } normalized 0-1
 
         if (theme === 'modern' || theme === 'modern_clean') {
@@ -96,7 +96,7 @@ function getBBox(node: Node, handlePos?: {x: number, y: number}) {
     const meta = getNodeIconMetadata(node.data);
     if (!meta || !meta.bbox) return null;
     
-    const theme = node.data?.iconTheme || 'classic';
+    const theme = getNodeTheme(node.data);
     const isIngredient = node.data?.type === 'ingredient';
     let imageX = 0, imageY = 0, imageSize = 0;
 
@@ -195,7 +195,7 @@ function getRadius(node: Node, hasHandle: boolean) {
     if (node.type !== 'minimal') {
         return (Math.min(node.width??100, node.height??50)/2 + 5);
     }
-    const theme = node.data?.iconTheme || 'classic';
+    const theme = getNodeTheme(node.data);
     if (theme === 'modern' || theme === 'modern_clean') {
         return 58; // 96px / 2
     }

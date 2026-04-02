@@ -32,7 +32,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { DB_COLLECTION_RECIPES } from '@/lib/config';
 import { standardizeIngredientName } from '@/lib/utils';
-import { getNodeIconUrl, getNodeIconId } from '@/lib/recipe-lanes/model-utils';
+import { getNodeIconUrl, getNodeIconId, getNodeIngredientName } from '@/lib/recipe-lanes/model-utils';
 import { RecipeNode, IconStats } from '@/lib/recipe-lanes/types';
 import { IconDetailModal } from '@/components/icon-detail-modal';
 import { IconOverviewModal } from '@/components/icon-overview-modal';
@@ -184,7 +184,7 @@ export default function Home() {
     
     try {
         const currentIconId = getNodeIconId(nodeToReroll);
-        const ingredient = standardizeIngredientName(nodeToReroll.visualDescription || nodeToReroll.text);
+        const ingredient = standardizeIngredientName(getNodeIngredientName(nodeToReroll));
 
         const result = await rejectIcon(
             recipeId,

@@ -146,7 +146,7 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
         try {
             const embeddingTexts = rawHydeQueries.length > 0 ? rawHydeQueries : [ingredientName];
             const embedding = await getAIService().embedTexts(embeddingTexts);
-            await dataService.writeIconToIndex(iconData.id, ingredientName, iconData.url, iconData.path, embedding);
+            await dataService.writeIconToIndex(iconData.id, ingredientName, iconData.url, embedding);
             console.log(`[Queue-${ingredientName}] icon_index written for icon ${iconData.id}`);
         } catch (e) {
             console.warn(`[Queue-${ingredientName}] icon_index write failed (non-fatal):`, e);

@@ -33,7 +33,6 @@ export interface SearchTerm {
 export interface IconStats {
     id: string;
     url?: string;
-    path?: string;
     score?: number;
     prompt?: string;
     impressions?: number;

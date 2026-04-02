@@ -66,8 +66,11 @@ describe('Cloud Function Metadata', () => {
             const nodes = doc.data()?.graph?.nodes || [];
             const node = nodes.find((n: any) => n.visualDescription === ingredientName);
 
-            if (node?.icon?.url && node?.icon?.id) {
-                iconUrl = node.icon.url;
+            // Icons are stored in the shortlist model: node.iconShortlist[shortlistIndex].icon
+            const currentEntry = node?.iconShortlist?.[node?.shortlistIndex ?? 0];
+            const entryIcon = currentEntry?.icon;
+            if (entryIcon?.url && entryIcon?.id) {
+                iconUrl = entryIcon.url;
                 break;
             }
 

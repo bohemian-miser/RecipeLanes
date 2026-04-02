@@ -196,8 +196,13 @@ export function getCurrentEntry(node: RecipeNode): ShortlistEntry | undefined {
     return node.iconShortlist[node.shortlistIndex ?? 0];
 }
 
-/** Extracts the IconStats from a ShortlistEntry. */
+/** Extracts the IconStats from a ShortlistEntry.
+ * Includes a migration shim: backfilled entries stored plain IconStats (no wrapper),
+ * so if entry.icon is absent but entry.id exists, the entry itself is the icon. */
 export function getEntryIcon(entry: ShortlistEntry): IconStats {
+    if (!entry.icon && (entry as unknown as IconStats).id) {
+        return entry as unknown as IconStats;
+    }
     return entry.icon;
 }
 

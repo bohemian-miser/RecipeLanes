@@ -23,7 +23,7 @@ import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined, calculateWilsonLCB } from './utils';
-import { applyIconToNode, buildShortlistEntry, clearNodeIcon, getEntryIcon, getNodeIconId, getNodeIconUrl, hasNodeIcon, prependToShortlist } from './recipe-lanes/model-utils';
+import { applyIconToNode, buildShortlistEntry, clearNodeIcon, getEntryIcon, getIconPath, getIconThumbPath, getNodeIconId, getNodeIconUrl, getNodeIngredientName, hasNodeIcon, prependToShortlist } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -286,11 +286,21 @@ export class FirebaseDataService implements DataService {
         
     /**
      * Helper to determine if a single node requires icon processing.
+     *
+     * A node does NOT need processing only if:
+     *   - its icon status is explicitly 'complete', OR
+     *   - its shortlist already contains a 'generated' entry
+     *
+     * A search-resolved shortlist (matchType: 'search') does NOT count —
+     * generation must still run so that ingredients_new is written and a
+     * purpose-built icon is added to the shortlist.
      */
     private nodeNeedsProcessing(node: any): boolean {
         if (!node.visualDescription) return false;
-        if (!node.icon || !node.icon.id) return true;
-        return false;
+        if (node.icon?.status === 'complete') return false;
+        const shortlist: any[] = node.iconShortlist || [];
+        if (shortlist.some((e: any) => e.matchType === 'generated')) return false;
+        return true;
     }
 
     /**

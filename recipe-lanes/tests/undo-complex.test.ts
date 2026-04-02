@@ -149,7 +149,7 @@ describe('Complex Undo Tests', () => {
         assert.strictEqual(mgr.edges.length, 8);
 
         // Delete "whisk"
-        mgr.deleteGraphNode("whisk");
+        mgr.deleteNode("whisk");
         
         // Removed: crack->whisk, salt->whisk, whisk->cook (3)
         // Added: crack->cook, salt->cook (2)

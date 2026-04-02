@@ -19,7 +19,7 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { RefreshCw, X, Hammer } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
-import { getNodeIconUrl, isIconSearchMatched } from '../../../lib/recipe-lanes/model-utils';
+import { getNodeIconStatus, getNodeIconUrl, isIconSearchMatched } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;

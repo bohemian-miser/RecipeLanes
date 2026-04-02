@@ -17,6 +17,30 @@
 
 import { RecipeNode, IconStats, ShortlistEntry } from './types';
 
+/**
+ * Returns the canonical ingredient name for a node — used for icon lookup and standardisation.
+ * Prefers visualDescription over text (visualDescription is the icon-specific description).
+ */
+export function getNodeIngredientName(node: RecipeNode): string {
+    return node.visualDescription || node.text;
+}
+
+export function getNodeTheme(node: RecipeNode): 'classic' | 'modern' | 'modern_clean' {
+    return (node.iconTheme as 'classic' | 'modern' | 'modern_clean') || 'classic';
+}
+
+/** Derives the Storage path for an icon from its ID and ingredient name. */
+export function getIconPath(iconId: string, ingredientName: string): string {
+    const shortId = iconId.substring(0, 8);
+    const kebabName = ingredientName.trim().replace(/\s+/g, '-');
+    return `icons/${kebabName}-${shortId}.png`;
+}
+
+/** Derives the thumb Storage path. */
+export function getIconThumbPath(iconId: string, ingredientName: string): string {
+    return getIconPath(iconId, ingredientName).replace('.png', '.thumb.png');
+}
+
 export function getNodeIcon(node: RecipeNode): IconStats | undefined {
     return node.icon;
 }

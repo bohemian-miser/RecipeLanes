@@ -19,6 +19,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { RecipeNode, SearchTerm } from '@/lib/recipe-lanes/types';
+import { getNodeIcon } from '@/lib/recipe-lanes/model-utils';
 
 interface IconDetailModalProps {
   node: RecipeNode | null;
@@ -40,7 +41,7 @@ const STATUS_BADGE: Record<string, string> = {
 export function IconDetailModal({ node, onClose }: IconDetailModalProps) {
   if (!node) return null;
 
-  const icon = node.icon;
+  const icon = getNodeIcon(node);
   const title = node.visualDescription || node.text;
 
   return (

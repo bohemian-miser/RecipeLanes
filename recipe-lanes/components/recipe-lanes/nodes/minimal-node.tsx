@@ -22,7 +22,7 @@ import { useSearchParams } from 'next/navigation';
 import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
 import { forgeIconAction, updateShortlistIndexAction } from '@/app/actions';
-import { getEntryIcon, getNodeIconId, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
+import { getEntryIcon, getNodeIconId, getNodeIconUrl, getNodeTheme } from '@/lib/recipe-lanes/model-utils';
 
 export const MinimalNode: React.FC<any> = ({
     data, selected, isConnectable, id

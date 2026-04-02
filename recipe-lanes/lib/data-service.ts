@@ -90,7 +90,7 @@ export interface DataService {
   failRecipeIcon(recipeId: string, ingredientName: string, errorMsg: string): Promise<void>;
 
   searchIconsByEmbedding(queryVec: number[], limit: number): Promise<IconStats[]>;
-  writeIconToIndex(iconId: string, ingredientName: string, url: string, embedding: number[]): Promise<void>;
+  writeIconToIndex(iconId: string, ingredientName: string, url: string, path: string, embedding: number[]): Promise<void>;
 }
 
 // --- Firebase Implementation ---
@@ -104,15 +104,16 @@ export class FirebaseDataService implements DataService {
     console.log(`[searchIconsByEmbedding] findNearest returned ${snap.docs.length} docs`);
     return snap.docs.map((doc: any) => {
       const d = doc.data();
-      return { id: d.icon_id, url: d.url, prompt: d.ingredient_name } as IconStats;
+      return { id: d.icon_id, url: d.url, path: d.path, prompt: d.ingredient_name } as IconStats;
     });
   }
 
-  async writeIconToIndex(iconId: string, ingredientName: string, url: string, embedding: number[]): Promise<void> {
+  async writeIconToIndex(iconId: string, ingredientName: string, url: string, path: string, embedding: number[]): Promise<void> {
     await db.collection(DB_COLLECTION_ICON_INDEX).doc(iconId).set({
       icon_id: iconId,
       ingredient_name: ingredientName,
       url,
+      path,
       embedding: FieldValue.vector(embedding),
       created_at: FieldValue.serverTimestamp()
     });
@@ -1890,7 +1891,7 @@ export class MemoryDataService implements DataService {
         return [];
     }
 
-    async writeIconToIndex(_iconId: string, _ingredientName: string, _url: string, _embedding: number[]): Promise<void> {
+    async writeIconToIndex(_iconId: string, _ingredientName: string, _url: string, _path: string, _embedding: number[]): Promise<void> {
         // no-op in memory mode
     }
 }

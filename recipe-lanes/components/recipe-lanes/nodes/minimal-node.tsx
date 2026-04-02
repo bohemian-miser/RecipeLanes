@@ -22,7 +22,7 @@ import { useSearchParams } from 'next/navigation';
 import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
 import { forgeIconAction, updateShortlistIndexAction } from '@/app/actions';
-import { getEntryIcon, getNodeIconId, getNodeIconUrl, getNodeTheme } from '@/lib/recipe-lanes/model-utils';
+import { getEntryIcon, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getNodeTheme } from '@/lib/recipe-lanes/model-utils';
 
 export const MinimalNode: React.FC<any> = ({
     data, selected, isConnectable, id
@@ -46,7 +46,7 @@ export const MinimalNode: React.FC<any> = ({
   const searchParams = useSearchParams();
   const recipeId = searchParams.get('id');
 
-  const iconTheme = data.iconTheme || 'classic';
+  const iconTheme = getNodeTheme(data);
 
   const handleTouchStart = () => {
       longPressTimer.current = setTimeout(() => {
@@ -104,7 +104,7 @@ export const MinimalNode: React.FC<any> = ({
   const handleForge = async (e: React.MouseEvent) => {
       e.stopPropagation();
       setIsForging(true);
-      const ingredientName = data.visualDescription || data.text;
+      const ingredientName = getNodeIngredientName(data);
       try {
           const result = await forgeIconAction(recipeId || '', ingredientName, getNodeIconId(data) || '');
           if (result && !result.success) {

@@ -27,7 +27,7 @@ import { ReactFlowProvider } from 'reactflow';
 import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction } from '@/app/actions';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
-import { getNodeIconUrl, getNodeIconId, applyIconToNode, hasNodeIcon } from '@/lib/recipe-lanes/model-utils';
+import { getNodeIconUrl, getNodeIconId, hasNodeIcon } from '@/lib/recipe-lanes/model-utils';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
@@ -218,8 +218,9 @@ function RecipeLanesContent() {
           const newNodes = partialGraph.nodes.map((n: any) => {
               const original = graph?.nodes.find(o => o.id === n.id);
               const updatedNode = { ...n };
-              if (original?.icon) {
-                  updatedNode.icon = original.icon;
+              if (original?.iconShortlist) {
+                  updatedNode.iconShortlist = original.iconShortlist;
+                  updatedNode.shortlistIndex = original.shortlistIndex;
               }
               return updatedNode;
           });
@@ -244,7 +245,7 @@ function RecipeLanesContent() {
               const safeGraph = { 
                   ...freshGraph, 
                   nodes: freshGraph.nodes.map(n => {
-                      const { icon, ...rest } = n;
+                      const { iconShortlist, shortlistIndex, ...rest } = n;
                       return rest;
                   })
               };
@@ -299,7 +300,10 @@ function RecipeLanesContent() {
                           const prevUrl = getNodeIconUrl(prevNode);
                           if (nUrl && !prevUrl) {
                               const updatedNode = { ...prevNode };
-                              if (n.icon) applyIconToNode(updatedNode, n.icon);
+                              if (n.iconShortlist) {
+                                  updatedNode.iconShortlist = n.iconShortlist;
+                                  updatedNode.shortlistIndex = n.shortlistIndex;
+                              }
                               return updatedNode;
                           }
                       }

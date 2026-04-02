@@ -19,7 +19,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { RecipeNode, SearchTerm } from '@/lib/recipe-lanes/types';
-import { getNodeIcon } from '@/lib/recipe-lanes/model-utils';
+import { getNodeIngredientName, getNodeIcon } from '@/lib/recipe-lanes/model-utils';
 
 interface IconDetailModalProps {
   node: RecipeNode | null;
@@ -42,7 +42,7 @@ export function IconDetailModal({ node, onClose }: IconDetailModalProps) {
   if (!node) return null;
 
   const icon = getNodeIcon(node);
-  const title = node.visualDescription || node.text;
+  const title = getNodeIngredientName(node);
 
   return (
     <div
@@ -137,7 +137,7 @@ export function IconDetailModal({ node, onClose }: IconDetailModalProps) {
               <div>
                 <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono mb-2">Search Terms</div>
                 <div className="flex flex-wrap gap-2">
-                  {icon.searchTerms.map((term, i) => {
+                  {icon.searchTerms.map((term: SearchTerm, i: number) => {
                     const badge = SOURCE_BADGE[term.source];
                     return (
                       <div

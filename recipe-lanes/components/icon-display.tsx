@@ -140,7 +140,7 @@ export function IconDisplay({ nodes, onReroll, onDelete, rerollingIds, error, hi
                                    <img
                                      src={iconUrl}
                                      alt={ingredient}
-                                     title={node.visualDescription || ingredient}
+                                     title={getNodeIngredientName(node)}
                                      className={`w-full h-full object-contain rendering-pixelated ${isRerolling ? 'opacity-50 grayscale' : ''}`}
                                      style={{ imageRendering: 'pixelated' }}
                                    />

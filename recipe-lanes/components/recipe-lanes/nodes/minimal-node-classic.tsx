@@ -19,7 +19,7 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { RefreshCw, X, Hammer } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
-import { getNodeIconStatus, getNodeIconUrl, isIconSearchMatched } from '../../../lib/recipe-lanes/model-utils';
+import { getNodeIconUrl, isIconSearchMatched, getNodeIngredientName, getNodeIconStatus } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
@@ -79,7 +79,7 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                 width: isVertical ? verticalMinWidth : 'auto', 
                 minWidth: isVertical ? verticalMinWidth : horizontalMinWidth
             }}
-            title={data.visualDescription || data.text}
+            title={getNodeIngredientName(data)}
             onTouchStart={handlers.onTouchStart}
             onTouchEnd={handlers.onTouchEnd}
         >
@@ -96,13 +96,13 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                         style={{ imageRendering: 'pixelated' }}
                     />
                 ) : (
-                    data.icon?.status === 'failed' ? (
+                    getNodeIconStatus(data) === 'failed' ? (
                        <div className="flex flex-col items-center justify-center text-red-500">
                            <X className="w-5 h-5 mb-0.5" />
                            <span className="text-[8px] font-bold uppercase leading-none">Failed</span>
                        </div>
                     ) : (
-                       <span className={`text-5xl drop-shadow-sm ${data.icon?.status === 'processing' || data.icon?.status === 'pending' ? 'animate-pulse opacity-50' : ''}`}>{isIngredient ? '🥕' : '🍳'}</span>
+                       <span className={`text-5xl drop-shadow-sm ${getNodeIconStatus(data) === 'processing' || getNodeIconStatus(data) === 'pending' ? 'animate-pulse opacity-50' : ''}`}>{isIngredient ? '🥕' : '🍳'}</span>
                     )
                 )}
                 

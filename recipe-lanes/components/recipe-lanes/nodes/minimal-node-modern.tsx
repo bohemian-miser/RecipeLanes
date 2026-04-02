@@ -19,7 +19,7 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { RefreshCw, X, Hammer } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
-import { getNodeIconUrl, getNodeTheme, isIconSearchMatched } from '../../../lib/recipe-lanes/model-utils';
+import { getNodeIconUrl, isIconSearchMatched, getNodeIngredientName, getNodeTheme } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
@@ -49,7 +49,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
     data, selected, isRerolling, isForging, isPivotMode, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
-    const themeVariant = data.iconTheme || 'modern'; // 'modern' or 'modern_clean'
+    const themeVariant = getNodeTheme(data) === 'modern_clean' ? 'modern_clean' : 'modern';
     const iconUrl = getNodeIconUrl(data);
 
     // Show a subtle indicator when icon was found via search, not exact-name match
@@ -68,7 +68,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                                 <div 
                                     className="relative flex flex-col items-center justify-center transition-transform duration-300 hover:z-50 group"
                                     style={containerSize} 
-                                    title={data.visualDescription || data.text}
+                                    title={getNodeIngredientName(data)}
                                     onTouchStart={handlers.onTouchStart}
                                     onTouchEnd={handlers.onTouchEnd}
                                 >
@@ -132,7 +132,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                 <div 
                     className="relative flex flex-col items-center justify-center transition-transform duration-300 hover:z-50 group"
                     style={containerSize} 
-                    title={data.visualDescription || data.text}
+                    title={getNodeIngredientName(data)}
                     onTouchStart={handlers.onTouchStart}
                     onTouchEnd={handlers.onTouchEnd}
                 >

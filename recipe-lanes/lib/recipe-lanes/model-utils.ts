@@ -25,38 +25,31 @@ export function getNodeIngredientName(node: RecipeNode): string {
     return node.visualDescription || node.text;
 }
 
+/** Returns the display theme for a node's icon. */
 export function getNodeTheme(node: RecipeNode): 'classic' | 'modern' | 'modern_clean' {
     return (node.iconTheme as 'classic' | 'modern' | 'modern_clean') || 'classic';
 }
 
-/** Derives the Storage path for an icon from its ID and ingredient name. */
-export function getIconPath(iconId: string, ingredientName: string): string {
-    const shortId = iconId.substring(0, 8);
-    const kebabName = ingredientName.trim().replace(/\s+/g, '-');
-    return `icons/${kebabName}-${shortId}.png`;
-}
-
-/** Derives the thumb Storage path. */
-export function getIconThumbPath(iconId: string, ingredientName: string): string {
-    return getIconPath(iconId, ingredientName).replace('.png', '.thumb.png');
-}
-
 export function getNodeIcon(node: RecipeNode): IconStats | undefined {
-    return node.icon;
+    const entry = getCurrentEntry(node);
+    return entry ? getEntryIcon(entry) : undefined;
 }
 
-export function setNodeIcon(node: RecipeNode, icon: IconStats) {
-    node.icon = icon;
+/** @deprecated - icon writes go through the shortlist; this is a no-op. */
+export function setNodeIcon(node: RecipeNode, _icon: IconStats) {
     return node;
 }
 
+/** @deprecated - clear via node.iconShortlist = undefined; node.shortlistIndex = undefined; */
 export function clearNodeIcon(node: RecipeNode) {
-    node.icon = undefined;
     return node;
 }
 
 export function hasNodeIcon(node: RecipeNode): boolean {
-    return !!node.icon && (!!node.icon.url || !!node.icon.path);
+    const entry = getCurrentEntry(node);
+    if (!entry) return false;
+    const icon = getEntryIcon(entry);
+    return !!(icon.url || icon.path || icon.id);
 }
 
 /**
@@ -77,10 +70,9 @@ export function getThumbPath(path: string): string {
     return path.replace(/\.png$/, '.thumb.png');
 }
 
-// Helper to bridge old code if needed, but prefer using IconStats directly
 export function getNodeIconUrl(node: RecipeNode): string | undefined {
     const entry = getCurrentEntry(node);
-    const icon = entry ? getEntryIcon(entry) : node.icon;
+    const icon = entry ? getEntryIcon(entry) : undefined;
     if (!icon) return undefined;
     if (icon.path) return getIconUrl(getThumbPath(icon.path));
     if (icon.url) return icon.url; // fallback for old icons without path
@@ -88,27 +80,22 @@ export function getNodeIconUrl(node: RecipeNode): string | undefined {
 }
 
 export function getNodeIconId(node: RecipeNode): string | undefined {
-    return node.icon?.id;
+    const entry = getCurrentEntry(node);
+    return entry ? getEntryIcon(entry).id : undefined;
 }
 
 export function getNodeIconMetadata(node: RecipeNode) {
-    return node.icon?.metadata;
+    const entry = getCurrentEntry(node);
+    return entry ? getEntryIcon(entry).metadata : undefined;
 }
 
 export function getNodeIconStatus(node: RecipeNode) {
-    return node.icon?.status;
+    const entry = getCurrentEntry(node);
+    return entry ? getEntryIcon(entry).status : undefined;
 }
 
-export function applyIconToNode(node: RecipeNode, icon: IconStats) {
-    // Only propagate essential visual/reference data, avoiding stale stats
-    const cleanIcon: IconStats = {
-        id: icon.id,
-        url: icon.url,
-        path: icon.path,
-        metadata: icon.metadata,
-        status: icon.status
-    };
-    setNodeIcon(node, cleanIcon);
+/** @deprecated - icon writes go through the shortlist. */
+export function applyIconToNode(node: RecipeNode, _icon: IconStats) {
     return node;
 }
 

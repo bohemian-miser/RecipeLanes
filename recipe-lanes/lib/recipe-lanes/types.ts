@@ -58,7 +58,6 @@ export interface RecipeNode {
   visualDescription: string; // "A carrot going into a grater"
   
   // Icon Data
-  icon?: IconStats;
   iconShortlist?: ShortlistEntry[];
   shortlistIndex?: number;  // current position in iconShortlist, 0-based
   iconQuery?: {

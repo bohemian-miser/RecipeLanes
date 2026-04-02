@@ -17,6 +17,7 @@
 
 import React, { memo } from 'react';
 import { Handle, Position } from 'reactflow';
+import { getNodeIngredientName } from '../../../lib/recipe-lanes/model-utils';
 // NodeProps not exported in this version
 // import { NodeProps } from 'reactflow';
 
@@ -32,7 +33,7 @@ export const MicroNode: React.FC<any> = ({ data, selected }) => {
 
       {/* Tooltip on hover */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none bg-zinc-800 text-white text-[9px] px-2 py-1 rounded whitespace-nowrap z-50">
-          {data.visualDescription || data.text.substring(0, 30)}
+          {getNodeIngredientName(data).substring(0, 30)}
       </div>
 
       <Handle type="source" position={Position.Bottom} className="!bg-transparent !w-1 !h-1 !border-0" />

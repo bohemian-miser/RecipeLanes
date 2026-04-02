@@ -37,6 +37,18 @@ export function getNodeHydeQueries(node: RecipeNode): string[] {
     return node.hydeQueries || [];
 }
 
+/** Derives the Storage path for an icon from its ID and ingredient name. */
+export function getIconPath(iconId: string, ingredientName: string): string {
+    const shortId = iconId.substring(0, 8);
+    const kebabName = ingredientName.trim().replace(/\s+/g, '-');
+    return `icons/${kebabName}-${shortId}.png`;
+}
+
+/** Derives the thumb Storage path. */
+export function getIconThumbPath(iconId: string, ingredientName: string): string {
+    return getIconPath(iconId, ingredientName).replace('.png', '.thumb.png');
+}
+
 export function getNodeIcon(node: RecipeNode): IconStats | undefined {
     const entry = getCurrentEntry(node);
     return entry ? getEntryIcon(entry) : undefined;

@@ -23,7 +23,7 @@ import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined, calculateWilsonLCB } from './utils';
-import { buildShortlistEntry, getEntryIcon, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, hasNodeIcon, prependToShortlist } from './recipe-lanes/model-utils';
+import { buildShortlistEntry, getEntryIcon, getIconPath, getIconThumbPath, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, hasNodeIcon, prependToShortlist } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -1054,17 +1054,14 @@ export class FirebaseDataService implements DataService {
   async uploadIcon(ingredientName: string, buffer: ArrayBuffer | Buffer, metadata: any): Promise<{ url: string, path: string, iconId: string }> {
       const isEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
       
-      // Filename: icons/Kebab-ShortID.png
       const iconId = randomUUID();
-      const shortId = iconId.substring(0, 8);
-      const kebabName = ingredientName.trim().replace(/\s+/g, '-');
-      const fileName = `icons/${kebabName}-${shortId}.png`;
+      const fileName = getIconPath(iconId, ingredientName);
 
       const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
       const bucket = storage.bucket(bucketName);
       const file = bucket.file(fileName);
       const bufferToSave = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer as ArrayBuffer);
-      
+
       await file.save(bufferToSave, {
           metadata: { contentType: 'image/png', metadata: { ...metadata, iconId } }
       });
@@ -1076,7 +1073,7 @@ export class FirebaseDataService implements DataService {
           .resize(128, 128, { kernel: sharp.kernel.nearest })
           .png()
           .toBuffer();
-      const thumbFileName = fileName.replace(/\.png$/, '.thumb.png');
+      const thumbFileName = getIconThumbPath(iconId, ingredientName);
       const thumbFile = bucket.file(thumbFileName);
       await thumbFile.save(thumbBuffer, {
           metadata: { contentType: 'image/png', metadata: { ...metadata, iconId, isThumb: true } }

@@ -90,7 +90,7 @@ export interface DataService {
   failRecipeIcon(recipeId: string, ingredientName: string, errorMsg: string): Promise<void>;
 
   searchIconsByEmbedding(queryVec: number[], limit: number): Promise<IconStats[]>;
-  writeIconToIndex(iconId: string, ingredientName: string, url: string, path: string, embedding: number[]): Promise<void>;
+  writeIconToIndex(iconId: string, ingredientName: string, url: string, embedding: number[]): Promise<void>;
 }
 
 // --- Firebase Implementation ---
@@ -104,16 +104,15 @@ export class FirebaseDataService implements DataService {
     console.log(`[searchIconsByEmbedding] findNearest returned ${snap.docs.length} docs`);
     return snap.docs.map((doc: any) => {
       const d = doc.data();
-      return { id: d.icon_id, url: d.url, path: d.path, prompt: d.ingredient_name } as IconStats;
+      return { id: d.icon_id, url: d.url, prompt: d.ingredient_name } as IconStats;
     });
   }
 
-  async writeIconToIndex(iconId: string, ingredientName: string, url: string, path: string, embedding: number[]): Promise<void> {
+  async writeIconToIndex(iconId: string, ingredientName: string, url: string, embedding: number[]): Promise<void> {
     await db.collection(DB_COLLECTION_ICON_INDEX).doc(iconId).set({
       icon_id: iconId,
       ingredient_name: ingredientName,
       url,
-      path,
       embedding: FieldValue.vector(embedding),
       created_at: FieldValue.serverTimestamp()
     });
@@ -1318,7 +1317,7 @@ export class FirebaseDataService implements DataService {
                   if (!updatesByRecipe.has(item.recipeId)) {
                       updatesByRecipe.set(item.recipeId, new Map());
                   }
-                  updatesByRecipe.get(item.recipeId)!.set(name, { id: foundIcon.id, url: foundIcon.url, path: foundIcon.path, metadata: foundIcon.metadata });
+                  updatesByRecipe.get(item.recipeId)!.set(name, { id: foundIcon.id, url: foundIcon.url, metadata: foundIcon.metadata });
               }
           }
       }
@@ -1474,8 +1473,9 @@ export class MemoryDataService implements DataService {
                 const stdName = standardizeIngredientName(getNodeIngredientName(n));
                 if (hits.has(stdName)) {
                     const bestIcon = hits.get(stdName)!;
-                    const resolvedEntry = buildShortlistEntry(bestIcon, 'generated');
-                    n.iconShortlist = prependToShortlist(n.iconShortlist || [], resolvedEntry);
+                    applyIconToNode(n, bestIcon);
+                    const entry = buildShortlistEntry(bestIcon, 'generated');
+                    n.iconShortlist = prependToShortlist(n.iconShortlist || [], entry);
                     n.shortlistIndex = 0;
                 }
             }
@@ -1895,7 +1895,7 @@ export class MemoryDataService implements DataService {
         return [];
     }
 
-    async writeIconToIndex(_iconId: string, _ingredientName: string, _url: string, _path: string, _embedding: number[]): Promise<void> {
+    async writeIconToIndex(_iconId: string, _ingredientName: string, _url: string, _embedding: number[]): Promise<void> {
         // no-op in memory mode
     }
 }

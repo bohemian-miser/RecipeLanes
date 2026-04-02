@@ -81,21 +81,30 @@ export function getIconUrl(path: string): string {
     return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedPath}?alt=media`;
 }
 
-/**
- * Derives the 128×128 thumbnail path from an icon's main storage path.
- * e.g. icons/Carrot-abc12345.png → icons/Carrot-abc12345.thumb.png
- */
-export function getThumbPath(path: string): string {
-    return path.replace(/\.png$/, '.thumb.png');
+export function getIconPath(iconId: string, ingredientName: string): string {
+    const shortId = iconId.substring(0, 8);
+    const kebabName = ingredientName.trim().replace(/\s+/g, '-');
+    return `icons/${kebabName}-${shortId}.png`;
+}
+
+export function getIconThumbPath(iconId: string, ingredientName: string): string {
+    return getIconPath(iconId, ingredientName).replace('.png', '.thumb.png');
+}
+
+export function getIconPublicUrl(iconId: string, ingredientName: string): string {
+    return getIconUrl(getIconPath(iconId, ingredientName));
+}
+
+export function getIconThumbUrl(iconId: string, ingredientName: string): string {
+    return getIconUrl(getIconThumbPath(iconId, ingredientName));
 }
 
 export function getNodeIconUrl(node: RecipeNode): string | undefined {
     const entry = getCurrentEntry(node);
     const icon = entry ? getEntryIcon(entry) : undefined;
-    if (!icon) return undefined;
-    if (icon.path) return getIconUrl(getThumbPath(icon.path));
-    if (icon.url) return icon.url; // fallback for old icons without path
-    return undefined;
+    if (!icon?.id) return undefined;
+    const name = node.visualDescription || node.text;
+    return getIconThumbUrl(icon.id, name);
 }
 
 export function getNodeIconId(node: RecipeNode): string | undefined {
@@ -113,8 +122,15 @@ export function getNodeIconStatus(node: RecipeNode) {
     return entry ? getEntryIcon(entry).status : undefined;
 }
 
-/** @deprecated - icon writes go through the shortlist. */
-export function applyIconToNode(node: RecipeNode, _icon: IconStats) {
+export function applyIconToNode(node: RecipeNode, icon: IconStats) {
+    // Only propagate essential visual/reference data, avoiding stale stats
+    const cleanIcon: IconStats = {
+        id: icon.id,
+        url: icon.url,
+        metadata: icon.metadata,
+        status: icon.status
+    };
+    setNodeIcon(node, cleanIcon);
     return node;
 }
 

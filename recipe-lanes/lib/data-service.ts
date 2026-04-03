@@ -415,6 +415,7 @@ export class FirebaseDataService implements DataService {
         }
     }
 
+    // queue monitor.
     async retryIconGeneration(ingredientName: string): Promise<void> {
         try {
             const stdName = standardizeIngredientName(ingredientName);
@@ -438,6 +439,7 @@ export class FirebaseDataService implements DataService {
         }
     }
 
+    // called from cf when icon failed to generate.
     async failRecipeIcon(recipeId: string, ingredientName: string, errorMsg: string): Promise<void> {
         const stdName = standardizeIngredientName(ingredientName);
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
@@ -473,6 +475,7 @@ export class FirebaseDataService implements DataService {
      * Search icon_index for matches and assign icon + shortlist to matching recipe nodes.
      * Returns names that had no search results (still need generation).
      */
+    // lanes. only on create.
     private async resolveFromIndex(
         recipeId: string,
         unresolvedNames: string[],
@@ -503,6 +506,7 @@ export class FirebaseDataService implements DataService {
     /**
      * Writes the full results as its shortlist.
      */
+    // lanes. good. only on create.
     private async assignShortlistToRecipe(recipeId: string, stdName: string, results: IconStats[]): Promise<void> {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
         const shortlistEntries: ShortlistEntry[] = results.map(r => buildShortlistEntry(toRecipeIcon(r), 'search'));
@@ -581,6 +585,7 @@ export class FirebaseDataService implements DataService {
         }
     }
 
+  // icon_overview and tests only.
   async addNodeToRecipe(recipeId: string, ingredientName: string, laneId: string = 'lane-1', hydeQueries?: string[]): Promise<{ success: boolean, nodeId?: string, error?: string }> {
       try {
         const stdName = standardizeIngredientName(ingredientName);
@@ -618,6 +623,7 @@ export class FirebaseDataService implements DataService {
       }
   }
 
+    // this runs when forging and in icon_overview. We should make this keep the old options around maybe?
   async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, embedFn?: (texts: string[]) => Promise<number[]>): Promise<{ success: boolean, error?: string }> {
       try {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);

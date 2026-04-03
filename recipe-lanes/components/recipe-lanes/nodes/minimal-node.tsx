@@ -74,9 +74,11 @@ export const MinimalNode: React.FC<any> = ({
 
       const shortlist: any[] = data.iconShortlist || [];
       if (shortlist.length === 0) return; // nothing to cycle through
-
+      // TODO this logic should be in model-utils.
       const currentIdx = data.shortlistIndex ?? 0;
       const newIdx = (currentIdx + 1) % shortlist.length;
+      // mark as cycled once we wrap around.
+      data.shortlistCycled = data.shortlistCycled || newIdx === 0;
       const nextEntry = shortlist[newIdx];
       const nextIcon = getEntryIcon(nextEntry);
 
@@ -92,7 +94,8 @@ export const MinimalNode: React.FC<any> = ({
           };
       }));
 
-      // Persist the new index to Firestore
+      // Persist the new index to Firestore. This will need to be changed
+      // when we move to zustand.
       try {
           await updateShortlistIndexAction(recipeId || '', id, newIdx);
       } catch (err) {

@@ -60,9 +60,29 @@ export function setNodeIcon(node: RecipeNode, _icon: IconStats) {
     return node;
 }
 
-/** @deprecated - clear via node.iconShortlist = undefined; node.shortlistIndex = undefined; */
-export function clearNodeIcon(node: RecipeNode) {
-    return node;
+/** Clears all shortlist state from the node (shortlist, index, and cycled flag). */
+export function clearNodeShortlist(node: RecipeNode): void {
+    node.iconShortlist = undefined;
+    node.shortlistIndex = undefined;
+    node.shortlistCycled = undefined;
+}
+
+/**
+ * Returns the IDs of every icon the user has seen in the current cycle:
+ * - If shortlistCycled is true: all entries in the shortlist
+ * - Otherwise: entries 0 through shortlistIndex inclusive
+ */
+export function getSeenIconIds(node: RecipeNode): string[] {
+    const shortlist = node.iconShortlist;
+    if (!shortlist || shortlist.length === 0) return [];
+    const upTo = node.shortlistCycled ? shortlist.length : (node.shortlistIndex ?? 0) + 1;
+    return shortlist.slice(0, upTo).map(e => getEntryIcon(e).id);
+}
+
+/** Returns the IconStats at a given shortlist position, or undefined if out of bounds. */
+export function getShortlistIconAt(node: RecipeNode, index: number): IconStats | undefined {
+    const entry = node.iconShortlist?.[index];
+    return entry ? getEntryIcon(entry) : undefined;
 }
 
 export function hasNodeIcon(node: RecipeNode): boolean {

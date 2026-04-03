@@ -136,13 +136,8 @@ function RecipeLanesContent() {
   // Sync graph to jsonText
   useEffect(() => {
       if (graph) {
-          const safeGraph = { 
-              ...graph, 
-                                nodes: graph.nodes.map(n => {
-                                    // const { icon, ...rest } = n;// this removes the whole icon, i just want to remove the url.
-                                    // const { icon, ...rest } = n;
-                                    return n;
-                                })          };
+          // url is no longer in the graph so it's safe.
+          const safeGraph = { ...graph };
           setJsonText(JSON.stringify(safeGraph, null, 2));
       }
   }, [graph]);

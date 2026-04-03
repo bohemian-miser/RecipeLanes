@@ -137,6 +137,11 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
             console.warn(`[Queue-${ingredientName}] icon_index write failed (non-fatal):`, e);
         }
 
+        // Record one impression per recipe this icon was shown in (non-fatal)
+        dataService.recordImpression(icon.id, ingredientDocId).catch(e =>
+            console.warn(`[Queue-${ingredientName}] recordImpression failed (non-fatal):`, e)
+        );
+
     } catch (error: any) {
         console.error(`[Queue-${ingredientName}] 💥 Failed:`, error);
         

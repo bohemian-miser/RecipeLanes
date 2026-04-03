@@ -52,6 +52,17 @@ export interface IconIndexEntry {
     created_at?: any;
 }
 
+/**
+ * Shape of a document in the Firestore `ingredients_new` collection.
+ * Doc ID = standardized ingredient name (same as visualDescription).
+ * `icons` is a slice of IconStats (up to 50 most recent).
+ */
+export interface IngredientDoc {
+    icons: IconStats[];
+    created_at: any;
+    updated_at: any;
+}
+
 export interface ShortlistEntry {
     icon: IconStats;
     matchType: 'generated' | 'search';
@@ -65,7 +76,8 @@ export interface RecipeNode {
   
   // Icon Data
   iconShortlist?: ShortlistEntry[];
-  shortlistIndex?: number;  // current position in iconShortlist, 0-based
+  shortlistIndex?: number;   // current position in iconShortlist, 0-based
+  shortlistCycled?: boolean; // true once the user has wrapped all the way around the shortlist
   iconQuery?: {
     queryUsed: string;
     method: string;

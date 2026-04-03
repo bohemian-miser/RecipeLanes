@@ -160,15 +160,26 @@ export function getNodeIconStatus(node: RecipeNode) {
     return entry ? getEntryIcon(entry).status : undefined;
 }
 
-export function applyIconToNode(node: RecipeNode, icon: IconStats) {
-    // Only propagate essential visual/reference data, avoiding stale stats
-    const cleanIcon: IconStats = {
+/**
+ * Returns a plain-object subset of IconStats safe to embed in recipe nodes.
+ * Strips legacy fields (path, url, fullPrompt, created_at, etc.) and Firestore
+ * Timestamp instances that break Next.js client↔server serialization.
+ */
+export function toRecipeIcon(icon: IconStats): IconStats {
+    return {
         id: icon.id,
         visualDescription: icon.visualDescription,
         metadata: icon.metadata,
-        status: icon.status
+        status: icon.status,
+        ...(icon.score !== undefined && { score: icon.score }),
+        ...(icon.impressions !== undefined && { impressions: icon.impressions }),
+        ...(icon.rejections !== undefined && { rejections: icon.rejections }),
     };
-    setNodeIcon(node, cleanIcon);
+}
+
+export function applyIconToNode(node: RecipeNode, icon: IconStats) {
+    // Only propagate essential visual/reference data, avoiding stale stats
+    setNodeIcon(node, toRecipeIcon(icon));
     return node;
 }
 

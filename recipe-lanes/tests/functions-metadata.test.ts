@@ -18,7 +18,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { db, storage } from '../lib/firebase-admin';
-import { createVisualRecipeAction } from '../app/actions';
+import { createVisualRecipeAction, forgeIconAction } from '../app/actions';
 import { setAIService, MockAIService } from '../lib/ai-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
 import { getIconPath } from '../lib/recipe-lanes/model-utils';
@@ -55,7 +55,14 @@ describe('Cloud Function Metadata', () => {
         if (!result.id) throw new Error("Failed to create recipe");
         const recipeId = result.id;
 
-        // 2. Poll until Background Worker updates the icon.
+        // 2. Force generation — resolveRecipeIcons may have resolved the ingredient from
+        //    stale icon_index entries written by previous test runs, assigning a search result
+        //    instead of queuing generation. Calling forgeIconAction clears any shortlist and
+        //    queues the ingredient unconditionally (no embedFn → skips index search).
+        const forgeResult = await forgeIconAction(recipeId, ingredientName) as any;
+        if (!forgeResult?.success) throw new Error(`forgeIconAction failed: ${forgeResult?.error}`);
+
+        // 3. Poll until Background Worker updates the icon.
         // Poll every 500 ms for up to 60 s (120 attempts) to handle a slow emulator
         // on low-power hardware without timing out before the function completes.
         let iconId: string | null = null;
@@ -71,9 +78,11 @@ describe('Cloud Function Metadata', () => {
 
             // Icons are stored in the shortlist model: node.iconShortlist[shortlistIndex].icon
             // URLs are derived from visualDescription + id, not stored directly.
+            // Only accept a 'generated' icon — search results may point to stale Firestore
+            // entries from previous test runs that were never uploaded to Storage.
             const currentEntry = node?.iconShortlist?.[node?.shortlistIndex ?? 0];
             const entryIcon = currentEntry?.icon;
-            if (entryIcon?.id && entryIcon?.visualDescription) {
+            if (entryIcon?.id && entryIcon?.visualDescription && currentEntry?.matchType === 'generated') {
                 iconId = entryIcon.id;
                 iconVisualDescription = entryIcon.visualDescription;
                 break;
@@ -85,7 +94,7 @@ describe('Cloud Function Metadata', () => {
 
         assert.ok(iconId, `Background worker did not update icons within ${(maxAttempts * pollIntervalMs) / 1000}s.`);
 
-        // 3. Verify Storage Metadata — derive path the same way getIconPublicUrl() does.
+        // 4. Verify Storage Metadata — derive path the same way getIconPublicUrl() does.
         const filePath = getIconPath(iconId!, standardizeIngredientName(iconVisualDescription!));
         
         const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app');

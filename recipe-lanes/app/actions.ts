@@ -533,8 +533,13 @@ export async function searchIconCandidatesAction(query: string): Promise<{ candi
     console.log(`[searchIconCandidatesAction] query="${query}"`);
     const embedding = await getAIService().embedTexts([query]);
     console.log(`[searchIconCandidatesAction] embedding dim=${embedding.length}`);
-    const candidates = await getDataService().searchIconsByEmbedding(embedding, 12);
-    console.log(`[searchIconCandidatesAction] got ${candidates.length} candidates`);
+    const raw = await getDataService().searchIconsByEmbedding(embedding, 12);
+    console.log(`[searchIconCandidatesAction] got ${raw.length} candidates`);
+    // Strip Firestore Timestamp objects — not serializable across the server→client boundary.
+    const candidates: IconStats[] = raw.map((c) => {
+        const { created_at: _, ...rest } = c as any;
+        return rest;
+    });
     return { candidates };
   } catch (e: any) {
     console.error('[searchIconCandidatesAction] failed:', e);

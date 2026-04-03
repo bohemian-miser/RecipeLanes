@@ -25,27 +25,6 @@ describe('Data Service & Actions', () => {
         service = getDataService();
     });
 
-    describe('Stats & Icon Logic', () => {
-        it('should track impressions and rejections', async () => {
-            const published = await service.publishIcon('ing1', 'Ing 1', { url: 'u1', score: 0 });
-            await service.recordImpression('ing1', published.id);
-            let icons = await service.getIconsForIngredient('ing1');
-            assert.strictEqual(icons[0].impressions, 1);
-
-            await service.recordRejection(published.id, 'Ing 1', 'ing1');
-            icons = await service.getIconsForIngredient('ing1');
-            assert.strictEqual(icons[0].rejections, 1);
-        });
-
-        it('should handle rerolls', async () => {
-            const published = await service.publishIcon('ing1', 'Ing 1', { url: 'u1', score: 0 });
-            await service.recordRejection(published.id, 'Ing 1', 'ing1');
-            await service.publishIcon('ing1', 'Ing 1', { url: 'u2', score: 0 });
-            const icons = await service.getIconsForIngredient('ing1');
-            assert.strictEqual(icons.length, 2);
-        });
-    });
-
     describe('Social & Gallery', () => {
         it('should handle visibility and vetting', async () => {
             const id = await service.saveRecipe({ ...mockGraph, title: 'Public' }, undefined, 'u1', 'public');

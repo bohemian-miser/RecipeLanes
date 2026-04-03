@@ -21,7 +21,8 @@ import { DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from "../../lib/config";
 import { getDataService } from '../../lib/data-service';
 import { getAIService } from '../../lib/ai-service';
 import { db } from '../../lib/firebase-admin';
-import { calculateWilsonLCB } from '../../lib/utils';
+import { withSearchTerms } from '../../lib/recipe-lanes/model-utils';
+// import { calculateWilsonLCB } from '../../lib/utils';
 
 // --- Helper Functions ---
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
@@ -67,7 +68,7 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
         });
 
         // 2. Generate the icon (This takes time, clients might still be adding recipes to the queue doc)
-        const { iconData } = await generateIconData(ingredientName);
+        const icon = await generateIconData(ingredientName);
 
         // 3. Publish & Assign (Transaction)
         console.log(`[Queue-${ingredientName}] Publishing to Firestore...`);
@@ -93,46 +94,28 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
             const latestRecipeIds: string[] = queueDocData?.recipes || [];
             console.log(`[Queue-${ingredientName}] in transaction Publishing to Firestore...`);
 
-            // Convert hydeQueries from queue doc into SearchTerm[]
             rawHydeQueries = queueDocData?.hydeQueries || [];
-            const searchTerms = rawHydeQueries.map((text: string) => ({
-                text,
-                source: 'hyde_from_img' as const,
-                addedAt: Date.now()
-            }));
+            const iconWithTerms = withSearchTerms(icon, rawHydeQueries);
 
-            // Set initial impressions based on how many recipes we're updating now
-            const initialImpressions = latestRecipeIds.length;
-            const initialScore = calculateWilsonLCB(initialImpressions, 0);
+            // Bundle variables together to make it easier to split reads and writes in the transaction.
+            // It's a bit of a hack.
+            const ingredientData = await dataService.imagineIngredientWithIcon(ingredientDocId, ingredientName, iconWithTerms, transaction);
 
-            const iconDataWithStats: any = {
-                ...iconData,
-                impressions: initialImpressions,
-                score: initialScore,
-                ...(searchTerms.length > 0 ? { searchTerms } : {})
-            };
-
-            const ingredientData = await dataService.imagineIngredientWithIcon(ingredientDocId, ingredientName, iconDataWithStats, transaction);
-
-            console.log(`[Queue-${ingredientName}] ✅ Success. Icon ID: ${iconData.id}`);
+            console.log(`[Queue-${ingredientName}] ✅ Success. Icon ID: ${icon.id}`);
 
             const recipeDataObj: Record<string, any> = {};
             for (const rId of latestRecipeIds) {
-                const data = await dataService.imagineRecipeWithIcon(rId, ingredientName, iconDataWithStats, transaction);
+                const data = await dataService.imagineRecipeWithIcon(rId, ingredientName, iconWithTerms, transaction);
                 recipeDataObj[rId] = data;
             }
 
-            // END READS.
-
-            // if it gets a bad read/write, it will throw.
-            //start emulator and dev:emulator make some slow stuff and try to find where the bad read/write is.
+            // End READS. Now commit all changes together.
 
             console.log(`[Queue-${ingredientName}] Committing to recipes...`);
             await dataService.setIngredientWithIcon(ingredientData, transaction);
 
             // Update all linked recipes using the atomic helper
             console.log(`[Queue-${ingredientName}] Updating ${latestRecipeIds.length} recipes...`);
-
             for (const rId of latestRecipeIds) {
                 await dataService.setRecipeWithIcon(recipeDataObj[rId], transaction);
             }
@@ -143,11 +126,13 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
         });
 
         // Write to icon_index for embedding search (non-fatal)
+        // This should probably be in the transaction so that a recipe doesn't miss the existence of
+        // an icon and then request it when it's actaully just been made. Slim chance tho.
         try {
             const embeddingTexts = rawHydeQueries.length > 0 ? rawHydeQueries : [ingredientName];
             const embedding = await getAIService().embedTexts(embeddingTexts);
-            await dataService.writeIconToIndex(iconData.id, ingredientName, embedding);
-            console.log(`[Queue-${ingredientName}] icon_index written for icon ${iconData.id}`);
+            await dataService.writeIconToIndex(icon.id, ingredientName, embedding);
+            console.log(`[Queue-${ingredientName}] icon_index written for icon ${icon.id}`);
         } catch (e) {
             console.warn(`[Queue-${ingredientName}] icon_index write failed (non-fatal):`, e);
         }

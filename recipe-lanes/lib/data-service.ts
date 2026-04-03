@@ -22,28 +22,29 @@ import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
-import { standardizeIngredientName, removeUndefined, calculateWilsonLCB } from './utils';
-import { applyIconToNode, buildShortlistEntry, getEntryIcon, getIconPath, getIconThumbPath, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, hasNodeIcon, iconIndexEntryToStats, prependToShortlist } from './recipe-lanes/model-utils';
+import { standardizeIngredientName, removeUndefined } from './utils';
+// import { calculateWilsonLCB } from './utils';
+import { applyIconToNode, buildShortlistEntry, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, hasNodeIcon, iconIndexEntryToStats, prependToShortlist } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
   createIngredient(name: string): Promise<string>;
   
-  getIconsForIngredient(ingredientId: string): Promise<any[]>;
+//   getIconsForIngredient(ingredientId: string): Promise<any[]>;
   getAllIcons(): Promise<any[]>;
   
   uploadIcon(
-      ingredientName: string, 
-      buffer: ArrayBuffer | Buffer, 
+      ingredientName: string,
+      buffer: ArrayBuffer | Buffer,
       metadata: any
-  ): Promise<{ url: string, path: string, iconId: string }>;
+  ): Promise<{ iconId: string }>;
 
   publishIcon(
-      ingredientId: string, 
-      ingredientName: string, 
-      iconData: any,
+      ingredientId: string,
+      ingredientName: string,
+      icon: IconStats,
       transaction?: any
-  ): Promise<IconStats>;
+  ): Promise<void>;
 
   
   saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public', ownerName?: string): Promise<string>;
@@ -59,8 +60,8 @@ export interface DataService {
   getStarredRecipes(userId: string): Promise<any[]>;
   getPublicRecipes(limit: number): Promise<any[]>;
 
-  recordRejection(iconId: string, ingredientName: string, ingredientId: string): Promise<void>;
-  recordImpression(ingredientId: string, iconId: string): Promise<void>;
+  // recordRejection(iconId: string, ingredientName: string, ingredientId: string): Promise<void>;
+  // recordImpression(ingredientId: string, iconId: string): Promise<void>;
 
   deleteIcon(iconId: string, ingredientName?: string): Promise<void>;
   
@@ -68,8 +69,8 @@ export interface DataService {
   checkExistingCopies(originalId: string, userId: string): Promise<any[]>;
   getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }>;
   retryIconGeneration(ingredientName: string): Promise<void>;
-  queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, IconStats>>;
-  waitForQueue(ingredientName: string, timeoutMs?: number): Promise<IconStats | null>;
+  // queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, IconStats>>;
+//   waitForQueue(ingredientName: string, timeoutMs?: number): Promise<IconStats | null>;
   
   // New Methods for Refactor
   resolveRecipeIcons(recipeId: string, embedFn?: (texts: string[]) => Promise<number[]>): Promise<void>;
@@ -79,7 +80,7 @@ export interface DataService {
   setRecipeWithIcon(data: any, transaction?: any): Promise<void>;
   assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<void>;
   
-  imagineIngredientWithIcon(ingredientId: string, ingredientName: string, iconData: any, transaction?: any): Promise<any>;
+  imagineIngredientWithIcon(ingredientId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<any>;
   setIngredientWithIcon(data: any, transaction?: any): Promise<void>;
   
   submitFeedback(data: { message: string, url: string, email?: string, graphJson?: string, userId?: string }): Promise<void>;
@@ -168,7 +169,7 @@ export class FirebaseDataService implements DataService {
       
       let recipeChanged = false;
       let ingredientChanged = false;
-      let icons = [];
+      let icons: any[] = [];
 
       const generatedEntry: ShortlistEntry = buildShortlistEntry(icon, 'generated');
       nodes.forEach((n: any) => {
@@ -184,23 +185,21 @@ export class FirebaseDataService implements DataService {
           }
       });
       
-      if (recipeChanged) {
-          // Update Impressions (Once per recipe update)
-          if (ingDoc.exists) {
-              icons = ingDoc.data()?.icons || [];
-              const iconIndex = icons.findIndex((i: any) => i.id === icon.id);
-              
-              if (iconIndex !== -1) {
-                  icons[iconIndex].impressions = (icons[iconIndex].impressions || 0) + 1;
-                  const n = icons[iconIndex].impressions;
-                  const r = icons[iconIndex].rejections || 0;
-                  icons[iconIndex].score = calculateWilsonLCB(n, r);
-                  icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
-                  
-                  ingredientChanged = true;
-              }
-          }
-      }
+      // if (recipeChanged) {
+      //     // Update Impressions (Once per recipe update)
+      //     if (ingDoc.exists) {
+      //         icons = ingDoc.data()?.icons || [];
+      //         const iconIndex = icons.findIndex((i: any) => i.id === icon.id);
+      //         if (iconIndex !== -1) {
+      //             icons[iconIndex].impressions = (icons[iconIndex].impressions || 0) + 1;
+      //             const n = icons[iconIndex].impressions;
+      //             const r = icons[iconIndex].rejections || 0;
+      //             icons[iconIndex].score = calculateWilsonLCB(n, r);
+      //             icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+      //             ingredientChanged = true;
+      //         }
+      //     }
+      // }
 
       return { recipeRef, ingRef, nodes, icons, recipeChanged, ingredientChanged };
   }
@@ -233,50 +232,32 @@ export class FirebaseDataService implements DataService {
   }
 
   // TEST ONLY.
-  async waitForQueue(ingredientName: string, timeoutMs: number = 15000): Promise<IconStats | null> {
+//   async waitForQueue(ingredientName: string, timeoutMs: number = 15000): Promise<IconStats | null> {
+//       const stdName = standardizeIngredientName(ingredientName);
+//       const docRef = db.collection(DB_COLLECTION_QUEUE).doc(stdName);
+//       const start = Date.now();
 
-      const stdName = standardizeIngredientName(ingredientName);
-      const docRef = db.collection(DB_COLLECTION_QUEUE).doc(stdName);
-      
-      const start = Date.now();
-      
-      while (Date.now() - start < timeoutMs) {
-          const snap = await docRef.get();
-          
-          // 1. Check Queue Status
-          if (snap.exists) {
-              const data = snap.data();
-              // Legacy support: if 'completed' status still used
-              if (data?.status === 'completed' && data.id) {
-                  return { id: data.id };
-              }
-              if (data?.status === 'failed') {
-                  throw new Error(data.error || 'Generation failed');
-              }
-              // If pending/processing, keep waiting
-          } else {
-              console.log(`[FIREBASEDATASERVICE] WAITFORQUEUE: NO QUEUE DOCUMENT FOR "${stdName}", CHECKING INGREDIENTS...`);
-              // 2. Queue item missing? It might be completed and deleted.
-              // Check the Ingredients collection.
-              const ingDoc = await db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName).get();
-              if (ingDoc.exists) {
-                  const data = ingDoc.data();
-                  if (data && data.icons && Array.isArray(data.icons) && data.icons.length > 0) {
-                      // Return the newest/best icon
-                      // Assuming icons are sorted or we take first
-                      // DataService.saveIcon sorts by score, so first is best
-                      const best = data.icons[0];
-                      return { id: best.id };
-                  }
-              }
-              // If neither queue nor ingredient exists, it might not be queued yet or deleted entirely.
-              // We continue waiting until timeout in case it's about to be created.
-          }
-          
-          await new Promise(r => setTimeout(r, 1000));
-      }
-      return null;
-  }
+//       while (Date.now() - start < timeoutMs) {
+//           const snap = await docRef.get();
+
+//           if (snap.exists) {
+//               const data = snap.data();
+//               if (data?.status === 'completed' && data.id) return { id: data.id };
+//               if (data?.status === 'failed') throw new Error(data.error || 'Generation failed');
+//               // pending/processing — keep waiting
+//           } else {
+//               console.log(`[FIREBASEDATASERVICE] WAITFORQUEUE: NO QUEUE DOCUMENT FOR "${stdName}", CHECKING INGREDIENTS...`);
+//               const ingDoc = await db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName).get();
+//               if (ingDoc.exists) {
+//                   const icons = ingDoc.data()?.icons || [];
+//                   if (icons.length > 0) return { id: icons[0].id, visualDescription: icons[0].visualDescription };
+//               }
+//           }
+
+//           await new Promise(r => setTimeout(r, 1000));
+//       }
+//       return null;
+//   }
         
     /**
      * Helper to determine if a single node requires icon processing.
@@ -287,31 +268,32 @@ export class FirebaseDataService implements DataService {
         return false;
     }
 
-    /**
-     * Merges new hydeQueries into the searchTerms of an icon stored inside the ingredient doc's icons[] array.
-     * Skips any text already present. Writes the full updated icons[] array back.
-     */
-    private async mergeSearchTermsIntoIcon(stdName: string, iconId: string, hydeQueries: string[]): Promise<void> {
-        const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName);
-        await db.runTransaction(async (t) => {
-            const doc = await t.get(docRef);
-            if (!doc.exists) return;
-            const icons: any[] = doc.data()?.icons || [];
-            const idx = icons.findIndex((i: any) => i.id === iconId);
-            if (idx === -1) return;
+    // /**
+    //  * Merges new hydeQueries into the searchTerms of an icon stored inside the ingredient doc's icons[] array.
+    //  * Skips any text already present. Writes the full updated icons[] array back.
+    //  */
+    // //why is this not called? todo ..
+    // private async mergeSearchTermsIntoIcon(stdName: string, iconId: string, hydeQueries: string[]): Promise<void> {
+    //     const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName);
+    //     await db.runTransaction(async (t) => {
+    //         const doc = await t.get(docRef);
+    //         if (!doc.exists) return;
+    //         const icons: any[] = doc.data()?.icons || [];
+    //         const idx = icons.findIndex((i: any) => i.id === iconId);
+    //         if (idx === -1) return;
 
-            const icon = icons[idx];
-            const existingTexts = new Set<string>((icon.searchTerms || []).map((st: any) => st.text));
-            const newTerms = hydeQueries
-                .filter(q => !existingTexts.has(q))
-                .map(q => ({ text: q, source: 'hyde_from_img' as const, addedAt: Date.now() }));
+    //         const icon = icons[idx];
+    //         const existingTexts = new Set<string>((icon.searchTerms || []).map((st: any) => st.text));
+    //         const newTerms = hydeQueries
+    //             .filter(q => !existingTexts.has(q))
+    //             .map(q => ({ text: q, source: 'hyde_from_img' as const, addedAt: Date.now() }));
 
-            if (newTerms.length === 0) return;
+    //         if (newTerms.length === 0) return;
 
-            icons[idx] = { ...icon, searchTerms: [...(icon.searchTerms || []), ...newTerms] };
-            t.update(docRef, { icons });
-        });
-    }
+    //         icons[idx] = { ...icon, searchTerms: [...(icon.searchTerms || []), ...newTerms] };
+    //         t.update(docRef, { icons });
+    //     });
+    // }
         /**
      * Safely adds an ingredient to the queue via a transaction.
      */
@@ -650,11 +632,10 @@ export class FirebaseDataService implements DataService {
             });
         });
 
-        if (iconIdToReject) {
-            const stdName = standardizeIngredientName(ingredientName);
-            // Best effort
-            this.recordRejection(iconIdToReject, ingredientName, stdName).catch(console.error);
-        }
+        // if (iconIdToReject) {
+        //     const stdName = standardizeIngredientName(ingredientName);
+        //     this.recordRejection(iconIdToReject, ingredientName, stdName).catch(console.error);
+        // }
 
         await this.resolveRecipeIcons(recipeId, embedFn);
         return { success: true };
@@ -1006,37 +987,28 @@ export class FirebaseDataService implements DataService {
     return stdName;
   }
 
-  async recordImpression(ingredientId: string, iconId: string) {
-      // ingredientId is StdName
-      const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
-      
-      await db.runTransaction(async (t) => {
-          const doc = await t.get(docRef);
-          if (!doc.exists) return;
-          const data = doc.data() || {};
-          const icons = data.icons || [];
-          
-          const index = icons.findIndex((i: any) => i.id === iconId);
-          if (index !== -1) {
-              const currentImpressions = icons[index].impressions || 0;
-              const currentRejections = icons[index].rejections || 0;
-              
-              icons[index].impressions = currentImpressions + 1;
-              icons[index].score = calculateWilsonLCB(icons[index].impressions, currentRejections);
-              
-              // Keep sorted
-              icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
-              t.update(docRef, { icons });
-          }
-      });
-  }
+  // async recordImpression(ingredientId: string, iconId: string) {
+  //     const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
+  //     await db.runTransaction(async (t) => {
+  //         const doc = await t.get(docRef);
+  //         if (!doc.exists) return;
+  //         const icons = (doc.data() || {}).icons || [];
+  //         const index = icons.findIndex((i: any) => i.id === iconId);
+  //         if (index !== -1) {
+  //             icons[index].impressions = (icons[index].impressions || 0) + 1;
+  //             icons[index].score = calculateWilsonLCB(icons[index].impressions, icons[index].rejections || 0);
+  //             icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+  //             t.update(docRef, { icons });
+  //         }
+  //     });
+  // }
 
-  async getIconsForIngredient(ingredientId: string) {
-    // ingredientId is StdName
-    const doc = await db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId).get();
-    if (!doc.exists) return [];
-    return doc.data()?.icons || [];
-  }
+//   async getIconsForIngredient(ingredientId: string) {
+//     // ingredientId is StdName
+//     const doc = await db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId).get();
+//     if (!doc.exists) return [];
+//     return doc.data()?.icons || [];
+//   }
 
   async getAllIcons() {
      try {
@@ -1050,7 +1022,7 @@ export class FirebaseDataService implements DataService {
      } catch (e: any) { return []; }
   }
 
-  async uploadIcon(ingredientName: string, buffer: ArrayBuffer | Buffer, metadata: any): Promise<{ url: string, path: string, iconId: string }> {
+  async uploadIcon(ingredientName: string, buffer: ArrayBuffer | Buffer, metadata: any): Promise<{ iconId: string }> {
       const isEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
       
       const iconId = randomUUID();
@@ -1079,10 +1051,10 @@ export class FirebaseDataService implements DataService {
       });
       await thumbFile.makePublic();
 
-      return { url: file.publicUrl(), path: fileName, iconId };
+      return { iconId };
   }
 
-  async imagineIngredientWithIcon(ingredientId: string, ingredientName: string, iconData: any, transaction?: any): Promise<any> {
+  async imagineIngredientWithIcon(ingredientId: string, ingredientName: string, iconData: IconStats, transaction?: any): Promise<any> {
       const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
       
       let doc;
@@ -1102,7 +1074,7 @@ export class FirebaseDataService implements DataService {
       }
       
       icons.push(iconData);
-      icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+      // icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
       if (icons.length > 50) icons = icons.slice(0, 50);
 
       return { docRef, icons, isNew, ingredientName };
@@ -1136,9 +1108,9 @@ export class FirebaseDataService implements DataService {
       }
   }
 
-  async publishIcon(ingredientId: string, ingredientName: string, iconData: any, transaction?: any): Promise<IconStats> {
+  async publishIcon(ingredientId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<void> {
       const operation = async (t: any) => {
-          const data = await this.imagineIngredientWithIcon(ingredientId, ingredientName, iconData, t);
+          const data = await this.imagineIngredientWithIcon(ingredientId, ingredientName, icon, t);
           await this.setIngredientWithIcon(data, t);
       };
 
@@ -1147,71 +1119,53 @@ export class FirebaseDataService implements DataService {
       } else {
           await db.runTransaction(operation);
       }
-
-      return {
-          id: iconData.id,
-          metadata: iconData.metadata
-      };
   }
 
 
 
-  async recordRejection(iconId: string, ingredientName: string, ingredientId: string) {
-    const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
-    
-    await db.runTransaction(async (t) => {
-        const doc = await t.get(docRef);
-        if (!doc.exists) return;
-        const icons = doc.data()?.icons || [];
-        
-        // Find by ID primarily, fallback to URL/Path for legacy support
-        const index = icons.findIndex((i: any) => i.id === iconId || i.url === iconId || i.path === iconId);
-        if (index !== -1) {
-            const icon = icons[index];
-            icon.rejections = (icon.rejections || 0) + 1;
-            if (icon.impressions === undefined || icon.impressions < icon.rejections) {
-                console.warn(`[recordRejection] MORE REJECTIONS THAN IMPRESSIONS`);
-            }
-            // Recalculate Score using Wilson LCB
-            icon.score = calculateWilsonLCB(icon.impressions, icon.rejections);
-            
-            icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
-            t.update(docRef, { icons });
-        }
-    });
-  }
+  // async recordRejection(iconId: string, ingredientName: string, ingredientId: string) {
+  //     const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
+  //     await db.runTransaction(async (t) => {
+  //         const doc = await t.get(docRef);
+  //         if (!doc.exists) return;
+  //         const icons = doc.data()?.icons || [];
+  //         const index = icons.findIndex((i: any) => i.id === iconId);
+  //         if (index !== -1) {
+  //             const icon = icons[index];
+  //             icon.rejections = (icon.rejections || 0) + 1;
+  //             if (icon.impressions === undefined || icon.impressions < icon.rejections) {
+  //                 console.warn(`[recordRejection] MORE REJECTIONS THAN IMPRESSIONS`);
+  //             }
+  //             icon.score = calculateWilsonLCB(icon.impressions, icon.rejections);
+  //             icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+  //             t.update(docRef, { icons });
+  //         }
+  //     });
+  // }
 
   async deleteIcon(iconId: string, ingredientName?: string) {
       if (!ingredientName) return; 
       const stdName = standardizeIngredientName(ingredientName);
       const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName);
       
-      const deletedPath = await db.runTransaction(async (t) => {
+      const deleted = await db.runTransaction(async (t) => {
           const doc = await t.get(docRef);
           if (!doc.exists) return null;
           const icons = doc.data()?.icons || [];
-          const iconToDelete = icons.find((i: any) => i.id === iconId || i.url === iconId || i.path === iconId);
-          
+          const iconToDelete = icons.find((i: any) => i.id === iconId);
+
           if (iconToDelete) {
-              const deletedId = iconToDelete.id;
-              const path = iconToDelete.path || iconToDelete.url || null;
-              const newIcons = icons.filter((i: any) => i.id !== deletedId);
+              const pathMap = getIconStoragePaths(iconToDelete);
+              const newIcons = icons.filter((i: any) => i !== iconToDelete);
               t.update(docRef, { icons: newIcons });
-              return path;
+              return pathMap;
           }
           return null;
       });
       
-      if (typeof deletedPath === 'string' && process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
-          let path: string = deletedPath;
-          if (deletedPath.includes('/o/')) {
-              const match = deletedPath.match(new RegExp('/o/([^?]+)'));
-              if (match) path = decodeURIComponent(match[1]);
-          }
-          if (path) {
-              const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
-              await bucket.file(path).delete().catch(() => {});
-          }
+      if (deleted && process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
+          const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
+          await Promise.all(Object.values<string>(deleted).map(p => bucket.file(p).delete().catch(() => {})));
       }
   }
 
@@ -1233,137 +1187,137 @@ export class FirebaseDataService implements DataService {
       }));
   }
 
-    // queueIcons is test only! It's no longer used.
-  async queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, IconStats>> {
-      const immediateHits = new Map<string, IconStats>();
-      if (items.length === 0) return immediateHits;
+//     // queueIcons is test only! It's no longer used.
+//   async queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, IconStats>> {
+//       const immediateHits = new Map<string, IconStats>();
+//       if (items.length === 0) return immediateHits;
       
-      const batch = db.batch();
-      let queuedCount = 0;
+//       const batch = db.batch();
+//       let queuedCount = 0;
       
-      const uniqueNames = Array.from(new Set(items.map(i => standardizeIngredientName(i.ingredientName))));
-      const refs = uniqueNames.map(name => db.collection(DB_COLLECTION_INGREDIENTS).doc(name));
-      const snapshots = await db.getAll(...refs);
+//       const uniqueNames = Array.from(new Set(items.map(i => standardizeIngredientName(i.ingredientName))));
+//       const refs = uniqueNames.map(name => db.collection(DB_COLLECTION_INGREDIENTS).doc(name));
+//       const snapshots = await db.getAll(...refs);
       
-      const cacheMap = new Map<string, any>();
-      snapshots.forEach(snap => {
-          if (snap.exists) cacheMap.set(snap.id, snap.data());
-      });
+//       const cacheMap = new Map<string, any>();
+//       snapshots.forEach(snap => {
+//           if (snap.exists) cacheMap.set(snap.id, snap.data());
+//       });
 
-      const updatesByRecipe = new Map<string, Map<string, { id: string, url?: string, path?: string, metadata?: any }>>();
+//       const updatesByRecipe = new Map<string, Map<string, { id: string, url?: string, path?: string, metadata?: any }>>();
 
-      for (const item of items) {
-          const name = standardizeIngredientName(item.ingredientName);
-          const rejected = new Set(item.rejectedIds || []);
+//       for (const item of items) {
+//           const name = standardizeIngredientName(item.ingredientName);
+//           const rejected = new Set(item.rejectedIds || []);
           
-          let foundIcon: IconStats | null = null;
+//           let foundIcon: IconStats | null = null;
 
-          const ingData = cacheMap.get(name);
-          if (ingData && ingData.icons && Array.isArray(ingData.icons)) {
-              for (const icon of ingData.icons) {
-                  const isRejected = rejected.has(icon.id);
-                  if (!isRejected) {
-                      foundIcon = {
-                          id: icon.id,
-                          score: icon.score,
-                          impressions: icon.impressions,
-                          rejections: icon.rejections,
-                          metadata: icon.metadata
-                      };
-                      break;
-                  }
-              }
-          }
+//           const ingData = cacheMap.get(name);
+//           if (ingData && ingData.icons && Array.isArray(ingData.icons)) {
+//               for (const icon of ingData.icons) {
+//                   const isRejected = rejected.has(icon.id);
+//                   if (!isRejected) {
+//                       foundIcon = {
+//                           id: icon.id,
+//                           score: icon.score,
+//                           impressions: icon.impressions,
+//                           rejections: icon.rejections,
+//                           metadata: icon.metadata
+//                       };
+//                       break;
+//                   }
+//               }
+//           }
 
-          if (!foundIcon) {
-              const docRef = db.collection(DB_COLLECTION_QUEUE).doc(name);
-              const docSnap = await docRef.get();
-              const existingData = docSnap.data();
+//           if (!foundIcon) {
+//               const docRef = db.collection(DB_COLLECTION_QUEUE).doc(name);
+//               const docSnap = await docRef.get();
+//               const existingData = docSnap.data();
 
-              if (existingData?.status === 'completed' && existingData.id) {
-                  if (!rejected.has(existingData.id)) {
-                      foundIcon = { id: existingData.id, metadata: existingData.metadata };
-                  }
-              }
+//               if (existingData?.status === 'completed' && existingData.id) {
+//                   if (!rejected.has(existingData.id)) {
+//                       foundIcon = { id: existingData.id, metadata: existingData.metadata };
+//                   }
+//               }
               
-              if (!foundIcon) {
-                  const update: any = {
-                      created_at: existingData?.created_at || FieldValue.serverTimestamp()
-                  };
+//               if (!foundIcon) {
+//                   const update: any = {
+//                       created_at: existingData?.created_at || FieldValue.serverTimestamp()
+//                   };
                   
-                  if (item.recipeId) {
-                      update.recipes = FieldValue.arrayUnion(item.recipeId);
-                      // Best-effort count update (ignoring race conditions for performance)
-                      const currentCount = existingData?.recipes?.length || 0;
-                      const alreadyHas = existingData?.recipes?.includes(item.recipeId);
-                      update.recipeCount = alreadyHas ? currentCount : currentCount + 1;
-                  }
+//                   if (item.recipeId) {
+//                       update.recipes = FieldValue.arrayUnion(item.recipeId);
+//                       // Best-effort count update (ignoring race conditions for performance)
+//                       const currentCount = existingData?.recipes?.length || 0;
+//                       const alreadyHas = existingData?.recipes?.includes(item.recipeId);
+//                       update.recipeCount = alreadyHas ? currentCount : currentCount + 1;
+//                   }
                   
-                  if (!existingData || existingData.status === 'completed' || existingData.status === 'failed') {
-                       update.status = 'pending';
-                       update.error = FieldValue.delete();
-                  }
+//                   if (!existingData || existingData.status === 'completed' || existingData.status === 'failed') {
+//                        update.status = 'pending';
+//                        update.error = FieldValue.delete();
+//                   }
                   
-                  batch.set(docRef, update, { merge: true });
-                  queuedCount++;
-              }
-          }
+//                   batch.set(docRef, update, { merge: true });
+//                   queuedCount++;
+//               }
+//           }
 
-          if (foundIcon) {
-              immediateHits.set(name, foundIcon);
-              if (item.recipeId) {
-                  if (!updatesByRecipe.has(item.recipeId)) {
-                      updatesByRecipe.set(item.recipeId, new Map());
-                  }
-                  updatesByRecipe.get(item.recipeId)!.set(name, { id: foundIcon.id, metadata: foundIcon.metadata });
-              }
-          }
-      }
+//           if (foundIcon) {
+//               immediateHits.set(name, foundIcon);
+//               if (item.recipeId) {
+//                   if (!updatesByRecipe.has(item.recipeId)) {
+//                       updatesByRecipe.set(item.recipeId, new Map());
+//                   }
+//                   updatesByRecipe.get(item.recipeId)!.set(name, { id: foundIcon.id, metadata: foundIcon.metadata });
+//               }
+//           }
+//       }
 
-      console.log(`[queueIcons] Prepared updates for ${updatesByRecipe.size} recipes. Queuing ${queuedCount} items.`);
+//       console.log(`[queueIcons] Prepared updates for ${updatesByRecipe.size} recipes. Queuing ${queuedCount} items.`);
 
-      for (const [recipeId, updates] of updatesByRecipe.entries()) {
-          console.log(`[queueIcons] Updating recipe ${recipeId}...`);
-          await db.runTransaction(async (t) => {
-              const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
-              const doc = await t.get(recipeRef);
-              if (!doc.exists) return;
-              const data = doc.data();
-              if (!data?.graph?.nodes) return;
+//       for (const [recipeId, updates] of updatesByRecipe.entries()) {
+//           console.log(`[queueIcons] Updating recipe ${recipeId}...`);
+//           await db.runTransaction(async (t) => {
+//               const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+//               const doc = await t.get(recipeRef);
+//               if (!doc.exists) return;
+//               const data = doc.data();
+//               if (!data?.graph?.nodes) return;
               
-              const nodes = data.graph.nodes;
-              let changed = false;
+//               const nodes = data.graph.nodes;
+//               let changed = false;
               
-              nodes.forEach((n: any) => {
-                  if (n.visualDescription) {
-                      const nName = standardizeIngredientName(getNodeIngredientName(n));
-                      if (updates.has(nName)) {
-                          const update = updates.get(nName)!;
-                          if (getNodeIconId(n) !== update.id) {
-                              const entry = buildShortlistEntry(update, 'search');
-                              n.iconShortlist = prependToShortlist(n.iconShortlist || [], entry);
-                              n.shortlistIndex = 0;
-                              changed = true;
-                          }
-                      }
-                  }
-              });
+//               nodes.forEach((n: any) => {
+//                   if (n.visualDescription) {
+//                       const nName = standardizeIngredientName(getNodeIngredientName(n));
+//                       if (updates.has(nName)) {
+//                           const update = updates.get(nName)!;
+//                           if (getNodeIconId(n) !== update.id) {
+//                               const entry = buildShortlistEntry(update, 'search');
+//                               n.iconShortlist = prependToShortlist(n.iconShortlist || [], entry);
+//                               n.shortlistIndex = 0;
+//                               changed = true;
+//                           }
+//                       }
+//                   }
+//               });
               
-              if (changed) {
-                  t.update(recipeRef, { "graph.nodes": removeUndefined(nodes) });
-              }
-          });
-          console.log(`[queueIcons] Recipe ${recipeId} updated.`);
-      }
+//               if (changed) {
+//                   t.update(recipeRef, { "graph.nodes": removeUndefined(nodes) });
+//               }
+//           });
+//           console.log(`[queueIcons] Recipe ${recipeId} updated.`);
+//       }
 
-      if (queuedCount > 0) {
-          console.log('[queueIcons] Committing batch...');
-          await batch.commit();
-          console.log(`[DataService] Enqueued ${queuedCount} icons.`);
-      }
+//       if (queuedCount > 0) {
+//           console.log('[queueIcons] Committing batch...');
+//           await batch.commit();
+//           console.log(`[DataService] Enqueued ${queuedCount} icons.`);
+//       }
       
-      return immediateHits;
-  }
+//       return immediateHits;
+//   }
   
   // ... (private helpers)
   private async updateStorageMetadata(iconUrl: string, updates: any) {
@@ -1513,10 +1467,10 @@ export class MemoryDataService implements DataService {
         if (!recipe.graph.rejections) recipe.graph.rejections = {};
         if (!recipe.graph.rejections[stdName]) recipe.graph.rejections[stdName] = [];
         
-        if (currentIconId) {
-            recipe.graph.rejections[stdName].push(currentIconId);
-            this.recordRejection(currentIconId, ingredientName, stdName);
-        }
+        // if (currentIconId) {
+        //     recipe.graph.rejections[stdName].push(currentIconId);
+        //     this.recordRejection(currentIconId, ingredientName, stdName);
+        // }
         
         // Clear all nodes matching ingredient
         recipe.graph.nodes.forEach(n => {
@@ -1530,26 +1484,25 @@ export class MemoryDataService implements DataService {
         return { success: true };
     }
     
-    async recordImpression(ingredientId: string, iconId: string): Promise<void> {
-        // Simple increment for memory store
-        const icons = memoryStore.getIconsForIngredient(ingredientId);
-        const icon = icons.find(i => i.id === iconId);
-        if (icon) {
-            const n = (icon.impressions || 0) + 1;
-            const r = (icon.rejections || 0);
-            const score = 1.0; // Mock score
-            memoryStore.updateIcon(iconId, { impressions: n, popularity_score: score });
-        }
-    }
+    // async recordImpression(ingredientId: string, iconId: string): Promise<void> {
+    //     const icons = memoryStore.getIconsForIngredient(ingredientId);
+    //     const icon = icons.find(i => i.id === iconId);
+    //     if (icon) {
+    //         const n = (icon.impressions || 0) + 1;
+    //         const r = (icon.rejections || 0);
+    //         const score = 1.0;
+    //         memoryStore.updateIcon(iconId, { impressions: n, popularity_score: score });
+    //     }
+    // }
 
-    async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number) {
-        // Legacy support - can be removed or alias to recordImpression if needed
-        await this.recordImpression(ingredientId, iconId);
-    }
+    // async incrementImpressions(ingredientId: string, iconId: string, iconUrl: string, newScore: number, newImpressions: number) {
+    //     // Legacy support - can be removed or alias to recordImpression if needed
+    //     await this.recordImpression(ingredientId, iconId);
+    // }
 
-    async waitForQueue(ingredientName: string, timeoutMs?: number): Promise<IconStats | null> {
-        return null;
-    }
+    // async waitForQueue(_ingredientName: string, _timeoutMs?: number): Promise<IconStats | null> {
+    //     throw new Error('waitForQueue is only available against the Firebase emulator');
+    // }
     
     // ... (rest of methods)
     async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
@@ -1772,43 +1725,39 @@ export class MemoryDataService implements DataService {
         return memoryStore.getAllIcons().sort((a, b) => b.popularity_score - a.popularity_score);
     }
 
-    async uploadIcon(ingredientName: string, buffer: ArrayBuffer | Buffer, metadata: any): Promise<{ url: string, path: string, iconId: string }> {
+    async uploadIcon(ingredientName: string, _buffer: ArrayBuffer | Buffer, metadata: any): Promise<{ iconId: string }> {
         const iconId = metadata.iconId || randomUUID();
-        return {
-            url: `https://placehold.co/64x64/png?text=Memory&uuid=${iconId}`,
-            path: `icons/${ingredientName}-${iconId}.png`,
-            iconId
-        };
+        return { iconId };
     }
 
-    async publishIcon(ingredientId: string, ingredientName: string, iconData: any): Promise<IconStats> {
+    async publishIcon(ingredientId: string, ingredientName: string, iconData: IconStats): Promise<void> {
         // Ensure ingredient exists
         const existing = memoryStore.getIngredients().find(i => i.name === ingredientId);
         if (!existing) {
             memoryStore.addIngredient({ name: ingredientId, created_at: Date.now() });
         }
 
-        const id = memoryStore.addIcon({
+        memoryStore.addIcon({
             ...iconData,
             ingredient: ingredientName,
             ingredientId: ingredientId,
-            popularity_score: iconData.score || 0,
-            marked_for_deletion: false
+            marked_for_deletion: false,
+            created_at: Date.now(),
+            url: '',
+            popularity_score: 0,
         });
-        
-        return { id: id, metadata: iconData.metadata };
     }
 
 
-    async recordRejection(iconId: string, ingredientName: string, ingredientId: string) {
-        const icons = memoryStore.getAllIcons().filter(i => i.id === iconId);
-        for (const icon of icons) {
-            const n = (icon.impressions || 0);
-            const r = (icon.rejections || 0) + 1;
-            const newLcb = 0; // Simplified
-            memoryStore.updateIcon(icon.id, { rejections: r, popularity_score: newLcb });
-        }
-    }
+    // async recordRejection(iconId: string, ingredientName: string, ingredientId: string) {
+    //     const icons = memoryStore.getAllIcons().filter(i => i.id === iconId);
+    //     for (const icon of icons) {
+    //         const n = (icon.impressions || 0);
+    //         const r = (icon.rejections || 0) + 1;
+    //         const newLcb = 0; // Simplified
+    //         memoryStore.updateIcon(icon.id, { rejections: r, popularity_score: newLcb });
+    //     }
+    // }
 
     async deleteIcon(iconId: string, ingredientName?: string) {
         memoryStore.deleteIcon(iconId);
@@ -1842,8 +1791,7 @@ export class MemoryDataService implements DataService {
             const recipe = this.recipes.get(recipeId);
             if (recipe) {
                 recipe.graph.nodes = nodes;
-                // In memory, we simulate the side effects
-                await this.recordImpression(ingredientName, icon.iconId);
+                // await this.recordImpression(ingredientName, icon.iconId);
             }
         }
     }
@@ -1865,7 +1813,7 @@ export class MemoryDataService implements DataService {
         console.log('[MemoryDataService] Feedback submitted:', data);
     }
 
-    async imagineIngredientWithIcon(ingredientId: string, ingredientName: string, iconData: any, transaction?: any): Promise<any> {
+    async imagineIngredientWithIcon(ingredientId: string, ingredientName: string, iconData: IconStats, transaction?: any): Promise<any> {
         return { ingredientId, ingredientName, iconData };
     }
 
@@ -1875,17 +1823,22 @@ export class MemoryDataService implements DataService {
     
     async listDebugFiles(): Promise<any[]> {
         const icons = await this.getAllIcons();
-        return icons.map((icon: any) => ({
-          name: `icons/${icon.ingredient_name || icon.ingredient}-${icon.id}.png`,
-          updated: new Date(icon.created_at).toISOString(),
-          contentType: 'image/png',
-          size: 0,
-          popularityScore: String(icon.popularity_score),
-          impressions: String(icon.impressions || 0),
-          rejections: String(icon.rejections || 0),
-          mediaLink: icon.url,
-          publicUrl: icon.url
-      }));
+        return icons.map((icon: any) => {
+            const ingredientName = icon.visualDescription || icon.ingredient_name || icon.ingredient || '';
+            const path = getIconPath(icon.id, standardizeIngredientName(ingredientName));
+            const url = getIconUrl(path);
+            return {
+                name: path,
+                updated: new Date(icon.created_at).toISOString(),
+                contentType: 'image/png',
+                size: 0,
+                popularityScore: String(icon.popularity_score),
+                impressions: String(icon.impressions || 0),
+                rejections: String(icon.rejections || 0),
+                mediaLink: url,
+                publicUrl: url,
+            };
+        });
     }
 
     async searchIconsByEmbedding(_queryVec: number[], _limit: number): Promise<IconStats[]> {

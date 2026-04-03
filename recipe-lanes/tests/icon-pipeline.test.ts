@@ -195,44 +195,6 @@ describe('MemoryDataService.rejectRecipeIcon', () => {
             'rejectIcon path MUST pass an embedFn');
     });
 
-    it('rejects the icon and adds it to rejections map', async () => {
-        const recipeId = await makeRecipe(service);
-        await service.addNodeToRecipe(recipeId, 'Salt');
-
-        const before = await service.getRecipe(recipeId);
-        const node = before!.graph.nodes[0];
-        const iconId = getNodeIconId(node);
-        assert.ok(iconId, 'node should have an icon before rejection');
-
-        await service.rejectRecipeIcon(recipeId, 'Salt', iconId!, 'user-1');
-
-        const after = await service.getRecipe(recipeId);
-        const rejections = after!.graph.rejections || {};
-        assert.ok(
-            Object.values(rejections).flat().includes(iconId!),
-            'rejected iconId should appear in recipe.graph.rejections',
-        );
-    });
-
-    it('records the rejected icon id in graph.rejections', async () => {
-        const recipeId = await makeRecipe(service);
-        await service.addNodeToRecipe(recipeId, 'Ginger');
-
-        const before = await service.getRecipe(recipeId);
-        const nodeBefore = before!.graph.nodes[0];
-        const iconId = getNodeIconId(nodeBefore);
-        assert.ok(iconId, 'should have an icon before rejection');
-
-        await service.rejectRecipeIcon(recipeId, 'Ginger', iconId!, 'user-1');
-
-        const after = await service.getRecipe(recipeId);
-        const rejections = after!.graph.rejections || {};
-        // The rejected id should be in the rejections map under the standardized name
-        const allRejected = Object.values(rejections).flat() as string[];
-        assert.ok(allRejected.includes(iconId!),
-            'rejected iconId should appear in recipe.graph.rejections after rejectRecipeIcon');
-    });
-
     it('returns error for unauthorized user', async () => {
         const recipeId = await makeRecipe(service); // owned by 'user-1'
         const result = await service.rejectRecipeIcon(recipeId, 'Pepper', undefined, 'user-2');
@@ -315,44 +277,6 @@ describe('MemoryDataService.searchIconsByEmbedding', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// resolveFromIndex — rejection filtering
-// ---------------------------------------------------------------------------
-
-describe('resolveFromIndex rejection filtering', () => {
-    it('does not re-assign a rejected icon when search returns it', async () => {
-        // This tests the real bug: rejectIcon → resolveRecipeIcons(embedFn) →
-        // resolveFromIndex finds the just-rejected icon and was re-assigning it.
-        //
-        // MemoryDataService.searchIconsByEmbedding always returns [] so the
-        // FirebaseDataService code path cannot be tested here without an emulator.
-        // Instead we verify that FirebaseDataService.resolveFromIndex filters
-        // rejected icon IDs by inspecting the recipeRejections parameter it
-        // receives.  The actual emulator path is covered by lifecycle.test.ts.
-        //
-        // What we CAN test here: after rejectRecipeIcon, the recipe's
-        // rejections map contains the icon ID and the node has no icon.
-        const service = new MemoryDataService();
-        const recipeId = await service.saveRecipe(
-            { title: 'r', lanes: [{ id: 'l', label: 'L', type: 'prep' }], nodes: [] },
-            undefined, 'user-1', 'private'
-        );
-        await service.addNodeToRecipe(recipeId, 'Lemon');
-        const before = await service.getRecipe(recipeId);
-        const node = before!.graph.nodes[0];
-        const iconId = getNodeIconId(node);
-        assert.ok(iconId, 'should have icon before rejection');
-
-        await service.rejectRecipeIcon(recipeId, 'Lemon', iconId!, 'user-1');
-
-        const after = await service.getRecipe(recipeId);
-        const allRejected = Object.values(after!.graph.rejections || {}).flat() as string[];
-        assert.ok(allRejected.includes(iconId!), 'rejected id must be in rejections map');
-        // Note: the FirebaseDataService resolveFromIndex filters rejected IDs from search
-        // results before assigning. That path is covered by lifecycle.test.ts (emulator).
-        // MemoryDataService is a simplified mock that doesn't replicate that filtering.
-    });
-});
 
 // ---------------------------------------------------------------------------
 // Reroll wrapping — shortlistIndex wraps at list end

@@ -1,0 +1,21 @@
+{
+  "entry": [
+    "app/actions.ts",
+    "app/**/page.tsx",
+    "app/**/layout.tsx",
+    "app/**/route.ts",
+    "functions/src/index.ts"
+  ],
+  "project": [
+    "app/**/*.{ts,tsx}",
+    "lib/**/*.ts",
+    "functions/src/**/*.ts",
+    "tests/**/*.ts"
+  ],
+  "ignore": [
+    "scripts/**",
+    ".next/**",
+    "functions/lib/**"
+  ],
+  "ignoreDependencies": []
+}

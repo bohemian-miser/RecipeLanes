@@ -27,8 +27,7 @@ import type { RecipeGraph, IconStats } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
 import { getEntryIcon, getIconThumbUrl, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
-import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from '@/lib/config';
+import {  DB_COLLECTION_RECIPES } from '@/lib/config';
 
 // Input Validation Schemas
 const IngredientSchema = z.string().min(1).max(100);
@@ -443,19 +442,18 @@ export async function deleteIconByIdAction(iconId: string, ingredientName?: stri
     }
 }
 
-export async function recordRejectionAction(iconId: string, ingredientName: string) {
-    const session = await getAuthService().verifyAuth();
-    if (!session?.isAdmin) return { error: 'Admin required' };
-
-    try {
-        const stdName = standardizeIngredientName(ingredientName);
-        await getDataService().recordRejection(iconId, ingredientName, stdName);
-        return { success: true };
-    } catch (e: any) {
-        console.error('recordRejectionAction failed:', e);
-        return { error: e.message };
-    }
-}
+// export async function recordRejectionAction(iconId: string, ingredientName: string) {
+//     const session = await getAuthService().verifyAuth();
+//     if (!session?.isAdmin) return { error: 'Admin required' };
+//     try {
+//         const stdName = standardizeIngredientName(ingredientName);
+//         await getDataService().recordRejection(iconId, ingredientName, stdName);
+//         return { success: true };
+//     } catch (e: any) {
+//         console.error('recordRejectionAction failed:', e);
+//         return { error: e.message };
+//     }
+// }
 
 export async function submitFeedbackAction(data: { message: string, url: string, email?: string, graphJson?: string }) {
     try {

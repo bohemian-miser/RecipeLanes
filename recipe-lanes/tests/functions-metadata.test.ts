@@ -21,6 +21,8 @@ import { db, storage } from '../lib/firebase-admin';
 import { createVisualRecipeAction } from '../app/actions';
 import { setAIService, MockAIService } from '../lib/ai-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
+import { getIconPath } from '../lib/recipe-lanes/model-utils';
+import { standardizeIngredientName } from '../lib/utils';
 
 // Use Mocks for parsing to ensure deterministic test.
 // "Butter" is used as the ingredient because MockAIService has a local Butter.png,
@@ -56,7 +58,8 @@ describe('Cloud Function Metadata', () => {
         // 2. Poll until Background Worker updates the icon.
         // Poll every 500 ms for up to 60 s (120 attempts) to handle a slow emulator
         // on low-power hardware without timing out before the function completes.
-        let iconUrl: string | null = null;
+        let iconId: string | null = null;
+        let iconVisualDescription: string | null = null;
         let attempts = 0;
         const maxAttempts = 120;
         const pollIntervalMs = 500;
@@ -67,10 +70,12 @@ describe('Cloud Function Metadata', () => {
             const node = nodes.find((n: any) => n.visualDescription === ingredientName);
 
             // Icons are stored in the shortlist model: node.iconShortlist[shortlistIndex].icon
+            // URLs are derived from visualDescription + id, not stored directly.
             const currentEntry = node?.iconShortlist?.[node?.shortlistIndex ?? 0];
             const entryIcon = currentEntry?.icon;
-            if (entryIcon?.url && entryIcon?.id) {
-                iconUrl = entryIcon.url;
+            if (entryIcon?.id && entryIcon?.visualDescription) {
+                iconId = entryIcon.id;
+                iconVisualDescription = entryIcon.visualDescription;
                 break;
             }
 
@@ -78,20 +83,10 @@ describe('Cloud Function Metadata', () => {
             attempts++;
         }
 
-        assert.ok(iconUrl, `Background worker did not update icons within ${(maxAttempts * pollIntervalMs) / 1000}s.`);
+        assert.ok(iconId, `Background worker did not update icons within ${(maxAttempts * pollIntervalMs) / 1000}s.`);
 
-        // 3. Verify Storage Metadata
-        let filePath: string;
-        if (iconUrl.includes('/o/')) {
-            const matches = iconUrl.match(new RegExp('/o/([^?]+)'));
-            if (!matches || !matches[1]) throw new Error("Could not parse Storage path");
-            filePath = decodeURIComponent(matches[1]);
-        } else {
-            const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
-            const parts = iconUrl.split(bucketName);
-            filePath = decodeURIComponent(parts[1]);
-            if (filePath.startsWith('/')) filePath = filePath.substring(1);
-        }
+        // 3. Verify Storage Metadata — derive path the same way getIconPublicUrl() does.
+        const filePath = getIconPath(iconId!, standardizeIngredientName(iconVisualDescription!));
         
         const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app');
         const file = bucket.file(filePath);

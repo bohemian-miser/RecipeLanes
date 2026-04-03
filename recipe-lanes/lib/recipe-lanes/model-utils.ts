@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry } from './types';
+import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry, SearchTerm } from './types';
 import { standardizeIngredientName } from '../utils';
 
 /**
@@ -92,14 +92,28 @@ export function iconIndexEntryToStats(entry: IconIndexEntry): IconStats {
     return { id: entry.icon_id, visualDescription: entry.ingredient_name };
 }
 
+export function getIconStoragePaths(icon: IconStats): { main: string; thumb: string } {
+    if (!icon.visualDescription) throw new Error(`getIconStoragePaths: icon ${icon.id} has no visualDescription`);
+    const stdName = standardizeIngredientName(icon.visualDescription);
+    return { main: getIconPath(icon.id, stdName), thumb: getIconThumbPath(icon.id, stdName) };
+}
+
 export function getIconPublicUrl(icon: IconStats): string {
-    if (!icon.visualDescription) throw new Error(`getIconPublicUrl: icon ${icon.id} has no visualDescription`);
-    return getIconUrl(getIconPath(icon.id, standardizeIngredientName(icon.visualDescription)));
+    return getIconUrl(getIconStoragePaths(icon).main);
 }
 
 export function getIconThumbUrl(icon: IconStats): string {
-    if (!icon.visualDescription) throw new Error(`getIconThumbUrl: icon ${icon.id} has no visualDescription`);
-    return getIconUrl(getIconThumbPath(icon.id, standardizeIngredientName(icon.visualDescription)));
+    return getIconUrl(getIconStoragePaths(icon).thumb);
+}
+
+export function withSearchTerms(icon: IconStats, hydeQueries: string[]): IconStats {
+    if (hydeQueries.length === 0) return icon;
+    const searchTerms: SearchTerm[] = hydeQueries.map(text => ({
+        text,
+        source: 'hyde_from_img' as const,
+        addedAt: Date.now(),
+    }));
+    return { ...icon, searchTerms };
 }
 
 export function getNodeIconUrl(node: RecipeNode): string | undefined {

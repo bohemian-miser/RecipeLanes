@@ -112,27 +112,19 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
     cleanupScreenshots(dir);
   });
 
-  test('UI Features: Feedback & Download', async ({ page, context }) => {
+  test('UI Features: Feedback', async ({ page }) => {
     test.slow();
     const dir = screenshotDir('recipe-ui-features', desktop.name);
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    
+
     await page.goto('/lanes?new=true');
     await create_recipe(page, 'UI Test', dir);
     await wait_for_graph(page, dir);
 
-    // 1. Feedback
     await page.getByTitle('Feedback & Contribute').click();
     await page.fill('#message', 'Test feedback');
     await page.fill('#email', 'test@example.com');
     await page.getByRole('button', { name: 'Send Feedback' }).click();
     await expect(page.getByText('Thank You!')).toBeVisible();
-
-    // 2. Download
-    const downloadPromise = page.waitForEvent('download');
-    await page.getByTitle('Download PNG').click();
-    const download = await downloadPromise;
-    expect(download.suggestedFilename()).toMatch(/recipe-lanes-.*\.png/);
 
     cleanupScreenshots(dir);
   });

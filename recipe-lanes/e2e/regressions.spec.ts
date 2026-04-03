@@ -194,43 +194,4 @@ test.describe('Regressions & Bug Repros', () => {
         cleanupScreenshots(dir);
     });
 
-    test('Forge queues generation and icon appears in gallery', async ({ page }) => {
-        test.slow();
-        const dir = screenshotDir('stats-comprehensive', desktop.name);
-        const RUN_ID = Date.now().toString().slice(-4);
-        const ingredient = `A${RUN_ID} Egg`.toLowerCase();
-
-        await page.goto('/lanes?new=true');
-        await create_recipe(page, `test eggs with ${ingredient}`, dir);
-        await wait_for_graph(page, dir);
-        await screenshot(page, dir, '01-recipe-created');
-
-        const node = get_node(page, ingredient);
-        await expect(node.locator('img')).toBeVisible({ timeout: 60000 });
-        await screenshot(page, dir, 'icon-appeared');
-
-        // Forge queues a brand-new generation (bypasses index search)
-        await node.hover();
-        await page.mouse.wheel(0, 500);
-        const forgeBtn = node.locator('button[title="Forge new icon"]');
-        await expect(forgeBtn).toBeVisible({ timeout: 15000 });
-        await forgeBtn.click({ force: true });
-        await screenshot(page, dir, 'forge-clicked');
-
-        // Generated icon must appear in ingredients_new (gallery) — CF writes it there
-        const galleryPage = await page.context().newPage();
-        await galleryPage.goto('/icon_overview');
-        const cards = galleryPage.locator('.relative.group').filter({ hasText: ingredient });
-        await expect.poll(async () => {
-            await galleryPage.reload();
-            await galleryPage.getByPlaceholder('Search ingredients...').fill(ingredient);
-            await galleryPage.keyboard.press('Enter');
-            await galleryPage.waitForTimeout(1000);
-            return cards.count();
-        }, { timeout: 60000, intervals: [2000] }).toBeGreaterThan(0);
-
-        await screenshot(galleryPage, dir, 'gallery-has-icon');
-        await galleryPage.close();
-        cleanupScreenshots(dir);
-    });
 });

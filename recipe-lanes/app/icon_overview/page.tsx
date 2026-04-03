@@ -46,7 +46,7 @@ export default function Home() {
   const [rerollingIds, setRerollingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<RecipeNode | null>(null);
-  const [selectedGalleryIcon, setSelectedGalleryIcon] = useState<{ icon: IconStats; ingredientName: string } | null>(null);
+  const [selectedGalleryIcon, setSelectedGalleryIcon] = useState<IconStats | null>(null);
 
   const [mode, setMode] = useState<'forge' | 'search'>('forge');
   const [searchCandidates, setSearchCandidates] = useState<IconStats[]>([]);
@@ -307,7 +307,7 @@ export default function Home() {
               query={searchQuery}
               candidates={searchCandidates}
               isSearching={isSearching}
-              onIconClick={(candidate) => setSelectedGalleryIcon({ icon: candidate, ingredientName: candidate.prompt ?? candidate.id })}
+              onIconClick={(candidate) => setSelectedGalleryIcon(candidate)}
             />
           )}
 
@@ -326,7 +326,7 @@ export default function Home() {
           )}
 
           <SharedGallery
-            onIconClick={(icon, ingredientName) => setSelectedGalleryIcon({ icon, ingredientName })}
+            onIconClick={(icon) => setSelectedGalleryIcon(icon)}
           />
         </div>
       </main>
@@ -334,8 +334,7 @@ export default function Home() {
       <IconDetailModal node={selectedNode} onClose={() => setSelectedNode(null)} />
       {selectedGalleryIcon && (
         <IconOverviewModal
-          icon={selectedGalleryIcon.icon}
-          ingredientName={selectedGalleryIcon.ingredientName}
+          icon={selectedGalleryIcon}
           onClose={() => setSelectedGalleryIcon(null)}
         />
       )}

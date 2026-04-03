@@ -25,7 +25,7 @@ import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQuer
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import type { RecipeGraph, IconStats } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
-import { getEntryIcon, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
+import { getEntryIcon, getIconThumbUrl, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from '@/lib/config';
@@ -204,44 +204,44 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
 
 
 // TODO: Why is this needed for a test??
-export async function getOrCreateIconAction(
-    rawIngredient: string,
-    rawSessionRejections = 0,
-    rawSeenUrls: string[] = []
-) {
-    try {
-        const ingredient = standardizeIngredientName(rawIngredient);
-        const service = getDataService();
+// export async function getOrCreateIconAction(
+//     rawIngredient: string,
+//     rawSessionRejections = 0,
+//     rawSeenUrls: string[] = []
+// ) {
+//     try {
+//         const ingredient = standardizeIngredientName(rawIngredient);
+//         const service = getDataService();
         
-        const hits = await service.queueIcons([{ ingredientName: ingredient }]);
+//         const hits = await service.queueIcons([{ ingredientName: ingredient }]);
         
-        if (hits.has(ingredient)) {
-            const hit = hits.get(ingredient)!;
-            return {
-                id: hit.id,
-                url: hit.url,
-                isNew: false,
-                popularityScore: hit.score || 0,
-                visualDescription: ingredient
-            };
-        }
+//         if (hits.has(ingredient)) {
+//             const hit = hits.get(ingredient)!;
+//             return {
+//                 id: hit.id,
+//                 url: getIconThumbUrl(hit.id, ingredient),
+//                 isNew: false,
+//                 popularityScore: hit.score || 0,
+//                 visualDescription: ingredient
+//             };
+//         }
+
+//         const completion = await service.waitForQueue(ingredient);
+//         if (completion) {
+//              return {
+//                 id: completion.id,
+//                 url: getIconThumbUrl(completion.id, ingredient),
+//                 isNew: true,
+//                 popularityScore: 0,
+//                 visualDescription: ingredient
+//             };
+//         }
         
-        const completion = await service.waitForQueue(ingredient);
-        if (completion) {
-             return {
-                id: completion.id,
-                url: completion.url,
-                isNew: true,
-                popularityScore: 0,
-                visualDescription: ingredient
-            };
-        }
-        
-        return { error: 'Generation timed out' };
-    } catch (e: any) {
-        return { error: e.message };
-    }
-}
+//         return { error: 'Generation timed out' };
+//     } catch (e: any) {
+//         return { error: e.message };
+//     }
+// }
 
 export async function getAllIconsAction() {
     const session = await getAuthService().verifyAuth();

@@ -19,7 +19,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { RecipeNode, SearchTerm } from '@/lib/recipe-lanes/types';
-import { getNodeIngredientName, getNodeIcon } from '@/lib/recipe-lanes/model-utils';
+import { getNodeIngredientName, getNodeIcon, getNodeIconUrl, getIconThumbUrl } from '@/lib/recipe-lanes/model-utils';
 
 interface IconDetailModalProps {
   node: RecipeNode | null;
@@ -42,6 +42,7 @@ export function IconDetailModal({ node, onClose }: IconDetailModalProps) {
   if (!node) return null;
 
   const icon = getNodeIcon(node);
+  const iconUrl = getNodeIconUrl(node);
   const title = getNodeIngredientName(node);
 
   return (
@@ -56,9 +57,9 @@ export function IconDetailModal({ node, onClose }: IconDetailModalProps) {
         {/* Header */}
         <div className="flex items-start justify-between gap-4 p-4 border-b border-zinc-800">
           <div className="flex items-center gap-4">
-            {icon?.url ? (
+            {iconUrl ? (
               <img
-                src={icon.url}
+                src={iconUrl}
                 alt={title}
                 width={128}
                 height={128}
@@ -122,15 +123,17 @@ export function IconDetailModal({ node, onClose }: IconDetailModalProps) {
             </div>
 
             {/* URL */}
-            <div>
-              <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono mb-1">URL</div>
-              <div
-                className="text-xs text-zinc-300 font-mono truncate bg-zinc-800 border border-zinc-700 px-2 py-1.5"
-                title={icon.url}
-              >
-                {icon.url}
+            {icon.visualDescription && (
+              <div>
+                <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono mb-1">URL</div>
+                <div
+                  className="text-xs text-zinc-300 font-mono truncate bg-zinc-800 border border-zinc-700 px-2 py-1.5"
+                  title={getIconThumbUrl(icon)}
+                >
+                  {getIconThumbUrl(icon)}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Search Terms */}
             {icon.searchTerms && icon.searchTerms.length > 0 && (

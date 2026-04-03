@@ -20,7 +20,7 @@ import type { IconStats, ShortlistEntry } from '../lib/recipe-lanes/types';
 
 const makeIcon = (id: string): IconStats => ({
     id,
-    url: `https://example.com/icons/${id}.png`,
+    visualDescription: id,
     score: 0.9,
 });
 

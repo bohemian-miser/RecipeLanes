@@ -17,6 +17,7 @@
 
 import React from 'react';
 import { IconStats } from '@/lib/recipe-lanes/types';
+import { getIconThumbUrl } from '@/lib/recipe-lanes/model-utils';
 
 interface IconSearchCandidatesProps {
   query: string;
@@ -62,14 +63,15 @@ export function IconSearchCandidates({ query, candidates, isSearching, onIconCli
             className="flex flex-col items-center gap-2 p-2 border-2 border-zinc-700 bg-zinc-900 hover:border-yellow-500 transition-colors cursor-pointer"
             onClick={() => onIconClick?.(candidate)}
           >
-            {candidate.url ? (
+            {candidate.visualDescription ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={candidate.url}
+                src={getIconThumbUrl(candidate)}
                 alt={candidate.id}
                 width={64}
                 height={64}
                 className="w-16 h-16 object-contain"
+                style={{ imageRendering: 'pixelated' }}
               />
             ) : (
               <div className="w-16 h-16 bg-zinc-700 flex items-center justify-center">

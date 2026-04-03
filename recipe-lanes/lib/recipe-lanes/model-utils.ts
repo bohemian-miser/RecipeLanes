@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { RecipeNode, IconStats, ShortlistEntry } from './types';
+import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry } from './types';
 import { standardizeIngredientName } from '../utils';
 
 /**
@@ -69,34 +69,46 @@ export function hasNodeIcon(node: RecipeNode): boolean {
     const entry = getCurrentEntry(node);
     if (!entry) return false;
     const icon = getEntryIcon(entry);
-    return !!(icon.url || icon.id);
+    return !!icon.id;
 }
 
 /**
  * Reconstructs the public Firebase Storage URL from a path.
- * Format: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{encoded-path}?alt=media
+ * In emulator environments (local-project-id), points to the Storage emulator.
  */
 export function getIconUrl(path: string): string {
     const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';
     const encodedPath = encodeURIComponent(path);
+    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '';
+    if (projectId === 'local-project-id' || projectId.startsWith('demo-')) {
+        const emulatorHost = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_EMULATOR_HOST || '127.0.0.1:9199';
+        return `http://${emulatorHost}/v0/b/${bucket}/o/${encodedPath}?alt=media`;
+    }
     return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedPath}?alt=media`;
 }
 
-export function getIconPublicUrl(iconId: string, ingredientName: string): string {
-    return getIconUrl(getIconPath(iconId, ingredientName));
+/** Maps an IconIndexEntry (Firestore doc) to an IconStats object. */
+export function iconIndexEntryToStats(entry: IconIndexEntry): IconStats {
+    return { id: entry.icon_id, visualDescription: entry.ingredient_name };
 }
 
-export function getIconThumbUrl(iconId: string, ingredientName: string): string {
-    return getIconUrl(getIconThumbPath(iconId, ingredientName));
+export function getIconPublicUrl(icon: IconStats): string {
+    if (!icon.visualDescription) throw new Error(`getIconPublicUrl: icon ${icon.id} has no visualDescription`);
+    return getIconUrl(getIconPath(icon.id, standardizeIngredientName(icon.visualDescription)));
+}
+
+export function getIconThumbUrl(icon: IconStats): string {
+    if (!icon.visualDescription) throw new Error(`getIconThumbUrl: icon ${icon.id} has no visualDescription`);
+    return getIconUrl(getIconThumbPath(icon.id, standardizeIngredientName(icon.visualDescription)));
 }
 
 export function getNodeIconUrl(node: RecipeNode): string | undefined {
     const entry = getCurrentEntry(node);
     const icon = entry ? getEntryIcon(entry) : undefined;
     if (!icon?.id) return undefined;
-    // Must use standardizeIngredientName to match the path used at upload time
-    const name = standardizeIngredientName(getNodeIngredientName(node));
-    return getIconThumbUrl(icon.id, name);
+    // Prefer the icon's own visualDescription (set at index time) over the node's.
+    const vd = icon.visualDescription || getNodeIngredientName(node);
+    return getIconThumbUrl({ ...icon, visualDescription: vd });
 }
 
 export function getNodeIconId(node: RecipeNode): string | undefined {
@@ -118,7 +130,7 @@ export function applyIconToNode(node: RecipeNode, icon: IconStats) {
     // Only propagate essential visual/reference data, avoiding stale stats
     const cleanIcon: IconStats = {
         id: icon.id,
-        url: icon.url,
+        visualDescription: icon.visualDescription,
         metadata: icon.metadata,
         status: icon.status
     };
@@ -196,13 +208,8 @@ export function getCurrentEntry(node: RecipeNode): ShortlistEntry | undefined {
     return node.iconShortlist[node.shortlistIndex ?? 0];
 }
 
-/** Extracts the IconStats from a ShortlistEntry.
- * Includes a migration shim: backfilled entries stored plain IconStats (no wrapper),
- * so if entry.icon is absent but entry.id exists, the entry itself is the icon. */
+/** Extracts the IconStats from a ShortlistEntry. */
 export function getEntryIcon(entry: ShortlistEntry): IconStats {
-    if (!entry.icon && (entry as unknown as IconStats).id) {
-        return entry as unknown as IconStats;
-    }
     return entry.icon;
 }
 
@@ -217,6 +224,7 @@ export function getEntryMatchType(entry: ShortlistEntry): 'generated' | 'search'
  * doesn't create a duplicate.
  */
 export function prependToShortlist(existing: ShortlistEntry[], entry: ShortlistEntry): ShortlistEntry[] {
-    const filtered = existing.filter(e => e.icon.id !== entry.icon.id);
+    const newId = getEntryIcon(entry).id;
+    const filtered = existing.filter(e => getEntryIcon(e).id !== newId);
     return [entry, ...filtered];
 }

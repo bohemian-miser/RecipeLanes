@@ -16,7 +16,7 @@ import type { RecipeNode, IconStats, ShortlistEntry } from '../lib/recipe-lanes/
 
 const makeIcon = (id: string): IconStats => ({
     id,
-    url: `https://example.com/icons/${id}.png`,
+    visualDescription: id,
     score: 0.9,
 });
 

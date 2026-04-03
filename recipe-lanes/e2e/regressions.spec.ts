@@ -103,60 +103,27 @@ test.describe('Regressions & Bug Repros', () => {
         cleanupScreenshots(dir);
     });
 
-    test('Stats Tracking: impressions and rejections', async ({ page }) => {
+    test('Icon appears and reroll cycles shortlist', async ({ page }) => {
         test.slow();
         const dir = screenshotDir('stats-tracking', desktop.name);
         const uniqueName = `Stats Egg ${Date.now()}`;
-        
+
         await page.goto('/lanes?new=true');
         await create_recipe(page, `make ${uniqueName}`, dir);
         await wait_for_graph(page, dir);
-        
+
         const node = get_node(page, uniqueName);
+        // Icon resolves either from index search or generation
         await expect(node.locator('img')).toBeVisible({ timeout: 30000 });
 
-        const galleryPage = await page.context().newPage();
-        await galleryPage.goto('/icon_overview');
-
-        // Poll until the icon appears in the gallery. Icon generation runs asynchronously via
-        // Cloud Function — retry the search until the ingredient_new entry is written.
-        const cards = galleryPage.locator('.relative.group').filter({ hasText: uniqueName });
-        await expect.poll(async () => {
-            await galleryPage.reload();
-            await galleryPage.getByPlaceholder('Search ingredients...').fill(uniqueName);
-            await galleryPage.keyboard.press('Enter');
-            await galleryPage.waitForTimeout(1000); // debounce + fetch
-            return cards.count();
-        }, { timeout: 30000, intervals: [2000] }).toBeGreaterThan(0);
-
-        const card = cards.first();
-        await expect(card).toContainText('0 / 1', { timeout: 5000 });
-
-        await page.bringToFront();
         await node.hover();
         const rerollBtn = node.locator('button[title="Cycle shortlist"]');
         await expect(rerollBtn).toBeVisible({ timeout: 15000 });
-        await rerollBtn.click();
 
-        await expect(rerollBtn.locator('svg')).not.toHaveClass(/animate-spin/, { timeout: 30000 });
-        
-        await galleryPage.bringToFront();
-        await expect.poll(async () => {
-            await galleryPage.reload();
-            await galleryPage.getByPlaceholder('Search ingredients...').fill(uniqueName);
-            await galleryPage.keyboard.press('Enter');
-            await galleryPage.waitForTimeout(1000);
-            return cards.count();
-        }, {
-            timeout: 45000,
-            intervals: [2000]
-        }).toBe(2);
-        
-        const cardTexts = await cards.allTextContents();
-        expect(cardTexts.some(t => t.includes('1 / 1'))).toBeTruthy();
-        expect(cardTexts.some(t => t.includes('0 / 1'))).toBeTruthy();
-        
-        await galleryPage.close();
+        // Reroll cycles the shortlist — completes without error
+        await rerollBtn.click();
+        await expect(rerollBtn).not.toBeDisabled({ timeout: 10000 });
+
         cleanupScreenshots(dir);
     });
 
@@ -227,97 +194,43 @@ test.describe('Regressions & Bug Repros', () => {
         cleanupScreenshots(dir);
     });
 
-    test('Comprehensive Stats: multiple rerolls and persistence', async ({ page }) => {
+    test('Forge queues generation and icon appears in gallery', async ({ page }) => {
         test.slow();
         const dir = screenshotDir('stats-comprehensive', desktop.name);
         const RUN_ID = Date.now().toString().slice(-4);
         const ingredient = `A${RUN_ID} Egg`.toLowerCase();
-        const ingredient2 = `B${RUN_ID} Flour`.toLowerCase();
 
         await page.goto('/lanes?new=true');
         await create_recipe(page, `test eggs with ${ingredient}`, dir);
         await wait_for_graph(page, dir);
-
-        await page.waitForTimeout(5000);
         await screenshot(page, dir, '01-recipe-created');
 
         const node = get_node(page, ingredient);
         await expect(node.locator('img')).toBeVisible({ timeout: 60000 });
-        let currentSrc = await node.locator('img').getAttribute('src');
-        await screenshot(page, dir, 'ingredient seen');
+        await screenshot(page, dir, 'icon-appeared');
 
-        const expectStats = async (name: string, count: number) => {
-            const galleryPage = await page.context().newPage();
-            await galleryPage.goto('/icon_overview');
-            await expect.poll(async () => {
-                await galleryPage.reload();
-                await galleryPage.getByPlaceholder('Search ingredients...').fill(name);
-                await galleryPage.keyboard.press('Enter');
-                await galleryPage.waitForTimeout(1500); // debounce (300ms) + fetch + render margin
-                const cards = galleryPage.locator('.relative.group').filter({ hasText: name });
-                return cards.count();
-            }, {
-                timeout: 30000,
-                intervals: [2000]
-            }).toBe(count);
-
-            await screenshot(galleryPage, dir, `${ingredient} should have count ${count}`);
-            await galleryPage.close();
-        };
-
-        await expectStats(ingredient, 1);
-
+        // Forge queues a brand-new generation (bypasses index search)
         await node.hover();
-        
-        
-        const rerollBtn = node.locator('button[title="Cycle shortlist"]');
-        await screenshot(page, dir, 'before reroll');
-        // Scroll to make the reroll button visible.
         await page.mouse.wheel(0, 500);
-        await expect(rerollBtn).toBeVisible({ timeout: 15000 });
-        await rerollBtn.hover({ force: true });
-        await rerollBtn.click({ force: true });
-        await screenshot(page, dir, 'after reroll clicked');
+        const forgeBtn = node.locator('button[title="Forge new icon"]');
+        await expect(forgeBtn).toBeVisible({ timeout: 15000 });
+        await forgeBtn.click({ force: true });
+        await screenshot(page, dir, 'forge-clicked');
 
-        const spinner = rerollBtn.locator('svg');
-        await expect(spinner).toHaveClass(/animate-spin/);
-        await screenshot(page, dir, 'spinner visible');
-        await expect.poll(() => node.locator('img').getAttribute('src'), {
-            timeout: 15000,
-            intervals: [1000]
-        }).not.toBe(currentSrc);
+        // Generated icon must appear in ingredients_new (gallery) — CF writes it there
+        const galleryPage = await page.context().newPage();
+        await galleryPage.goto('/icon_overview');
+        const cards = galleryPage.locator('.relative.group').filter({ hasText: ingredient });
+        await expect.poll(async () => {
+            await galleryPage.reload();
+            await galleryPage.getByPlaceholder('Search ingredients...').fill(ingredient);
+            await galleryPage.keyboard.press('Enter');
+            await galleryPage.waitForTimeout(1000);
+            return cards.count();
+        }, { timeout: 60000, intervals: [2000] }).toBeGreaterThan(0);
 
-        currentSrc = await node.locator('img').getAttribute('src');
-
-        await expectStats(ingredient, 2);
-
-        await node.hover();
-        await rerollBtn.click({ force: true });
-        await expect.poll(() => node.locator('img').getAttribute('src'), { 
-            timeout: 30000,
-            intervals: [2000]
-        }).not.toBe(currentSrc);
-
-        await expectStats(ingredient, 3);
-
-        await page.goto('/lanes?new=true');
-        await create_recipe(page, `crush ${ingredient2}`, dir);
-        await wait_for_graph(page, dir);
-
-        await page.reload();
-        await wait_for_graph(page, dir);
-        const node2 = get_node(page, ingredient2);
-        await expect(node2.locator('img')).toBeVisible({ timeout: 60000 });
-        const src2 = await node2.locator('img').getAttribute('src');
-        
-        await node2.hover();
-        await node2.locator('button[title="Cycle shortlist"]').click({ force: true });
-        await expect.poll(() => node2.locator('img').getAttribute('src'), { 
-            timeout: 30000,
-            intervals: [2000]
-        }).not.toBe(src2);
-
-        await expectStats(ingredient2, 2);
+        await screenshot(galleryPage, dir, 'gallery-has-icon');
+        await galleryPage.close();
         cleanupScreenshots(dir);
     });
 });

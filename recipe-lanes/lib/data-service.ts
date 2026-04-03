@@ -23,7 +23,7 @@ import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined, calculateWilsonLCB } from './utils';
-import { applyIconToNode, buildShortlistEntry, getEntryIcon, getIconPath, getIconThumbPath, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, hasNodeIcon, prependToShortlist } from './recipe-lanes/model-utils';
+import { applyIconToNode, buildShortlistEntry, getEntryIcon, getIconPath, getIconThumbPath, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, hasNodeIcon, iconIndexEntryToStats, prependToShortlist } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -90,7 +90,7 @@ export interface DataService {
   failRecipeIcon(recipeId: string, ingredientName: string, errorMsg: string): Promise<void>;
 
   searchIconsByEmbedding(queryVec: number[], limit: number): Promise<IconStats[]>;
-  writeIconToIndex(iconId: string, ingredientName: string, url: string, embedding: number[]): Promise<void>;
+  writeIconToIndex(iconId: string, ingredientName: string, embedding: number[]): Promise<void>;
 }
 
 // --- Firebase Implementation ---
@@ -102,17 +102,13 @@ export class FirebaseDataService implements DataService {
       .findNearest('embedding', FieldValue.vector(queryVec), { limit, distanceMeasure: 'COSINE' as const })
       .get();
     console.log(`[searchIconsByEmbedding] findNearest returned ${snap.docs.length} docs`);
-    return snap.docs.map((doc: any) => {
-      const d = doc.data();
-      return { id: d.icon_id, url: d.url, prompt: d.ingredient_name } as IconStats;
-    });
+    return snap.docs.map((doc: any) => iconIndexEntryToStats(doc.data()));
   }
 
-  async writeIconToIndex(iconId: string, ingredientName: string, url: string, embedding: number[]): Promise<void> {
+  async writeIconToIndex(iconId: string, ingredientName: string, embedding: number[]): Promise<void> {
     await db.collection(DB_COLLECTION_ICON_INDEX).doc(iconId).set({
       icon_id: iconId,
       ingredient_name: ingredientName,
-      url,
       embedding: FieldValue.vector(embedding),
       created_at: FieldValue.serverTimestamp()
     });
@@ -251,8 +247,8 @@ export class FirebaseDataService implements DataService {
           if (snap.exists) {
               const data = snap.data();
               // Legacy support: if 'completed' status still used
-              if (data?.status === 'completed' && data.id && data.url) {
-                  return { id: data.id, url: data.url };
+              if (data?.status === 'completed' && data.id) {
+                  return { id: data.id };
               }
               if (data?.status === 'failed') {
                   throw new Error(data.error || 'Generation failed');
@@ -269,8 +265,8 @@ export class FirebaseDataService implements DataService {
                       // Return the newest/best icon
                       // Assuming icons are sorted or we take first
                       // DataService.saveIcon sorts by score, so first is best
-                      const best = data.icons[0]; 
-                      return { id: best.id, url: best.url };
+                      const best = data.icons[0];
+                      return { id: best.id };
                   }
               }
               // If neither queue nor ingredient exists, it might not be queued yet or deleted entirely.
@@ -698,7 +694,6 @@ export class FirebaseDataService implements DataService {
               if (data.icons && Array.isArray(data.icons)) {
                   const safeIcons = data.icons.map((icon: any) => ({
                       ...icon,
-                      // Ensure created_at is serialized
                       created_at: icon.created_at?.toDate ? icon.created_at.toDate().toISOString() : (icon.created_at || null)
                   }));
                   allIcons.push(...safeIcons);
@@ -1153,10 +1148,9 @@ export class FirebaseDataService implements DataService {
           await db.runTransaction(operation);
       }
 
-      return { 
-          id: iconData.id, 
-          url: iconData.url, 
-          metadata: iconData.metadata 
+      return {
+          id: iconData.id,
+          metadata: iconData.metadata
       };
   }
 
@@ -1267,11 +1261,10 @@ export class FirebaseDataService implements DataService {
           const ingData = cacheMap.get(name);
           if (ingData && ingData.icons && Array.isArray(ingData.icons)) {
               for (const icon of ingData.icons) {
-                  const isRejected = rejected.has(icon.id) || rejected.has('url:' + icon.url);
+                  const isRejected = rejected.has(icon.id);
                   if (!isRejected) {
-                      foundIcon = { 
-                          id: icon.id, 
-                          url: icon.url || null,
+                      foundIcon = {
+                          id: icon.id,
                           score: icon.score,
                           impressions: icon.impressions,
                           rejections: icon.rejections,
@@ -1289,7 +1282,7 @@ export class FirebaseDataService implements DataService {
 
               if (existingData?.status === 'completed' && existingData.id) {
                   if (!rejected.has(existingData.id)) {
-                      foundIcon = { id: existingData.id, url: existingData.url || null, metadata: existingData.metadata };
+                      foundIcon = { id: existingData.id, metadata: existingData.metadata };
                   }
               }
               
@@ -1322,7 +1315,7 @@ export class FirebaseDataService implements DataService {
                   if (!updatesByRecipe.has(item.recipeId)) {
                       updatesByRecipe.set(item.recipeId, new Map());
                   }
-                  updatesByRecipe.get(item.recipeId)!.set(name, { id: foundIcon.id, url: foundIcon.url, metadata: foundIcon.metadata });
+                  updatesByRecipe.get(item.recipeId)!.set(name, { id: foundIcon.id, metadata: foundIcon.metadata });
               }
           }
       }
@@ -1417,13 +1410,12 @@ export class MemoryDataService implements DataService {
             const bestIcon = existingIcons.find(i => !rejected.has(i.id));
 
             if (bestIcon) {
-                hits.set(stdName, { 
-                    id: bestIcon.id, 
-                    url: bestIcon.url, 
-                    score: bestIcon.popularity_score, 
-                    impressions: bestIcon.impressions, 
-                    rejections: bestIcon.rejections, 
-                    metadata: bestIcon.metadata 
+                hits.set(stdName, {
+                    id: bestIcon.id,
+                    score: bestIcon.popularity_score,
+                    impressions: bestIcon.impressions,
+                    rejections: bestIcon.rejections,
+                    metadata: bestIcon.metadata
                 });
                 continue;
             }
@@ -1447,7 +1439,7 @@ export class MemoryDataService implements DataService {
                 metadata: dummyMeta
             });
             
-            hits.set(stdName, { id: iconId, url: mockUrl, score: 0, impressions: 0, rejections: 0, metadata: dummyMeta });
+            hits.set(stdName, { id: iconId, visualDescription: stdName, score: 0, impressions: 0, rejections: 0, metadata: dummyMeta });
         }
         return hits;
     }
@@ -1804,12 +1796,12 @@ export class MemoryDataService implements DataService {
             marked_for_deletion: false
         });
         
-        return { id: id, url: iconData.url, metadata: iconData.metadata };
+        return { id: id, metadata: iconData.metadata };
     }
 
 
     async recordRejection(iconId: string, ingredientName: string, ingredientId: string) {
-        const icons = memoryStore.getAllIcons().filter(i => i.id === iconId || i.url === iconId);
+        const icons = memoryStore.getAllIcons().filter(i => i.id === iconId);
         for (const icon of icons) {
             const n = (icon.impressions || 0);
             const r = (icon.rejections || 0) + 1;
@@ -1900,7 +1892,7 @@ export class MemoryDataService implements DataService {
         return [];
     }
 
-    async writeIconToIndex(_iconId: string, _ingredientName: string, _url: string, _embedding: number[]): Promise<void> {
+    async writeIconToIndex(_iconId: string, _ingredientName: string, _embedding: number[]): Promise<void> {
         // no-op in memory mode
     }
 }

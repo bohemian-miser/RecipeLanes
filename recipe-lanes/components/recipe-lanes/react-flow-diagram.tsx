@@ -527,18 +527,20 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             const dataUrl = await toPng(flowWrapper.current, {
                 backgroundColor: '#ffffff',
                 style: { width: 'auto', height: 'auto', transform: 'none' },
-                cacheBust: true, 
-                pixelRatio: 2 
+                cacheBust: true,
+                skipFonts: true,
+                pixelRatio: 2
             });
             download(dataUrl);
         } catch (err) {
-            console.warn("Download failed (CORS?), retrying without font embedding...", err);
+            console.warn("Download failed, retrying with minimal options...", err);
             try {
                 const dataUrl = await toPng(flowWrapper.current, {
                     backgroundColor: '#ffffff',
                     style: { width: 'auto', height: 'auto', transform: 'none' },
                     pixelRatio: 2,
-                    fontEmbedCSS: '' // Disable font embedding
+                    skipFonts: true,
+                    fontEmbedCSS: ''
                 });
                 download(dataUrl);
             } catch (e2) {

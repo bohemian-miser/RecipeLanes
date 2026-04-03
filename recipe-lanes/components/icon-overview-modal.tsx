@@ -19,10 +19,10 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { IconStats, SearchTerm } from '@/lib/recipe-lanes/types';
+import { getIconThumbUrl } from '@/lib/recipe-lanes/model-utils';
 
 interface IconOverviewModalProps {
   icon: IconStats;
-  ingredientName: string;
   onClose: () => void;
 }
 
@@ -32,7 +32,7 @@ const SOURCE_BADGE: Record<SearchTerm['source'], { label: string; className: str
   llm_vision:   { label: 'llm',  className: 'bg-purple-900/60 text-purple-300 border border-purple-700' },
 };
 
-export function IconOverviewModal({ icon, ingredientName, onClose }: IconOverviewModalProps) {
+export function IconOverviewModal({ icon, onClose }: IconOverviewModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
@@ -45,23 +45,17 @@ export function IconOverviewModal({ icon, ingredientName, onClose }: IconOvervie
         {/* Header */}
         <div className="flex items-start justify-between gap-4 p-4 border-b border-zinc-800">
           <div className="flex items-center gap-4">
-            {icon.url ? (
-              <img
-                src={icon.url}
-                alt={ingredientName}
-                width={128}
-                height={128}
-                className="shrink-0 border-2 border-zinc-700 bg-zinc-950"
-                style={{ imageRendering: 'pixelated', width: 128, height: 128, objectFit: 'contain' }}
-              />
-            ) : (
-              <div className="shrink-0 w-32 h-32 border-2 border-zinc-700 bg-zinc-950 flex items-center justify-center">
-                <span className="text-zinc-600 text-xs font-mono">no image</span>
-              </div>
-            )}
+            <img
+              src={getIconThumbUrl(icon)}
+              alt={icon.visualDescription}
+              width={128}
+              height={128}
+              className="shrink-0 border-2 border-zinc-700 bg-zinc-950"
+              style={{ imageRendering: 'pixelated', width: 128, height: 128, objectFit: 'contain' }}
+            />
             <div className="min-w-0">
               <h2 className="text-base font-bold text-yellow-500 uppercase tracking-tight leading-tight break-words">
-                {ingredientName}
+                {icon.visualDescription}
               </h2>
             </div>
           </div>

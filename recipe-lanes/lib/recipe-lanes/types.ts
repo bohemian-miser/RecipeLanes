@@ -32,9 +32,9 @@ export interface SearchTerm {
 
 export interface IconStats {
     id: string;
-    url?: string;
+    /** The canonical ingredient/visual description used to derive the storage path. */
+    visualDescription?: string;
     score?: number;
-    prompt?: string;
     impressions?: number;
     rejections?: number;
     metadata?: {
@@ -43,6 +43,13 @@ export interface IconStats {
     };
     status?: 'pending' | 'processing' | 'failed';
     searchTerms?: SearchTerm[];
+}
+
+/** Shape of a document in the Firestore `icon_index` collection. Internal to data-service. */
+export interface IconIndexEntry {
+    icon_id: string;
+    ingredient_name: string;
+    created_at?: any;
 }
 
 export interface ShortlistEntry {

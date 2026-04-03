@@ -87,7 +87,6 @@ export const MinimalNode: React.FC<any> = ({
               ...n,
               data: {
                   ...n.data,
-                  icon: { id: nextIcon.id, url: nextIcon.url, metadata: nextIcon.metadata },
                   shortlistIndex: newIdx,
               },
           };

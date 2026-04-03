@@ -12,7 +12,7 @@ import { FirebaseDataService } from '../lib/data-service';
 
 const makeIcon = (id: string): IconStats => ({
     id,
-    url: `https://example.com/icons/${id}.png`,
+    visualDescription: id,
     score: 0.9,
 });
 
@@ -241,9 +241,8 @@ describe('FirebaseDataService.searchIconsByEmbedding', () => {
         const icon = results[0];
         // id is mapped from d.icon_id
         assert.strictEqual(icon.id, 'icon42');
-        assert.strictEqual(icon.url, 'https://example.com/icon42.png');
-        // prompt is mapped from d.ingredient_name
-        assert.strictEqual(icon.prompt, 'lemon');
+        // visualDescription is mapped from d.ingredient_name
+        assert.strictEqual(icon.visualDescription, 'lemon');
     });
 });
 
@@ -343,7 +342,7 @@ describe('RecipeNode extended fields', () => {
     it('accepts searchTerms on IconStats', () => {
         const icon: IconStats = {
             id: 'i1',
-            url: 'https://example.com/i1.png',
+            visualDescription: 'pasta boiling in water',
             searchTerms: [
                 { text: 'boiling pasta', source: 'hyde_from_img', addedAt: 1000 },
                 { text: 'al dente noodles', source: 'llm_vision', addedAt: 2000, embedding: [0.4, 0.5] },

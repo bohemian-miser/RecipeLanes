@@ -21,6 +21,7 @@ import { useEffect, useState } from 'react';
 import { getPagedIconsAction, deleteIconByIdAction } from '@/app/actions';
 import { Search, ChevronLeft, ChevronRight, Loader2, Trash2, Sparkles } from 'lucide-react';
 import { IconStats } from '@/lib/recipe-lanes/types';
+import { getIconThumbUrl } from '@/lib/recipe-lanes/model-utils';
 
 interface SharedGalleryProps {
   onIconClick?: (icon: IconStats, ingredientName: string) => void;
@@ -97,9 +98,11 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
           <div className="text-center text-zinc-600 py-12 text-sm">No icons found.</div>
       ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
-              {icons.map((icon) => (
-                <div 
-                    key={icon.id} 
+              {icons.map((icon) => {
+                const thumbUrl = getIconThumbUrl(icon);
+                return (
+                <div
+                    key={icon.id}
                     className="relative aspect-square bg-zinc-800 border-2 border-zinc-700 shadow-md group overflow-hidden rounded-lg"
                     data-testid="gallery-item"
                     data-ingredient={icon.ingredient_name || icon.ingredient || icon.visualDescription}
@@ -133,7 +136,7 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
                        title="View details"
                      >
                        <img
-                         src={icon.url}
+                         src={thumbUrl}
                          alt={icon.ingredient_name || icon.visualDescription}
                          title={icon.visualDescription || icon.ingredient_name}
                          className="w-full h-full object-contain rendering-pixelated transition-transform group-hover:scale-110"
@@ -142,7 +145,7 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
                      </button>
                    ) : (
                      <img
-                       src={icon.url}
+                       src={thumbUrl}
                        alt={icon.ingredient_name || icon.visualDescription}
                        title={icon.visualDescription || icon.ingredient_name}
                        className="w-full h-full object-contain rendering-pixelated transition-transform group-hover:scale-110"
@@ -150,7 +153,8 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
                      />
                    )}
                 </div>
-              ))}
+                );
+              })}
           </div>
       )}
 

@@ -97,13 +97,12 @@ export async function addIngredientNodeAction(recipeId: string, ingredientName: 
     }
     const result = await getDataService().addNodeToRecipe(recipeId, ingredientName, undefined, hydeQueries);
     if (result.success) {
-        getDataService().resolveRecipeIcons(recipeId, getAIService().embedTexts.bind(getAIService()))
-            .catch(e => console.error('[addIngredientNodeAction] resolveRecipeIcons failed:', e));
+        await getDataService().resolveRecipeIcons(recipeId, getAIService().embedTexts.bind(getAIService()));
     }
     return result;
 }
 
-/* TODO: REPLACE these with just calling resolveIcons when we make a new recipe instead of relying on the cloud function */
+
 
 // // Automatic Trigger on New Recipe Creation
 // export const processNewRecipe = onDocumentCreated({ document: "recipes/{recipeId}", timeoutSeconds: 60, memory: "256MiB" }, async (event) => {
@@ -187,12 +186,12 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
         console.log('[createVisualRecipeAction] 💾 Saving initial recipe...');
         const id = await getDataService().saveRecipe(graph, targetId, userId, visibility);
 
-        // Fire-and-forget — embedding + vector search runs in background so page navigates immediately
-        getDataService().resolveRecipeIcons(id, getAIService().embedTexts.bind(getAIService()))
-            .catch(e => console.error('[createVisualRecipeAction] resolveRecipeIcons failed:', e));
+        // Await so the embedding search + queue setup completes before returning.
+        // Index hits populate icons immediately on page load; misses queue generation.
+        await getDataService().resolveRecipeIcons(id, getAIService().embedTexts.bind(getAIService()));
 
         console.log(`[createVisualRecipeAction] ✅ Complete. ID: ${id}`);
-        return {id} ;
+        return {id};
 
     } catch (e: any) {
         console.error('[createVisualRecipeAction] Failed:', e);

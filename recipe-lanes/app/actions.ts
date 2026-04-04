@@ -25,7 +25,7 @@ import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQuer
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import type { RecipeGraph, IconStats } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
-import { getIconThumbUrl, getNodeIconUrl, getShortlistIconAt } from '@/lib/recipe-lanes/model-utils';
+import { getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import {  DB_COLLECTION_RECIPES } from '@/lib/config';
 
@@ -315,14 +315,10 @@ export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: stri
     const newGraph = parseRecipeGraph(text);
 
     // Restore icons if ID matches and AI forgot them
-    newGraph.nodes.forEach(n => {
-        if (!getNodeIconUrl(n)) {
-            const old = currentGraph.nodes.find(o => o.id === n.id);
-            if (old && old.iconShortlist) {
-                n.iconShortlist = old.iconShortlist;
-                n.shortlistIndex = old.shortlistIndex;
-            }
-        }
+    newGraph.nodes = newGraph.nodes.map(n => {
+        if (getNodeIconUrl(n)) return n;
+        const old = currentGraph.nodes.find(o => o.id === n.id);
+        return old ? preserveNodeShortlist(n, old) : n;
     });
 
     return { graph: newGraph, adjustment: prompt };

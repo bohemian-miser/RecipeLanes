@@ -310,3 +310,19 @@ export function prependToShortlist(existing: ShortlistEntry[], entry: ShortlistE
     const filtered = existing.filter(e => getEntryIcon(e).id !== newId);
     return [entry, ...filtered];
 }
+
+/**
+ * Copies shortlist data (iconShortlist + shortlistIndex) from `source` onto
+ * `target`, returning a new object. Use this when reconstructing a node from
+ * AI output or JSON edit and you want to preserve the existing icons.
+ *
+ * Only copies when the source actually has a shortlist.
+ */
+export function preserveNodeShortlist<T extends RecipeNode>(target: T, source: RecipeNode): T {
+    if (!source.iconShortlist || source.iconShortlist.length === 0) return target;
+    return {
+        ...target,
+        iconShortlist: source.iconShortlist,
+        shortlistIndex: source.shortlistIndex,
+    };
+}

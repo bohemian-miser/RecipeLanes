@@ -27,7 +27,7 @@ import { ReactFlowProvider } from 'reactflow';
 import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction } from '@/app/actions';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
-import { hasNodeIcon } from '@/lib/recipe-lanes/model-utils';
+import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github } from 'lucide-react';
@@ -213,12 +213,10 @@ function RecipeLanesContent() {
           // Restore icons from existing graph
           const newNodes = partialGraph.nodes.map((n: any) => {
               const original = graph?.nodes.find(o => o.id === n.id);
-              const updatedNode = { ...n };
-              if (original?.iconShortlist) {
-                  updatedNode.iconShortlist = original.iconShortlist;
-                  updatedNode.shortlistIndex = original.shortlistIndex;
+              if (original && getNodeShortlistLength(original) > 0) {
+                  return preserveNodeShortlist(n, original);
               }
-              return updatedNode;
+              return n;
           });
           
           const newGraph = { ...partialGraph, nodes: newNodes };

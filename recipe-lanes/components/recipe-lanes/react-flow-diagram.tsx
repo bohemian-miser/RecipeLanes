@@ -36,7 +36,7 @@ import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
-import { getNodeIconUrl, getNodeIconId } from '../../lib/recipe-lanes/model-utils';
+import { getNodeIconUrl, getNodeIconId, preserveNodeShortlist, getNodeShortlistLength } from '../../lib/recipe-lanes/model-utils';
 import MinimalNode from './nodes/minimal-node';
 import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
@@ -331,21 +331,21 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                          
                          // Always sync text/serves/baseServes from DB prop even if dirty, 
                          // so that top-level scaling (serves) and background updates (icons) work.
-                         const newData = { 
-                             ...n.data, 
+                         const baseData = {
+                             ...n.data,
                              text: dbNode.text,
-                             serves: graph.serves, 
-                             baseServes: graph.baseServes 
+                             serves: graph.serves,
+                             baseServes: graph.baseServes
                          };
-                         
+
                          if (dbUrl && dbUrl !== currentUrl) {
                              changed = true;
-                             if (dbNode.iconShortlist) {
-                                 // Update using the shortlist from DB
-                                 newData.iconShortlist = dbNode.iconShortlist;
-                                 newData.shortlistIndex = dbNode.shortlistIndex;
-                             }
                          }
+
+                         // Copy shortlist from DB when the icon changed (forge result arrived).
+                         const newData = (dbUrl && dbUrl !== currentUrl && getNodeShortlistLength(dbNode) > 0)
+                             ? preserveNodeShortlist(baseData, dbNode)
+                             : baseData;
                          
                          // If serves or text changed, mark as changed to trigger re-render
                          if (n.data.serves !== graph.serves || n.data.text !== dbNode.text) changed = true;

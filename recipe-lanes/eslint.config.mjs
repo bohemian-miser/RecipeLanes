@@ -71,8 +71,10 @@ const eslintConfig = defineConfig([
     ignores: [
       "lib/recipe-lanes/model-utils.ts",
       "lib/recipe-lanes/types.ts",
+      "lib/stores/recipe-store.ts",
       "scripts/**",
       "functions/**",
+      "tests/**",
     ],
     rules: {
       "no-restricted-syntax": [

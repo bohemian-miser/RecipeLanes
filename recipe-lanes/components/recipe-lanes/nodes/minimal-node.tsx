@@ -28,6 +28,7 @@ import {
     getNodeShortlistKey,
     getNodeIconUrlAt,
     isIconSearchMatchedAt,
+    currentShortlistIndex,
 } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 
@@ -52,7 +53,7 @@ export const MinimalNode: React.FC<any> = ({
   const iconTheme = getNodeTheme(data);
 
   const shortlistKey = getNodeShortlistKey(node);
-  const currentIndex = (storeNode ?? data).shortlistIndex ?? 0;
+  const currentIndex = Math.max(0, currentShortlistIndex(node));
   const iconUrl = getNodeIconUrlAt(node, currentIndex);
   const isSearchMatched = isIconSearchMatchedAt(node, currentIndex);
 

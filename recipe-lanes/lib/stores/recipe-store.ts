@@ -88,7 +88,7 @@ interface RecipeActions {
      * Advances shortlistIndex on the named node by one, wrapping at `length`.
      * All other nodes keep their existing object reference.
      */
-    cycleShortlist: (nodeId: string, length: number) => void;
+    cycleShortlist: (nodeId: string) => void;
 
     /**
      * Applies a local graph mutation (serves scaling, JSON edit, etc.).
@@ -206,12 +206,14 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
 
     setGraph: (graph) => set({ graph, isDirty: true }),
 
-    cycleShortlist: (nodeId, length) => {
+    cycleShortlist: (nodeId) => {
         const state = get();
-        if (!state.graph || length === 0) return;
+        if (!state.graph) return;
 
         const nodes = state.graph.nodes.map(n => {
             if (n.id !== nodeId) return n; // preserve reference
+            const length = n.iconShortlist?.length ?? 0;
+            if (length === 0) return n;
             const next = ((n.shortlistIndex ?? 0) + 1) % length;
             return { ...n, shortlistIndex: next };
         });

@@ -121,7 +121,7 @@ describe('useRecipeStore', () => {
             useRecipeStore.getState().mergeSnapshot(makeGraph([node]));
 
             // User cycles to index 1
-            useRecipeStore.getState().cycleShortlist('a', 2);
+            useRecipeStore.getState().cycleShortlist('a');
             assert.equal(useRecipeStore.getState().graph!.nodes[0].shortlistIndex, 1);
 
             // Snapshot arrives with same shortlist but index 0 (server hasn't saved yet)
@@ -141,7 +141,7 @@ describe('useRecipeStore', () => {
             useRecipeStore.getState().mergeSnapshot(makeGraph([node]));
 
             // User cycles
-            useRecipeStore.getState().cycleShortlist('a', 1);
+            useRecipeStore.getState().cycleShortlist('a');
 
             // Forge: server sends a new shortlist with a different icon
             const newEntries = [makeEntry('icon-99'), makeEntry('icon-1')];
@@ -196,7 +196,7 @@ describe('useRecipeStore', () => {
             const node = makeNode('a', { iconShortlist: entries, shortlistIndex: 0 });
             useRecipeStore.getState().mergeSnapshot(makeGraph([node]));
 
-            useRecipeStore.getState().cycleShortlist('a', 3);
+            useRecipeStore.getState().cycleShortlist('a');
             assert.equal(useRecipeStore.getState().graph!.nodes[0].shortlistIndex, 1);
         });
 
@@ -205,7 +205,7 @@ describe('useRecipeStore', () => {
             const node = makeNode('a', { iconShortlist: entries, shortlistIndex: 1 });
             useRecipeStore.getState().mergeSnapshot(makeGraph([node]));
 
-            useRecipeStore.getState().cycleShortlist('a', 2);
+            useRecipeStore.getState().cycleShortlist('a');
             assert.equal(useRecipeStore.getState().graph!.nodes[0].shortlistIndex, 0);
         });
 
@@ -215,7 +215,7 @@ describe('useRecipeStore', () => {
             useRecipeStore.getState().mergeSnapshot(makeGraph([nodeA, nodeB]));
 
             const originalB = useRecipeStore.getState().graph!.nodes[1];
-            useRecipeStore.getState().cycleShortlist('a', 2);
+            useRecipeStore.getState().cycleShortlist('a');
 
             assert.equal(useRecipeStore.getState().graph!.nodes[1], originalB);
         });
@@ -223,8 +223,7 @@ describe('useRecipeStore', () => {
         it('is a no-op when length is 0', () => {
             const node = makeNode('a', { shortlistIndex: 2 });
             useRecipeStore.getState().mergeSnapshot(makeGraph([node]));
-
-            useRecipeStore.getState().cycleShortlist('a', 0);
+            useRecipeStore.getState().cycleShortlist('a');
             assert.equal(useRecipeStore.getState().graph!.nodes[0].shortlistIndex, 2);
         });
     });

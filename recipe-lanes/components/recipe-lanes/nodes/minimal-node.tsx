@@ -90,9 +90,7 @@ export const MinimalNode: React.FC<any> = ({
 
   const handleReroll = (e: React.MouseEvent) => {
       e.stopPropagation();
-      const length = getNodeShortlistLength(node);
-      if (length === 0) return;
-      cycleShortlist(id, length);
+      cycleShortlist(id);
       // TODO: record impression fire-and-forget once a lightweight
       // recordImpressionAction (touching only ingredients_new, not the recipe
       // doc) is available. See docs/STATE_AND_PERSISTENCE.md.

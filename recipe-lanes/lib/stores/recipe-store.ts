@@ -44,7 +44,7 @@
 
 import { create } from 'zustand';
 import { RecipeGraph, RecipeNode } from '../recipe-lanes/types';
-import { getNodeShortlistKey } from '../recipe-lanes/model-utils';
+import { getNodeShortlistKey, cycleShortlistNodes } from '../recipe-lanes/model-utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -210,13 +210,7 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
         const state = get();
         if (!state.graph) return;
 
-        const nodes = state.graph.nodes.map(n => {
-            if (n.id !== nodeId) return n; // preserve reference
-            const length = n.iconShortlist?.length ?? 0;
-            if (length === 0) return n;
-            const next = ((n.shortlistIndex ?? 0) + 1) % length;
-            return { ...n, shortlistIndex: next };
-        });
+        const nodes = cycleShortlistNodes(state.graph, nodeId);
 
         set({ graph: { ...state.graph, nodes } });
     },

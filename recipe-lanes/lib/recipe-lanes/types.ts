@@ -41,7 +41,6 @@ export interface IconStats {
         center: { x: number, y: number };
         bbox: { x: number, y: number, w: number, h: number };
     };
-    status?: 'pending' | 'processing' | 'failed';
     searchTerms?: SearchTerm[];
 }
 
@@ -83,6 +82,7 @@ export interface RecipeNode {
     method: string;
     outcome?: 'accepted' | 'rerolled_past' | 'regenerated';
   };
+  status?: 'pending' | 'processing' | 'failed';
   hydeQueries?: string[];
 
   type: 'ingredient' | 'action';
@@ -128,7 +128,7 @@ export interface RecipeGraph {
   nodes: RecipeNode[];
   layouts?: Record<string, NodeLayout[]>;
   
-  // Persistent user preferences for this recipe
+  // Persistent user preferences for this recipe (not needed anymore since we moved to shortlist)
   rejections?: Record<string, string[]>; // Map<VisualDescription, RejectedIconIDs[]>
 }
 

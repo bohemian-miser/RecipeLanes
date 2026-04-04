@@ -24,7 +24,7 @@ import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/type
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined } from './utils';
 // import { calculateWilsonLCB } from './utils';
-import { applyIconToNode, buildShortlistEntry, clearNodeShortlist, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, prependToShortlist, toRecipeIcon } from './recipe-lanes/model-utils';
+import { applyIconToNode, buildShortlistEntry, clearNodeShortlist, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, prependToShortlist, toRecipeIcon, setNodeStatus } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -185,8 +185,6 @@ export class FirebaseDataService implements DataService {
       const nodes = recipeData?.graph?.nodes || [];
       
       let recipeChanged = false;
-      let ingredientChanged = false;
-      let icons: any[] = [];
 
       const generatedEntry: ShortlistEntry = buildShortlistEntry(icon, 'generated');
       nodes.forEach((n: any) => {
@@ -201,40 +199,23 @@ export class FirebaseDataService implements DataService {
               }
           }
       });
-      
-      // if (recipeChanged) {
-      //     // Update Impressions (Once per recipe update)
-      //     if (ingDoc.exists) {
-      //         icons = ingDoc.data()?.icons || [];
-      //         const iconIndex = icons.findIndex((i: any) => i.id === icon.id);
-      //         if (iconIndex !== -1) {
-      //             icons[iconIndex].impressions = (icons[iconIndex].impressions || 0) + 1;
-      //             const n = icons[iconIndex].impressions;
-      //             const r = icons[iconIndex].rejections || 0;
-      //             icons[iconIndex].score = calculateWilsonLCB(n, r);
-      //             icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
-      //             ingredientChanged = true;
-      //         }
-      //     }
-      // }
 
-      return { recipeRef, ingRef, nodes, icons, recipeChanged, ingredientChanged };
+      return { recipeRef, nodes, recipeChanged };
   }
 
   async setRecipeWithIcon(data: any, transaction?: any): Promise<void> {
-      const { recipeRef, ingRef, nodes, icons, recipeChanged, ingredientChanged } = data;
+      const { recipeRef, nodes, recipeChanged } = data;
       
       if (transaction) {
           if (recipeChanged) transaction.update(recipeRef, { "graph.nodes": nodes });
-          if (ingredientChanged) transaction.update(ingRef, { icons });
       } else {
           const batch = db.batch();
           if (recipeChanged) batch.update(recipeRef, { "graph.nodes": nodes });
-          if (ingredientChanged) batch.update(ingRef, { icons });
           await batch.commit();
       }
   }
 
+  // does the imagining and the setting. This was essentially the func before the transaction refactor.
   async assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<void> {
       const operation = async (t: any) => {
           const data = await this.imagineRecipeWithIcon(recipeId, ingredientName, icon, t);
@@ -248,33 +229,6 @@ export class FirebaseDataService implements DataService {
       }
   }
 
-  // TEST ONLY.
-//   async waitForQueue(ingredientName: string, timeoutMs: number = 15000): Promise<IconStats | null> {
-//       const stdName = standardizeIngredientName(ingredientName);
-//       const docRef = db.collection(DB_COLLECTION_QUEUE).doc(stdName);
-//       const start = Date.now();
-
-//       while (Date.now() - start < timeoutMs) {
-//           const snap = await docRef.get();
-
-//           if (snap.exists) {
-//               const data = snap.data();
-//               if (data?.status === 'completed' && data.id) return { id: data.id };
-//               if (data?.status === 'failed') throw new Error(data.error || 'Generation failed');
-//               // pending/processing — keep waiting
-//           } else {
-//               console.log(`[FIREBASEDATASERVICE] WAITFORQUEUE: NO QUEUE DOCUMENT FOR "${stdName}", CHECKING INGREDIENTS...`);
-//               const ingDoc = await db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName).get();
-//               if (ingDoc.exists) {
-//                   const icons = ingDoc.data()?.icons || [];
-//                   if (icons.length > 0) return { id: icons[0].id, visualDescription: icons[0].visualDescription };
-//               }
-//           }
-
-//           await new Promise(r => setTimeout(r, 1000));
-//       }
-//       return null;
-//   }
         
     /**
      * Helper to determine if a single node requires icon processing.
@@ -373,27 +327,10 @@ export class FirebaseDataService implements DataService {
                 }
             }
 
-            // 3. Mark Node as Pending in Recipe (Optimistic UI)
-            // recipeData is already defined above
+            // 3. Mark Node as Pending in Recipe.
             const nodes = recipeData?.graph?.nodes || [];
-            let changed = false;
-            nodes.forEach((n: any) => {
-                 if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
-                     // Only update if not already set to avoid unnecessary writes?
-                     // Or just force it to pending/processing if it was failed/missing.
-                     const curStatus = n.iconShortlist?.[0]?.icon?.status;
-                     if (curStatus !== 'pending' && curStatus !== 'processing') {
-                         if (!n.iconShortlist || n.iconShortlist.length === 0) {
-                             n.iconShortlist = [{ icon: { id: '', status: 'pending' }, matchType: 'generated' }];
-                             n.shortlistIndex = 0;
-                         } else {
-                             n.iconShortlist[0].icon.status = 'pending';
-                         }
-                         changed = true;
-                     }
-                 }
-            });
-            
+            const changed = setNodeStatus(recipeData?.graph, stdName, 'pending');
+
             if (changed) {
                 transaction.update(recipeRef, { "graph.nodes": nodes });
             }
@@ -452,18 +389,7 @@ export class FirebaseDataService implements DataService {
             const nodes = data?.graph?.nodes || [];
             let changed = false;
 
-            nodes.forEach((n: any) => {
-                if (n.visualDescription) {
-                     const nName = standardizeIngredientName(getNodeIngredientName(n));
-                     if (nName === stdName) {
-                         // Mark first shortlist entry as failed, or add a sentinel
-                         if (n.iconShortlist && n.iconShortlist.length > 0) {
-                             n.iconShortlist[0].icon.status = 'failed';
-                         }
-                         changed = true;
-                     }
-                }
-            });
+            changed = setNodeStatus(data?.graph, stdName, 'failed');
 
             if (changed) {
                 t.update(recipeRef, { "graph.nodes": nodes });
@@ -636,6 +562,7 @@ export class FirebaseDataService implements DataService {
             const data = doc.data()!;
 
             // Ownership check
+            // TODO get the owner from calling creds here instead of in actions.
             if (data.ownerId && data.ownerId !== userId) {
                 // TODO: UI should pop up a message "save a copy to reroll"
                 throw new Error("Unauthorized: Save a copy to reroll icons in this recipe.");
@@ -649,7 +576,6 @@ export class FirebaseDataService implements DataService {
             nodes.forEach((n: any) => {
                 if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
                     iconsToReject.push(...getSeenIconIds(n));
-                    clearNodeShortlist(n);
                 }
             });
 
@@ -1475,7 +1401,6 @@ export class MemoryDataService implements DataService {
         recipe.graph.nodes.forEach(n => {
             if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
                 iconsToReject.push(...getSeenIconIds(n));
-                clearNodeShortlist(n);
             }
         });
 

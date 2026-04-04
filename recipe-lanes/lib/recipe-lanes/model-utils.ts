@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry, SearchTerm } from './types';
+import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry, SearchTerm, RecipeGraph } from './types';
 import { standardizeIngredientName } from '../utils';
 
 /**
@@ -88,6 +88,21 @@ export function getShortlistIconAt(node: RecipeNode, index: number): IconStats |
 /** Returns the number of entries in the node's shortlist. */
 export function getNodeShortlistLength(node: RecipeNode): number {
     return node.iconShortlist?.length ?? 0;
+}
+
+/**
+ * Returns a new nodes array where the node with `nodeId` has its
+ * `shortlistIndex` advanced by one (wrapping at length). All other
+ * node object references are preserved.
+ */
+export function cycleShortlistNodes(graph: RecipeGraph, nodeId: string): RecipeNode[] {
+    return graph.nodes.map(n => {
+        if (n.id !== nodeId) return n;
+        const length = getNodeShortlistLength(n);
+        if (length === 0) return n;
+        const next = ((n.shortlistIndex ?? 0) + 1) % length;
+        return { ...n, shortlistIndex: next };
+    });
 }
 
 /**
@@ -193,8 +208,38 @@ export function getNodeIconMetadata(node: RecipeNode) {
 }
 
 export function getNodeIconStatus(node: RecipeNode) {
-    const entry = getCurrentEntry(node);
-    return entry ? getEntryIcon(entry).status : undefined;
+    return node.status;
+}
+export function setNodeIconStatus(node: RecipeNode, status: 'pending' | 'processing' | 'failed') {
+    node.status = status;
+}
+
+/**
+ * Returns the status for a node by id from a graph, or undefined when
+ * the graph or node is missing.
+ */
+export function getNodeStatus(graph: RecipeGraph | null, nodeId: string): 'pending' | 'processing' | 'failed' | undefined {
+    if (!graph) return undefined;
+    const node = graph.nodes.find(n => n.id === nodeId);
+    if (!node) return undefined;
+    return getNodeIconStatus(node);
+}
+
+/**
+ * Sets the status on the node with `nodeId` in `graph` when the current
+ * status is not already `pending` or `processing`. Returns true when a
+ * change was made.
+ */
+export function setNodeStatus(graph: RecipeGraph | null, nodeId: string, status: 'pending' | 'processing' | 'failed'): boolean {
+    if (!graph) return false;
+    const node = graph.nodes.find(n => n.id === nodeId);
+    if (!node) return false;
+    const cur = getNodeIconStatus(node);
+    // Do not overwrite an in-flight status
+    if (cur === 'pending' || cur === 'processing') return false;
+    if (cur === status) return false;
+    setNodeIconStatus(node, status);
+    return true;
 }
 
 /**

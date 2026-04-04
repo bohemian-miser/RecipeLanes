@@ -18,8 +18,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, memo } from 'react';
-import ReactFlow, { 
-    Background, 
+import ReactFlow, {
+    Background,
     Controls,
     ReactFlowProvider,
     useReactFlow
@@ -31,22 +31,20 @@ import { Node, Edge, Panel, MarkerType, useNodesState, useEdgesState } from 'rea
 type Node = any;
 type Edge = any;
 import 'reactflow/dist/style.css';
-import { useSearchParams, useRouter } from 'next/navigation';
 import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX } from 'd3-force';
 
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import { getNodeIconUrl, getNodeIconId } from '../../lib/recipe-lanes/model-utils';
-import { calculateBridgeEdges } from '../../lib/recipe-lanes/graph-logic';
 import MinimalNode from './nodes/minimal-node';
 import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
 import FloatingEdge from './edges/floating-edge';
 import { toPng } from 'html-to-image';
 import { Download, Share2, Undo, Redo, Check, Save } from 'lucide-react';
-import { saveRecipeAction } from '@/app/actions';
-import { useShortlistStore } from '@/lib/stores/shortlist-store';
+import { useHistoryManager } from './hooks/useHistoryManager';
+import { useSaveAndFork } from './hooks/useSaveAndFork';
 
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
@@ -94,36 +92,32 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const { fitView, getNodes: getNodesRaw, getEdges: getEdgesRaw } = useReactFlow();
     const getNodes = getNodesRaw as () => any[];
     const getEdges = getEdgesRaw as () => any[];
-    const searchParams = useSearchParams();
-    const router = useRouter();
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
-    const [copied, setCopied] = useState(false);
-    const [saved, setSaved] = useState(false);
-    
-    // Initialize from graph.visibility (injected by service)
-    // If prop is provided, use it, otherwise fallback to internal state logic (though moving to prop driven is better)
-    const initialVisibility = graph.visibility === 'public';
-    const [internalIsPublic, setInternalIsPublic] = useState(initialVisibility);
-    
-    const isPublic = propIsPublic !== undefined ? propIsPublic : internalIsPublic;
-
-    // We still need a ref for the save function to access the latest state without re-creating the function
-    const visibilityRef = useRef(isPublic);
-    
-    useEffect(() => {
-        visibilityRef.current = isPublic;
-    }, [isPublic]);
-
-    const [isDirty, setIsDirty] = useState(false);
-
-    // Update state if graph prop changes (e.g. fresh load)
-    useEffect(() => {
-        const pub = graph.visibility === 'public';
-        if (propIsPublic === undefined) {
-             setInternalIsPublic(pub);
-        }
-    }, [graph.visibility, propIsPublic]);
+    const {
+        copied,
+        saved,
+        isDirty,
+        setIsDirty,
+        isPublic,
+        visibilityRef,
+        getGraph,
+        performSave,
+        handleSave,
+        handleShare,
+        toggleVisibility,
+    } = useSaveAndFork({
+        graph,
+        mode,
+        getNodes,
+        getEdges,
+        isLoggedIn,
+        isOwner,
+        propIsPublic,
+        onVisibilityChange,
+        onSave,
+        onNotify,
+    });
 
     // Theme Effect
     useEffect(() => {
@@ -167,91 +161,15 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     }, []);
 
     // History
-    const [past, setPast] = useState<{ nodes: Node[], edges: Edge[] }[]>([]);
-    const [future, setFuture] = useState<{ nodes: Node[], edges: Edge[] }[]>([]);
-
-    const takeSnapshot = useCallback(() => {
-        const n = getNodes();
-        const e = getEdges();
-        setPast(p => [...p, { 
-            nodes: JSON.parse(JSON.stringify(n)), 
-            edges: JSON.parse(JSON.stringify(e)) 
-        }]);
-        setFuture([]);
-    }, [getNodes, getEdges]);
-
-    const handleDeleteNode = useCallback((nodeId: string) => {
-        console.log(`[DiagramInner] handleDeleteNode called for ${nodeId}`);
-        takeSnapshot();
-        const currentEdges = getEdges();
-        
-        const edgeFactory = (source: string, target: string) => ({
-            id: `${source}-${target}`,
-            source,
-            target,
-            type: 'floating',
-            data: { variant: edgeStyle },
-            style: { stroke: '#9ca3af', strokeWidth: 1.5 },
-            markerEnd: { type: MarkerType.ArrowClosed, color: '#9ca3af', width: 20, height: 20 }
-        });
-
-        const newEdgesList = calculateBridgeEdges(nodeId, currentEdges, edgeFactory);
-        
-        setEdges(newEdgesList);
-        setNodes(nds => nds.filter(n => n.id !== nodeId));
-        setIsDirty(true);
-        setTimeout(() => onEdit?.(), 0);
-    }, [takeSnapshot, getEdges, setEdges, setNodes, edgeStyle, onEdit]);
-
-    const undo = useCallback(() => {
-        if (past.length === 0) return;
-        const newPast = [...past];
-        const previous = newPast.pop();
-        setPast(newPast);
-        setFuture(f => [{ 
-            nodes: JSON.parse(JSON.stringify(getNodes())), 
-            edges: JSON.parse(JSON.stringify(getEdges())) 
-        }, ...f]);
-        
-        if (previous) {
-            // Re-attach handlers that are lost during JSON serialization
-            const restoredNodes = previous.nodes.map(n => ({
-                ...n,
-                data: {
-                    ...n.data,
-                    onDelete: () => handleDeleteNode(n.id)
-                }
-            }));
-            setNodes(restoredNodes);
-            setEdges(previous.edges);
-            setIsDirty(true);
-        }
-    }, [past, getNodes, getEdges, setNodes, setEdges, handleDeleteNode]);
-
-    const redo = useCallback(() => {
-        if (future.length === 0) return;
-        const newFuture = [...future];
-        const next = newFuture.shift();
-        setFuture(newFuture);
-        setPast(p => [...p, { 
-            nodes: JSON.parse(JSON.stringify(getNodes())), 
-            edges: JSON.parse(JSON.stringify(getEdges())) 
-        }]);
-        
-        if (next) {
-            // Re-attach handlers
-            const restoredNodes = next.nodes.map(n => ({
-                ...n,
-                data: {
-                    ...n.data,
-                    onDelete: () => handleDeleteNode(n.id)
-                }
-            }));
-            setNodes(restoredNodes);
-            setEdges(next.edges);
-            setIsDirty(true);
-        }
-    }, [future, getNodes, getEdges, setNodes, setEdges, handleDeleteNode]);
+    const { past, future, takeSnapshot, undo, redo, handleDeleteNode } = useHistoryManager({
+        getNodes,
+        getEdges,
+        setNodes,
+        setEdges,
+        edgeStyle,
+        onEdit,
+        setIsDirty,
+    });
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -549,129 +467,6 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                 onNotify?.("Download failed. Check console/CORS.");
             }
         }
-    };
-
-    const getGraph = useCallback((): RecipeGraph => {
-        const currentNodes = getNodes().filter(n => n.type !== 'lane');
-        const currentEdges = getEdges();
-        const layouts = graph.layouts || {};
-        layouts[mode as string] = currentNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
-
-        // Overlay shortlist indexes from the store so that cycling choices made
-        // since the last Firestore snapshot are included in the save.
-        const storeIndexes = useShortlistStore.getState().getIndexes();
-
-        // Filter out nodes that are no longer in the ReactFlow state (deleted)
-        const nodesWithPos = graph.nodes
-            .filter(n => currentNodes.some(rn => rn.id === n.id))
-            .map(n => {
-               const rfn = currentNodes.find(rn => rn.id === n.id)!;
-
-               // Reconstruct inputs from current edges to capture bridging/changes
-               const inputs = currentEdges
-                   .filter(e => e.target === n.id)
-                   .map(e => e.source);
-
-               // Prefer the store index (reflects cycling) over the snapshot value.
-               const shortlistIndex = storeIndexes[n.id] ?? n.shortlistIndex;
-
-               return { ...n, x: rfn.position.x, y: rfn.position.y, inputs, shortlistIndex };
-            });
-
-        return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
-    }, [graph, mode, getNodes, getEdges]);
-
-    const performSave = async () => {
-        const graphToSave = getGraph();
-        
-        let currentId = searchParams.get('id') || undefined;
-        // Use ref for latest value (important for toggleVisibility which is async)
-        const visibility = visibilityRef.current ? 'public' : 'unlisted';
-        
-        // Forking Logic for Non-Owners (Alice Copy)
-        if (isLoggedIn && !isOwner && currentId) {
-             console.log('[ReactFlow] Forking on Save (Non-Owner)');
-             const sourceId = currentId;
-             currentId = undefined; // Force new creation
-             graphToSave.sourceId = sourceId;
-
-             // Smarter Copy Naming
-             let newTitle = graphToSave.title || 'Untitled';
-             if (newTitle.startsWith('Yet another copy of ')) {
-                 const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
-                 if (match) {
-                     newTitle = `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;
-                 } else {
-                     newTitle = `${newTitle} (1)`;
-                 }
-             } else if (newTitle.startsWith('Another copy of ')) {
-                 newTitle = newTitle.replace('Another copy of ', 'Yet another copy of ');
-             } else if (newTitle.startsWith('Copy of ')) {
-                 newTitle = newTitle.replace('Copy of ', 'Another copy of ');
-             } else {
-                 newTitle = `Copy of ${newTitle}`;
-             }
-             graphToSave.title = newTitle;
-             onNotify?.("Saving a copy...");
-        }
-        
-        // Ensure visibility is part of the graph object passed back
-        graphToSave.visibility = visibility;
-
-        const result = await saveRecipeAction(graphToSave, currentId, visibility);
-        
-        if (onSave) onSave(graphToSave);
-        return result;
-    };
-
-    const handleSave = async () => {
-        if (!isLoggedIn) {
-            onNotify?.('Log in to save recipe');
-            return;
-        }
-        const res = await performSave();
-        if (res.id) {
-            const url = new URL(window.location.href);
-            url.searchParams.set('id', res.id);
-            router.push(url.pathname + url.search);
-            setIsDirty(false);
-            setSaved(true);
-            setTimeout(() => setSaved(false), 2000);
-            onNotify?.("Saved changes.");
-        } else {
-            console.error('Failed to save.');
-            onNotify?.("Failed to save.");
-        }
-    };
-
-    const handleShare = async () => {
-        const res = await performSave();
-        if (res.id) {
-            const url = new URL(window.location.href);
-            url.searchParams.set('id', res.id);
-            router.push(url.pathname + url.search);
-            navigator.clipboard.writeText(url.toString());
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-            setIsDirty(false);
-            onNotify?.("Link copied to clipboard");
-        }
-    };
-
-    const toggleVisibility = async () => {
-        const newPublic = !visibilityRef.current;
-        
-        if (onVisibilityChange) {
-            onVisibilityChange(newPublic);
-        }
-        else {
-            setInternalIsPublic(newPublic);
-        }
-        
-        visibilityRef.current = newPublic;
-        setIsDirty(true);
-        // Save immediately
-        await handleSave();
     };
 
     const handleReset = () => {

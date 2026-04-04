@@ -85,6 +85,43 @@ export function getShortlistIconAt(node: RecipeNode, index: number): IconStats |
     return entry ? getEntryIcon(entry) : undefined;
 }
 
+/** Returns the number of entries in the node's shortlist. */
+export function getNodeShortlistLength(node: RecipeNode): number {
+    return node.iconShortlist?.length ?? 0;
+}
+
+/**
+ * Returns a stable key that changes whenever the shortlist contents change
+ * (i.e. when a forge completes and a new shortlist is assigned).
+ * Safe to use as a useEffect dependency.
+ */
+export function getNodeShortlistKey(node: RecipeNode): string {
+    return node.iconShortlist?.map(e => getEntryIcon(e).id).join(',') ?? '';
+}
+
+/**
+ * Returns the thumb URL for the shortlist entry at the given index, or undefined
+ * when the shortlist is empty or the index is out of bounds.
+ * Use this instead of getNodeIconUrl when the display index is driven externally
+ * (e.g. from a Zustand store).
+ */
+export function getNodeIconUrlAt(node: RecipeNode, index: number): string | undefined {
+    const icon = getShortlistIconAt(node, index);
+    if (!icon?.id) return undefined;
+    const vd = icon.visualDescription || getNodeIngredientName(node);
+    return getIconThumbUrl({ ...icon, visualDescription: vd });
+}
+
+/**
+ * Returns true when the shortlist entry at the given index was resolved via
+ * search rather than generation.
+ */
+export function isIconSearchMatchedAt(node: RecipeNode, index: number): boolean {
+    if (!node.iconShortlist) return false;
+    const entry = node.iconShortlist[index];
+    return entry ? getEntryMatchType(entry) === 'search' : false;
+}
+
 export function hasNodeIcon(node: RecipeNode): boolean {
     const entry = getCurrentEntry(node);
     if (!entry) return false;

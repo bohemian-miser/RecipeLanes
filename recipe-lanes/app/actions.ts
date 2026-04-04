@@ -487,47 +487,6 @@ export async function vetRecipeAction(recipeId: string, isVetted: boolean) {
     }
 }
 
-/**
- * Advances the shortlistIndex for a node. Sets shortlistCycled=true the first time
- * the index wraps around to 0. Rejections are recorded in bulk when forge is called.
- */
-// I hate how complex this function is. TODO make it simpler.
-export async function updateShortlistIndexAction(recipeId: string, nodeId: string, newIndex: number): Promise<{ success: boolean; error?: string }> {
-    // try {
-    //     // const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
-    //     // let impressionIconId: string | undefined;
-    //     // let ingredientId: string | undefined;
-    //     // await db.runTransaction(async (t) => {
-    //     //     const doc = await t.get(recipeRef);
-    //     //     if (!doc.exists) throw new Error('Recipe not found');
-    //     //     const nodes: any[] = doc.data()?.graph?.nodes || [];
-    //     //     const node = nodes.find((n: any) => n.id === nodeId);
-    //     //     if (!node) throw new Error('Node not found');
-    //     //     const shortlist = node.iconShortlist || [];
-    //     //     if (shortlist.length === 0) throw new Error('No shortlist on node');
-    //     //     const alreadyCycled: boolean = node.shortlistCycled ?? false;
-    //     //     const nextIdx = newIndex;
-    //     //     if (nextIdx >= shortlist.length) {
-    //     //         node.shortlistCycled = true;
-    //     //         node.shortlistIndex = 0;
-    //     //         // Only record impression when first wrapping to 0, not on subsequent cycles
-    //     //         if (!alreadyCycled) impressionIconId = getShortlistIconAt(node, 0)?.id;
-    //     //     } else {
-    //     //         node.shortlistIndex = nextIdx;
-    //     //         // Only record impression on first pass through
-    //     //         if (!alreadyCycled) impressionIconId = getShortlistIconAt(node, nextIdx)?.id;
-    //     //     }
-    //     //     ingredientId = standardizeIngredientName(node.visualDescription || '');
-    //     //     t.update(recipeRef, { 'graph.nodes': nodes });
-    //     // });
-    //     if (impressionIconId && ingredientId) {
-    //         getDataService().recordImpression(impressionIconId, ingredientId).catch(console.error);
-    //     }
-    //     return { success: true };
-    // } catch (e: any) {
-    //     return { success: false, error: e.message };
-    // }
-}
 
 export async function searchIconCandidatesAction(query: string): Promise<{ candidates: IconStats[], error?: string }> {
   if (!query.trim()) return { candidates: [] };

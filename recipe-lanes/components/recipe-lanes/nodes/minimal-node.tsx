@@ -15,38 +15,63 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { memo, useState } from 'react';
-import { useReactFlow } from 'reactflow';
-import { RecipeNode } from '../../../lib/recipe-lanes/types';
+import React, { memo, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
-import { forgeIconAction, updateShortlistIndexAction } from '@/app/actions';
-import { getEntryIcon, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getNodeTheme } from '@/lib/recipe-lanes/model-utils';
+import { forgeIconAction } from '@/app/actions';
+import {
+    getNodeIngredientName,
+    getNodeTheme,
+    getNodeIconId,
+    getNodeShortlistLength,
+    getNodeShortlistKey,
+    getNodeIconUrlAt,
+    isIconSearchMatchedAt,
+} from '@/lib/recipe-lanes/model-utils';
+import { useShortlistStore } from '@/lib/stores/shortlist-store';
 
 export const MinimalNode: React.FC<any> = ({
     data, selected, isConnectable, id
 }) => {
-  const [isRerolling, setIsRerolling] = useState(false);
   const [isForging, setIsForging] = useState(false);
-  const [prevIconUrl, setPrevIconUrl] = useState(getNodeIconUrl(data));
-
-  const currentIconUrl = getNodeIconUrl(data);
-  if (currentIconUrl !== prevIconUrl) {
-      setPrevIconUrl(currentIconUrl);
-      if ((isRerolling || isForging) && currentIconUrl) {
-          setIsRerolling(false);
-          setIsForging(false);
-      }
-  }
-
   const [isPivotMode, setIsPivotMode] = useState(false);
   const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
-  const { setNodes } = useReactFlow();
   const searchParams = useSearchParams();
   const recipeId = searchParams.get('id');
 
   const iconTheme = getNodeTheme(data);
+
+  // ---------------------------------------------------------------------------
+  // Shortlist store: the current display index lives here, not in Firestore.
+  // The store is initialized from the node's server-side shortlistIndex on
+  // mount and whenever the shortlist contents change (e.g. after a forge).
+  // On save, react-flow-diagram.tsx overlays store indexes onto graph.nodes
+  // via useShortlistStore.getState().getIndexes().
+  // ---------------------------------------------------------------------------
+  const { cycle, initialize, getIndex } = useShortlistStore();
+  const shortlistKey = getNodeShortlistKey(data);
+
+  useEffect(() => {
+      initialize(id, data.shortlistIndex ?? 0);
+  // Re-initialize whenever the shortlist contents change (forge prepends a new
+  // shortlist and resets shortlistIndex to 0 on the server).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shortlistKey, id]);
+
+  const currentIndex = getIndex(id, data.shortlistIndex ?? 0);
+  const iconUrl = getNodeIconUrlAt(data, currentIndex);
+  const isSearchMatched = isIconSearchMatchedAt(data, currentIndex);
+
+  // ---------------------------------------------------------------------------
+  // Forge state: cleared when a forge result arrives via Firestore snapshot,
+  // which updates data.iconShortlist and therefore shortlistKey.
+  // ---------------------------------------------------------------------------
+  const [prevShortlistKey, setPrevShortlistKey] = useState(shortlistKey);
+  if (shortlistKey !== prevShortlistKey) {
+      setPrevShortlistKey(shortlistKey);
+      if (isForging) setIsForging(false);
+  }
 
   const handleTouchStart = () => {
       longPressTimer.current = setTimeout(() => {
@@ -69,38 +94,14 @@ export const MinimalNode: React.FC<any> = ({
       if (data.onDelete) data.onDelete();
   };
 
-  const handleReroll = async (e: React.MouseEvent) => {
+  const handleReroll = (e: React.MouseEvent) => {
       e.stopPropagation();
-
-      const shortlist: any[] = data.iconShortlist || [];
-      if (shortlist.length === 0) return; // nothing to cycle through
-      // TODO this logic should be in model-utils.
-      const currentIdx = data.shortlistIndex ?? 0;
-      const newIdx = (currentIdx + 1) % shortlist.length;
-      // mark as cycled once we wrap around.
-      data.shortlistCycled = data.shortlistCycled || newIdx === 0;
-      const nextEntry = shortlist[newIdx];
-      const nextIcon = getEntryIcon(nextEntry);
-
-      // Optimistically update the local React state
-      setNodes((nds: any[]) => nds.map((n: any) => {
-          if (n.id !== id) return n;
-          return {
-              ...n,
-              data: {
-                  ...n.data,
-                  shortlistIndex: newIdx,
-              },
-          };
-      }));
-
-      // Persist the new index to Firestore. This will need to be changed
-      // when we move to zustand.
-      try {
-          await updateShortlistIndexAction(recipeId || '', id, newIdx);
-      } catch (err) {
-          console.error("Reroll persist failed:", err);
-      }
+      const length = getNodeShortlistLength(data);
+      if (length === 0) return;
+      cycle(id, length);
+      // TODO: record impression fire-and-forget once a lightweight
+      // recordImpressionAction (touching only ingredients_new, not the recipe
+      // doc) is available. See docs/STATE_AND_PERSISTENCE.md.
   };
 
   const handleForge = async (e: React.MouseEvent) => {
@@ -128,10 +129,10 @@ export const MinimalNode: React.FC<any> = ({
   };
 
   if (iconTheme === 'modern' || iconTheme === 'modern_clean') {
-      return <MinimalNodeModern data={data} selected={selected} isRerolling={isRerolling} isForging={isForging} isPivotMode={isPivotMode} handlers={handlers} />;
+      return <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
   }
 
-  return <MinimalNodeClassic data={data} selected={selected} isRerolling={isRerolling} isForging={isForging} isPivotMode={isPivotMode} handlers={handlers} />;
+  return <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
 };
 
 export default memo(MinimalNode);

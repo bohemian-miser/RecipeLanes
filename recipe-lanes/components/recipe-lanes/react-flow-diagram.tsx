@@ -46,6 +46,7 @@ import FloatingEdge from './edges/floating-edge';
 import { toPng } from 'html-to-image';
 import { Download, Share2, Undo, Redo, Check, Save } from 'lucide-react';
 import { saveRecipeAction } from '@/app/actions';
+import { useShortlistStore } from '@/lib/stores/shortlist-store';
 
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
@@ -555,21 +556,28 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         const currentEdges = getEdges();
         const layouts = graph.layouts || {};
         layouts[mode as string] = currentNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
-        
+
+        // Overlay shortlist indexes from the store so that cycling choices made
+        // since the last Firestore snapshot are included in the save.
+        const storeIndexes = useShortlistStore.getState().getIndexes();
+
         // Filter out nodes that are no longer in the ReactFlow state (deleted)
         const nodesWithPos = graph.nodes
             .filter(n => currentNodes.some(rn => rn.id === n.id))
             .map(n => {
                const rfn = currentNodes.find(rn => rn.id === n.id)!;
-               
+
                // Reconstruct inputs from current edges to capture bridging/changes
                const inputs = currentEdges
                    .filter(e => e.target === n.id)
                    .map(e => e.source);
 
-               return { ...n, x: rfn.position.x, y: rfn.position.y, inputs };
+               // Prefer the store index (reflects cycling) over the snapshot value.
+               const shortlistIndex = storeIndexes[n.id] ?? n.shortlistIndex;
+
+               return { ...n, x: rfn.position.x, y: rfn.position.y, inputs, shortlistIndex };
             });
-            
+
         return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
     }, [graph, mode, getNodes, getEdges]);
 

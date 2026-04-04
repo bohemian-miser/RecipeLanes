@@ -19,7 +19,7 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { RefreshCw, X, Hammer } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
-import { getNodeIconUrl, isIconSearchMatched, getNodeIngredientName, getNodeIconStatus } from '../../../lib/recipe-lanes/model-utils';
+import { getNodeIngredientName, getNodeIconStatus } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
@@ -27,6 +27,10 @@ interface MinimalNodeViewProps {
     isRerolling: boolean;
     isForging: boolean;
     isPivotMode: boolean;
+    /** Current icon URL driven by the shortlist store — do not call getNodeIconUrl(data) here. */
+    iconUrl: string | undefined;
+    /** Whether the current shortlist entry was resolved via search rather than generation. */
+    isSearchMatched: boolean;
     handlers: {
         onReroll: (e: React.MouseEvent) => void;
         onForge: (e: React.MouseEvent) => void;
@@ -37,14 +41,10 @@ interface MinimalNodeViewProps {
 }
 
 export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
-    data, selected, isRerolling, isForging, isPivotMode, handlers
+    data, selected, isRerolling, isForging, isPivotMode, iconUrl, isSearchMatched, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
-    const iconUrl = getNodeIconUrl(data);
     const textPos = data.textPos || 'bottom';
-
-    // Show a subtle indicator when icon was found via search, not exact-name match
-    const isSearchMatched = isIconSearchMatched(data);
     const isVertical = textPos === 'top' || textPos === 'bottom';
   
     const flexClass = {

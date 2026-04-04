@@ -27,7 +27,8 @@ import { ReactFlowProvider } from 'reactflow';
 import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction } from '@/app/actions';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
-import { getNodeIconUrl, getNodeIconId, hasNodeIcon } from '@/lib/recipe-lanes/model-utils';
+import { hasNodeIcon } from '@/lib/recipe-lanes/model-utils';
+import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
@@ -45,9 +46,10 @@ function RecipeLanesContent() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [recipeText, setRecipeText] = useState('');
   const [chatInput, setChatInput] = useState('');
-  const [graph, setGraph] = useState<RecipeGraph | null>(null);
-  const [ownerId, setOwnerId] = useState<string | null>(null);
-  const [ownerName, setOwnerName] = useState<string | null>(null);
+  const graph = useRecipeStore(s => s.graph);
+  const ownerId = useRecipeStore(s => s.ownerId);
+  const ownerName = useRecipeStore(s => s.ownerName);
+  const { mergeSnapshot, setGraph, reset: resetRecipeStore } = useRecipeStore.getState();
   
   useEffect(() => {
       console.log('[RecipeLanesPage] User:', user?.uid, 'Owner:', ownerId);
@@ -200,7 +202,6 @@ function RecipeLanesContent() {
           url.searchParams.delete('new');
           url.searchParams.set('id', res.id);
           window.history.replaceState({}, '', url.pathname + url.search);
-          if (user) setOwnerId(user.uid);
       }
       return res;
   };
@@ -240,7 +241,7 @@ function RecipeLanesContent() {
               const safeGraph = { 
                   ...freshGraph, 
                   nodes: freshGraph.nodes.map(n => {
-                      const { iconShortlist, shortlistIndex, ...rest } = n;
+                      const { iconShortlist: _sl, shortlistIndex: _si, ...rest } = n;
                       return rest;
                   })
               };
@@ -268,6 +269,7 @@ function RecipeLanesContent() {
       const id = searchParams.get('id');
       if (!id) return;
 
+      resetRecipeStore();
       debugLogAction('Setting up listener for recipe: ' + id);
       setStatus('loading');
       setWarningDismissed(false);
@@ -277,42 +279,11 @@ function RecipeLanesContent() {
           if (docSnapshot.exists()) {
               const data = docSnapshot.data();
               const currentGraph = data.graph as RecipeGraph;
-              
               if (data.visibility) currentGraph.visibility = data.visibility as any;
-
-              // Merge logic: preserve local layout state if dragging? 
-              // For now, simpler: Just update graph. 
-              // Ideally check timestamp or just merge updated icons.
-              setGraph((prevGraph) => {
-                  if (!prevGraph) return currentGraph;
-                  
-                  // Only update if content changed or icons populated
-                  // We specifically look for new iconUrls
-                  const newNodes = currentGraph.nodes.map(n => {
-                      const prevNode = prevGraph.nodes.find(p => p.id === n.id);
-                      if (prevNode) {
-                          const nUrl = getNodeIconUrl(n);
-                          const prevUrl = getNodeIconUrl(prevNode);
-                          if (nUrl && !prevUrl) {
-                              const updatedNode = { ...prevNode };
-                              if (n.iconShortlist) {
-                                  updatedNode.iconShortlist = n.iconShortlist;
-                                  updatedNode.shortlistIndex = n.shortlistIndex;
-                              }
-                              return updatedNode;
-                          }
-                      }
-                      return n;
-                  });
-                  
-                  // If we are just populating icons, we don't want to reset the whole graph 
-                  // and lose selection/scroll state if possible.
-                  // But ReactFlow handles props updates well.
-                  return { ...currentGraph, nodes: newNodes };
+              mergeSnapshot(currentGraph, {
+                  ownerId: data.ownerId || undefined,
+                  ownerName: data.ownerName || undefined,
               });
-
-              if (data.ownerId) setOwnerId(data.ownerId);
-              if (data.ownerName) setOwnerName(data.ownerName);
               setRecipeText(currentGraph.originalText || '');
               setRecipeTitle(currentGraph.title || '');
               setStatus('complete');
@@ -352,8 +323,7 @@ function RecipeLanesContent() {
   const handleNew = () => {
       setRecipeText('');
       setRecipeTitle('');
-      setGraph(null);
-      setOwnerId(null);
+      resetRecipeStore();
       setError(null);
       setStatus('idle');
       setWarningDismissed(false);
@@ -402,7 +372,6 @@ function RecipeLanesContent() {
           const url = new URL(window.location.href);
           url.searchParams.set('id', res.id);
           router.push(url.pathname + url.search);
-          if (user) setOwnerId(user.uid);
           setWarningDismissed(true);
           setStatus('complete');
           setRecipeTitle(newGraph.title!);
@@ -438,7 +407,6 @@ function RecipeLanesContent() {
                    const url = new URL(window.location.href);
                    url.searchParams.set('id', res.id);
                    router.push(url.pathname + url.search);
-                   setOwnerId(user.uid);
                    showNotification("Saved copy to your profile.");
                }
           }
@@ -495,8 +463,6 @@ const handleVisualize = async () => {
         url.searchParams.set('id', res.id);
         
         router.push(url.pathname + url.search);
-        
-        if (user) setOwnerId(user.uid); // is this needed??
 
         // The Snapshot Listener in useEffect will pick this up if we pushed URL?
         // Actually pushState doesn't trigger useEffect on searchParams unless we use router.push or Next.js handles it.

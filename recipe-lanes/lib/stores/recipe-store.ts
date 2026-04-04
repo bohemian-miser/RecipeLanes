@@ -90,6 +90,12 @@ interface RecipeActions {
      */
     cycleShortlist: (nodeId: string, length: number) => void;
 
+    /**
+     * Applies a local graph mutation (serves scaling, JSON edit, etc.).
+     * Marks the recipe dirty — use mergeSnapshot for Firestore data.
+     */
+    setGraph: (graph: RecipeGraph) => void;
+
     /** Clears all state — call when the user navigates away from a recipe. */
     reset: () => void;
 }
@@ -197,6 +203,8 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
     setStatus: (status) => set({ status }),
     setError: (error) => set({ error, status: error ? 'error' : get().status }),
     setDirty: (dirty) => set({ isDirty: dirty }),
+
+    setGraph: (graph) => set({ graph, isDirty: true }),
 
     cycleShortlist: (nodeId, length) => {
         const state = get();

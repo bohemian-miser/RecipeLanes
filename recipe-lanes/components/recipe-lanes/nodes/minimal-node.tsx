@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { memo, useEffect, useState } from 'react';
+import React, { memo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
@@ -29,7 +29,7 @@ import {
     getNodeIconUrlAt,
     isIconSearchMatchedAt,
 } from '@/lib/recipe-lanes/model-utils';
-import { useShortlistStore } from '@/lib/stores/shortlist-store';
+import { useRecipeStore } from '@/lib/stores/recipe-store';
 
 export const MinimalNode: React.FC<any> = ({
     data, selected, isConnectable, id
@@ -40,32 +40,25 @@ export const MinimalNode: React.FC<any> = ({
   const searchParams = useSearchParams();
   const recipeId = searchParams.get('id');
 
+  // Subscribe to this node in the recipe store.
+  // cycleShortlist writes shortlistIndex directly onto graph.nodes[i], so this
+  // selector re-renders only when this specific node changes.
+  const storeNode = useRecipeStore(s => s.graph?.nodes.find(n => n.id === id));
+  const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
+
+  // Use storeNode when available (it has up-to-date shortlistIndex after cycling).
+  // Fall back to data prop for nodes not yet in the store.
+  const node = storeNode ?? data;
   const iconTheme = getNodeTheme(data);
 
-  // ---------------------------------------------------------------------------
-  // Shortlist store: the current display index lives here, not in Firestore.
-  // The store is initialized from the node's server-side shortlistIndex on
-  // mount and whenever the shortlist contents change (e.g. after a forge).
-  // On save, react-flow-diagram.tsx overlays store indexes onto graph.nodes
-  // via useShortlistStore.getState().getIndexes().
-  // ---------------------------------------------------------------------------
-  const { cycle, initialize, getIndex } = useShortlistStore();
-  const shortlistKey = getNodeShortlistKey(data);
-
-  useEffect(() => {
-      initialize(id, data.shortlistIndex ?? 0);
-  // Re-initialize whenever the shortlist contents change (forge prepends a new
-  // shortlist and resets shortlistIndex to 0 on the server).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shortlistKey, id]);
-
-  const currentIndex = getIndex(id, data.shortlistIndex ?? 0);
-  const iconUrl = getNodeIconUrlAt(data, currentIndex);
-  const isSearchMatched = isIconSearchMatchedAt(data, currentIndex);
+  const shortlistKey = getNodeShortlistKey(node);
+  const currentIndex = (storeNode ?? data).shortlistIndex ?? 0;
+  const iconUrl = getNodeIconUrlAt(node, currentIndex);
+  const isSearchMatched = isIconSearchMatchedAt(node, currentIndex);
 
   // ---------------------------------------------------------------------------
   // Forge state: cleared when a forge result arrives via Firestore snapshot,
-  // which updates data.iconShortlist and therefore shortlistKey.
+  // which causes mergeSnapshot to reset shortlistIndex and update the store node.
   // ---------------------------------------------------------------------------
   const [prevShortlistKey, setPrevShortlistKey] = useState(shortlistKey);
   if (shortlistKey !== prevShortlistKey) {
@@ -96,9 +89,9 @@ export const MinimalNode: React.FC<any> = ({
 
   const handleReroll = (e: React.MouseEvent) => {
       e.stopPropagation();
-      const length = getNodeShortlistLength(data);
+      const length = getNodeShortlistLength(node);
       if (length === 0) return;
-      cycle(id, length);
+      cycleShortlist(id, length);
       // TODO: record impression fire-and-forget once a lightweight
       // recordImpressionAction (touching only ingredients_new, not the recipe
       // doc) is available. See docs/STATE_AND_PERSISTENCE.md.

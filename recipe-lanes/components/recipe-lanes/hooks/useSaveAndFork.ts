@@ -19,7 +19,6 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { RecipeGraph } from '../../../lib/recipe-lanes/types';
 import { saveRecipeAction } from '@/app/actions';
-import { useShortlistStore } from '@/lib/stores/shortlist-store';
 
 interface UseSaveAndForkParams {
     graph: RecipeGraph;
@@ -82,9 +81,8 @@ export function useSaveAndFork({
         const layouts = graph.layouts || {};
         layouts[mode as string] = currentNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
 
-        // Overlay shortlist indexes from the store so that cycling choices made
-        // since the last Firestore snapshot are included in the save.
-        const storeIndexes = useShortlistStore.getState().getIndexes();
+        // graph.nodes comes from recipe-store, which has up-to-date shortlistIndex
+        // values from cycleShortlist() — no separate overlay needed.
 
         // Filter out nodes that are no longer in the ReactFlow state (deleted)
         const nodesWithPos = graph.nodes
@@ -97,10 +95,7 @@ export function useSaveAndFork({
                     .filter(e => e.target === n.id)
                     .map(e => e.source);
 
-                // Prefer the store index (reflects cycling) over the snapshot value.
-                const shortlistIndex = storeIndexes[n.id] ?? n.shortlistIndex;
-
-                return { ...n, x: rfn.position.x, y: rfn.position.y, inputs, shortlistIndex };
+                return { ...n, x: rfn.position.x, y: rfn.position.y, inputs };
             });
 
         return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };

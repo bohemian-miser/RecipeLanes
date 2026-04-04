@@ -68,8 +68,8 @@ describe('Cloud Function Metadata', () => {
         let iconId: string | null = null;
         let iconVisualDescription: string | null = null;
         let attempts = 0;
-        const maxAttempts = 120;
-        const pollIntervalMs = 500;
+        const maxAttempts = 30;
+        const pollIntervalMs = 500
 
         while (attempts < maxAttempts) {
             const doc = await db.collection('recipes').doc(recipeId).get();
@@ -91,7 +91,8 @@ describe('Cloud Function Metadata', () => {
             await new Promise(r => setTimeout(r, pollIntervalMs));
             attempts++;
         }
-
+        // ~2s 
+        // console.log(`[DEBUG] Polling attempts: ${attempts}, Icon ID: ${iconId}, Visual Description: ${iconVisualDescription} found in ${(attempts * pollIntervalMs) / 1000}s.`);
         assert.ok(iconId, `Background worker did not update icons within ${(maxAttempts * pollIntervalMs) / 1000}s.`);
 
         // 4. Verify Storage Metadata — derive path the same way getIconPublicUrl() does.

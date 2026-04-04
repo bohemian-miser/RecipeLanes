@@ -24,7 +24,7 @@ import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/type
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined } from './utils';
 // import { calculateWilsonLCB } from './utils';
-import { applyIconToNode, buildShortlistEntry, clearNodeShortlist, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, prependToShortlist, toRecipeIcon, setNodeStatus } from './recipe-lanes/model-utils';
+import { applyIconToNode, buildShortlistEntry, clearNodeShortlist, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, prependToShortlist, toRecipeIcon, setNodeStatusByIngredient } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -235,6 +235,7 @@ export class FirebaseDataService implements DataService {
      */
     private nodeNeedsProcessing(node: any): boolean {
         if (!node.visualDescription) return false;
+        if (node.status === 'pending' || node.status === 'processing') return true;
         if (!node.iconShortlist || node.iconShortlist.length === 0) return true;
         return false;
     }
@@ -329,7 +330,7 @@ export class FirebaseDataService implements DataService {
 
             // 3. Mark Node as Pending in Recipe.
             const nodes = recipeData?.graph?.nodes || [];
-            const changed = setNodeStatus(recipeData?.graph, stdName, 'pending');
+            const changed = setNodeStatusByIngredient(recipeData?.graph, stdName, 'pending');
 
             if (changed) {
                 transaction.update(recipeRef, { "graph.nodes": nodes });
@@ -389,7 +390,7 @@ export class FirebaseDataService implements DataService {
             const nodes = data?.graph?.nodes || [];
             let changed = false;
 
-            changed = setNodeStatus(data?.graph, stdName, 'failed');
+            changed = setNodeStatusByIngredient(data?.graph, stdName, 'failed');
 
             if (changed) {
                 t.update(recipeRef, { "graph.nodes": nodes });
@@ -572,10 +573,12 @@ export class FirebaseDataService implements DataService {
             const nodes = graph.nodes || [];
             const stdName = standardizeIngredientName(String(ingredientName));
 
-            // Collect icons to reject and clear ALL nodes matching this ingredient
+            // Collect icons to reject and mark nodes pending so nodeNeedsProcessing
+            // queues generation while keeping the existing shortlist visible.
             nodes.forEach((n: any) => {
                 if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
                     iconsToReject.push(...getSeenIconIds(n));
+                    n.status = 'pending';
                 }
             });
 
@@ -1356,6 +1359,7 @@ export class MemoryDataService implements DataService {
                 const stdName = standardizeIngredientName(getNodeIngredientName(n));
                 if (hits.has(stdName)) {
                     const bestIcon = hits.get(stdName)!;
+                    // todo don't use this broken 
                     applyIconToNode(n, bestIcon);
                     const entry = buildShortlistEntry(bestIcon, 'generated');
                     n.iconShortlist = prependToShortlist(n.iconShortlist || [], entry);

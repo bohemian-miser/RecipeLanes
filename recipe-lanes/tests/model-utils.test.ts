@@ -5,7 +5,7 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { RecipeGraph, RecipeNode } from '../lib/recipe-lanes/types';
-import { getNodeStatus, setNodeStatus } from '../lib/recipe-lanes/model-utils';
+import { getNodeStatus, setNodeStatus, prependToShortlist, buildShortlistEntry, toRecipeIcon } from '../lib/recipe-lanes/model-utils';
 
 function makeNode(id: string, overrides: Partial<RecipeNode> = {}): RecipeNode {
     return {
@@ -38,13 +38,13 @@ describe('model-utils setNodeStatus/getNodeStatus', () => {
         assert.equal(getNodeStatus(g, 'a'), 'pending');
     });
 
-    it('does not overwrite when status is pending or processing', () => {
+    it('overwrites pending/processing status', () => {
         const n = makeNode('b', { status: 'pending' as any });
         const g = makeGraph([n]);
 
         const changed = setNodeStatus(g, 'b', 'failed');
-        assert.equal(changed, false);
-        assert.equal(getNodeStatus(g, 'b'), 'pending');
+        assert.equal(changed, true);
+        assert.equal(getNodeStatus(g, 'b'), 'failed');
     });
 
     it('returns false when setting to same status', () => {
@@ -54,5 +54,39 @@ describe('model-utils setNodeStatus/getNodeStatus', () => {
         const changed = setNodeStatus(g, 'c', 'failed');
         assert.equal(changed, false);
         assert.equal(getNodeStatus(g, 'c'), 'failed');
+    });
+});
+
+describe('prependToShortlist', () => {
+    function makeIcon(id: string) {
+        return toRecipeIcon({ id, visualDescription: `icon-${id}` } as any);
+    }
+
+    function makeEntry(id: string) {
+        return buildShortlistEntry(makeIcon(id), 'generated');
+    }
+
+    it('prepends to empty list', () => {
+        const e = makeEntry('a');
+        const res = prependToShortlist([], e);
+        assert.equal(res.length, 1);
+        assert.equal(res[0], e);
+    });
+
+    it('deduplicates existing id', () => {
+        const e1 = makeEntry('x');
+        const existing = [e1];
+        const eNew = buildShortlistEntry(makeIcon('x'), 'generated');
+        const res = prependToShortlist(existing, eNew);
+        assert.equal(res.length, 1);
+        assert.equal(res[0], eNew);
+    });
+
+    it('keeps other entries after prepending', () => {
+        const e1 = makeEntry('1');
+        const e2 = makeEntry('2');
+        const res = prependToShortlist([e1, e2], makeEntry('new'));
+        assert.equal(res.length, 3);
+        assert.equal(res[0].icon.id, 'new');
     });
 });

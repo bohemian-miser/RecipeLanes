@@ -235,11 +235,31 @@ export function setNodeStatus(graph: RecipeGraph | null, nodeId: string, status:
     const node = graph.nodes.find(n => n.id === nodeId);
     if (!node) return false;
     const cur = getNodeIconStatus(node);
-    // Do not overwrite an in-flight status
-    if (cur === 'pending' || cur === 'processing') return false;
     if (cur === status) return false;
     setNodeIconStatus(node, status);
     return true;
+}
+
+/**
+ * Sets the icon status on all nodes whose standardized ingredient name matches
+ * `stdName`. Returns true if any node was changed.
+ */
+export function setNodeStatusByIngredient(
+    graph: RecipeGraph | null,
+    stdName: string,
+    status: 'pending' | 'processing' | 'failed',
+): boolean {
+    if (!graph) return false;
+    let changed = false;
+    for (const node of graph.nodes) {
+        if (!node.visualDescription) continue;
+        if (standardizeIngredientName(getNodeIngredientName(node)) !== stdName) continue;
+        const cur = getNodeIconStatus(node);
+        if (cur === status) continue;
+        setNodeIconStatus(node, status);
+        changed = true;
+    }
+    return changed;
 }
 
 /**
@@ -247,16 +267,18 @@ export function setNodeStatus(graph: RecipeGraph | null, nodeId: string, status:
  * Strips legacy fields (path, url, fullPrompt, created_at, etc.) and Firestore
  * Timestamp instances that break Next.js client↔server serialization.
  */
+// it's now safe for all things. this kept out url but is'nt needed anymore.
 export function toRecipeIcon(icon: IconStats): IconStats {
-    return {
-        id: icon.id,
-        visualDescription: icon.visualDescription,
-        metadata: icon.metadata,
-        status: icon.status,
-        ...(icon.score !== undefined && { score: icon.score }),
-        ...(icon.impressions !== undefined && { impressions: icon.impressions }),
-        ...(icon.rejections !== undefined && { rejections: icon.rejections }),
-    };
+    return icon;
+    // {
+    //     id: icon.id,
+    //     visualDescription: icon.visualDescription,
+    //     metadata: icon.metadata,
+    //     status: icon.status,
+    //     ...(icon.score !== undefined && { score: icon.score }),
+    //     ...(icon.impressions !== undefined && { impressions: icon.impressions }),
+    //     ...(icon.rejections !== undefined && { rejections: icon.rejections }),
+    // };
 }
 
 export function applyIconToNode(node: RecipeNode, icon: IconStats) {

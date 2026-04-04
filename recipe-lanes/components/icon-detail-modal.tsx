@@ -75,9 +75,9 @@ export function IconDetailModal({ node, onClose }: IconDetailModalProps) {
               <h2 className="text-base font-bold text-yellow-500 uppercase tracking-tight leading-tight break-words">
                 {title}
               </h2>
-              {icon?.status && (
-                <span className={`mt-1 inline-block text-[10px] font-mono px-1.5 py-0.5 rounded ${STATUS_BADGE[icon.status] ?? 'bg-zinc-700 text-zinc-400'}`}>
-                  {icon.status}
+              {node?.status && (
+                <span className={`mt-1 inline-block text-[10px] font-mono px-1.5 py-0.5 rounded ${STATUS_BADGE[node.status] ?? 'bg-zinc-700 text-zinc-400'}`}>
+                  {node.status}
                 </span>
               )}
             </div>

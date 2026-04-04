@@ -24,6 +24,7 @@ import { getIconThumbUrl } from '@/lib/recipe-lanes/model-utils';
 interface IconOverviewModalProps {
   icon: IconStats;
   onClose: () => void;
+  matchScore?: number;
 }
 
 const SOURCE_BADGE: Record<SearchTerm['source'], { label: string; className: string }> = {
@@ -32,7 +33,7 @@ const SOURCE_BADGE: Record<SearchTerm['source'], { label: string; className: str
   llm_vision:   { label: 'llm',  className: 'bg-purple-900/60 text-purple-300 border border-purple-700' },
 };
 
-export function IconOverviewModal({ icon, onClose }: IconOverviewModalProps) {
+export function IconOverviewModal({ icon, onClose, matchScore }: IconOverviewModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
@@ -70,12 +71,13 @@ export function IconOverviewModal({ icon, onClose }: IconOverviewModalProps) {
 
         <div className="p-4 space-y-5">
           {/* Stats row */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {(
               [
                 { label: 'Impressions', value: icon.impressions },
                 { label: 'Rejections',  value: icon.rejections },
                 { label: 'Score',       value: icon.score !== undefined ? icon.score.toFixed(3) : undefined },
+                { label: 'Match',       value: matchScore !== undefined ? matchScore.toFixed(3) : undefined },
               ] as { label: string; value: string | number | undefined }[]
             ).map(({ label, value }) => (
               <div key={label} className="bg-zinc-800 border border-zinc-700 p-2 text-center">

@@ -24,7 +24,7 @@ import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/type
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined } from './utils';
 // import { calculateWilsonLCB } from './utils';
-import { applyIconToNode, buildShortlistEntry, clearNodeShortlist, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, prependToShortlist, toRecipeIcon, setNodeStatusByIngredient } from './recipe-lanes/model-utils';
+import { applyIconToNode, buildShortlistEntry, clearNodeShortlist, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, prependToShortlist, rankIconsByEmbedding, toRecipeIcon, setNodeStatusByIngredient } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -92,6 +92,8 @@ export interface DataService {
 
   searchIconsByEmbedding(queryVec: number[], limit: number): Promise<IconStats[]>;
   writeIconToIndex(iconId: string, ingredientName: string, embedding: number[]): Promise<void>;
+  /** Fetches stored embeddings from icon_index for the given icon IDs. */
+  getIconEmbeddings(iconIds: string[]): Promise<Map<string, number[]>>;
 }
 
 // --- Firebase Implementation ---
@@ -99,7 +101,7 @@ export class FirebaseDataService implements DataService {
   _db = db; // allows test patching
 
   async searchIconsByEmbedding(queryVec: number[], limit: number): Promise<IconStats[]> {
-    const snap = await this._db.collection('icon_index')
+    const snap = await this._db.collection(DB_COLLECTION_ICON_INDEX)
       .findNearest('embedding', FieldValue.vector(queryVec), { limit, distanceMeasure: 'COSINE' as const })
       .get();
     console.log(`[searchIconsByEmbedding] findNearest returned ${snap.docs.length} docs`);
@@ -131,6 +133,22 @@ export class FirebaseDataService implements DataService {
       created_at: FieldValue.serverTimestamp()
     });
     console.log(`[writeIconToIndex] wrote ${iconId} (${ingredientName}), dim=${embedding.length}`);
+  }
+
+  async getIconEmbeddings(iconIds: string[]): Promise<Map<string, number[]>> {
+    const map = new Map<string, number[]>();
+    if (iconIds.length === 0) return map;
+    const refs = iconIds.map(id => db.collection(DB_COLLECTION_ICON_INDEX).doc(id));
+    const docs = await db.getAll(...refs);
+    for (const doc of docs) {
+      if (!doc.exists) continue;
+      const raw = doc.data()?.embedding;
+      if (!raw) continue;
+      // Firestore Admin SDK returns VectorValue with toArray(); fall back for plain arrays.
+      const arr: number[] = typeof raw.toArray === 'function' ? raw.toArray() : raw;
+      if (Array.isArray(arr) && arr.length > 0) map.set(doc.id, arr);
+    }
+    return map;
   }
 
   async vetRecipe(recipeId: string, isVetted: boolean): Promise<void> {
@@ -417,8 +435,10 @@ export class FirebaseDataService implements DataService {
                 const vec = await embedFn(textsToEmbed);
                 const results = await this.searchIconsByEmbedding(vec, 12);
                 if (results.length > 0) {
-                    await this.assignShortlistToRecipe(recipeId, stdName, results.slice(0, 8));
-                    console.log(`[resolveFromIndex] "${stdName}" → ${results.length} candidates`);
+                    const embeddings = await this.getIconEmbeddings(results.map(r => r.id));
+                    const ranked = rankIconsByEmbedding(results, vec, embeddings);
+                    await this.assignShortlistToRecipe(recipeId, stdName, ranked.slice(0, 8));
+                    console.log(`[resolveFromIndex] "${stdName}" → ${results.length} candidates, ranked by matchScore`);
                 } else {
                     stillUnresolved.push(stdName);
                 }
@@ -431,12 +451,11 @@ export class FirebaseDataService implements DataService {
     }
 
     /**
-     * Writes the full results as its shortlist.
+     * Writes the pre-built shortlist entries (already ranked + scored) to matching nodes.
      */
     // lanes. good. only on create.
-    private async assignShortlistToRecipe(recipeId: string, stdName: string, results: IconStats[]): Promise<void> {
+    private async assignShortlistToRecipe(recipeId: string, stdName: string, entries: ShortlistEntry[]): Promise<void> {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
-        const shortlistEntries: ShortlistEntry[] = results.map(r => buildShortlistEntry(toRecipeIcon(r), 'search'));
         let changed = false;
         await db.runTransaction(async (t) => {
             const doc = await t.get(recipeRef);
@@ -445,7 +464,7 @@ export class FirebaseDataService implements DataService {
             // Update matching nodes with new shortlist.
             nodes.forEach((n: any) => {
                 if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
-                    n.iconShortlist = shortlistEntries;
+                    n.iconShortlist = entries;
                     n.shortlistIndex = 0;
                     changed = true;
                 }
@@ -453,8 +472,8 @@ export class FirebaseDataService implements DataService {
             if (changed) t.update(recipeRef, { 'graph.nodes': nodes });
         });
         // Record impression for the icon now shown at index 0.
-        if (changed && results[0]?.id) {
-            this.recordImpression(results[0].id, stdName).catch(console.error);
+        if (changed && entries[0]) {
+            this.recordImpression(getEntryIcon(entries[0]).id, stdName).catch(console.error);
         }
     }
 
@@ -585,6 +604,7 @@ export class FirebaseDataService implements DataService {
             t.update(recipeRef, { "graph.nodes": nodes });
         });
 
+        // TODO this is not working, i forged an icon and then searched for it in icon_overview and it didn't show up.
         if (iconsToReject.length > 0) {
             const stdName = standardizeIngredientName(ingredientName);
             iconsToReject.forEach(id => this.recordRejection(id, stdName).catch(console.error));
@@ -1780,6 +1800,10 @@ export class MemoryDataService implements DataService {
 
     async writeIconToIndex(_iconId: string, _ingredientName: string, _embedding: number[]): Promise<void> {
         // no-op in memory mode
+    }
+
+    async getIconEmbeddings(_iconIds: string[]): Promise<Map<string, number[]>> {
+        return new Map();
     }
 }
 

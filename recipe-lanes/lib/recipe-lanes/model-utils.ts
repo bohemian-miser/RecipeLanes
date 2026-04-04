@@ -344,8 +344,8 @@ export function advanceShortlistIndex(node: RecipeNode): number {
 // ---------------------------------------------------------------------------
 
 /** Wraps an IconStats + matchType into a ShortlistEntry. */
-export function buildShortlistEntry(icon: IconStats, matchType: 'generated' | 'search'): ShortlistEntry {
-    return { icon, matchType };
+export function buildShortlistEntry(icon: IconStats, matchType: 'generated' | 'search', matchScore?: number): ShortlistEntry {
+    return { icon, matchType, ...(matchScore !== undefined && { matchScore }) };
 }
 
 /**
@@ -365,6 +365,43 @@ export function getEntryIcon(entry: ShortlistEntry): IconStats {
 /** Extracts the matchType from a ShortlistEntry. */
 export function getEntryMatchType(entry: ShortlistEntry): 'generated' | 'search' {
     return entry.matchType;
+}
+
+/** Extracts the matchScore from a ShortlistEntry, or undefined when not set. */
+export function getEntryMatchScore(entry: ShortlistEntry): number | undefined {
+    return entry.matchScore;
+}
+
+/**
+ * Cosine similarity between two equal-length vectors. Returns 0 for zero-magnitude inputs.
+ */
+export function cosineSimilarity(a: number[], b: number[]): number {
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < a.length; i++) {
+        dot += a[i] * b[i];
+        na  += a[i] * a[i];
+        nb  += b[i] * b[i];
+    }
+    if (na === 0 || nb === 0) return 0;
+    return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
+
+/**
+ * Scores each icon by cosine similarity to `queryVec` using the provided embedding map,
+ * then returns a sorted (descending) array of ShortlistEntries with `matchScore` set.
+ * Icons missing from `embeddings` receive a score of 0 and sort last.
+ */
+export function rankIconsByEmbedding(
+    icons: IconStats[],
+    queryVec: number[],
+    embeddings: Map<string, number[]>,
+): ShortlistEntry[] {
+    const entries = icons.map(icon => {
+        const vec = embeddings.get(icon.id);
+        const matchScore = vec ? cosineSimilarity(queryVec, vec) : 0;
+        return buildShortlistEntry(icon, 'search', matchScore);
+    });
+    return entries.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
 }
 
 /**

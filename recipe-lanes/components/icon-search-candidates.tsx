@@ -22,11 +22,12 @@ import { getIconThumbUrl } from '@/lib/recipe-lanes/model-utils';
 interface IconSearchCandidatesProps {
   query: string;
   candidates: IconStats[];
+  matchScores?: Record<string, number>;
   isSearching: boolean;
-  onIconClick?: (candidate: IconStats) => void;
+  onIconClick?: (candidate: IconStats, matchScore?: number) => void;
 }
 
-export function IconSearchCandidates({ query, candidates, isSearching, onIconClick }: IconSearchCandidatesProps) {
+export function IconSearchCandidates({ query, candidates, matchScores, isSearching, onIconClick }: IconSearchCandidatesProps) {
   if (isSearching) {
     return (
       <div className="w-full border-4 border-zinc-700 bg-zinc-800 p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)]">
@@ -57,11 +58,13 @@ export function IconSearchCandidates({ query, candidates, isSearching, onIconCli
         {candidates.length} result{candidates.length !== 1 ? 's' : ''} for &apos;{query}&apos;
       </p>
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-        {candidates.map((candidate) => (
+        {candidates.map((candidate) => {
+          const score = matchScores?.[candidate.id];
+          return (
           <div
             key={candidate.id}
             className="flex flex-col items-center gap-2 p-2 border-2 border-zinc-700 bg-zinc-900 hover:border-yellow-500 transition-colors cursor-pointer"
-            onClick={() => onIconClick?.(candidate)}
+            onClick={() => onIconClick?.(candidate, score)}
           >
             {candidate.visualDescription ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -81,15 +84,20 @@ export function IconSearchCandidates({ query, candidates, isSearching, onIconCli
             <span className="text-yellow-500 font-mono text-[10px] leading-tight text-center break-all w-full truncate" title={candidate.id}>
               {candidate.id.length > 10 ? candidate.id.slice(0, 10) + '…' : candidate.id}
             </span>
-            {(candidate.impressions !== undefined || candidate.score !== undefined) && (
-              <span className="text-zinc-500 font-mono text-[9px]">
-                {candidate.impressions !== undefined && `${candidate.impressions}x`}
-                {candidate.score !== undefined && candidate.impressions !== undefined && ' · '}
-                {candidate.score !== undefined && `${candidate.score.toFixed(2)}`}
-              </span>
-            )}
+            <span className="text-zinc-500 font-mono text-[9px]">
+              {score !== undefined ? `match ${score.toFixed(3)}` : (
+                (candidate.impressions !== undefined || candidate.score !== undefined) ? (
+                  <>
+                    {candidate.impressions !== undefined && `${candidate.impressions}x`}
+                    {candidate.score !== undefined && candidate.impressions !== undefined && ' · '}
+                    {candidate.score !== undefined && `${candidate.score.toFixed(2)}`}
+                  </>
+                ) : null
+              )}
+            </span>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

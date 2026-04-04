@@ -46,10 +46,11 @@ export default function Home() {
   const [rerollingIds, setRerollingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<RecipeNode | null>(null);
-  const [selectedGalleryIcon, setSelectedGalleryIcon] = useState<IconStats | null>(null);
+  const [selectedGalleryIcon, setSelectedGalleryIcon] = useState<{ icon: IconStats; matchScore?: number } | null>(null);
 
   const [mode, setMode] = useState<'forge' | 'search'>('forge');
   const [searchCandidates, setSearchCandidates] = useState<IconStats[]>([]);
+  const [searchMatchScores, setSearchMatchScores] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
 
@@ -162,10 +163,12 @@ export default function Home() {
     try {
       const result = await searchIconCandidatesAction(query);
       setSearchCandidates(result.candidates);
+      setSearchMatchScores(result.matchScores);
       setSearchQuery(query);
     } catch (e: any) {
       console.error(e);
       setSearchCandidates([]);
+      setSearchMatchScores({});
       setSearchQuery(query);
     } finally {
       setIsSearching(false);
@@ -306,8 +309,9 @@ export default function Home() {
             <IconSearchCandidates
               query={searchQuery}
               candidates={searchCandidates}
+              matchScores={searchMatchScores}
               isSearching={isSearching}
-              onIconClick={(candidate) => setSelectedGalleryIcon(candidate)}
+              onIconClick={(candidate, matchScore) => setSelectedGalleryIcon({ icon: candidate, matchScore })}
             />
           )}
 
@@ -326,7 +330,7 @@ export default function Home() {
           )}
 
           <SharedGallery
-            onIconClick={(icon) => setSelectedGalleryIcon(icon)}
+            onIconClick={(icon) => setSelectedGalleryIcon({ icon })}
           />
         </div>
       </main>
@@ -334,7 +338,8 @@ export default function Home() {
       <IconDetailModal node={selectedNode} onClose={() => setSelectedNode(null)} />
       {selectedGalleryIcon && (
         <IconOverviewModal
-          icon={selectedGalleryIcon}
+          icon={selectedGalleryIcon.icon}
+          matchScore={selectedGalleryIcon.matchScore}
           onClose={() => setSelectedGalleryIcon(null)}
         />
       )}

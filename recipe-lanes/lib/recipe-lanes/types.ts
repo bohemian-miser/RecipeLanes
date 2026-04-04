@@ -56,6 +56,7 @@ export interface IconIndexEntry {
  * Doc ID = standardized ingredient name (same as visualDescription).
  * `icons` is a slice of IconStats (up to 50 most recent).
  */
+// this also has 'embedding' which is a 768 dimensional vector.
 export interface IngredientDoc {
     icons: IconStats[];
     created_at: any;
@@ -65,6 +66,8 @@ export interface IngredientDoc {
 export interface ShortlistEntry {
     icon: IconStats;
     matchType: 'generated' | 'search';
+    /** Cosine similarity [0, 1] between the search query embedding and this icon's embedding. */
+    matchScore?: number;
 }
 
 export interface RecipeNode {

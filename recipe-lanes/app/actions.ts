@@ -25,7 +25,7 @@ import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQuer
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import type { RecipeGraph, IconStats } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
-import { getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist } from '@/lib/recipe-lanes/model-utils';
+import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import {  DB_COLLECTION_RECIPES } from '@/lib/config';
 
@@ -484,18 +484,24 @@ export async function vetRecipeAction(recipeId: string, isVetted: boolean) {
 }
 
 
-export async function searchIconCandidatesAction(query: string): Promise<{ candidates: IconStats[], error?: string }> {
-  if (!query.trim()) return { candidates: [] };
+export async function searchIconCandidatesAction(query: string): Promise<{ candidates: IconStats[], matchScores: Record<string, number>, error?: string }> {
+  if (!query.trim()) return { candidates: [], matchScores: {} };
   try {
     console.log(`[searchIconCandidatesAction] query="${query}"`);
     const embedding = await getAIService().embedTexts([query]);
     console.log(`[searchIconCandidatesAction] embedding dim=${embedding.length}`);
     const candidates = await getDataService().searchIconsByEmbedding(embedding, 12);
     console.log(`[searchIconCandidatesAction] got ${candidates.length} candidates`);
-    return { candidates };
+    const embeddings = await getDataService().getIconEmbeddings(candidates.map(c => c.id));
+    const matchScores: Record<string, number> = {};
+    for (const c of candidates) {
+      const vec = embeddings.get(c.id);
+      if (vec) matchScores[c.id] = cosineSimilarity(embedding, vec);
+    }
+    return { candidates, matchScores };
   } catch (e: any) {
     console.error('[searchIconCandidatesAction] failed:', e);
-    return { candidates: [], error: e.message };
+    return { candidates: [], matchScores: {}, error: e.message };
   }
 }
 

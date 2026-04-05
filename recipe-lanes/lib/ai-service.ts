@@ -73,18 +73,24 @@ export class RealAIService implements AIService {
 
   async embedTexts(texts: string[]): Promise<number[]> {
     if (texts.length === 0) return [];
-    const results = await Promise.all(
-        texts.map(t => ai.embed({ embedder: embeddingModel, content: t }))
-    );
-    // Each ai.embed call returns Embedding[] — one entry per content item.
-    // We passed a single string so take index 0 and extract the number[].
-    const vecs = results.map(r => r[0].embedding);
-    const dim = vecs[0].length;
-    const avg = new Array(dim).fill(0) as number[];
-    for (const vec of vecs) {
-        for (let i = 0; i < dim; i++) avg[i] += vec[i] / vecs.length;
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            // Single batched API call via ai.embedMany — one HTTP request for all texts.
+            const batch = await ai.embedMany({ embedder: embeddingModel, content: texts });
+            const vecs = batch.map(e => e.embedding);
+            const dim = vecs[0].length;
+            const avg = new Array(dim).fill(0) as number[];
+            for (const vec of vecs) {
+                for (let i = 0; i < dim; i++) avg[i] += vec[i] / vecs.length;
+            }
+            return avg;
+        } catch (e) {
+            lastErr = e;
+            if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+        }
     }
-    return avg;
+    throw lastErr;
   }
 }
 

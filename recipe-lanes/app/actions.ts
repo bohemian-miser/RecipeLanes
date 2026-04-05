@@ -17,6 +17,7 @@
 
 'use server';
 
+import { after } from 'next/server';
 import { getAIService } from '@/lib/ai-service';
 import { getDataService } from '@/lib/data-service';
 import { getAuthService } from '@/lib/auth-service';
@@ -187,11 +188,17 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
         console.log('[createVisualRecipeAction] 💾 Saving initial recipe...');
         const id = await getDataService().saveRecipe(graph, targetId, userId, visibility);
 
-        // Await so the embedding search + queue setup completes before returning.
-        // Index hits populate icons immediately on page load; misses queue generation.
-        await getDataService().resolveRecipeIcons(id, getAIService().embedTexts.bind(getAIService()));
+        // Return the ID immediately — the client's snapshot listener will pick up
+        // icon shortlists as resolveRecipeIcons writes them to Firestore.
+        // Falls back to awaiting directly when outside a Next.js request context (tests).
+        const embedFn = getAIService().embedTexts.bind(getAIService());
+        try {
+            after(() => getDataService().resolveRecipeIcons(id, embedFn));
+        } catch {
+            await getDataService().resolveRecipeIcons(id, embedFn);
+        }
 
-        console.log(`[createVisualRecipeAction] ✅ Complete. ID: ${id}`);
+        console.log(`[createVisualRecipeAction] ✅ Saved. ID: ${id} (icons resolving in background)`);
         return {id};
 
     } catch (e: any) {

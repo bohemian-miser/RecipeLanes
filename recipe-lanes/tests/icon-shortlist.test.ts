@@ -7,6 +7,13 @@ import {
     nextShortlistIcon,
     advanceShortlistIndex,
     buildShortlistEntry,
+    getSeenEntries,
+    getPendingImpressionIds,
+    getPendingRejectionIds,
+    markSeenEntriesImpressed,
+    markSeenEntriesRejected,
+    getEntryHasImpressed,
+    getEntryHasRejected,
 } from '../lib/recipe-lanes/model-utils';
 import type { RecipeNode, IconStats, ShortlistEntry } from '../lib/recipe-lanes/types';
 
@@ -267,5 +274,192 @@ describe('advanceShortlistIndex', () => {
             assert.strictEqual(advanceShortlistIndex(node), i + 1,
                 `expected ${i + 1} when shortlistIndex is ${i}`);
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// getSeenEntries — returns entries 0..shortlistIndex, or all when shortlistCycled
+// ---------------------------------------------------------------------------
+
+describe('getSeenEntries', () => {
+    it('returns empty array when iconShortlist is absent', () => {
+        const node: RecipeNode = { ...baseNode() };
+        assert.deepStrictEqual(getSeenEntries(node), []);
+    });
+
+    it('returns only entry[0] when shortlistIndex=0 and not cycled', () => {
+        const entries = [makeEntry('a', 'search'), makeEntry('b', 'search'), makeEntry('c', 'search')];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 0 };
+        const seen = getSeenEntries(node);
+        assert.strictEqual(seen.length, 1);
+        assert.strictEqual(seen[0].icon.id, 'a');
+    });
+
+    it('returns entries 0..N when shortlistIndex=N', () => {
+        const entries = [makeEntry('a', 'search'), makeEntry('b', 'search'), makeEntry('c', 'search')];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 2 };
+        const seen = getSeenEntries(node);
+        assert.strictEqual(seen.length, 3);
+        assert.deepStrictEqual(seen.map(e => e.icon.id), ['a', 'b', 'c']);
+    });
+
+    it('returns all entries when shortlistCycled=true regardless of shortlistIndex', () => {
+        const entries = [makeEntry('a', 'search'), makeEntry('b', 'search'), makeEntry('c', 'search')];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 1, shortlistCycled: true };
+        const seen = getSeenEntries(node);
+        assert.strictEqual(seen.length, 3);
+    });
+
+    it('defaults shortlistIndex to 0 when absent', () => {
+        const entries = [makeEntry('x', 'generated'), makeEntry('y', 'generated')];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries };
+        const seen = getSeenEntries(node);
+        assert.strictEqual(seen.length, 1);
+        assert.strictEqual(seen[0].icon.id, 'x');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// getPendingImpressionIds / getPendingRejectionIds
+// ---------------------------------------------------------------------------
+
+describe('getPendingImpressionIds', () => {
+    it('returns all seen IDs when none are impressed', () => {
+        const entries = [makeEntry('a', 'search'), makeEntry('b', 'search'), makeEntry('c', 'search')];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 1 };
+        assert.deepStrictEqual(getPendingImpressionIds(node), ['a', 'b']);
+    });
+
+    it('skips entries that already have hasImpressed=true', () => {
+        const entries: ShortlistEntry[] = [
+            buildShortlistEntry(makeIcon('a'), 'search', undefined),
+            { ...buildShortlistEntry(makeIcon('b'), 'search'), hasImpressed: true },
+            buildShortlistEntry(makeIcon('c'), 'search', undefined),
+        ];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 2 };
+        const ids = getPendingImpressionIds(node);
+        assert.deepStrictEqual(ids, ['a', 'c']);
+    });
+
+    it('returns empty when all seen entries are already impressed', () => {
+        const entries: ShortlistEntry[] = [
+            { ...buildShortlistEntry(makeIcon('a'), 'search'), hasImpressed: true },
+            { ...buildShortlistEntry(makeIcon('b'), 'search'), hasImpressed: true },
+        ];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 1 };
+        assert.deepStrictEqual(getPendingImpressionIds(node), []);
+    });
+
+    it('does not include unseen entries even if not impressed', () => {
+        const entries = [makeEntry('a', 'search'), makeEntry('b', 'search'), makeEntry('c', 'search')];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 0 };
+        assert.deepStrictEqual(getPendingImpressionIds(node), ['a']);
+    });
+});
+
+describe('getPendingRejectionIds', () => {
+    it('returns all seen IDs when none are rejected', () => {
+        const entries = [makeEntry('a', 'search'), makeEntry('b', 'search')];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 1 };
+        assert.deepStrictEqual(getPendingRejectionIds(node), ['a', 'b']);
+    });
+
+    it('skips entries that already have hasRejected=true', () => {
+        const entries: ShortlistEntry[] = [
+            { ...buildShortlistEntry(makeIcon('x'), 'search'), hasRejected: true },
+            buildShortlistEntry(makeIcon('y'), 'search'),
+        ];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 1 };
+        assert.deepStrictEqual(getPendingRejectionIds(node), ['y']);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// markSeenEntriesImpressed / markSeenEntriesRejected
+// ---------------------------------------------------------------------------
+
+describe('markSeenEntriesImpressed', () => {
+    it('sets hasImpressed=true on all seen entries', () => {
+        const entries = [makeEntry('a', 'search'), makeEntry('b', 'search'), makeEntry('c', 'search')];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 1 };
+        const updated = markSeenEntriesImpressed(node)!;
+        assert.strictEqual(getEntryHasImpressed(updated[0]), true);
+        assert.strictEqual(getEntryHasImpressed(updated[1]), true);
+        assert.strictEqual(getEntryHasImpressed(updated[2]), false, 'entry[2] is unseen, should not be marked');
+    });
+
+    it('does not re-mark already impressed entries (preserves existing flag)', () => {
+        const entries: ShortlistEntry[] = [
+            { ...buildShortlistEntry(makeIcon('a'), 'search'), hasImpressed: true },
+            buildShortlistEntry(makeIcon('b'), 'search'),
+        ];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 1 };
+        const updated = markSeenEntriesImpressed(node)!;
+        assert.strictEqual(getEntryHasImpressed(updated[0]), true);
+        assert.strictEqual(getEntryHasImpressed(updated[1]), true);
+    });
+
+    it('does not mutate the original node shortlist', () => {
+        const entries = [makeEntry('a', 'search')];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 0 };
+        markSeenEntriesImpressed(node);
+        assert.strictEqual(getEntryHasImpressed(entries[0]), false, 'original entry should be unchanged');
+    });
+
+    it('returns empty array when iconShortlist is absent', () => {
+        const node: RecipeNode = { ...baseNode() };
+        assert.deepStrictEqual(markSeenEntriesImpressed(node)!, []);
+    });
+});
+
+describe('markSeenEntriesRejected', () => {
+    it('sets hasRejected=true on all seen entries', () => {
+        const entries = [makeEntry('a', 'search'), makeEntry('b', 'search'), makeEntry('c', 'search')];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 1 };
+        markSeenEntriesRejected(node);
+        const updated = node.iconShortlist!;
+        assert.strictEqual(getEntryHasRejected(updated[0]), true);
+        assert.strictEqual(getEntryHasRejected(updated[1]), true);
+        assert.strictEqual(getEntryHasRejected(updated[2]), false, 'entry[2] is unseen');
+    });
+
+    // it('does not mutate the original node shortlist', () => {
+    //     const entries = [makeEntry('x', 'generated')];
+    //     const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 0 };
+    //     markSeenEntriesRejected(node);
+    //     assert.strictEqual(getEntryHasRejected(entries[0]), false, 'original entry should be unchanged');
+    // });
+
+    it('skips already-rejected entries without changing them', () => {
+        const entries: ShortlistEntry[] = [
+            { ...buildShortlistEntry(makeIcon('a'), 'search'), hasRejected: true },
+            buildShortlistEntry(makeIcon('b'), 'search'),
+        ];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 1 };
+        markSeenEntriesRejected(node);
+        const updated = node.iconShortlist!;
+        assert.strictEqual(getEntryHasRejected(updated[0]), true);
+        assert.strictEqual(getEntryHasRejected(updated[1]), true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Idempotency: double-forge should not double-count pending IDs
+// ---------------------------------------------------------------------------
+
+describe('hasImpressed / hasRejected idempotency', () => {
+    it('getPendingImpressionIds returns empty after markSeenEntriesImpressed', () => {
+        const entries = [makeEntry('a', 'search'), makeEntry('b', 'search')];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 1 };markSeenEntriesRejected(node);
+        const updated = node.iconShortlist!;
+        const markedNode: RecipeNode = { ...node, iconShortlist: updated };
+        assert.deepStrictEqual(getPendingImpressionIds(markedNode), []);
+    });
+
+    it('getPendingRejectionIds returns empty after markSeenEntriesRejected', () => {
+        const entries = [makeEntry('x', 'generated'), makeEntry('y', 'generated')];
+        const node: RecipeNode = { ...baseNode(), iconShortlist: entries, shortlistIndex: 1 };
+        const markedNode: RecipeNode = { ...node, iconShortlist: markSeenEntriesRejected(node) };
+        assert.deepStrictEqual(getPendingRejectionIds(markedNode), []);
     });
 });

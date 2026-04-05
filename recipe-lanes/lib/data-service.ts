@@ -16,6 +16,7 @@
  */
 
 import { db, storage, isFirebaseEnabled } from './firebase-admin';
+import { setIngredientStatuses } from './data-helpers';
 import { memoryStore, IconData, IngredientData } from './store';
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
@@ -24,7 +25,7 @@ import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/type
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined } from './utils';
 // import { calculateWilsonLCB } from './utils';
-import { applyIconToNode, buildShortlistEntry, clearNodeShortlist, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, prependToShortlist, rankIconsByEmbedding, toRecipeIcon, setNodeStatusByIngredient } from './recipe-lanes/model-utils';
+import { applyIconToNode, buildShortlistEntry, clearNodeShortlist, computeShortlistDelta, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getPendingImpressionIds, getPendingRejectionIds, getPendingImpressionTargets, getPendingRejectionTargets, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, markEntryImpressedAtIndex, markSeenEntriesImpressed, markSeenEntriesRejected, mutateNodesByIngredient, prependToShortlist, rankIconsByEmbedding, toRecipeIcon, setNodeStatusByIngredient } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -61,6 +62,7 @@ export interface DataService {
   getPublicRecipes(limit: number): Promise<any[]>;
 
   recordRejection(iconId: string, ingredientId: string): Promise<void>;
+  decrementRejection(iconId: string, ingredientId: string): Promise<void>;
   recordImpression(iconId: string, ingredientId: string): Promise<void>;
 
   deleteIcon(iconId: string, ingredientName?: string): Promise<void>;
@@ -205,17 +207,10 @@ export class FirebaseDataService implements DataService {
       let recipeChanged = false;
 
       const generatedEntry: ShortlistEntry = buildShortlistEntry(icon, 'generated');
-      nodes.forEach((n: any) => {
-          if (n.visualDescription) {
-              const nName = standardizeIngredientName(getNodeIngredientName(n));
-              if (nName === stdName) {
-                  // Prepend generated icon to shortlist (no cap)
-                  const existingShortlist: ShortlistEntry[] = n.iconShortlist || [];
-                  n.iconShortlist = prependToShortlist(existingShortlist, generatedEntry);
-                  n.shortlistIndex = 0;
-                  recipeChanged = true;
-              }
-          }
+      recipeChanged = mutateNodesByIngredient(nodes, stdName, (n) => {
+          n.iconShortlist = prependToShortlist(n.iconShortlist || [], generatedEntry);
+          n.shortlistIndex = 0;
+          delete n.status;
       });
 
       return { recipeRef, nodes, recipeChanged };
@@ -427,27 +422,32 @@ export class FirebaseDataService implements DataService {
         hydeQueriesMap: Map<string, string[]>,
         embedFn: (texts: string[]) => Promise<number[]>
     ): Promise<string[]> {
-        const stillUnresolved: string[] = [];
-        for (const stdName of unresolvedNames) {
-            try {
-                const queries = hydeQueriesMap.get(stdName);
-                const textsToEmbed = queries && queries.length > 0 ? queries : [stdName];
-                const vec = await embedFn(textsToEmbed);
-                const results = await this.searchIconsByEmbedding(vec, 12);
-                if (results.length > 0) {
-                    const embeddings = await this.getIconEmbeddings(results.map(r => r.id));
-                    const ranked = rankIconsByEmbedding(results, vec, embeddings);
-                    await this.assignShortlistToRecipe(recipeId, stdName, ranked.slice(0, 8));
-                    console.log(`[resolveFromIndex] "${stdName}" → ${results.length} candidates, ranked by matchScore`);
-                } else {
-                    stillUnresolved.push(stdName);
+        const CONCURRENCY = 2;
+        const settled: (string | null)[] = [];
+        for (let i = 0; i < unresolvedNames.length; i += CONCURRENCY) {
+            const batch = unresolvedNames.slice(i, i + CONCURRENCY);
+            const batchResults = await Promise.all(batch.map(async (stdName) => {
+                try {
+                    const queries = hydeQueriesMap.get(stdName);
+                    const textsToEmbed = queries && queries.length > 0 ? queries : [stdName];
+                    const vec = await embedFn(textsToEmbed);
+                    const searchResults = await this.searchIconsByEmbedding(vec, 12);
+                    if (searchResults.length > 0) {
+                        const embeddings = await this.getIconEmbeddings(searchResults.map(r => r.id));
+                        const ranked = rankIconsByEmbedding(searchResults, vec, embeddings);
+                        await this.assignShortlistToRecipe(recipeId, stdName, ranked.slice(0, 8));
+                        console.log(`[resolveFromIndex] "${stdName}" → ${searchResults.length} candidates, ranked by matchScore`);
+                        return null;
+                    }
+                    return stdName;
+                } catch (e) {
+                    console.warn(`[resolveFromIndex] search failed for "${stdName}":`, e);
+                    return stdName;
                 }
-            } catch (e) {
-                console.warn(`[resolveFromIndex] search failed for "${stdName}":`, e);
-                stillUnresolved.push(stdName);
-            }
+            }));
+            settled.push(...batchResults);
         }
-        return stillUnresolved;
+        return settled.filter((n): n is string => n !== null);
     }
 
     /**
@@ -456,24 +456,25 @@ export class FirebaseDataService implements DataService {
     // lanes. good. only on create.
     private async assignShortlistToRecipe(recipeId: string, stdName: string, entries: ShortlistEntry[]): Promise<void> {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+        // Mark entry[0] as impressed — impression is recorded below after the write.
+        const markedEntries = markEntryImpressedAtIndex(entries, 0);
         let changed = false;
         await db.runTransaction(async (t) => {
             const doc = await t.get(recipeRef);
             if (!doc.exists) return;
             const nodes: any[] = doc.data()?.graph?.nodes || [];
-            // Update matching nodes with new shortlist.
-            nodes.forEach((n: any) => {
-                if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
-                    n.iconShortlist = entries;
-                    n.shortlistIndex = 0;
-                    changed = true;
-                }
+            changed = mutateNodesByIngredient(nodes, stdName, (n) => {
+                n.iconShortlist = markedEntries;
+                n.shortlistIndex = 0;
+                delete n.status;
             });
             if (changed) t.update(recipeRef, { 'graph.nodes': nodes });
         });
         // Record impression for the icon now shown at index 0.
         if (changed && entries[0]) {
-            this.recordImpression(getEntryIcon(entries[0]).id, stdName).catch(console.error);
+            const icon0 = getEntryIcon(entries[0]);
+            const ingId = icon0.visualDescription ? standardizeIngredientName(icon0.visualDescription) : stdName;
+            await this.recordImpression(icon0.id, ingId).catch(console.error);
         }
     }
 
@@ -511,6 +512,9 @@ export class FirebaseDataService implements DataService {
 
         // Collect unresolved names (all nodes without icons go directly to index search + generation)
         const unresolvedNames = Array.from(hydeQueriesMap.keys());
+
+        // Mark all unresolved nodes as pending so the UI blocks forge/reroll immediately.
+        await setIngredientStatuses(recipeId, unresolvedNames, 'pending');
 
         // 2. Try to resolve from index via embedding search (threshold=0: any result satisfies).
         //    Returns names that got zero candidates — these still need generation.
@@ -573,7 +577,9 @@ export class FirebaseDataService implements DataService {
   async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, embedFn?: (texts: string[]) => Promise<number[]>): Promise<{ success: boolean, error?: string }> {
       try {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
-        const iconsToReject: string[] = [];
+        const stdName = standardizeIngredientName(String(ingredientName));
+        const iconsToImpres: { id: string; ingredientId: string }[] = [];
+        const iconsToReject: { id: string; ingredientId: string }[] = [];
 
         await db.runTransaction(async (t) => {
             const doc = await t.get(recipeRef);
@@ -588,27 +594,26 @@ export class FirebaseDataService implements DataService {
                 throw new Error("Unauthorized: Save a copy to reroll icons in this recipe.");
             }
 
-            const graph = data.graph;
-            const nodes = graph.nodes || [];
-            const stdName = standardizeIngredientName(String(ingredientName));
-
-            // Collect icons to reject and mark nodes pending so nodeNeedsProcessing
-            // queues generation while keeping the existing shortlist visible.
-            nodes.forEach((n: any) => {
-                if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
-                    iconsToReject.push(...getSeenIconIds(n));
-                    n.status = 'pending';
-                }
+            const nodes = data.graph?.nodes || [];
+            mutateNodesByIngredient(nodes, stdName, (n) => {
+                // this is confusing.
+                iconsToImpres.push(...getPendingImpressionTargets(n));
+                iconsToReject.push(...getPendingRejectionTargets(n));
+                markSeenEntriesImpressed(n);
+                markSeenEntriesRejected(n);
+                n.status = 'pending';
             });
 
             t.update(recipeRef, { "graph.nodes": nodes });
         });
 
-        // TODO this is not working, i forged an icon and then searched for it in icon_overview and it didn't show up.
-        if (iconsToReject.length > 0) {
-            const stdName = standardizeIngredientName(ingredientName);
-            iconsToReject.forEach(id => this.recordRejection(id, stdName).catch(console.error));
-        }
+        console.log(`[rejectRecipeIcon] stdName=${stdName} toImpres=${JSON.stringify(iconsToImpres)} toReject=${JSON.stringify(iconsToReject)}`);
+        const settled = await Promise.allSettled([
+            // this is confusing.
+            ...iconsToImpres.map(({ id, ingredientId }) => this.recordImpression(id, ingredientId)),
+            ...iconsToReject.map(({ id, ingredientId }) => this.recordRejection(id, ingredientId)),
+        ]);
+        settled.forEach((r, i) => { if (r.status === 'rejected') console.warn(`[rejectRecipeIcon] task[${i}] failed:`, r.reason); });
 
         await this.resolveRecipeIcons(recipeId, embedFn);
         return { success: true };
@@ -782,13 +787,35 @@ export class FirebaseDataService implements DataService {
 
       if (existingId) {
           const existingDoc = await db.collection(DB_COLLECTION_RECIPES).doc(existingId).get();
+          let oldNodesById: Map<string, any> = new Map();
           if (existingDoc.exists) {
               const existingData = existingDoc.data();
               // TODO: Consider just saving under a new ID if not owner?
               if (existingData?.ownerId && existingData.ownerId !== userId) {
                   throw new Error("You are not the owner of this recipe.");
               }
+              for (const n of existingData?.graph?.nodes || []) {
+                  oldNodesById.set(n.id, n);
+              }
           }
+          // Compute impression/rejection delta vs previously-saved Firestore state.
+          // The backend is authoritative for what icons exist; only shortlistIndex/
+          // shortlistCycled are trusted from the client.
+          const tasks: Promise<void>[] = [];
+          (graph.nodes || []).forEach((n: any) => {
+              if (!n.iconShortlist || !n.visualDescription) return;
+              const oldNode = oldNodesById.get(n.id);
+              const delta = computeShortlistDelta(oldNode, n);
+              const hasDelta = delta.toImpres.length || delta.toReject.length || delta.toUnreject.length;
+              console.log(`[saveRecipe] node=${n.id} ingredient="${n.visualDescription}" idx=${n.shortlistIndex} oldIdx=${oldNode?.shortlistIndex ?? 'none'} toImpres=${delta.toImpres.map(t=>t.id)} toReject=${delta.toReject.map(t=>t.id)} toUnreject=${delta.toUnreject.map(t=>t.id)}`);
+              if (hasDelta) {
+                  n.iconShortlist = delta.updatedShortlist;
+                  delta.toImpres.forEach(({ id, ingredientId }) => tasks.push(this.recordImpression(id, ingredientId)));
+                  delta.toReject.forEach(({ id, ingredientId }) => tasks.push(this.recordRejection(id, ingredientId)));
+                  delta.toUnreject.forEach(({ id, ingredientId }) => tasks.push(this.decrementRejection(id, ingredientId)));
+              }
+          });
+          await Promise.allSettled(tasks);
           // Maybe allow a non-merging option?
           await db.collection(DB_COLLECTION_RECIPES).doc(existingId).set(removeUndefined(data), { merge: true });
           return existingId;
@@ -1088,13 +1115,33 @@ export class FirebaseDataService implements DataService {
       const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
       await db.runTransaction(async (t) => {
           const doc = await t.get(docRef);
+          if (!doc.exists) {
+              console.warn(`[recordRejection] ingredients_new/${ingredientId} not found for icon ${iconId}`);
+              return;
+          }
+          const icons = doc.data()?.icons || [];
+          const index = icons.findIndex((i: any) => i.id === iconId);
+          if (index === -1) {
+              console.warn(`[recordRejection] icon ${iconId} not found in ingredients_new/${ingredientId} (${icons.length} icons: ${icons.map((i:any)=>i.id).join(',')})`);
+              return;
+          }
+          icons[index].rejections = (icons[index].rejections || 0) + 1;
+          t.update(docRef, { icons });
+          console.log(`[recordRejection] ✅ icon ${iconId} in ${ingredientId} → ${icons[index].rejections}`);
+      });
+  }
+
+  async decrementRejection(iconId: string, ingredientId: string): Promise<void> {
+      const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
+      await db.runTransaction(async (t) => {
+          const doc = await t.get(docRef);
           if (!doc.exists) return;
           const icons = doc.data()?.icons || [];
           const index = icons.findIndex((i: any) => i.id === iconId);
-          if (index !== -1) {
-              icons[index].rejections = (icons[index].rejections || 0) + 1;
-              t.update(docRef, { icons });
-          }
+          if (index === -1) return;
+          icons[index].rejections = Math.max(0, (icons[index].rejections || 0) - 1);
+          t.update(docRef, { icons });
+          console.log(`[decrementRejection] ✅ icon ${iconId} in ${ingredientId} → ${icons[index].rejections}`);
       });
   }
 
@@ -1419,21 +1466,25 @@ export class MemoryDataService implements DataService {
         }
 
         const stdName = standardizeIngredientName(ingredientName);
-        const iconsToReject: string[] = [];
+        const iconsToImpres: { id: string; ingredientId: string }[] = [];
+        const iconsToReject: { id: string; ingredientId: string }[] = [];
 
-        // Clear all nodes matching ingredient, collecting icons to reject
-        recipe.graph.nodes.forEach(n => {
-            if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
-                iconsToReject.push(...getSeenIconIds(n));
-            }
+        mutateNodesByIngredient(recipe.graph.nodes, stdName, (n) => {
+            iconsToImpres.push(...getPendingImpressionTargets(n));
+            iconsToReject.push(...getPendingRejectionTargets(n));
+            markSeenEntriesRejected(n);
+            n.status = 'pending';
         });
 
-        iconsToReject.forEach(id => this.recordRejection(id, stdName).catch(console.error));
+        await Promise.allSettled([
+            ...iconsToImpres.map(({ id, ingredientId }) => this.recordImpression(id, ingredientId)),
+            ...iconsToReject.map(({ id, ingredientId }) => this.recordRejection(id, ingredientId)),
+        ]);
 
         await this.resolveRecipeIcons(recipeId);
         return { success: true };
     }
-    
+
     // async recordImpression(ingredientId: string, iconId: string): Promise<void> {
     //     const icons = memoryStore.getIconsForIngredient(ingredientId);
     //     const icon = icons.find(i => i.id === iconId);
@@ -1713,6 +1764,13 @@ export class MemoryDataService implements DataService {
         }
     }
 
+    async decrementRejection(iconId: string, _ingredientId: string): Promise<void> {
+        const icons = memoryStore.getAllIcons().filter(i => i.id === iconId);
+        for (const icon of icons) {
+            memoryStore.updateIcon(icon.id, { rejections: Math.max(0, (icon.rejections || 0) - 1) });
+        }
+    }
+
     async deleteIcon(iconId: string, ingredientName?: string) {
         memoryStore.deleteIcon(iconId);
     }
@@ -1727,13 +1785,10 @@ export class MemoryDataService implements DataService {
         const nodes = recipe.graph.nodes.map(n => ({ ...n }));
         let changed = false;
         
-        nodes.forEach(n => {
-            if (n.visualDescription && standardizeIngredientName(getNodeIngredientName(n)) === stdName) {
-                const memEntry2 = buildShortlistEntry(icon, 'generated');
-                n.iconShortlist = prependToShortlist((n.iconShortlist as any) || [], memEntry2);
-                n.shortlistIndex = 0;
-                changed = true;
-            }
+        changed = mutateNodesByIngredient(nodes, stdName, (n) => {
+            n.iconShortlist = prependToShortlist((n.iconShortlist as any) || [], buildShortlistEntry(icon, 'generated'));
+            n.shortlistIndex = 0;
+            delete n.status;
         });
 
         return { recipeId, nodes, changed, icon, ingredientName };

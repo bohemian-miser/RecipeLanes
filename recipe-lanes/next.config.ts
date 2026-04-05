@@ -20,6 +20,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   distDir: process.env.DIST_DIR || '.next',
   productionBrowserSourceMaps: true,
+  turbopack: {
+    root: __dirname,
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: '5mb',

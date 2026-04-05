@@ -238,10 +238,7 @@ function RecipeLanesContent() {
           if (freshGraph) {
               const safeGraph = { 
                   ...freshGraph, 
-                  nodes: freshGraph.nodes.map(n => {
-                      const { iconShortlist: _sl, shortlistIndex: _si, ...rest } = n;
-                      return rest;
-                  })
+                  nodes: freshGraph.nodes
               };
               setJsonText(JSON.stringify(safeGraph, null, 2));
           }

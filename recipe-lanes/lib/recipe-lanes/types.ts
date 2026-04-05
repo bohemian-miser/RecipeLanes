@@ -68,6 +68,10 @@ export interface ShortlistEntry {
     matchType: 'generated' | 'search';
     /** Cosine similarity [0, 1] between the search query embedding and this icon's embedding. */
     matchScore?: number;
+    /** True once an impression has been recorded for this entry in the backend. */
+    hasImpressed?: boolean;
+    /** True once a rejection has been recorded for this entry in the backend. */
+    hasRejected?: boolean;
 }
 
 export interface RecipeNode {

@@ -68,16 +68,274 @@ export function clearNodeShortlist(node: RecipeNode): void {
 }
 
 /**
- * Returns the IDs of every icon the user has seen in the current cycle:
+ * Returns all ShortlistEntries the user has seen in the current cycle:
  * - If shortlistCycled is true: all entries in the shortlist
  * - Otherwise: entries 0 through shortlistIndex inclusive
  */
-export function getSeenIconIds(node: RecipeNode): string[] {
+export function getSeenEntries(node: RecipeNode): ShortlistEntry[] {
     const shortlist = node.iconShortlist;
     if (!shortlist || shortlist.length === 0) return [];
     const upTo = node.shortlistCycled ? shortlist.length : (node.shortlistIndex ?? 0) + 1;
-    return shortlist.slice(0, upTo).map(e => getEntryIcon(e).id);
+    return shortlist.slice(0, upTo);
 }
+
+/**
+ * Returns the IDs of every icon the user has seen in the current cycle.
+ */
+export function getSeenIconIds(node: RecipeNode): string[] {
+    return getSeenEntries(node).map(e => getEntryIcon(e).id);
+}
+
+/**
+ * Returns icon IDs for seen entries that have not yet had an impression recorded.
+ */
+// this might be not needed.
+export function getPendingImpressionIds(node: RecipeNode): string[] {
+    return getSeenEntries(node)
+        .filter(e => !getEntryHasImpressed(e))
+        .map(e => getEntryIcon(e).id);
+}
+
+/**
+ * Returns icon IDs for seen entries that have not yet had a rejection recorded.
+ */
+// this might be not needed.
+export function getPendingRejectionIds(node: RecipeNode): string[] {
+    return getSeenEntries(node)
+        .filter(e => !getEntryHasRejected(e))
+        .map(e => getEntryIcon(e).id);
+}
+
+/**
+ * Like getPendingImpressionIds but returns {id, ingredientId} pairs.
+ * ingredientId is standardized from the icon's own visualDescription so that
+ * search icons (which may belong to a different ingredient than the node) are
+ * looked up in the correct `ingredients_new` document.
+ */
+export function getPendingImpressionTargets(node: RecipeNode): { id: string; ingredientId: string }[] {
+    const fallback = standardizeIngredientName(getNodeIngredientName(node));
+    return getSeenEntries(node)
+        .filter(e => !getEntryHasImpressed(e))
+        .map(e => {
+            const icon = getEntryIcon(e);
+            return { id: icon.id, ingredientId: icon.visualDescription ? standardizeIngredientName(icon.visualDescription) : fallback };
+        });
+}
+
+/**
+ * Like getPendingRejectionIds but returns {id, ingredientId} pairs.
+ * ingredientId is standardized from the icon's own visualDescription so that
+ * search icons (which may belong to a different ingredient than the node) are
+ * looked up in the correct `ingredients_new` document.
+ */
+export function getPendingRejectionTargets(node: RecipeNode): { id: string; ingredientId: string }[] {
+    const fallback = standardizeIngredientName(getNodeIngredientName(node));
+    return getSeenEntries(node)
+        .filter(e => !getEntryHasRejected(e))
+        .map(e => {
+            const icon = getEntryIcon(e);
+            return { id: icon.id, ingredientId: icon.visualDescription ? standardizeIngredientName(icon.visualDescription) : fallback };
+        });
+}
+
+/**
+ * Returns a new shortlist with hasImpressed=true for all seen entries that weren't
+ * already marked. Entries beyond the seen range are returned unchanged.
+ */
+export function markSeenEntriesImpressed(node: RecipeNode) {
+    if (!node.iconShortlist) return;
+    const upTo = node.shortlistCycled ? node.iconShortlist.length : (node.shortlistIndex ?? 0) + 1;
+    node.iconShortlist = node.iconShortlist.map((e, i) =>
+        i < upTo && !getEntryHasImpressed(e) ? { ...e, hasImpressed: true } : e
+    );
+}
+
+/**
+ * Returns a new shortlist with hasImpressed=true on the entry at `index`.
+ * Used when a shortlist is first assigned and we immediately record an impression
+ * for the entry shown at position 0.
+ */
+export function markEntryImpressedAtIndex(entries: ShortlistEntry[], index: number): ShortlistEntry[] {
+    return entries.map((e, i) => i === index && !getEntryHasImpressed(e) ? { ...e, hasImpressed: true } : e);
+}
+
+/**
+ * Marks seen entries in the given node.
+ */
+export function markSeenEntriesRejected(node: RecipeNode) {
+    if (!node.iconShortlist) return;
+    const upTo = node.shortlistCycled ? node.iconShortlist.length : (node.shortlistIndex ?? 0) + 1;
+    node.iconShortlist = node.iconShortlist.map((e, i) =>
+        i < upTo && !getEntryHasRejected(e) ? { ...e, hasRejected: true } : e
+    );
+}
+
+export interface ShortlistDeltaEntry {
+    id: string;
+    ingredientId: string;
+}
+
+export interface ShortlistDelta {
+    toImpres: ShortlistDeltaEntry[];
+    toReject: ShortlistDeltaEntry[];
+    /** Icons that were previously recorded as rejected but are now selected (cycled back). */
+    toUnreject: ShortlistDeltaEntry[];
+    updatedShortlist: ShortlistEntry[];
+}
+
+/**
+ * Computes the delta between a previously-saved node (from Firestore) and the
+ * incoming client node. The backend is authoritative for what icons exist; only
+ * `shortlistIndex` and `shortlistCycled` are trusted from the client.
+ *
+ * Algorithm: for each icon in the new shortlist, compute whether it *should* be
+ * impressed/rejected given the new index, then subtract the already-recorded state
+ * (old flags, matched by icon ID so forge/prepend doesn't break matching).
+ *
+ *   impressionDelta = int(shouldBeImpressed) - int(wasImpressed)   → only 0 or +1
+ *   rejectionDelta  = int(shouldBeRejected)  - int(wasRejected)    → -1, 0, or +1
+ *
+ * Icons in old-but-not-new (removed by forge dedup) are ignored — no delta.
+ * Impressions are monotonic: once seen, always seen; cycling back never un-impresses.
+ * Rejections track the currently-selected icon: only the selected entry can un-reject.
+ */
+
+/**
+ * Stamps hasImpressed/hasRejected on each entry based purely on shortlistIndex
+ * and shortlistCycled, so the delta loop can read flags from the entry directly
+ * without caring about index arithmetic.
+ */
+/**
+ * Stamps hasImpressed/hasRejected on each entry based purely on shortlistIndex
+ * and shortlistCycled. Unseen entries (beyond the current index) are returned
+ * unchanged so their existing flags are preserved — cycling back should not
+ * inadvertently clear rejections on icons the user hasn't reached yet.
+ */
+function stampShortlistFlags(shortlist: ShortlistEntry[], shortlistIndex: number, shortlistCycled?: boolean): ShortlistEntry[] {
+    const upTo = shortlistCycled ? shortlist.length : shortlistIndex + 1;
+    return shortlist.map((e, i) => {
+        if (i >= upTo) return e; // unseen: preserve as-is
+        return {
+            ...e,
+            hasImpressed: true,
+            hasRejected:  i !== shortlistIndex ? true : undefined,
+        };
+    });
+}
+
+export function computeShortlistDelta(
+    oldNode: RecipeNode | null | undefined,
+    newNode: RecipeNode,
+): ShortlistDelta {
+    const rawShortlist = newNode.iconShortlist;
+    const empty: ShortlistDelta = { toImpres: [], toReject: [], toUnreject: [], updatedShortlist: rawShortlist ?? [] };
+    if (!rawShortlist || rawShortlist.length === 0) return empty;
+
+    const newShortlist = stampShortlistFlags(rawShortlist, newNode.shortlistIndex ?? 0, newNode.shortlistCycled);
+
+    const ingId = (icon: IconStats) =>
+        icon.visualDescription ? standardizeIngredientName(icon.visualDescription) : "WTF";
+
+
+    // Match old flags by icon ID so prepend/forge doesn't break flag matching.
+    const oldFlagsByIconId = new Map<string, ShortlistEntry>();
+    for (const e of oldNode?.iconShortlist ?? []) {
+        oldFlagsByIconId.set(getEntryID(e), e);
+    }
+
+    
+    const toImpres: ShortlistDeltaEntry[] = [];
+    const toReject: ShortlistDeltaEntry[] = [];
+    const toUnreject: ShortlistDeltaEntry[] = [];
+    const updatedShortlist: ShortlistEntry[] = [];
+
+    for (const e of newShortlist) {
+
+        const old = oldFlagsByIconId.get(getEntryID(e))
+        const nR = getEntryHasRejected(e);
+        const nI = getEntryHasImpressed(e);
+        let oR = false;
+        let oI = false;
+        if (old !== undefined) {
+            oR = getEntryHasRejected(old);
+            oI = getEntryHasImpressed(old);
+        }
+        // New impression.
+        if (nI && !oI) toImpres.push({ id: getEntryID(e), ingredientId: ingId(getEntryIcon(e)) });
+        
+        // Rejection changed.
+        if (nR && !oR) toReject.push({ id: getEntryID(e), ingredientId: ingId(getEntryIcon(e)) });
+        if (!nR && oR) toUnreject.push({ id: getEntryID(e), ingredientId: ingId(getEntryIcon(e)) });
+
+        // Once Impressed, always impressed.
+        // Rejection changes.
+        updatedShortlist.push({
+            ...e,
+            hasImpressed: nI || oI,
+            hasRejected:  nR,
+        });
+    }
+    return { toImpres, toReject, toUnreject, updatedShortlist };
+}
+// export function computeShortlistDelta(
+//     oldNode: RecipeNode | null | undefined,
+//     newNode: RecipeNode,
+// ): ShortlistDelta {
+//     const newShortlist = newNode.iconShortlist;
+//     const empty: ShortlistDelta = { toImpres: [], toReject: [], toUnreject: [], updatedShortlist: newShortlist ?? [] };
+//     if (!newShortlist || newShortlist.length === 0) return empty;
+
+//     const fallback = standardizeIngredientName(getNodeIngredientName(newNode));
+//     const ingId = (icon: IconStats) =>
+//         icon.visualDescription ? standardizeIngredientName(icon.visualDescription) : fallback;
+
+//     const newIndex = newNode.shortlistIndex ?? 0;
+//     const newCycled = newNode.shortlistCycled ?? false;
+//     const upTo = newCycled ? newShortlist.length : newIndex + 1;
+
+//     // Match old flags by icon ID so prepend/forge doesn't break flag matching.
+//     const oldFlagsByIconId = new Map<string, ShortlistEntry>();
+//     for (const e of oldNode?.iconShortlist ?? []) {
+//         oldFlagsByIconId.set(getEntryIcon(e).id, e);
+//     }
+
+//     const toImpres: ShortlistDeltaEntry[] = [];
+//     const toReject: ShortlistDeltaEntry[] = [];
+//     const toUnreject: ShortlistDeltaEntry[] = [];
+//     const updatedShortlist: ShortlistEntry[] = [];
+
+//     for (let i = 0; i < newShortlist.length; i++) {
+//         const entry = newShortlist[i];
+//         const icon = getEntryIcon(entry);
+//         const target: ShortlistDeltaEntry = { id: icon.id, ingredientId: ingId(icon) };
+
+//         const isSeen = i < upTo;
+//         const isSelected = i === newIndex;
+
+//         const oldEntry = oldFlagsByIconId.get(icon.id);
+//         const wasImpressed = oldEntry ? getEntryHasImpressed(oldEntry) : false;
+//         const wasRejected  = oldEntry ? getEntryHasRejected(oldEntry)  : false;
+
+//         // Impressions: monotonic — once seen, always seen.
+//         const nowImpressed = isSeen || wasImpressed;
+//         const impressionDelta = (nowImpressed ? 1 : 0) - (wasImpressed ? 1 : 0);
+//         if (impressionDelta > 0) toImpres.push(target);
+
+//         // Rejections: only authoritative for seen entries. Unseen entries preserve old flag.
+//         const nowRejected = isSeen ? (isSeen && !isSelected) : wasRejected;
+//         const rejectionDelta = (nowRejected ? 1 : 0) - (wasRejected ? 1 : 0);
+//         if (rejectionDelta > 0) toReject.push(target);
+//         if (rejectionDelta < 0) toUnreject.push(target);
+
+//         updatedShortlist.push({
+//             ...entry,
+//             hasImpressed: nowImpressed || undefined,
+//             hasRejected:  nowRejected  || undefined,
+//         });
+//     }
+
+//     return { toImpres, toReject, toUnreject, updatedShortlist };
+// }
 
 /** Returns the IconStats at a given shortlist position, or undefined if out of bounds. */
 export function getShortlistIconAt(node: RecipeNode, index: number): IconStats | undefined {
@@ -269,18 +527,19 @@ export function setNodeStatusByIngredient(
  */
 // it's now safe for all things. this kept out url but is'nt needed anymore.
 export function toRecipeIcon(icon: IconStats): IconStats {
-    return icon;
-    // {
-    //     id: icon.id,
-    //     visualDescription: icon.visualDescription,
-    //     metadata: icon.metadata,
-    //     status: icon.status,
-    //     ...(icon.score !== undefined && { score: icon.score }),
-    //     ...(icon.impressions !== undefined && { impressions: icon.impressions }),
-    //     ...(icon.rejections !== undefined && { rejections: icon.rejections }),
-    // };
+    // return icon;
+    return {
+        id: icon.id,
+        visualDescription: icon.visualDescription,
+        metadata: icon.metadata,
+        // status: icon.status,
+        ...(icon.score !== undefined && { score: icon.score }),
+        ...(icon.impressions !== undefined && { impressions: icon.impressions }),
+        ...(icon.rejections !== undefined && { rejections: icon.rejections }),
+    };
 }
 
+//deprecated.
 export function applyIconToNode(node: RecipeNode, icon: IconStats) {
     // Only propagate essential visual/reference data, avoiding stale stats
     setNodeIcon(node, toRecipeIcon(icon));
@@ -362,9 +621,21 @@ export function getEntryIcon(entry: ShortlistEntry): IconStats {
     return entry.icon;
 }
 
+export function getEntryID(entry: ShortlistEntry): string {
+    return entry.icon.id;
+}
+
 /** Extracts the matchType from a ShortlistEntry. */
 export function getEntryMatchType(entry: ShortlistEntry): 'generated' | 'search' {
     return entry.matchType;
+}
+
+export function getEntryHasImpressed(entry: ShortlistEntry): boolean {
+    return entry.hasImpressed === true;
+}
+
+export function getEntryHasRejected(entry: ShortlistEntry): boolean {
+    return entry.hasRejected === true;
 }
 
 /** Extracts the matchScore from a ShortlistEntry, or undefined when not set. */
@@ -413,6 +684,26 @@ export function prependToShortlist(existing: ShortlistEntry[], entry: ShortlistE
     const newId = getEntryIcon(entry).id;
     const filtered = existing.filter(e => getEntryIcon(e).id !== newId);
     return [entry, ...filtered];
+}
+
+/**
+ * Calls `fn` on every node whose standardized ingredient name matches `stdName`.
+ * Returns true if at least one node was matched.
+ * Use this inside Firestore transactions to avoid repeating the filter boilerplate.
+ */
+export function mutateNodesByIngredient(
+    nodes: any[],
+    stdName: string,
+    fn: (node: any) => void,
+): boolean {
+    let matched = false;
+    for (const n of nodes) {
+        if (!n.visualDescription) continue;
+        if (standardizeIngredientName(getNodeIngredientName(n)) !== stdName) continue;
+        fn(n);
+        matched = true;
+    }
+    return matched;
 }
 
 /**

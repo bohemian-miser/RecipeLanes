@@ -427,7 +427,7 @@ export async function debugLogAction(message: string) {
 /* ^ Triaged ^ */
 
 
-// this is for the shared gallery on '/'.
+// this is for the shared gallery on '/icon_overview'.
 export async function deleteIconByIdAction(iconId: string, ingredientName?: string): Promise<{ success: boolean; error?: string }> {
     const session = await getAuthService().verifyAuth();
     if (!session) return { success: false, error: 'Login required' };

@@ -155,13 +155,18 @@ describe('Impression and Rejection Tracking', () => {
         assert.equal(stats.get('fp-3')!.rejections, 0, 'fp-3 should have no rejection (not seen)');
     });
 
-    it('save records +1 impression for every seen icon but no rejections', async () => {
+    it('save records +1 impression for every seen', async () => {
         const ingredient = `save-test-${Date.now()}`;
         const stdName = standardizeIngredientName(ingredient);
         // User has seen 2 of 3 icons (shortlistIndex=1)
         const icons = [makeIcon('si-1', stdName), makeIcon('si-2', stdName), makeIcon('si-3', stdName)];
+        // Put these icons in the DB.
         const entries = await seedIngredient(stdName, icons);
         const recipeId = await createRecipeWithShortlist(stdName, entries, 1);
+
+        // I think this could be a bit more comprehensive and look at multiple nodes with different shortlistIndices.
+        // This is also a bit redundant based on the shortlistdelta tests. but they don't cover some of the stuff.
+        // TODO look at making a unified test that covers more.
 
         // Fetch the recipe graph and save it (simulates user pressing Save).
         const recipe = await getDataService().getRecipe(recipeId) as any;
@@ -170,7 +175,7 @@ describe('Impression and Rejection Tracking', () => {
 
         const stats = await fetchIconStats(stdName);
         assert.equal(stats.get('si-1')!.impressions, 1, 'si-1 impression');
-        assert.equal(stats.get('si-1')!.rejections, 0, 'si-1 should have no rejection');
+        assert.equal(stats.get('si-1')!.rejections, 1, 'si-1 should have rejection');
         assert.equal(stats.get('si-2')!.impressions, 1, 'si-2 impression');
         assert.equal(stats.get('si-2')!.rejections, 0, 'si-2 should have no rejection');
         assert.equal(stats.get('si-3')!.impressions, 0, 'si-3 (unseen) should have no impression');

@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+rust-embed/target/
+rust-embed/models/
+public/icon_index_384.json

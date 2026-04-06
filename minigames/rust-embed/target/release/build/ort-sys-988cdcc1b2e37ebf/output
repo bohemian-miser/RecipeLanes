@@ -1,0 +1,12 @@
+cargo:rustc-check-cfg=cfg(link_error)
+cargo:rerun-if-env-changed=ORT_LIB_LOCATION
+cargo:rerun-if-env-changed=CARGO_NET_OFFLINE
+cargo:rerun-if-env-changed=ORT_SKIP_DOWNLOAD
+[ort-sys] [DEBUG] Using prebuilt binaries
+[ort-sys] [DEBUG] looking for prebuilt binaries matching feature set: none
+[ort-sys] [DEBUG] downloading from 'https://cdn.pyke.io/0/pyke:ort-rs/ms@1.23.2/aarch64-unknown-linux-gnu.tar.lzma2'; tls_provider=Rustls, root_certs=WebPki
+cargo:rerun-if-env-changed=ORT_CXX_STDLIB
+cargo:rerun-if-env-changed=CXXSTDLIB
+cargo:rustc-link-lib=stdc++
+cargo:rustc-link-search=native=/home/dog/.cache/ort.pyke.io/dfbin/aarch64-unknown-linux-gnu/c25248c32d84f228b9d584b84b31e1577e4810d46beb5e304e9fa340c000176c
+cargo:rustc-link-lib=static=onnxruntime

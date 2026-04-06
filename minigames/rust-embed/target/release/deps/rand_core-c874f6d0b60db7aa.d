@@ -1,0 +1,11 @@
+/home/dog/projects/RecipeLanes-embedding-mini-project/minigames/rust-embed/target/release/deps/rand_core-c874f6d0b60db7aa.d: /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/lib.rs /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/block.rs /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/impls.rs /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/le.rs /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/os.rs
+
+/home/dog/projects/RecipeLanes-embedding-mini-project/minigames/rust-embed/target/release/deps/librand_core-c874f6d0b60db7aa.rlib: /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/lib.rs /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/block.rs /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/impls.rs /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/le.rs /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/os.rs
+
+/home/dog/projects/RecipeLanes-embedding-mini-project/minigames/rust-embed/target/release/deps/librand_core-c874f6d0b60db7aa.rmeta: /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/lib.rs /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/block.rs /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/impls.rs /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/le.rs /home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/os.rs
+
+/home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/lib.rs:
+/home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/block.rs:
+/home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/impls.rs:
+/home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/le.rs:
+/home/dog/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rand_core-0.9.5/src/os.rs:

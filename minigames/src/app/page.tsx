@@ -1,10 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { pipeline, env } from '@xenova/transformers';
-
-// Skip local model caching to work well in dev
-env.allowLocalModels = false;
+import { useState, useRef, useEffect } from 'react';
 
 type Result = {
   id: string;
@@ -13,165 +9,203 @@ type Result = {
   icon_id?: string;
 };
 
+type RunMetrics = {
+  methodName: string;
+  embedTime: number;
+  searchTime: number;
+  totalTime: number;
+  results: Result[];
+  error?: string;
+};
+
 export default function Home() {
   const [query, setQuery] = useState('egg');
-  const [method, setMethod] = useState('vertex-004');
-  const [region, setRegion] = useState('us-central1');
-  const [results, setResults] = useState<Result[]>([]);
   const [loading, setLoading] = useState(false);
-  const [metrics, setMetrics] = useState({ embed: 0, search: 0, total: 0 });
-  const [error, setError] = useState('');
+  const [runs, setRuns] = useState<RunMetrics[]>([]);
   
-  const browserModelRef = useRef<any>(null);
+  const workerRef = useRef<Worker | null>(null);
+  const messageIdRef = useRef(0);
+  const resolversRef = useRef<Record<number, { resolve: (val: any) => void, reject: (err: any) => void }>>({});
 
-  const initBrowserModel = async () => {
-    if (!browserModelRef.current) {
-      console.log('Loading browser embedding model...');
-      browserModelRef.current = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-    }
-    return browserModelRef.current;
+  useEffect(() => {
+    // Initialize worker
+    workerRef.current = new Worker(new URL('../lib/worker.ts', import.meta.url));
+    workerRef.current.onmessage = (e) => {
+      const { id, status, vector, error } = e.data;
+      if (resolversRef.current[id]) {
+        if (status === 'success') resolversRef.current[id].resolve(vector);
+        else resolversRef.current[id].reject(new Error(error));
+        delete resolversRef.current[id];
+      }
+    };
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
+
+  const getBrowserEmbedding = (text: string, model: string): Promise<number[]> => {
+    return new Promise((resolve, reject) => {
+      if (!workerRef.current) return reject(new Error('Worker not initialized'));
+      const id = ++messageIdRef.current;
+      resolversRef.current[id] = { resolve, reject };
+      workerRef.current.postMessage({ id, text, model });
+    });
   };
 
   const handleSearch = async () => {
     setLoading(true);
-    setError('');
-    setResults([]);
-    setMetrics({ embed: 0, search: 0, total: 0 });
-    const startTotal = Date.now();
+    setRuns([]);
     
-    try {
-      let vector: number[] = [];
-      let embedTime = 0;
-      
-      // 1. EMBEDDING
-      if (method.startsWith('vertex')) {
-        const model = method === 'vertex-004' ? 'text-embedding-004' : 'text-embedding-gecko@003';
-        const res = await fetch('/api/embed', {
+    const methods = [
+      { name: 'Vertex 004 (us-central1)', model: 'text-embedding-004', region: 'us-central1', type: 'vertex' },
+      { name: 'Vertex 004 (europe-west4)', model: 'text-embedding-004', region: 'europe-west4', type: 'vertex' },
+      { name: 'Vertex 004 (asia-northeast1)', model: 'text-embedding-004', region: 'asia-northeast1', type: 'vertex' },
+      { name: 'Vertex Gecko 003 (us-central1)', model: 'text-embedding-gecko@003', region: 'us-central1', type: 'vertex' },
+      { name: 'Browser MiniLM (Local)', model: 'Xenova/all-MiniLM-L6-v2', type: 'browser' },
+    ];
+
+    // Execute all concurrently
+    const promises = methods.map(async m => {
+      try {
+        const start = Date.now();
+        let vector: number[] = [];
+        let embedTime = 0;
+
+        // 1. EMBED
+        if (m.type === 'vertex') {
+          const embedRes = await fetch('/api/embed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: query, model: m.model, region: m.region })
+          });
+          if (!embedRes.ok) throw new Error((await embedRes.json()).error);
+          const data = await embedRes.json();
+          vector = data.vector;
+          embedTime = data.timeMs;
+        } else if (m.type === 'browser') {
+          const embedStart = Date.now();
+          vector = await getBrowserEmbedding(query, m.model);
+          embedTime = Date.now() - embedStart;
+        }
+
+        // 2. SEARCH
+        const searchRes = await fetch('/api/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: query, model, region })
+          body: JSON.stringify({ vector, limit: 12 })
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
-        vector = data.vector;
-        embedTime = data.timeMs;
-      } else if (method === 'browser') {
-        const startEmbed = Date.now();
-        const extractor = await initBrowserModel();
-        const out = await extractor(query, { pooling: 'mean', normalize: true });
-        vector = Array.from(out.data);
-        embedTime = Date.now() - startEmbed;
+        if (!searchRes.ok) throw new Error((await searchRes.json()).error);
+        const { results, timeMs: searchTime } = await searchRes.json();
+
+        const result: RunMetrics = { 
+          methodName: m.name, 
+          embedTime, 
+          searchTime, 
+          totalTime: Date.now() - start, 
+          results 
+        };
+        
+        // Add to runs incrementally
+        setRuns(prev => [...prev, result]);
+        
+      } catch (e: any) {
+        setRuns(prev => [...prev, {
+          methodName: m.name,
+          embedTime: 0, searchTime: 0, totalTime: 0,
+          results: [],
+          error: e.message
+        }]);
       }
-      
-      // 2. SEARCH
-      const searchRes = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vector, limit: 12 })
-      });
-      const searchData = await searchRes.json();
-      if (!searchRes.ok) throw new Error(searchData.error);
-      
-      setResults(searchData.results);
-      setMetrics({
-        embed: embedTime,
-        search: searchData.timeMs,
-        total: Date.now() - startTotal
-      });
-      
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Unknown error occurred');
-    } finally {
-      setLoading(false);
-    }
+    });
+
+    await Promise.allSettled(promises);
+    setLoading(false);
   };
 
   return (
     <main className="min-h-screen p-8 bg-gray-50 text-gray-900 font-sans">
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-[1400px] mx-auto space-y-6">
         <h1 className="text-3xl font-bold tracking-tight">Embedding Search Minigame</h1>
         
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium mb-1">Search Query</label>
-              <input 
-                type="text" 
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="e.g., 'egg'"
-                onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              />
-            </div>
-            
-            <div className="w-48">
-              <label className="block text-sm font-medium mb-1">Method</label>
-              <select 
-                value={method} 
-                onChange={e => setMethod(e.target.value)}
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-              >
-                <option value="vertex-004">Vertex (text-embedding-004)</option>
-                <option value="browser">Browser (all-MiniLM-L6-v2)</option>
-              </select>
-            </div>
-            
-            <div className="w-40">
-              <label className="block text-sm font-medium mb-1">Region (Vertex)</label>
-              <select 
-                value={region} 
-                onChange={e => setRegion(e.target.value)}
-                disabled={method === 'browser'}
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:opacity-50"
-              >
-                <option value="us-central1">us-central1</option>
-                <option value="europe-west4">europe-west4</option>
-                <option value="asia-northeast1">asia-northeast1</option>
-              </select>
-            </div>
-            
-            <div className="flex items-end">
-              <button 
-                onClick={handleSearch}
-                disabled={loading}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium transition-colors h-[42px]"
-              >
-                {loading ? 'Searching...' : 'Search'}
-              </button>
-            </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-end gap-4">
+          <div className="flex-1 min-w-[300px]">
+            <label className="block text-sm font-medium mb-1">Search Query</label>
+            <input 
+              type="text" 
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-lg"
+              placeholder="e.g., 'egg'"
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            />
           </div>
-          
-          {error && (
-            <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">
-              {error}
-            </div>
-          )}
-          
-          <div className="flex gap-6 text-sm text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100">
-            <div><span className="font-semibold">Embedding:</span> {metrics.embed}ms</div>
-            <div><span className="font-semibold">Search:</span> {metrics.search}ms</div>
-            <div><span className="font-semibold">Total:</span> {metrics.total}ms</div>
-          </div>
+          <button 
+            onClick={handleSearch}
+            disabled={loading}
+            className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium transition-colors h-[52px]"
+          >
+            {loading ? 'Searching all...' : 'Search'}
+          </button>
         </div>
 
-        {results.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {results.map((r, i) => (
-              <div key={r.id || i} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center gap-3">
-                {r.url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.url} alt={r.ingredient_name} className="w-20 h-20 object-contain rounded-lg" />
-                ) : (
-                  <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">No Img</div>
-                )}
-                <div>
-                  <div className="font-medium text-sm line-clamp-2">{r.ingredient_name || r.id}</div>
-                  <div className="text-xs text-gray-400 mt-1">{r.icon_id || 'no-icon-id'}</div>
-                </div>
-              </div>
-            ))}
+        {runs.length > 0 && (
+          <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr>
+                  <th className="p-4 border-b-2 font-semibold w-1/4">Method</th>
+                  <th className="p-4 border-b-2 font-semibold w-1/5">Latency</th>
+                  <th className="p-4 border-b-2 font-semibold">Top 12 Results</th>
+                </tr>
+              </thead>
+              <tbody>
+                {runs.map((run, i) => (
+                  <tr key={i} className="border-b last:border-0 hover:bg-gray-50 align-top">
+                    <td className="p-4 font-medium whitespace-nowrap">
+                      {run.methodName}
+                      {run.error && <div className="text-red-500 text-sm mt-2 max-w-[200px] whitespace-normal break-words">{run.error}</div>}
+                    </td>
+                    <td className="p-4 text-sm whitespace-nowrap">
+                      {run.error ? '-' : (
+                        <div className="space-y-1">
+                          <div className="text-gray-500 flex justify-between">
+                            <span>Embed:</span> 
+                            <span className="text-gray-900 font-medium ml-2">{run.embedTime}ms</span>
+                          </div>
+                          <div className="text-gray-500 flex justify-between">
+                            <span>DB Search:</span> 
+                            <span className="text-gray-900 font-medium ml-2">{run.searchTime}ms</span>
+                          </div>
+                          <div className="text-blue-600 font-semibold flex justify-between mt-2 pt-2 border-t border-gray-100">
+                            <span>Total RTT:</span>
+                            <span className="ml-2">{run.totalTime}ms</span>
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      {run.results.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {run.results.map((r, j) => (
+                            <div key={j} className="flex flex-col items-center gap-1 w-20 group relative">
+                              {r.url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={r.url} alt={r.ingredient_name} className="w-16 h-16 object-contain rounded-md bg-gray-50 border border-gray-100" />
+                              ) : (
+                                <div className="w-16 h-16 bg-gray-100 rounded-md border border-gray-200 flex items-center justify-center text-[10px] text-gray-400">No Img</div>
+                              )}
+                              <div className="text-[10px] text-center leading-tight line-clamp-2 w-full px-1" title={r.ingredient_name}>
+                                {r.ingredient_name || r.id}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

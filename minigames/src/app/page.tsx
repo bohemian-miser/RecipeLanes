@@ -62,6 +62,7 @@ export default function Home() {
       { name: 'Vertex 004 (asia-northeast1)', model: 'text-embedding-004', region: 'asia-northeast1', type: 'vertex' },
       { name: 'Vertex Multilingual 002 (us-central1)', model: 'text-multilingual-embedding-002', region: 'us-central1', type: 'vertex' },
       { name: 'Browser MiniLM (Local)', model: 'Xenova/all-MiniLM-L6-v2', type: 'browser' },
+      { name: 'Rust Func (In-Memory)', type: 'rust' },
     ];
 
     // Execute all concurrently
@@ -70,9 +71,23 @@ export default function Home() {
         const start = Date.now();
         let vector: number[] = [];
         let embedTime = 0;
+        let searchTime = 0;
+        let results: Result[] = [];
 
-        // 1. EMBED
-        if (m.type === 'vertex') {
+        if (m.type === 'rust') {
+          const res = await fetch('http://127.0.0.1:8080/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: query })
+          });
+          if (!res.ok) throw new Error(await res.text());
+          const data = await res.json();
+          embedTime = data.embed_time_ms;
+          searchTime = data.search_time_ms;
+          results = data.results;
+        } else {
+          // 1. EMBED
+          if (m.type === 'vertex') {
           const embedRes = await fetch('/api/embed', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -88,14 +103,17 @@ export default function Home() {
           embedTime = Date.now() - embedStart;
         }
 
-        // 2. SEARCH
-        const searchRes = await fetch('/api/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ vector, limit: 12 })
-        });
-        if (!searchRes.ok) throw new Error((await searchRes.json()).error);
-        const { results, timeMs: searchTime } = await searchRes.json();
+          // 2. SEARCH
+          const searchRes = await fetch('/api/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vector, limit: 12 })
+          });
+          if (!searchRes.ok) throw new Error((await searchRes.json()).error);
+          const searchData = await searchRes.json();
+          results = searchData.results;
+          searchTime = searchData.timeMs;
+        }
 
         const result: RunMetrics = { 
           methodName: m.name, 

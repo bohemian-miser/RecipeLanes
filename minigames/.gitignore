@@ -41,4 +41,5 @@ yarn-error.log*
 next-env.d.ts
 rust-embed/target/
 rust-embed/models/
+rust-embed/.fastembed_cache/
 public/icon_index_384.json

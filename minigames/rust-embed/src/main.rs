@@ -3,7 +3,7 @@ use axum::{
     routing::post,
     Router,
 };
-use fastembed::{TextEmbedding, InitOptions, EmbeddingModel};
+use fastembed::{TextEmbedding, UserDefinedEmbeddingModel, InitOptionsUserDefined};
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, sync::Arc, time::Instant, fs};
 use tower_http::cors::{Any, CorsLayer};
@@ -59,10 +59,19 @@ async fn main() {
     let db: Vec<IconDoc> = serde_json::from_str(&file_content).unwrap();
     println!("Loaded {} documents into memory.", db.len());
 
-    println!("Loading FastEmbed model...");
-    let mut options = InitOptions::new(EmbeddingModel::AllMiniLML6V2);
-    options.show_download_progress = true;
-    let model = TextEmbedding::try_new(options).unwrap();
+    println!("Loading FastEmbed model from local disk...");
+    let user_model = UserDefinedEmbeddingModel {
+        onnx_file: fs::read("./models/all-MiniLM-L6-v2/model.onnx").expect("missing model"),
+        tokenizer_files: fastembed::TokenizerFiles {
+            tokenizer_file: fs::read("./models/all-MiniLM-L6-v2/tokenizer.json").expect("missing tok"),
+            config_file: fs::read("./models/all-MiniLM-L6-v2/config.json").expect("missing conf"),
+            special_tokens_map_file: fs::read("./models/all-MiniLM-L6-v2/special_tokens_map.json").expect("missing spec"),
+            tokenizer_config_file: fs::read("./models/all-MiniLM-L6-v2/tokenizer_config.json").expect("missing tok conf"),
+        }
+    };
+    
+    let model = TextEmbedding::try_new_from_user_defined(user_model, InitOptionsUserDefined::default())
+        .expect("Failed to initialize fastembed model");
 
     let state = Arc::new(AppState { 
         model: Mutex::new(model), 
@@ -93,7 +102,7 @@ async fn search_handler(
     // 1. Generate Embedding
     let start_embed = Instant::now();
     let embeddings = {
-        let mut model = state.model.lock().await;
+        let model = state.model.lock().await;
         model.embed(vec![payload.text.clone()], None).unwrap()
     };
     let query_vector = &embeddings[0];

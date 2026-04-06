@@ -40,8 +40,9 @@ import { FeedbackModal } from '@/components/feedback-modal';
 function RecipeLanesContent() {
   const { user, loading: authLoading, signIn } = useAuth();
   const searchParams = useSearchParams();
+  const recipeId = searchParams.get('id');
   const router = useRouter();
-  
+
   const [recipeTitle, setRecipeTitle] = useState('');
   const [editingTitle, setEditingTitle] = useState(false);
   const [recipeText, setRecipeText] = useState('');
@@ -260,17 +261,21 @@ function RecipeLanesContent() {
   }, [inputExpanded]);
 
   // Listener for Recipe Updates
+  // NOTE: Depends on `recipeId` (string), NOT `searchParams` (object).
+  // Using searchParams as a dependency caused the listener to re-run on every save
+  // because window.history.replaceState (called in handleSave) makes useSearchParams
+  // return a new object reference, even when the ID hasn't changed. This caused
+  // resetRecipeStore() → graph = null → DiagramInner remount → stale position restore.
   useEffect(() => {
-      const id = searchParams.get('id');
-      if (!id) return;
+      if (!recipeId) return;
 
       resetRecipeStore();
-      debugLogAction('Setting up listener for recipe: ' + id);
+      debugLogAction('Setting up listener for recipe: ' + recipeId);
       setStatus('loading');
       setWarningDismissed(false);
 
       // Use Firestore Listener
-      const unsubscribe = onSnapshot(doc(db, 'recipes', id), (docSnapshot) => {
+      const unsubscribe = onSnapshot(doc(db, 'recipes', recipeId), (docSnapshot) => {
           if (docSnapshot.exists()) {
               const data = docSnapshot.data();
               const currentGraph = data.graph as RecipeGraph;
@@ -292,28 +297,27 @@ function RecipeLanesContent() {
       });
 
       return () => unsubscribe();
-  }, [searchParams]);
+  }, [recipeId]);
 
   useEffect(() => {
-      const id = searchParams.get('id');
       setExistingCopiesDismissed(false);
-      
+
       // If we don't have a user or ownerId yet, we can't determine copies.
       // Set to null to block auto-forking until we know for sure.
-      if (!id || !user || !ownerId) {
+      if (!recipeId || !user || !ownerId) {
           setExistingCopies(null);
           return;
       }
 
       if (user.uid !== ownerId) {
            setExistingCopies(null); // Reset to loading before fetch
-           checkExistingCopiesAction(id).then(res => {
+           checkExistingCopiesAction(recipeId).then(res => {
                setExistingCopies(res.copies || []);
            });
       } else {
            setExistingCopies([]); // Owner doesn't need copy check
       }
-  }, [searchParams, user, ownerId]);
+  }, [recipeId, user, ownerId]);
 
   const handleNew = () => {
       setRecipeText('');

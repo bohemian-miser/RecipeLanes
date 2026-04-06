@@ -807,7 +807,7 @@ export class FirebaseDataService implements DataService {
               const oldNode = oldNodesById.get(n.id);
               const delta = computeShortlistDelta(oldNode, n);
               const hasDelta = delta.toImpres.length || delta.toReject.length || delta.toUnreject.length;
-              console.log(`[saveRecipe] node=${n.id} ingredient="${n.visualDescription}" idx=${n.shortlistIndex} oldIdx=${oldNode?.shortlistIndex ?? 'none'} toImpres=${delta.toImpres.map(t=>t.id)} toReject=${delta.toReject.map(t=>t.id)} toUnreject=${delta.toUnreject.map(t=>t.id)}`);
+            //   console.log(`[saveRecipe] node=${n.id} ingredient="${n.visualDescription}" idx=${n.shortlistIndex} oldIdx=${oldNode?.shortlistIndex ?? 'none'} toImpres=${delta.toImpres.map(t=>t.id)} toReject=${delta.toReject.map(t=>t.id)} toUnreject=${delta.toUnreject.map(t=>t.id)}`);
               if (hasDelta) {
                   n.iconShortlist = delta.updatedShortlist;
                   delta.toImpres.forEach(({ id, ingredientId }) => tasks.push(this.recordImpression(id, ingredientId)));

@@ -49,21 +49,21 @@ function getCenter(node: Node, handlePos?: { x: number, y: number }) {
             // Handles are ALWAYS centered in the Icon Container (top-1/2 left-1/2).
             // We MUST use handlePos because node width is unreliable (text wrapping).
             if (handlePos) {
-                console.log(`Using handlePos: ${handlePos.x}, ${handlePos.y} for classic icon node:`, node.id);
-                 // Red Dot Visualization uses the full 80x80 container for metadata mapping.
-                 // To align arrows with the red dot, we must use the same reference frame.
-                 const imageSize = 80;
+                // Red Dot Visualization uses the full 80x80 container for metadata mapping.
+                // To align arrows with the red dot, we must use the same reference frame.
+                const imageSize = 80;
                 const imageX = handlePos.x - imageSize/2; // Handle is center.
                 const imageY = handlePos.y; 
-
-                 if (meta && meta.center) {
+                
+                if (meta && meta.center) {
                     return {
                         x: imageX + meta.center.x * imageSize,
                         y: imageY + meta.center.y * imageSize
                     };
-                 }
-                 return handlePos; // Default to handle (center)
+                }
+                return handlePos; // Default to handle (center)
             }
+            
             
             // Fallback if no handlePos (rare/initial): Use heuristics but accept they might be off
             // ... (keep existing fallback logic if desired, or simplify) ...

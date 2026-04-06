@@ -277,6 +277,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
         setNodes(newNodes);
         setEdges(newEdges);
+        hasInitialLayoutRef.current = true;
 
         if (fit && !canPreserve) {
             setTimeout(() => {
@@ -284,11 +285,16 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             }, 50);
         }
 
-    }, [graph, mode, spacing, setNodes, setEdges, fitView, handleDeleteNode, edgeStyle]); 
+    }, [graph, mode, spacing, setNodes, setEdges, fitView, handleDeleteNode, edgeStyle]);
 
     const prevMode = useRef(mode);
     const prevSpacing = useRef(spacing);
     const lastSnapshotRef = useRef(0);
+    // Set to true after the first runLayout completes. Once nodes are laid out,
+    // subsequent graph updates (snapshots, saves) must NOT re-run layout — that
+    // would reset positions the user has moved. Reset when the recipe changes
+    // (component unmounts because {graph ? <Diagram/> : null} swaps it out).
+    const hasInitialLayoutRef = useRef(false);
 
     // Layout Effect
     useEffect(() => {
@@ -317,9 +323,13 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             return () => clearTimeout(timer);
         }
 
-        if (isDirty) {
-            // In dirty mode, we ONLY apply metadata updates (icons) from DB to EXISTING nodes.
-            // We DO NOT restore deleted nodes or move nodes based on DB, preventing overwrites.
+        
+        if (isDirty || hasInitialLayoutRef.current) {
+            // Once the initial layout has run (or while dirty), ONLY apply metadata updates
+            // (icons, text, serves) from DB to EXISTING nodes.
+            // We DO NOT restore deleted nodes or move nodes based on DB — that would reset
+            // positions the user has moved.
+            // This prevents moving an icon in one tab from affecting another tab.
             setNodes(currentNodes => {
                 let changed = false;
                 const newNodes = currentNodes.map(n => {

@@ -325,6 +325,20 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
         
         if (isDirty || hasInitialLayoutRef.current) {
+            // Detect full regeneration: if none of the incoming graph node IDs match
+            // current ReactFlow nodes, the recipe was re-parsed with all-new IDs.
+            // In that case, do a fresh layout rather than a no-op metadata patch.
+            const currentRFNodeIds = new Set(
+                getNodes().filter((n: any) => n.type !== 'lane').map((n: any) => n.id)
+            );
+            const incomingIds = graph.nodes.map(n => n.id);
+            const hasOverlap = incomingIds.length === 0 || incomingIds.some(id => currentRFNodeIds.has(id));
+            if (!hasOverlap) {
+                hasInitialLayoutRef.current = false;
+                runLayout(false, true);
+                return;
+            }
+
             // Once the initial layout has run (or while dirty), ONLY apply metadata updates
             // (icons, text, serves) from DB to EXISTING nodes.
             // We DO NOT restore deleted nodes or move nodes based on DB — that would reset

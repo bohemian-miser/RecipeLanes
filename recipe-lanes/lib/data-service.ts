@@ -103,10 +103,11 @@ export class FirebaseDataService implements DataService {
   _db = db; // allows test patching
 
   async searchIconsByEmbedding(queryVec: number[], limit: number): Promise<IconStats[]> {
+    const t0 = Date.now();
     const snap = await this._db.collection(DB_COLLECTION_ICON_INDEX)
       .findNearest('embedding', FieldValue.vector(queryVec), { limit, distanceMeasure: 'COSINE' as const })
       .get();
-    console.log(`[searchIconsByEmbedding] findNearest returned ${snap.docs.length} docs`);
+    console.log(`[searchIconsByEmbedding] findNearest returned ${snap.docs.length} docs in ${Date.now() - t0}ms`);
     if (snap.docs.length === 0) return [];
 
     // Enrich with full icon data from ingredients_new
@@ -430,13 +431,17 @@ export class FirebaseDataService implements DataService {
                 try {
                     const queries = hydeQueriesMap.get(stdName);
                     const textsToEmbed = queries && queries.length > 0 ? queries : [stdName];
+                    const t0 = Date.now();
                     const vec = await embedFn(textsToEmbed);
+                    const embedMs = Date.now() - t0;
+                    const t1 = Date.now();
                     const searchResults = await this.searchIconsByEmbedding(vec, 12);
+                    const lookupMs = Date.now() - t1;
                     if (searchResults.length > 0) {
                         const embeddings = await this.getIconEmbeddings(searchResults.map(r => r.id));
                         const ranked = rankIconsByEmbedding(searchResults, vec, embeddings);
                         await this.assignShortlistToRecipe(recipeId, stdName, ranked.slice(0, 8));
-                        console.log(`[resolveFromIndex] "${stdName}" → ${searchResults.length} candidates, ranked by matchScore`);
+                        console.log(`[resolveFromIndex] "${stdName}" → ${searchResults.length} candidates, ranked by matchScore (embed ${embedMs}ms, lookup ${lookupMs}ms)`);
                         return null;
                     }
                     return stdName;

@@ -60,7 +60,7 @@ export default function Home() {
       { name: 'Vertex 004 (us-central1)', model: 'text-embedding-004', region: 'us-central1', type: 'vertex' },
       { name: 'Vertex 004 (europe-west4)', model: 'text-embedding-004', region: 'europe-west4', type: 'vertex' },
       { name: 'Vertex 004 (asia-northeast1)', model: 'text-embedding-004', region: 'asia-northeast1', type: 'vertex' },
-      { name: 'Vertex Gecko 003 (us-central1)', model: 'text-embedding-gecko@003', region: 'us-central1', type: 'vertex' },
+      { name: 'Vertex Multilingual 002 (us-central1)', model: 'text-multilingual-embedding-002', region: 'us-central1', type: 'vertex' },
       { name: 'Browser MiniLM (Local)', model: 'Xenova/all-MiniLM-L6-v2', type: 'browser' },
     ];
 

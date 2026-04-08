@@ -22,7 +22,12 @@ test.describe('Icon Systems (Consolidated)', () => {
     const { promoteToAdmin } = await import('./utils/admin-utils');
     await promoteToAdmin(uid);
     
-    await page.getByPlaceholder('ENTER INGREDIENT...').fill(unique);
+    // Wait for the auth refresh to complete and the form to become visible and stable
+    await page.waitForTimeout(1000);
+    const ingredientInput = page.getByPlaceholder('ENTER INGREDIENT...');
+    await expect(ingredientInput).toBeVisible({ timeout: 15000 });
+    
+    await ingredientInput.fill(unique);
     await page.getByRole('button', { name: 'Generate Icon' }).click();
     
     const inventoryIcon = page.getByTestId('inventory-display').getByAltText(new RegExp(unique, 'i')).first();
@@ -96,9 +101,9 @@ test.describe('Icon Systems (Consolidated)', () => {
     });
     await page.evaluate(async ({ name }) => {
         const { _firebaseDb, _firebaseFirestore } = window as any;
-        const { doc, setDoc, serverTimestamp } = _firebaseFirestore;
+        const { doc, setDoc } = _firebaseFirestore;
         await setDoc(doc(_firebaseDb, 'icon_queue', name), {
-            status: 'failed', error: 'Simulated', recipes: [], recipeCount: 0, created_at: serverTimestamp()
+            status: 'failed', error: 'Simulated', recipes: [], recipeCount: 0, created_at: new Date()
         });
     }, { name: failItem });
 

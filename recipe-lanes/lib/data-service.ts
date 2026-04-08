@@ -110,31 +110,28 @@ export class FirebaseDataService implements DataService {
     console.log(`[searchIconsByEmbedding] findNearest returned ${snap.docs.length} docs in ${Date.now() - t0}ms`);
     if (snap.docs.length === 0) return [];
 
-    // Enrich with full icon data from ingredients_new
-    const entries = snap.docs.map((doc: any) => doc.data() as { icon_id: string; ingredient_name: string });
-    const uniqueIngredients = [...new Set(entries.map(e => e.ingredient_name))];
-    const ingDocs = await db.getAll(
-      ...uniqueIngredients.map((name: string) => db.collection(DB_COLLECTION_INGREDIENTS).doc(name))
-    );
-    const ingMap = new Map<string, any[]>();
-    ingDocs.forEach(d => {
-      if (d.exists) ingMap.set(d.id, d.data()?.icons || []);
-    });
-
-    return entries.map(entry => {
-      const icons: any[] = ingMap.get(entry.ingredient_name) || [];
-      const full = icons.find((i: any) => i.id === entry.icon_id);
-      return full ?? iconIndexEntryToStats(entry);
+    return snap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        visualDescription: data.visualDescription || data.ingredient_name,
+        score: data.score,
+        impressions: data.impressions,
+        rejections: data.rejections,
+        metadata: data.metadata,
+        searchTerms: data.searchTerms,
+      } as IconStats;
     });
   }
 
   async writeIconToIndex(iconId: string, ingredientName: string, embedding: number[]): Promise<void> {
     await db.collection(DB_COLLECTION_ICON_INDEX).doc(iconId).set({
-      icon_id: iconId,
+      id: iconId,
       ingredient_name: ingredientName,
+      visualDescription: ingredientName,
       embedding: FieldValue.vector(embedding),
       created_at: FieldValue.serverTimestamp()
-    });
+    }, { merge: true });
     console.log(`[writeIconToIndex] wrote ${iconId} (${ingredientName}), dim=${embedding.length}`);
   }
 
@@ -641,58 +638,40 @@ export class FirebaseDataService implements DataService {
 
   async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
       try {
-          // Pagination Strategy: Page through INGREDIENTS, not icons.
-          // Page 1 = Ingredients 1-50. We return ALL icons in those ingredients.
-          // This ensures full coverage of the DB.
-          
-          const INGREDIENTS_PER_PAGE = 50;
-          const offset = (page - 1) * INGREDIENTS_PER_PAGE;
+          const offset = (page - 1) * limit;
 
-          let q: FirebaseFirestore.Query = db.collection(DB_COLLECTION_INGREDIENTS)
-              .orderBy('updated_at', 'desc');
+          let q: FirebaseFirestore.Query = db.collection(DB_COLLECTION_ICON_INDEX)
+              .orderBy('created_at', 'desc');
           
           if (!query) {
-              q = q.offset(offset).limit(INGREDIENTS_PER_PAGE);
+              q = q.offset(offset).limit(limit);
           } else {
-              // Search is still limited to recent/scan for now
               q = q.limit(1000); 
           }
 
           const snapshot = await q.get();
-          let allIcons: any[] = [];
-          
-          snapshot.forEach(doc => {
+          let allIcons: any[] = snapshot.docs.map(doc => {
               const data = doc.data();
-              if (data.icons && Array.isArray(data.icons)) {
-                  const safeIcons = data.icons.map((icon: any) => ({
-                      ...icon,
-                      created_at: icon.created_at?.toDate ? icon.created_at.toDate().toISOString() : (icon.created_at || null)
-                  }));
-                  allIcons.push(...safeIcons);
-              }
-          });
-
-          // Sort by creation time within this batch
-          allIcons.sort((a, b) => {
-              const tA = new Date(a.created_at).getTime();
-              const tB = new Date(b.created_at).getTime();
-              return tB - tA;
+              const { embedding, ...rest } = data;
+              return {
+                  ...rest,
+                  id: doc.id,
+                  visualDescription: data.visualDescription || data.ingredient_name || data.ingredient || 'Unknown',
+                  created_at: data.created_at?.toDate ? data.created_at.toDate().toISOString() : (data.created_at || null),
+                  updated_at: data.updated_at?.toDate ? data.updated_at.toDate().toISOString() : (data.updated_at || null)
+              };
           });
 
           if (query && query.trim()) {
               const term = query.toLowerCase().trim();
               allIcons = allIcons.filter((i: any) => 
                   i.visualDescription?.toLowerCase().includes(term) || 
-                  i.ingredient?.toLowerCase().includes(term)
+                  i.ingredient_name?.toLowerCase().includes(term)
               );
-              // For search, we handle manual pagination if needed, or just return all hits
+              allIcons = allIcons.slice(offset, offset + limit);
           }
 
-          // Approximation for total: We don't know total icons without scanning all.
-          // We return a high number to keep "Next" button enabled if we found results.
-          // If current batch is empty, we assume end.
           const totalEstimate = allIcons.length > 0 ? (page * limit) + allIcons.length : (page - 1) * limit;
-
           return { icons: allIcons, total: totalEstimate };
       } catch (e: any) {
           console.warn('getPagedIcons failed:', e.message);
@@ -1001,17 +980,8 @@ export class FirebaseDataService implements DataService {
   }
 
   async recordImpression(iconId: string, ingredientId: string): Promise<void> {
-      const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
-      await db.runTransaction(async (t) => {
-          const doc = await t.get(docRef);
-          if (!doc.exists) return;
-          const icons = doc.data()?.icons || [];
-          const index = icons.findIndex((i: any) => i.id === iconId);
-          if (index !== -1) {
-              icons[index].impressions = (icons[index].impressions || 0) + 1;
-              t.update(docRef, { icons });
-          }
-      });
+      const docRef = db.collection(DB_COLLECTION_ICON_INDEX).doc(iconId);
+      await docRef.update({ impressions: FieldValue.increment(1) }).catch(() => {});
   }
 
 //   async getIconsForIngredient(ingredientId: string) {
@@ -1023,13 +993,18 @@ export class FirebaseDataService implements DataService {
 
   async getAllIcons() {
      try {
-         const snapshot = await db.collection(DB_COLLECTION_INGREDIENTS).limit(100).get();
-         let all: any[] = [];
-         snapshot.forEach(doc => {
+         const snapshot = await db.collection(DB_COLLECTION_ICON_INDEX).orderBy('created_at', 'desc').limit(1000).get();
+         return snapshot.docs.map(doc => {
              const data = doc.data();
-             if (data.icons) all.push(...data.icons);
+             const { embedding, ...rest } = data;
+             return {
+                 ...rest,
+                 id: doc.id,
+                 visualDescription: data.visualDescription || data.ingredient_name || data.ingredient || 'Unknown',
+                 created_at: data.created_at?.toDate ? data.created_at.toDate().toISOString() : (data.created_at || null),
+                 updated_at: data.updated_at?.toDate ? data.updated_at.toDate().toISOString() : (data.updated_at || null)
+             };
          });
-         return all;
      } catch (e: any) { return []; }
   }
 
@@ -1066,46 +1041,28 @@ export class FirebaseDataService implements DataService {
   }
 
   async imagineIngredientWithIcon(ingredientId: string, ingredientName: string, iconData: IconStats, transaction?: any): Promise<any> {
-      const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
-      
-      let doc;
-      if (transaction) {
-          doc = await transaction.get(docRef);
-      } else {
-          doc = await docRef.get();
-      }
-
-      let icons = [];
-      let isNew = false;
-
-      if (doc.exists) {
-          icons = doc.data()?.icons || [];
-      } else {
-          isNew = true;
-      }
-      
-      icons.push(iconData);
-      // icons.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
-      if (icons.length > 50) icons = icons.slice(0, 50);
-
-      return { docRef, icons, isNew, ingredientName };
+      return { iconId: iconData.id, iconData, ingredientName };
   }
 
   async setIngredientWithIcon(data: any, transaction?: any): Promise<void> {
-      const { docRef, icons, isNew, ingredientName } = data;
+      const { iconId, iconData, ingredientName, embedding } = data;
+      const docRef = db.collection(DB_COLLECTION_ICON_INDEX).doc(iconId);
+      const payload: any = {
+          ...iconData,
+          ingredient_name: ingredientName,
+          visualDescription: iconData.visualDescription || ingredientName,
+          created_at: FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp()
+      };
+      
+      if (embedding) {
+          payload.embedding = FieldValue.vector(embedding);
+      }
       
       if (transaction) {
-          if (isNew) {
-              transaction.set(docRef, { icons, created_at: FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp() });
-          } else {
-              transaction.update(docRef, { icons, updated_at: FieldValue.serverTimestamp() });
-          }
+          transaction.set(docRef, payload, { merge: true });
       } else {
-          if (isNew) {
-              await docRef.set({ icons, created_at: FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp() });
-          } else {
-              await docRef.update({ icons, updated_at: FieldValue.serverTimestamp() });
-          }
+          await docRef.set(payload, { merge: true });
       }
   }
 
@@ -1125,37 +1082,17 @@ export class FirebaseDataService implements DataService {
 
 
   async recordRejection(iconId: string, ingredientId: string): Promise<void> {
-      const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
-      await db.runTransaction(async (t) => {
-          const doc = await t.get(docRef);
-          if (!doc.exists) {
-              console.warn(`[recordRejection] ingredients_new/${ingredientId} not found for icon ${iconId}`);
-              return;
-          }
-          const icons = doc.data()?.icons || [];
-          const index = icons.findIndex((i: any) => i.id === iconId);
-          if (index === -1) {
-              console.warn(`[recordRejection] icon ${iconId} not found in ingredients_new/${ingredientId} (${icons.length} icons: ${icons.map((i:any)=>i.id).join(',')})`);
-              return;
-          }
-          icons[index].rejections = (icons[index].rejections || 0) + 1;
-          t.update(docRef, { icons });
-          console.log(`[recordRejection] ✅ icon ${iconId} in ${ingredientId} → ${icons[index].rejections}`);
+      const docRef = db.collection(DB_COLLECTION_ICON_INDEX).doc(iconId);
+      await docRef.update({ rejections: FieldValue.increment(1) }).catch(e => {
+          console.warn(`[recordRejection] failed for icon ${iconId}:`, e);
       });
+      console.log(`[recordRejection] ✅ icon ${iconId} incremented`);
   }
 
   async decrementRejection(iconId: string, ingredientId: string): Promise<void> {
-      const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(ingredientId);
-      await db.runTransaction(async (t) => {
-          const doc = await t.get(docRef);
-          if (!doc.exists) return;
-          const icons = doc.data()?.icons || [];
-          const index = icons.findIndex((i: any) => i.id === iconId);
-          if (index === -1) return;
-          icons[index].rejections = Math.max(0, (icons[index].rejections || 0) - 1);
-          t.update(docRef, { icons });
-          console.log(`[decrementRejection] ✅ icon ${iconId} in ${ingredientId} → ${icons[index].rejections}`);
-      });
+      const docRef = db.collection(DB_COLLECTION_ICON_INDEX).doc(iconId);
+      await docRef.update({ rejections: FieldValue.increment(-1) }).catch(() => {});
+      console.log(`[decrementRejection] ✅ icon ${iconId} decremented`);
   }
 
   async deleteIcon(iconId: string, ingredientName?: string) {

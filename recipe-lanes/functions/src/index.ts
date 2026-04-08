@@ -97,10 +97,6 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
             rawHydeQueries = queueDocData?.hydeQueries || [];
             const iconWithTerms = withSearchTerms(icon, rawHydeQueries);
 
-            // Bundle variables together to make it easier to split reads and writes in the transaction.
-            // It's a bit of a hack.
-            const ingredientData = await dataService.imagineIngredientWithIcon(ingredientDocId, ingredientName, iconWithTerms, transaction);
-
             console.log(`[Queue-${ingredientName}] ✅ Success. Icon ID: ${icon.id}`);
 
             const recipeDataObj: Record<string, any> = {};
@@ -112,6 +108,11 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
             // End READS. Now commit all changes together.
 
             console.log(`[Queue-${ingredientName}] Committing to recipes...`);
+            
+            // We let the writeIconToIndex handle setting the actual icon data now,
+            // so we don't strictly need imagineIngredientWithIcon anymore for the DB update
+            // However, we'll keep the call structure if it's used elsewhere or does side-effects.
+            const ingredientData = await dataService.imagineIngredientWithIcon(ingredientDocId, ingredientName, iconWithTerms, transaction);
             await dataService.setIngredientWithIcon(ingredientData, transaction);
 
             // Update all linked recipes using the atomic helper
@@ -125,18 +126,6 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
             console.log(`[Queue-${ingredientName}] Successfully updated ${latestRecipeIds.length} recipes and deleted queue item.`);
         });
 
-        // Write to icon_index for embedding search (non-fatal)
-        // This should probably be in the transaction so that a recipe doesn't miss the existence of
-        // an icon and then request it when it's actaully just been made. Slim chance tho.
-        try {
-            const embeddingTexts = rawHydeQueries.length > 0 ? rawHydeQueries : [ingredientName];
-            const embedding = await getAIService().embedTexts(embeddingTexts);
-            await dataService.writeIconToIndex(icon.id, ingredientName, embedding);
-            console.log(`[Queue-${ingredientName}] icon_index written for icon ${icon.id}`);
-        } catch (e) {
-            console.warn(`[Queue-${ingredientName}] icon_index write failed (non-fatal):`, e);
-        }
-
         // Record one impression per recipe this icon was shown in (non-fatal)
         dataService.recordImpression(icon.id, ingredientDocId).catch(e =>
             console.warn(`[Queue-${ingredientName}] recordImpression failed (non-fatal):`, e)
@@ -145,8 +134,6 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
     } catch (error: any) {
         console.error(`[Queue-${ingredientName}] 💥 Failed:`, error);
         
-        // Handle Permanent vs Transient
-        // Quota errors (429) or 5xx -> Throw to retry
         const isTransient = error.code === 429 || error.status === 429 || error.code === 503 || error.status === 503 || error.message?.includes('quota');
         
         if (isTransient) {
@@ -162,8 +149,6 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
         }).catch(() => {});
         
         // Propagate failure to recipes so UI shows Red X
-        // We need to read recipes again or assume we have them?
-        // Better to read again to be safe.
         const qDoc = await docRef.get();
         const recipes = qDoc.data()?.recipes || [];
         const dataService = getDataService();

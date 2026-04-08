@@ -68,8 +68,13 @@ test.describe('Regressions & Bug Repros', () => {
         const { promoteToAdmin } = await import('./utils/admin-utils');
         await promoteToAdmin(uid);
 
+        // Wait for the auth refresh to complete and the form to become visible and stable
+        await page.waitForTimeout(1000);
+        const ingredientInput = page.getByPlaceholder('ENTER INGREDIENT...');
+        await expect(ingredientInput).toBeVisible({ timeout: 15000 });
+
         // 1. Generate
-        await page.getByPlaceholder('ENTER INGREDIENT...').fill(uniqueName);
+        await ingredientInput.fill(uniqueName);
         await page.getByRole('button', { name: 'Generate Icon' }).click();
         
         const inventoryIcon = page.getByTestId('inventory-display').getByAltText(new RegExp(uniqueName, 'i')).first();

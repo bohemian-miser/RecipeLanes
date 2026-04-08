@@ -521,23 +521,31 @@ export class FirebaseDataService implements DataService {
         // Mark all unresolved nodes as pending so the UI blocks forge/reroll immediately.
         await setIngredientStatuses(recipeId, unresolvedNames, 'pending');
 
-        // 2. Try to resolve from index via embedding search (threshold=0: any result satisfies).
-        //    Returns names that got zero candidates — these still need generation.
+        // 2. Try to resolve from index via embedding search (returns names with zero candidates).
         let toGenerate = unresolvedNames;
+        let resolveMs = 0;
         if (embedFn) {
+            const t0 = Date.now();
             toGenerate = await this.resolveFromIndex(recipeId, unresolvedNames, hydeQueriesMap, embedFn);
+            resolveMs = Date.now() - t0;
         }
 
-        // 3. Only queue ingredients that the index couldn't satisfy (zero search results).
-        //    Names with search results have a shortlist and don't need a new icon generated.
-        if (toGenerate.length > 0) {
-            console.log(`Queueing ${toGenerate.length}/${unresolvedNames.length} ingredients for generation (${unresolvedNames.length - toGenerate.length} resolved from index)...`);
-            await Promise.all(toGenerate.map(stdName =>
-                this.queueIconForGeneration(recipeId, stdName, hydeQueriesMap.get(stdName))
-            ));
-        } else {
-            console.log(`All ${unresolvedNames.length} ingredients resolved from index — no generation needed.`);
+        // 3. Queue any names that still need generation. Log a concise, contextual message.
+        if (toGenerate.length === 0) {
+            if (embedFn) {
+                console.log(`All ${unresolvedNames.length} ingredients resolved from index in ${resolveMs}ms — no generation needed.`);
+            }
+            console.log(`No ingredients need generation and no embed fn provided.`);
+            return;
         }
+
+        const reason = embedFn
+            ? `(${unresolvedNames.length - toGenerate.length} `
+            : '(no embed fn)';
+        console.log(`Queueing ${toGenerate.length}/${unresolvedNames.length} ingredients for generation ${reason} resolved from index in ${resolveMs}ms)...`);
+        await Promise.all(toGenerate.map(stdName =>
+            this.queueIconForGeneration(recipeId, stdName, hydeQueriesMap.get(stdName))
+        ));
     }
 
   // icon_overview and tests only.

@@ -1,124 +1,120 @@
-# Design Document: Rust Vector Search Backend Integration
+# Design Document: Hybrid Icon Search Architecture (Cloud Function & In-Browser)
 
 ## 1. Context & Objective
-The RecipeLanes project requires a fast, low-latency vector search capability to match user ingredients/actions to icons. Following prototyping in the `embedding-mini-project`, we have elected to proceed with a **Rust In-Memory Backend**. 
+Following initial prototyping, the objective has shifted from managing a dedicated Rust vector database container to a completely **Serverless & Client-Hybrid** architecture. We want zero infrastructure management ("just code deployment"), blazing-fast cold starts, and the ability to dynamically swap search execution strategies on the fly without deploying new client code.
 
-**Primary Goals:**
-1.  **Future-Proof Architecture:** Design the system so the underlying "In-Memory" search can be swapped out for a managed database (e.g., Qdrant, Pinecone, or pgvector) with zero changes to the HTTP API or core business logic.
-2.  **Accommodate Icon Refactor:** Support the ongoing codebase refactor where icons are indexed by a top-level `icon_id` rather than a visual description. The vector service will act purely as an `Embedding -> icon_id` retrieval engine.
-3.  **Stateless & Scalable Deployment:** The service must be capable of spinning up from scratch, pulling the latest index, and serving requests instantly via Google Cloud Run.
-4.  **Automated CI/CD:** Integrate smoothly with GitHub Actions for testing and deployment.
+**Primary Architecture Goals:**
+1.  **Zero-Management Serverless:** Utilize Google Cloud Functions to serve the search. 
+2.  **Baked-In State:** Data is baked directly into the deployment artifact. No fetching large datasets on cold starts.
+3.  **Strategy Pattern & Remote Toggles:** The frontend must seamlessly fall back between Cloud Functions, fully local In-Browser execution, or the legacy Vertex AI search using Firebase Remote Config.
+4.  **Real-Time Gap Mitigation:** Handle the edge-case where a user creates a new icon and immediately searches for it, bypassing the baked index.
 
 ---
 
-## 2. System Architecture & "Future-Proof" Design
+## 2. The Strategy Pattern (Client-Side Abstraction)
 
-To prevent locking ourselves into the in-memory approach, we will use a **Ports and Adapters (Hexagonal)** architecture within the Rust service.
+To ensure we can easily swap between backend, browser, and legacy implementations, the Next.js frontend will implement the **Strategy Pattern**.
 
-### 2.1 Core Trait Abstraction
-We will define a Rust `trait` representing the vector database operations. The HTTP layer (`axum`) will only interact with this trait.
+A factory function will read a Firebase Remote Config value (e.g., `icon_search_mode = "browser" | "cloud_function" | "legacy"`) and instantiate the correct strategy.
 
-```rust
-#[async_trait]
-pub trait VectorStore: Send + Sync {
-    /// Search for the closest icons to a given dense vector
-    async fn search(&self, query_vector: &[f32], limit: usize) -> Result<Vec<SearchResult>, StoreError>;
-    
-    /// Insert or update an icon vector
-    async fn upsert(&self, icon_id: &str, vector: Vec<f32>) -> Result<(), StoreError>;
-    
-    /// Delete an icon vector
-    async fn delete(&self, icon_id: &str) -> Result<(), StoreError>;
-    
-    /// Bulk load the initial dataset
-    async fn load_initial_data(&self, data: Vec<IconRecord>) -> Result<(), StoreError>;
+```typescript
+// 1. The Strategy Interface
+interface IconSearchStrategy {
+    search(query: string, limit: number): Promise<SearchResult[]>;
 }
 
-pub struct SearchResult {
-    pub icon_id: String,
-    pub score: f32,
+// 2. Implementations
+class BrowserLocalSearch implements IconSearchStrategy {
+    // Loads Int8 index and ONNX model in background web worker
+    async search(query: string, limit: number) { ... }
+}
+
+class CloudFunctionSearch implements IconSearchStrategy {
+    // Hits the stateless Cloud Function endpoint
+    async search(query: string, limit: number) { ... }
+}
+
+class LegacyVertexSearch implements IconSearchStrategy {
+    // Current fallback using Vertex AI and Firestore native search
+    async search(query: string, limit: number) { ... }
+}
+
+// 3. Execution (Context)
+async function getSearchEngine(): Promise<IconSearchStrategy> {
+    const mode = await getFirebaseRemoteConfig('icon_search_mode');
+    switch(mode) {
+        case 'browser': return new BrowserLocalSearch();
+        case 'cloud_function': return new CloudFunctionSearch();
+        default: return new LegacyVertexSearch();
+    }
 }
 ```
-
-### 2.2 Implementations
-1.  **`InMemoryStore` (Initial implementation):** Implements `VectorStore` using a `RwLock<Vec<IconRecord>>` and performs brute-force (or SIMD-optimized) cosine similarity. It is blazing fast for < 100,000 records.
-2.  **`MockStore` (For testing):** Implements `VectorStore` to return deterministic search results for HTTP integration tests without needing to load ONNX models.
-3.  **`QdrantStore` / `PineconeStore` (Future):** If the dataset outgrows memory, we simply write a new struct that implements `VectorStore` and makes gRPC/HTTP calls to the managed DB, swapping it in `main.rs` via Dependency Injection.
+**Benefits:** If the Cloud Function proves too slow for certain regions, or we want to save on compute costs, we simply flip the Firebase config to `browser`, and users start doing the embedding and search entirely on their own devices.
 
 ---
 
-## 3. Handling the Icon `icon_id` Refactor
+## 3. Cloud Function Backend: "Baked-In" Data Strategy
 
-Currently, the main codebase is refactoring icons to be referenced by a top-level `icon_id`. The vector search service will strictly respect this boundary:
-*   **It does NOT store the image URLs or visual descriptions.**
-*   It only stores: `icon_id: String` and `embedding: Vec<f32>`.
-*   **Query Flow:** 
-    1. User types "Peanut Butter".
-    2. Next.js backend requests `/search?q=Peanut+Butter` from the Rust Service.
-    3. Rust Service embeds the query and runs cosine similarity.
-    4. Rust Service returns `[{ icon_id: "pb_123", score: 0.95 }, ...]`.
-    5. Next.js backend takes those `icon_id`s, hydrates the actual icon URLs/metadata from Firestore, and returns them to the frontend.
+We do not want a database. We want a fast function. 
 
----
+### 3.1 The "Baked" Build Process
+Instead of the Cloud Function connecting to Firestore or Cloud Storage on boot, the vector index is bundled **into the code artifact itself** during the CI/CD pipeline. 
 
-## 4. Index Updating Strategy (Firebase Integration)
+When the function scales from 0 to 1, the operating system simply loads a local file from disk to memory (taking milliseconds) rather than making network requests.
 
-Since the Rust service is in-memory, it will lose its data when the container shuts down. We need a robust sync mechanism.
+### 3.2 Deployment Triggers & Cost Analysis
+*   **Deployment Cost:** Google Cloud Build offers 120 free minutes per day. Pushing a Cloud Function is essentially **free**. The only cost is a fraction of a cent per month for storing the compressed deployment artifact in Google Artifact Registry.
+*   **When to Deploy:**
+    *   **Nightly Cron:** A GitHub Action runs every night at 2:00 AM.
+    *   **Threshold Trigger:** If the database grows by `X` new icons since the last build, a Firestore webhook triggers the GitHub Action to rebuild early.
 
-### 4.1 Startup Sync (Cold Start)
-When the Rust container boots, it will hit a known Google Cloud Storage bucket (or query Firestore directly) to download a pre-computed JSON/Binary dump of all `icon_id`s and their vectors. It parses this dump into memory before opening the HTTP port to accept traffic.
-
-### 4.2 Real-time Sync (Webhooks)
-When an admin adds or edits an icon's metadata in the main RecipeLanes application:
-1.  A **Firebase Cloud Function** (Firestore `onWrite` trigger) fires.
-2.  The Firebase function calls the Rust service's `/api/upsert` endpoint.
-3.  The Rust service embeds the new description string using `fastembed` and updates its `InMemoryStore` instantly.
-4.  *(Optional)* A nightly GitHub Action dumps the current Firestore state to the Cloud Storage bucket to keep the "Cold Start" file up to date.
+### 3.3 Index Optimization (KNN Deduplication)
+As the DB grows, we must keep the baked payload tiny. During the GitHub Action build step, we will run a pre-processing script:
+*   Perform K-Nearest Neighbors (KNN) on all vectors.
+*   If two icons have a similarity score of `> 0.99` (they mean exactly the same thing conceptually), drop one from the vector index and map its visual UI reference to the primary icon. 
+*   **Result:** We only ship conceptually distinct vectors.
 
 ---
 
-## 5. Deployment Plan
+## 4. Mitigating the "Fresh Icon" Gap
 
-The service will be containerized and deployed to **Google Cloud Run**, keeping it within the same GCP network as Firebase to ensure ultra-low latency and free egress.
+**The Problem:** If the index is only baked nightly, and a user creates a brand new icon at 10:00 AM, the Cloud Function won't know about it until tomorrow.
 
-### 5.1 Dockerfile Structure
-*   **Base:** Rust slim image.
-*   **Build Step:** Compiles the `axum` web server. Downloads the `Xenova/all-MiniLM-L6-v2` ONNX weights and bakes them directly into the Docker image so the container does not need to download them at runtime.
-*   **Runtime:** Exposes port 8080.
+**The Solution: Parallel Hybrid Search**
+During the GitHub Action build, we inject an environment variable into the Cloud Function: `LAST_INDEX_TIMESTAMP`.
 
-### 5.2 GitHub Actions Integration
-We will add a new workflow: `.github/workflows/rust-vector-search.yml`
+When the user searches:
+1.  **Fast Path:** The Cloud Function performs the dense vector search against its baked memory.
+2.  **Slow Path (Parallel):** The Cloud Function simultaneously queries live Firestore for any icons where `created_at > LAST_INDEX_TIMESTAMP`. It performs a brute-force comparison on *just* those few new icons.
+3.  **Merge:** The results are merged, sorted by score, and returned to the user.
 
-*   **Trigger:** Push to `main` modifying files in the `rust-vector-search/` directory.
-*   **CI Steps:**
-    1. `cargo fmt --check`
-    2. `cargo clippy -- -D warnings`
-    3. `cargo test`
-*   **CD Steps:**
-    1. Authenticate with Google Cloud (via Workload Identity Federation).
-    2. Build Docker Image.
-    3. Push to Google Artifact Registry.
-    4. Execute `gcloud run deploy recipe-lanes-vector-search --image ...`
+This guarantees absolute real-time accuracy without sacrificing the 0ms lookup speed of the 99% historical dataset.
 
 ---
 
-## 6. Implementation Specifics
+## 5. Technology Stack for the Cloud Function
 
-*   **Frameworks:** `axum` (Web HTTP), `tokio` (Async runtime).
-*   **Embedding Model:** `fastembed-rs` (Using `all-MiniLM-L6-v2` with `try_new_from_user_defined` to load baked-in weights).
-*   **Math:** Raw iterations are sufficient for <10k records, but `ndarray` will be imported for optimized matrix multiplication if needed.
-*   **Security:** 
-    *   `/search` is accessible internally via GCP VPC (or secured via API Key if public).
-    *   `/upsert` and `/delete` are secured via a rigid `ADMIN_API_KEY` validated in an Axum middleware layer.
+Since we want "just code deployment", deploying a custom Rust container to Cloud Functions is possible but adds friction. 
+We will instead use **Node.js Cloud Functions (2nd Gen)** leveraging `@huggingface/transformers` to match the exact same pipeline we built for the browser.
+
+*   **Runtime:** Node.js 20.
+*   **Embedding Model:** `Xenova/all-MiniLM-L6-v2` loaded locally via ONNX Runtime Node.
+*   **Database:** `Float32Array` or `Int8Array` loaded from a local `.bin` file bundled in the deployment zip.
 
 ---
 
-## 7. Testing Strategy
+## 6. Summary of Workflows
 
-1.  **VectorStore Unit Tests:**
-    *   Insert 3 known vectors. Query a vector exactly matching one. Ensure the correct `icon_id` is returned with a score of `1.0`.
-2.  **Axum Route Integration Tests:**
-    *   Inject `MockStore` into the Axum router.
-    *   Use `axum::test_helpers` to execute HTTP `POST /search` and assert JSON responses without hitting the network or spinning up a real server.
-3.  **ONNX Model Loading Test:**
-    *   Write a sanity-check unit test that asserts `TextEmbedding::try_new_from_user_defined` does not panic, ensuring the weights exist in the expected directory structure.
+**1. The CI/CD Rebuild Pipeline (GitHub Actions)**
+1. Fetches all icons from Firestore.
+2. Runs Vector generation for any missing embeddings.
+3. Deduplicates vectors (KNN distance threshold).
+4. Compresses index into Int8 `.bin` format.
+5. Injects `BUILD_TIMESTAMP`.
+6. Executes `gcloud functions deploy`.
+
+**2. The Client Search Flow**
+1. Next.js App loads.
+2. Checks Firebase Remote Config.
+3. If `browser`: Downloads the Int8 bin in the background and searches locally.
+4. If `cloud_function`: Sends query to GCP Function -> Function searches baked Int8 bin + parallel queries Firestore for new delta icons -> returns unified list.

@@ -11,3 +11,4 @@ test-results/
 recipe-lanes/functions/.env
 *service-account.json
 .playwright-mcp/
+.claude

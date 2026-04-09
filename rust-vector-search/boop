@@ -1,0 +1,13 @@
+#!/bin/bash
+if [ -z "$1" ]; then
+    echo "Usage: ./boop \"search query here\""
+    exit 1
+fi
+
+echo "🔍 Searching for: '$1'"
+echo "---------------------------------------------------"
+
+curl -s -X POST \
+  -H "Content-Type: application/json" \
+  -d "{\"query\": \"$1\", \"limit\": 12}" \
+  http://localhost:8080/search

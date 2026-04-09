@@ -1096,28 +1096,16 @@ export class FirebaseDataService implements DataService {
   }
 
   async deleteIcon(iconId: string, ingredientName?: string) {
-      if (!ingredientName) return; 
-      const stdName = standardizeIngredientName(ingredientName);
-      const docRef = db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName);
+      const docRef = db.collection(DB_COLLECTION_ICON_INDEX).doc(iconId);
+      const doc = await docRef.get();
+      if (!doc.exists) return;
+      const icon = doc.data() as IconStats;
+      await docRef.delete();
       
-      const deleted = await db.runTransaction(async (t) => {
-          const doc = await t.get(docRef);
-          if (!doc.exists) return null;
-          const icons = doc.data()?.icons || [];
-          const iconToDelete = icons.find((i: any) => i.id === iconId);
-
-          if (iconToDelete) {
-              const pathMap = getIconStoragePaths(iconToDelete);
-              const newIcons = icons.filter((i: any) => i !== iconToDelete);
-              t.update(docRef, { icons: newIcons });
-              return pathMap;
-          }
-          return null;
-      });
-      
-      if (deleted && process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
+      if (icon.visualDescription && process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
+          const pathMap = getIconStoragePaths(icon);
           const bucket = storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
-          await Promise.all(Object.values<string>(deleted).map(p => bucket.file(p).delete().catch(() => {})));
+          await Promise.all(Object.values<string>(pathMap).map(p => bucket.file(p).delete().catch(() => {})));
       }
   }
 

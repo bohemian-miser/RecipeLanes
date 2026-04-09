@@ -34,7 +34,7 @@ import { setAIService, MockAIService } from '../lib/ai-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
 import { buildShortlistEntry } from '../lib/recipe-lanes/model-utils';
 import { standardizeIngredientName } from '../lib/utils';
-import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_RECIPES } from '../lib/config';
+import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_RECIPES, DB_COLLECTION_ICON_INDEX } from '../lib/config';
 import type { IconStats, ShortlistEntry } from '../lib/recipe-lanes/types';
 
 setAIService(new MockAIService());
@@ -61,6 +61,14 @@ async function seedIngredient(
         created_at: new Date(),
         updated_at: new Date(),
     });
+    const batch = db.batch();
+    for (const icon of icons) {
+        batch.set(db.collection(DB_COLLECTION_ICON_INDEX).doc(icon.id), {
+            ...icon,
+            ingredient_name: stdName,
+        });
+    }
+    await batch.commit();
     return icons.map(icon => buildShortlistEntry(icon, 'search'));
 }
 
@@ -95,12 +103,14 @@ async function createRecipeWithShortlist(
 }
 
 /** Fetches icons from `ingredients_new/{stdName}` keyed by icon id. */
-async function fetchIconStats(stdName: string): Promise<Map<string, { impressions: number; rejections: number }>> {
-    const doc = await db.collection(DB_COLLECTION_INGREDIENTS).doc(stdName).get();
-    const icons: any[] = doc.data()?.icons || [];
+async function fetchIconStats(iconIds: string[]): Promise<Map<string, { impressions: number; rejections: number }>> {
     const map = new Map<string, { impressions: number; rejections: number }>();
-    for (const icon of icons) {
-        map.set(icon.id, { impressions: icon.impressions || 0, rejections: icon.rejections || 0 });
+    for (const id of iconIds) {
+        const doc = await db.collection(DB_COLLECTION_ICON_INDEX).doc(id).get();
+        if (doc.exists) {
+            const icon = doc.data()!;
+            map.set(doc.id, { impressions: icon.impressions || 0, rejections: icon.rejections || 0 });
+        }
     }
     return map;
 }
@@ -126,7 +136,7 @@ describe('Impression and Rejection Tracking', () => {
         assert.ok(result.success, `rejectRecipeIcon failed: ${result.error}`);
 
         // Verify all 3 icons got +1 impression and +1 rejection
-        const stats = await fetchIconStats(stdName);
+        const stats = await fetchIconStats(icons.map(i => i.id));
         for (const icon of icons) {
             const s = stats.get(icon.id);
             assert.ok(s, `icon ${icon.id} not found in ingredients_new`);
@@ -145,7 +155,7 @@ describe('Impression and Rejection Tracking', () => {
 
         await getDataService().rejectRecipeIcon(recipeId, ingredient);
 
-        const stats = await fetchIconStats(stdName);
+        const stats = await fetchIconStats(icons.map(i => i.id));
         // Icons at index 0 and 1 should be recorded; index 2 should not.
         assert.equal(stats.get('fp-1')!.impressions, 1, 'fp-1 impression');
         assert.equal(stats.get('fp-1')!.rejections, 1, 'fp-1 rejection');
@@ -173,7 +183,7 @@ describe('Impression and Rejection Tracking', () => {
         assert.ok(recipe, 'recipe not found');
         await getDataService().saveRecipe(recipe.graph, recipeId);
 
-        const stats = await fetchIconStats(stdName);
+        const stats = await fetchIconStats(icons.map(i => i.id));
         assert.equal(stats.get('si-1')!.impressions, 1, 'si-1 impression');
         assert.equal(stats.get('si-1')!.rejections, 1, 'si-1 should have rejection');
         assert.equal(stats.get('si-2')!.impressions, 1, 'si-2 impression');
@@ -200,7 +210,7 @@ describe('Impression and Rejection Tracking', () => {
             await getDataService().rejectRecipeIcon(recipeId, ingredient);
         }
 
-        const stats = await fetchIconStats(stdName);
+        const stats = await fetchIconStats(icons.map(i => i.id));
         // Despite two forge calls, already-flagged entries should not be double-counted
         assert.ok(stats.get('id-1')!.impressions <= 1, `id-1 impressions should be ≤1, got ${stats.get('id-1')!.impressions}`);
         assert.ok(stats.get('id-1')!.rejections <= 1, `id-1 rejections should be ≤1, got ${stats.get('id-1')!.rejections}`);
@@ -224,7 +234,7 @@ describe('Impression and Rejection Tracking', () => {
         // Forge — should record rejections for all 3, but NOT double-count impressions
         await getDataService().rejectRecipeIcon(recipeId, ingredient);
 
-        const stats = await fetchIconStats(stdName);
+        const stats = await fetchIconStats(icons.map(i => i.id));
         for (const icon of icons) {
             const s = stats.get(icon.id)!;
             assert.equal(s.impressions, 1, `${icon.id}: expected exactly 1 impression`);

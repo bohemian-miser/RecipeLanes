@@ -94,6 +94,7 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
     await login('admin-user');
     const { promoteToAdmin } = await import('./utils/admin-utils');
     await promoteToAdmin('admin-user');
+    await page.waitForTimeout(1000);
     
     await page.goto('/gallery?filter=unvetted');
     const card = page.locator(`a[href="/lanes?id=${recipeId}"]`);

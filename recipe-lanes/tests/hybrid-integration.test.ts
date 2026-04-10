@@ -38,16 +38,17 @@ describe('Hybrid Search Integration (Emulator)', () => {
             }
         });
 
-        // 2. Define a searchFn that returns a mock result
-        const mockSearchFn = async (texts: string[]) => {
-            return {
+        // 2. Define a batch search fn that returns a mock result
+        const mockBatchSearchFn = async (ingredients: { name: string, queries: string[] }[], _limit: number) => {
+            return ingredients.map(ing => ({
+                name: ing.name,
                 embedding: new Array(384).fill(0.1),
-                fast_matches: [{ icon_id: iconId, score: 0.99 }]
-            };
+                fast_matches: [{ icon_id: iconId, score: 0.99 }],
+            }));
         };
 
         // 3. Trigger resolution
-        await service.resolveRecipeIcons(recipeId, mockSearchFn);
+        await service.resolveRecipeIcons(recipeId, mockBatchSearchFn);
 
         // 4. Verify that the node now has a shortlist
         const doc = await recipeRef.get();
@@ -78,16 +79,17 @@ describe('Hybrid Search Integration (Emulator)', () => {
             }
         });
 
-        // 2. Define a searchFn simulating legacy mode (empty fast_matches, 768d embedding)
-        const mockSearchFn = async (texts: string[]) => {
-            return {
+        // 2. Define a batch search fn simulating legacy mode (empty fast_matches, 768d embedding)
+        const mockBatchSearchFn = async (ingredients: { name: string, queries: string[] }[], _limit: number) => {
+            return ingredients.map(ing => ({
+                name: ing.name,
                 embedding: legacyEmbedding,
-                fast_matches: [] // Force fallback to findNearest
-            };
+                fast_matches: [] as any[], // Force fallback to findNearest
+            }));
         };
 
         // Give the Firestore emulator vector index a moment to update
-        // Note: Emulators can be flaky building vector indexes synchronously. 
+        // Note: Emulators can be flaky building vector indexes synchronously.
         // We'll mock the actual `searchIconsByEmbedding` call just to prove the fallback logic routes correctly.
         const originalSearch = service.searchIconsByEmbedding.bind(service);
         let fallbackCalled = false;
@@ -101,7 +103,7 @@ describe('Hybrid Search Integration (Emulator)', () => {
         };
 
         // 3. Trigger resolution
-        await service.resolveRecipeIcons(recipeId, mockSearchFn);
+        await service.resolveRecipeIcons(recipeId, mockBatchSearchFn);
 
         // Restore
         service.searchIconsByEmbedding = originalSearch;

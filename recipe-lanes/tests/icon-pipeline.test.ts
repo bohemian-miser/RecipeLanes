@@ -24,26 +24,28 @@ const makeIcon = (id: string): IconStats => ({
     score: 0.9,
 });
 
-/** Stub searchFn that returns a fixed vector and fast matches and records how many times it was called. */
+/** Stub batch search fn that returns a fixed vector and fast matches and records how many times it was called. */
 function makeEmbedSpy() {
     let callCount = 0;
-    const searchFn = async (_texts: string[]): Promise<{ embedding: number[], fast_matches: any[] }> => {
+    const searchFn = async (ingredients: { name: string, queries: string[] }[], _limit: number): Promise<{ name: string, embedding: number[], fast_matches: any[] }[]> => {
         callCount++;
-        return { embedding: [0.1, 0.2, 0.3], fast_matches: [] };
+        return ingredients.map(ing => ({ name: ing.name, embedding: [0.1, 0.2, 0.3], fast_matches: [] }));
     };
     return { searchFn, getCallCount: () => callCount };
 }
-/** A MemoryDataService subclass that tracks resolveRecipeIcons calls, including searchFn. */
+type BatchSearchFn = (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>;
+
+/** A MemoryDataService subclass that tracks resolveRecipeIcons calls, including batchSearchFn. */
 class SpyMemoryDataService extends MemoryDataService {
     public resolveCallArgs: Array<{ recipeId: string; hadEmbedFn: boolean }> = [];
 
-    override async resolveRecipeIcons(recipeId: string, searchFn?: (texts: string[]) => Promise<{ embedding: number[], fast_matches: any[] }>): Promise<void> {
-        this.resolveCallArgs.push({ recipeId, hadEmbedFn: searchFn !== undefined });
-        return super.resolveRecipeIcons(recipeId, searchFn);
+    override async resolveRecipeIcons(recipeId: string, batchSearchFn?: BatchSearchFn): Promise<void> {
+        this.resolveCallArgs.push({ recipeId, hadEmbedFn: batchSearchFn !== undefined });
+        return super.resolveRecipeIcons(recipeId, batchSearchFn);
     }
 }
 
-/** A MemoryDataService subclass that captures searchFn passed to rejectRecipeIcon. */
+/** A MemoryDataService subclass that captures batchSearchFn passed to rejectRecipeIcon. */
 class RejectSpyDataService extends MemoryDataService {
     public rejectCalls: Array<{ searchFnProvided: boolean }> = [];
 
@@ -52,10 +54,10 @@ class RejectSpyDataService extends MemoryDataService {
         ingredientName: string,
         currentIconId?: string,
         userId?: string,
-        searchFn?: (texts: string[]) => Promise<{ embedding: number[], fast_matches: any[] }>,
+        batchSearchFn?: BatchSearchFn,
     ): Promise<{ success: boolean; error?: string }> {
-        this.rejectCalls.push({ searchFnProvided: searchFn !== undefined });
-        return super.rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId, searchFn);
+        this.rejectCalls.push({ searchFnProvided: batchSearchFn !== undefined });
+        return super.rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId, batchSearchFn);
     }
 }
 

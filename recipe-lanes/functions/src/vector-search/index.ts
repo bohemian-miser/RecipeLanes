@@ -78,54 +78,65 @@ function averageEmbeddings(vecs: number[][]): number[] {
   return avg;
 }
 
+/** Embed a list of queries and return their averaged, normalised vector. */
+async function embedAndSearch(queries: string[], limit: number): Promise<{
+  embedding: number[];
+  fast_matches: { icon_id: string; score: number }[];
+}> {
+  const outputs = await Promise.all(
+    queries.map(q => embedderPipeline(q, { pooling: "mean", normalize: true }))
+  );
+  const vecs = outputs.map((o: any) => Array.from(o.data) as number[]);
+  const embedding = vecs.length === 1 ? vecs[0] : averageEmbeddings(vecs);
+
+  const fast_matches: { icon_id: string; score: number }[] = [];
+  if (iconIndex && iconIndex.length > 0) {
+    for (const record of iconIndex) {
+      fast_matches.push({ icon_id: record.id, score: cosineSimilarity(embedding, record.embedding) });
+    }
+    fast_matches.sort((a, b) => b.score - a.score);
+    fast_matches.splice(limit);
+  }
+  return { embedding, fast_matches };
+}
+
 export const searchIconVector = onCall({
     memory: "1GiB",
     timeoutSeconds: 60,
     maxInstances: 10,
 }, async (request) => {
-  // Accept either queries[] (preferred) or legacy query string.
+  const limit = request.data.limit || 12;
+  await initialize();
+
+  // Batch mode: ingredients[{name, queries[]}] → results[{name, embedding, fast_matches}]
+  if (Array.isArray(request.data.ingredients)) {
+    const ingredients: { name: string; queries: string[] }[] = request.data.ingredients;
+    if (ingredients.length === 0) {
+      throw new HttpsError("invalid-argument", "ingredients array is empty.");
+    }
+    console.log(`[VectorSearch] batch: ${ingredients.length} ingredients`);
+    const results = await Promise.all(
+      ingredients.map(async (ing) => {
+        const queries = ing.queries.filter(q => typeof q === "string" && q.trim());
+        if (queries.length === 0) return { name: ing.name, embedding: [], fast_matches: [] };
+        const { embedding, fast_matches } = await embedAndSearch(queries, limit);
+        return { name: ing.name, embedding, fast_matches };
+      })
+    );
+    return { results, snapshot_timestamp: snapshotTimestamp };
+  }
+
+  // Single-ingredient mode (backward compat): queries[] or query string
   const rawQueries: string | string[] = request.data.queries ?? request.data.query;
   const queries: string[] = Array.isArray(rawQueries)
     ? rawQueries.filter((q: any) => typeof q === "string" && q.trim())
     : (typeof rawQueries === "string" && rawQueries.trim() ? [rawQueries] : []);
-  const limit = request.data.limit || 12;
 
   if (queries.length === 0) {
-    throw new HttpsError("invalid-argument", "Provide 'queries' (string[]) or 'query' (string).");
+    throw new HttpsError("invalid-argument", "Provide 'ingredients' (batch) or 'queries'/'query' (single).");
   }
 
-  await initialize();
-
-  // Embed all queries in parallel, then average + re-normalise.
-  const outputs = await Promise.all(
-    queries.map(q => embedderPipeline(q, { pooling: "mean", normalize: true }))
-  );
-  const vecs = outputs.map((o: any) => Array.from(o.data) as number[]);
-  const queryEmbedding = vecs.length === 1 ? vecs[0] : averageEmbeddings(vecs);
-
-  console.log(`[VectorSearch] embedded ${queries.length} quer${queries.length === 1 ? 'y' : 'ies'}, dim=${queryEmbedding.length}`);
-
-  // Perform cosine similarity search
-  const fastMatches: { icon_id: string; score: number }[] = [];
-  
-  if (iconIndex && iconIndex.length > 0) {
-    for (const record of iconIndex) {
-      const score = cosineSimilarity(queryEmbedding, record.embedding);
-      fastMatches.push({
-        icon_id: record.id,
-        score,
-      });
-    }
-    
-    // Sort descending by score
-    fastMatches.sort((a, b) => b.score - a.score);
-    // Truncate
-    fastMatches.splice(limit);
-  }
-
-  return {
-    embedding: queryEmbedding,
-    fast_matches: fastMatches,
-    snapshot_timestamp: snapshotTimestamp,
-  };
+  console.log(`[VectorSearch] single: ${queries.length} quer${queries.length === 1 ? 'y' : 'ies'}`);
+  const { embedding, fast_matches } = await embedAndSearch(queries, limit);
+  return { embedding, fast_matches, snapshot_timestamp: snapshotTimestamp };
 });

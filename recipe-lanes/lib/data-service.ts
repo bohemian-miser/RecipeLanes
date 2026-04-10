@@ -75,9 +75,9 @@ export interface DataService {
 //   waitForQueue(ingredientName: string, timeoutMs?: number): Promise<IconStats | null>;
   
   // New Methods for Refactor
-  resolveRecipeIcons(recipeId: string, searchFn?: (texts: string[]) => Promise<{ embedding: number[], fast_matches: any[] }>): Promise<void>;
+  resolveRecipeIcons(recipeId: string, batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>): Promise<void>;
   addNodeToRecipe(recipeId: string, ingredientName: string, laneId?: string, hydeQueries?: string[]): Promise<{ success: boolean, nodeId?: string, error?: string }>;
-  rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, searchFn?: (texts: string[]) => Promise<{ embedding: number[], fast_matches: any[] }>): Promise<{ success: boolean, error?: string }>;
+  rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>): Promise<{ success: boolean, error?: string }>;
   imagineRecipeWithIcon(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<any>;
   setRecipeWithIcon(data: any, transaction?: any): Promise<void>;
   assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<void>;
@@ -440,59 +440,60 @@ export class FirebaseDataService implements DataService {
         recipeId: string,
         unresolvedNames: string[],
         hydeQueriesMap: Map<string, string[]>,
-        searchFn: (texts: string[]) => Promise<{ embedding: number[], fast_matches: any[] }>
+        batchSearchFn: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>
     ): Promise<string[]> {
-        const results = await Promise.all(unresolvedNames.map(async (stdName) => {
-                try {
-                    const queries = hydeQueriesMap.get(stdName);
-                    const textsToEmbed = queries && queries.length > 0 ? queries : [stdName];
-                    const t0 = Date.now();
-                    
-                    // 1. Unified Call (Embed + Fast Match)
-                    const { embedding: vec, fast_matches } = await searchFn(textsToEmbed);
-                    const fastMs = Date.now() - t0;
-                    
-                    let searchResults: IconStats[] = [];
-                    let lookupMs = 0;
-                    
-                    // CF path: fast_matches are pre-ranked in MiniLM space — hydrate metadata and
-                    // use CF scores directly. Do NOT re-rank with Firestore embeddings (768d vs 384d).
-                    if (fast_matches && fast_matches.length > 0) {
-                        const t1 = Date.now();
-                        const hydrated = await this.getIconsByIds(fast_matches.map(fm => fm.icon_id));
-                        const ranked = hydrated
-                            .map(icon => {
-                                const fm = fast_matches.find(m => m.icon_id === icon.id);
-                                return buildShortlistEntry(icon, 'search', fm?.score ?? 0);
-                            })
-                            .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
-                        lookupMs = Date.now() - t1;
-                        await this.assignShortlistToRecipe(recipeId, stdName, ranked.slice(0, 8));
-                        console.log(`[resolveFromIndex] "${stdName}" → ${ranked.length} candidates from CF (embed ${fastMs}ms, hydrate ${lookupMs}ms)`);
-                        return null;
-                    }
+        const ingredients = unresolvedNames.map(name => ({
+            name,
+            queries: hydeQueriesMap.get(name) ?? [name],
+        }));
 
-                    // Legacy path: Firestore findNearest (768d), then re-rank with stored 768d embeddings.
-                    {
-                        const t1 = Date.now();
-                        searchResults = await this.searchIconsByEmbedding(vec, 12);
-                        lookupMs = Date.now() - t1;
-                    }
+        const t0 = Date.now();
+        let batchResults: { name: string, embedding: number[], fast_matches: any[] }[];
+        try {
+            batchResults = await batchSearchFn(ingredients, 12);
+        } catch (e) {
+            console.warn(`[resolveFromIndex] batch search failed:`, e);
+            return unresolvedNames;
+        }
+        console.log(`[resolveFromIndex] batch CF call: ${ingredients.length} ingredients in ${Date.now() - t0}ms`);
 
-                    if (searchResults.length > 0) {
-                        const embeddings = await this.getIconEmbeddings(searchResults.map(r => r.id));
-                        const ranked = rankIconsByEmbedding(searchResults, vec, embeddings);
-                        await this.assignShortlistToRecipe(recipeId, stdName, ranked.slice(0, 8));
-                        console.log(`[resolveFromIndex] "${stdName}" → ${searchResults.length} candidates from Firestore (embed ${fastMs}ms, findNearest ${lookupMs}ms)`);
-                        return null;
-                    }
-                    return stdName;
-                } catch (e) {
-                    console.warn(`[resolveFromIndex] search failed for "${stdName}":`, e);
-                    return stdName;
+        const unresolved: string[] = [];
+        await Promise.all(batchResults.map(async ({ name: stdName, embedding: vec, fast_matches }) => {
+            try {
+                // CF path: fast_matches pre-ranked in MiniLM space — hydrate and use scores directly.
+                if (fast_matches && fast_matches.length > 0) {
+                    const t1 = Date.now();
+                    const hydrated = await this.getIconsByIds(fast_matches.map((fm: any) => fm.icon_id));
+                    const ranked = hydrated
+                        .map(icon => {
+                            const fm = fast_matches.find((m: any) => m.icon_id === icon.id);
+                            return buildShortlistEntry(icon, 'search', fm?.score ?? 0);
+                        })
+                        .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+                    await this.assignShortlistToRecipe(recipeId, stdName, ranked.slice(0, 8));
+                    console.log(`[resolveFromIndex] "${stdName}" → ${ranked.length} candidates from CF (hydrate ${Date.now() - t1}ms)`);
+                    return;
                 }
-            }));
-        return results.filter((n): n is string => n !== null);
+
+                // Legacy fallback: Firestore findNearest (768d).
+                const t1 = Date.now();
+                const searchResults = await this.searchIconsByEmbedding(vec, 12);
+                const findMs = Date.now() - t1;
+                if (searchResults.length > 0) {
+                    const embeddings = await this.getIconEmbeddings(searchResults.map(r => r.id));
+                    const ranked = rankIconsByEmbedding(searchResults, vec, embeddings);
+                    await this.assignShortlistToRecipe(recipeId, stdName, ranked.slice(0, 8));
+                    console.log(`[resolveFromIndex] "${stdName}" → ${searchResults.length} candidates from Firestore (findNearest ${findMs}ms)`);
+                    return;
+                }
+                unresolved.push(stdName);
+            } catch (e) {
+                console.warn(`[resolveFromIndex] processing failed for "${stdName}":`, e);
+                unresolved.push(stdName);
+            }
+        }));
+
+        return unresolved;
     }
 
     /**
@@ -523,7 +524,7 @@ export class FirebaseDataService implements DataService {
         }
     }
 
-    async resolveRecipeIcons(recipeId: string, searchFn?: (texts: string[]) => Promise<{ embedding: number[], fast_matches: any[] }>): Promise<void> {
+    async resolveRecipeIcons(recipeId: string, batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>): Promise<void> {
         console.log(`[FirebaseDataService] resolveRecipeIcons: ${recipeId}`);
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
         const doc = await recipeRef.get();
@@ -561,18 +562,18 @@ export class FirebaseDataService implements DataService {
         // Mark all unresolved nodes as pending so the UI blocks forge/reroll immediately.
         await setIngredientStatuses(recipeId, unresolvedNames, 'pending');
 
-        // 2. Try to resolve from index via embedding search (returns names with zero candidates).
+        // 2. One batch CF call for all ingredients → returns any that still need generation.
         let toGenerate = unresolvedNames;
         let resolveMs = 0;
-        if (searchFn) {
+        if (batchSearchFn) {
             const t0 = Date.now();
-            toGenerate = await this.resolveFromIndex(recipeId, unresolvedNames, hydeQueriesMap, searchFn);
+            toGenerate = await this.resolveFromIndex(recipeId, unresolvedNames, hydeQueriesMap, batchSearchFn);
             resolveMs = Date.now() - t0;
         }
 
         // 3. Queue any names that still need generation. Log a concise, contextual message.
         if (toGenerate.length === 0) {
-            if (searchFn) {
+            if (batchSearchFn) {
                 console.log(`All ${unresolvedNames.length} ingredients resolved from index in ${resolveMs}ms — no generation needed.`);
             } else {
                 console.log(`No ingredients need generation and no search fn provided.`);
@@ -580,7 +581,7 @@ export class FirebaseDataService implements DataService {
             return;
         }
 
-        const reason = searchFn
+        const reason = batchSearchFn
             ? `(${unresolvedNames.length - toGenerate.length} `
             : '(no search fn)';
         console.log(`Queueing ${toGenerate.length}/${unresolvedNames.length} ingredients for generation ${reason} resolved from index in ${resolveMs}ms)...`);
@@ -628,7 +629,7 @@ export class FirebaseDataService implements DataService {
   }
 
     // this runs when forging and in icon_overview. We should make this keep the old options around maybe?
-  async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, searchFn?: (texts: string[]) => Promise<{ embedding: number[], fast_matches: any[] }>): Promise<{ success: boolean, error?: string }> {
+  async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>): Promise<{ success: boolean, error?: string }> {
       try {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
         const stdName = standardizeIngredientName(String(ingredientName));
@@ -669,7 +670,7 @@ export class FirebaseDataService implements DataService {
         ]);
         settled.forEach((r, i) => { if (r.status === 'rejected') console.warn(`[rejectRecipeIcon] task[${i}] failed:`, r.reason); });
 
-        await this.resolveRecipeIcons(recipeId, searchFn);
+        await this.resolveRecipeIcons(recipeId, batchSearchFn);
         return { success: true };
       } catch (e: any) {
           return { success: false, error: e.message };
@@ -1386,7 +1387,7 @@ export class MemoryDataService implements DataService {
         return hits;
     }
 
-    async resolveRecipeIcons(recipeId: string, _searchFn?: (texts: string[]) => Promise<{ embedding: number[], fast_matches: any[] }>): Promise<void> {
+    async resolveRecipeIcons(recipeId: string, _batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>): Promise<void> {
         const recipe = this.recipes.get(recipeId);
         if (!recipe) return;
         
@@ -1442,7 +1443,7 @@ export class MemoryDataService implements DataService {
         return { success: true, nodeId };
     }
 
-    async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, _searchFn?: (texts: string[]) => Promise<{ embedding: number[], fast_matches: any[] }>): Promise<{ success: boolean, error?: string }> {
+    async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, _batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>): Promise<{ success: boolean, error?: string }> {
         const recipe = this.recipes.get(recipeId);
         if (!recipe) return { success: false, error: 'Recipe not found' };
 

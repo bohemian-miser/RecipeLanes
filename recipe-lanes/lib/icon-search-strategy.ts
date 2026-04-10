@@ -13,6 +13,17 @@ export type SearchResponse = {
   snapshot_timestamp: number;
 };
 
+export type BatchIngredient = {
+  name: string;
+  queries: string[];
+};
+
+export type BatchSearchResult = {
+  name: string;
+  embedding: number[];
+  fast_matches: FastMatch[];
+};
+
 export type SearchMode = 'node_cf' | 'browser' | 'legacy';
 
 /**
@@ -57,4 +68,32 @@ export async function getFastPass(queryInput: string | string[], limit: number =
   }
 
   throw new Error(`Invalid search mode: ${mode}`);
+}
+
+/**
+ * Batch fast pass — one CF call for multiple ingredients.
+ * Returns per-ingredient results in the same order as the input.
+ */
+export async function getBatchFastPass(
+  ingredients: BatchIngredient[],
+  limit: number = 12,
+): Promise<BatchSearchResult[]> {
+  const mode = getActiveSearchMode();
+
+  if (mode === 'node_cf') {
+    const searchIconVector = httpsCallable<
+      { ingredients: BatchIngredient[]; limit: number },
+      { results: BatchSearchResult[]; snapshot_timestamp: number }
+    >(functions, 'vectorSearch-searchIconVector');
+    const result = await searchIconVector({ ingredients, limit });
+    return result.data.results;
+  }
+
+  // Fallback for legacy/browser: fan out per ingredient sequentially
+  return Promise.all(
+    ingredients.map(async (ing) => {
+      const res = await getFastPass(ing.queries.length > 0 ? ing.queries : [ing.name], limit);
+      return { name: ing.name, embedding: res.embedding, fast_matches: res.fast_matches };
+    })
+  );
 }

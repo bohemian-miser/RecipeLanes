@@ -29,7 +29,7 @@ import { standardizeIngredientName } from '@/lib/utils';
 import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import {  DB_COLLECTION_RECIPES } from '@/lib/config';
-import { unifiedIconSearch } from '@/lib/search-orchestrator';
+import { unifiedIconSearch, batchIconSearch } from '@/lib/search-orchestrator';
 
 // Input Validation Schemas
 const IngredientSchema = z.string().min(1).max(100);
@@ -47,7 +47,7 @@ export async function rejectIcon(recipeId: string, ingredientName: string, curre
     try {
         const session = await getAuthService().verifyAuth();
         const userId = session?.uid;
-        return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId, unifiedIconSearch);
+        return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId, batchIconSearch);
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -102,14 +102,14 @@ export async function addIngredientNodeAction(recipeId: string, ingredientName: 
         // 5. Trigger icon resolution in background (or foreground if preferred)
         try {
             if (process.env.NODE_ENV === 'test') {
-                await getDataService().resolveRecipeIcons(recipeId, unifiedIconSearch);
+                await getDataService().resolveRecipeIcons(recipeId, batchIconSearch);
             } else {
-                after(() => getDataService().resolveRecipeIcons(recipeId, unifiedIconSearch));
+                after(() => getDataService().resolveRecipeIcons(recipeId, batchIconSearch));
             }
         } catch (e) {
             // Fallback for environments where 'after' is not supported (like some older Next.js versions or non-request contexts)
             console.log("[addIngredientNodeAction] 'after' not supported or outside request scope, running sync");
-            await getDataService().resolveRecipeIcons(recipeId, unifiedIconSearch);
+            await getDataService().resolveRecipeIcons(recipeId, batchIconSearch);
         }
     }
     return result;
@@ -205,13 +205,13 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
         const embedFn = getAIService().embedTexts.bind(getAIService());
         try {
             if (process.env.NODE_ENV === 'test') {
-                await getDataService().resolveRecipeIcons(id, unifiedIconSearch);
+                await getDataService().resolveRecipeIcons(id, batchIconSearch);
             } else {
-                after(() => getDataService().resolveRecipeIcons(id, unifiedIconSearch));
+                after(() => getDataService().resolveRecipeIcons(id, batchIconSearch));
             }
         } catch (e) {
             console.log("[createVisualRecipeAction] 'after' not supported or outside request scope, running sync", e);
-            await getDataService().resolveRecipeIcons(id, unifiedIconSearch);
+            await getDataService().resolveRecipeIcons(id, batchIconSearch);
         }
 
         console.log(`[createVisualRecipeAction] ✅ Saved. ID: ${id} (icons resolving in background)`);

@@ -28,7 +28,7 @@ import type { RecipeGraph, IconStats } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
 import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
-import {  DB_COLLECTION_RECIPES } from '@/lib/config';
+import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
 import { unifiedIconSearch, batchIconSearch } from '@/lib/search-orchestrator';
 
 // Input Validation Schemas
@@ -440,6 +440,31 @@ export async function retryIconGenerationAction(ingredientName: string) {
 export async function debugLogAction(message: string) {
     console.log(`[CLIENT-LOG] ${message}`);
 }
+
+export async function clearIconQueueAction(): Promise<{ success: boolean; deleted: number; error?: string }> {
+    const session = await getAuthService().verifyAuth();
+    if (!session) return { success: false, deleted: 0, error: 'Login required' };
+    const userDoc = await db.collection('users').doc(session.uid).get();
+    if (!userDoc.data()?.isAdmin) return { success: false, deleted: 0, error: 'Admin required' };
+
+    try {
+        const snap = await db.collection(DB_COLLECTION_QUEUE).get();
+        const docs = snap.docs;
+        // Batch delete in chunks of 500
+        let deleted = 0;
+        for (let i = 0; i < docs.length; i += 500) {
+            const batch = db.batch();
+            docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+            await batch.commit();
+            deleted += Math.min(500, docs.length - i);
+        }
+        console.log(`[clearIconQueue] Deleted ${deleted} queue docs`);
+        return { success: true, deleted };
+    } catch (e: any) {
+        return { success: false, deleted: 0, error: e.message };
+    }
+}
+
 /* ^ Triaged ^ */
 
 

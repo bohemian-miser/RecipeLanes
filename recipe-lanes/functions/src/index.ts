@@ -62,7 +62,13 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
     const docRef = db.collection(DB_COLLECTION_QUEUE).doc(ingredientName);
 
     try {
-        // 1. Immediately set to processing (No transaction needed since it's onCreated)
+        // 1. Check doc exists (may have been cleared by admin) before proceeding
+        const existing = await docRef.get();
+        if (!existing.exists) {
+            console.log(`[Task-${ingredientName}] Queue doc not found — task was cleared, skipping.`);
+            return;
+        }
+
         console.log(`[Queue-${ingredientName}] Started`);
         await docRef.update({
             status: "processing",

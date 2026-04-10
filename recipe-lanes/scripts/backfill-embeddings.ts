@@ -6,23 +6,21 @@ import * as dotenv from 'dotenv';
 import { FieldValue } from 'firebase-admin/firestore';
 import { ai, embeddingModel } from '../lib/genkit';
 
-// Usage: npx tsx backfill-embeddings.ts [--staging | --prod]
+// Usage: npx tsx backfill-embeddings.ts [--staging | --prod] [--dry-run]
 
 async function run() {
   const args = process.argv.slice(2);
   let envArg = 'staging';
+  let dryRun = false;
 
   if (args.includes('--prod')) envArg = 'prod';
   else if (args.includes('--staging')) envArg = 'staging';
-  else {
-      console.warn("No environment flag provided. Defaulting to --staging.");
-  }
+  
+  if (args.includes('--dry-run')) dryRun = true;
 
   const envFile = envArg === 'prod' ? '.env.prod' : '.env.staging';
   dotenv.config({ path: path.resolve(__dirname, `../${envFile}`) });
 
-  // Disable local cache writing for the transformers library if needed, 
-  // but it's fine locally. We'll use /tmp just in case.
   env.cacheDir = "/tmp/.cache/huggingface";
 
   const serviceAccountPath = path.resolve(__dirname, `../${envArg}-service-account.json`);
@@ -41,6 +39,11 @@ async function run() {
 
   const db = admin.firestore();
   
+  console.log(`=========================================`);
+  console.log(` ENVIRONMENT: ${envArg}`);
+  console.log(` MODE:        ${dryRun ? 'DRY RUN (No writes)' : 'LIVE WRITE'}`);
+  console.log(`=========================================`);
+  
   console.log(`Fetching all icons from ${envArg} icon_index...`);
   const snap = await db.collection('icon_index').get();
   
@@ -52,6 +55,7 @@ async function run() {
   let backfilledMiniLM = 0;
   let backfilledVertex = 0;
   let errors = 0;
+  let skips = 0;
 
   console.log("Starting backfill process...");
 
@@ -67,25 +71,40 @@ async function run() {
 
       const updates: any = {};
 
+      // Helper to check if a vector field is valid and populated
+      const isVectorValid = (vec: any, expectedDim: number) => {
+          if (!vec) return false;
+          const arr = typeof vec.toArray === 'function' ? vec.toArray() : vec;
+          return Array.isArray(arr) && arr.length === expectedDim;
+      };
+
       // 1. Backfill MiniLM (384d)
-      if (!data.embedding_minilm) {
+      if (!isVectorValid(data.embedding_minilm, 384)) {
           try {
               const output = await embedderPipeline(name, { pooling: "mean", normalize: true });
               const queryVec = Array.from(output.data) as number[];
-              updates.embedding_minilm = FieldValue.vector(queryVec);
-              backfilledMiniLM++;
+              if (queryVec.length === 384) {
+                  updates.embedding_minilm = FieldValue.vector(queryVec);
+                  backfilledMiniLM++;
+              } else {
+                  throw new Error(`MiniLM produced vector of length ${queryVec.length}`);
+              }
           } catch (e: any) {
               console.error(`Failed to generate MiniLM embedding for ${name}:`, e.message);
               errors++;
           }
       }
 
-      // 2. Backfill Vertex (768d) - optional, but requested "both embeddings populated"
-      if (!data.embedding) {
+      // 2. Backfill Vertex (768d)
+      if (!isVectorValid(data.embedding, 768)) {
           try {
               const result = await ai.embed({ embedder: embeddingModel, content: name });
-              updates.embedding = FieldValue.vector(result.embedding);
-              backfilledVertex++;
+              if (result.embedding && result.embedding.length === 768) {
+                  updates.embedding = FieldValue.vector(result.embedding);
+                  backfilledVertex++;
+              } else {
+                  throw new Error(`Vertex produced vector of length ${result.embedding?.length}`);
+              }
           } catch (e: any) {
               console.error(`Failed to generate Vertex embedding for ${name}:`, e.message);
               errors++;
@@ -95,24 +114,30 @@ async function run() {
       // Commit updates if any
       if (Object.keys(updates).length > 0) {
           try {
-              await doc.ref.update(updates);
-              console.log(`[${i+1}/${snap.size}] Updated ${doc.id} ("${name}") - MiniLM: ${!!updates.embedding_minilm}, Vertex: ${!!updates.embedding}`);
+              if (!dryRun) {
+                  await doc.ref.update(updates);
+              }
+              console.log(`[${i+1}/${snap.size}] ${dryRun ? 'WOULD UPDATE' : 'UPDATED'} ${doc.id} ("${name}") - Added MiniLM: ${!!updates.embedding_minilm}, Added Vertex: ${!!updates.embedding}`);
           } catch (e: any) {
               console.error(`Failed to write updates for ${doc.id}:`, e.message);
               errors++;
           }
-      } else if (i % 100 === 0) {
-          console.log(`[${i+1}/${snap.size}] ... already fully populated.`);
+      } else {
+          skips++;
+          if (i % 100 === 0) {
+              console.log(`[${i+1}/${snap.size}] ... processing (already populated)`);
+          }
       }
   }
 
   console.log("=================================================");
-  console.log("BACKFILL COMPLETE");
+  console.log(`BACKFILL COMPLETE ${dryRun ? '(DRY RUN)' : ''}`);
   console.log("=================================================");
   console.log(`Total icons processed: ${snap.size}`);
-  console.log(`MiniLM (384d) embeddings generated: ${backfilledMiniLM}`);
-  console.log(`Vertex (768d) embeddings generated: ${backfilledVertex}`);
-  console.log(`Errors encountered: ${errors}`);
+  console.log(`Icons fully skipped:   ${skips}`);
+  console.log(`MiniLM generated:      ${backfilledMiniLM}`);
+  console.log(`Vertex generated:      ${backfilledVertex}`);
+  console.log(`Errors encountered:    ${errors}`);
   console.log("=================================================");
 }
 

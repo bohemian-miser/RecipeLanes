@@ -104,28 +104,6 @@ export class FirebaseDataService implements DataService {
   _db = db; // allows test patching
 
   async searchIconsByEmbedding(queryVec: number[], limit: number): Promise<IconStats[]> {
-    // If configured to use the Node CF for search, we use it instead of findNearest
-    if (process.env.NEXT_PUBLIC_ICON_SEARCH_MODE === 'node_cf' || process.env.FORCE_HYBRID_SEARCH === 'true') {
-        try {
-            const { getFunctions } = require('firebase-admin/functions');
-            const searchFn = getFunctions().taskQueue('vectorSearch-searchIconVector');
-            // Wait, taskQueue is for background tasks. For synchronous calls, we use https.onCall
-            // Actually, from admin SDK, we call a URL or use a different method.
-            // On the server, we can just hit the HTTP endpoint or use the cloud-functions client.
-            // But usually we just use the REST API or call the library directly if it's the same project.
-            
-            // SIMPLER: If we are in the backend and want speed, we can call the function via HTTP 
-            // or just use Firestore findNearest as the "Slow Pass" since we are already on the server.
-            
-            // TODO: In a production setup, we might want a dedicated service client here.
-            // For now, let's stick to the high-quality findNearest for the backend, 
-            // as it's already running on GCP infrastructure and should be fast enough 
-            // for non-interactive background tasks.
-        } catch (e) {
-            console.warn("[searchIconsByEmbedding] Hybrid call failed, falling back to Firestore native:", e);
-        }
-    }
-
     const t0 = Date.now();
     const snap = await this._db.collection(DB_COLLECTION_ICON_INDEX)
       .findNearest('embedding', FieldValue.vector(queryVec), { limit, distanceMeasure: 'COSINE' as const })
@@ -481,29 +459,35 @@ export class FirebaseDataService implements DataService {
                     let searchResults: IconStats[] = [];
                     let lookupMs = 0;
                     
-                    // If fast_matches is populated (e.g. from Node CF), we hydrate them and skip the slow Firestore findNearest
-                    // because the embedding spaces (384d vs 768d) are incompatible anyway.
+                    // CF path: fast_matches are pre-ranked in MiniLM space — hydrate metadata and
+                    // use CF scores directly. Do NOT re-rank with Firestore embeddings (768d vs 384d).
                     if (fast_matches && fast_matches.length > 0) {
                         const t1 = Date.now();
                         const hydrated = await this.getIconsByIds(fast_matches.map(fm => fm.icon_id));
-                        searchResults = hydrated.map(icon => {
-                            const fm = fast_matches.find(m => m.icon_id === icon.id);
-                            return fm ? { ...icon, score: fm.score } : icon;
-                        });
+                        const ranked = hydrated
+                            .map(icon => {
+                                const fm = fast_matches.find(m => m.icon_id === icon.id);
+                                return buildShortlistEntry(icon, 'search', fm?.score ?? 0);
+                            })
+                            .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
                         lookupMs = Date.now() - t1;
-                    } else {
-                        // 2. Slow Pass (Live Firestore check) for Legacy Vertex (768d) mode
+                        await this.assignShortlistToRecipe(recipeId, stdName, ranked.slice(0, 8));
+                        console.log(`[resolveFromIndex] "${stdName}" → ${ranked.length} candidates from CF (embed ${fastMs}ms, hydrate ${lookupMs}ms)`);
+                        return null;
+                    }
+
+                    // Legacy path: Firestore findNearest (768d), then re-rank with stored 768d embeddings.
+                    {
                         const t1 = Date.now();
                         searchResults = await this.searchIconsByEmbedding(vec, 12);
                         lookupMs = Date.now() - t1;
                     }
-                    
-                    // If we have any results
+
                     if (searchResults.length > 0) {
                         const embeddings = await this.getIconEmbeddings(searchResults.map(r => r.id));
                         const ranked = rankIconsByEmbedding(searchResults, vec, embeddings);
                         await this.assignShortlistToRecipe(recipeId, stdName, ranked.slice(0, 8));
-                        console.log(`[resolveFromIndex] "${stdName}" → ${searchResults.length} candidates, ranked (fast ${fastMs}ms, firestore ${lookupMs}ms)`);
+                        console.log(`[resolveFromIndex] "${stdName}" → ${searchResults.length} candidates from Firestore (embed ${fastMs}ms, findNearest ${lookupMs}ms)`);
                         return null;
                     }
                     return stdName;
@@ -596,8 +580,9 @@ export class FirebaseDataService implements DataService {
         if (toGenerate.length === 0) {
             if (searchFn) {
                 console.log(`All ${unresolvedNames.length} ingredients resolved from index in ${resolveMs}ms — no generation needed.`);
+            } else {
+                console.log(`No ingredients need generation and no search fn provided.`);
             }
-            console.log(`No ingredients need generation and no search fn provided.`);
             return;
         }
 

@@ -702,7 +702,8 @@ export class FirebaseDataService implements DataService {
           const snapshot = await q.get();
           let allIcons: any[] = snapshot.docs.map(doc => {
               const data = doc.data();
-              const { embedding, ...rest } = data;
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              const { embedding, embedding_minilm, ...rest } = data;
               return {
                   ...rest,
                   id: doc.id,
@@ -1046,7 +1047,8 @@ export class FirebaseDataService implements DataService {
          const snapshot = await db.collection(DB_COLLECTION_ICON_INDEX).orderBy('created_at', 'desc').limit(1000).get();
          return snapshot.docs.map(doc => {
              const data = doc.data();
-             const { embedding, ...rest } = data;
+             // eslint-disable-next-line @typescript-eslint/no-unused-vars
+             const { embedding, embedding_minilm, ...rest } = data;
              return {
                  ...rest,
                  id: doc.id,

@@ -101,7 +101,7 @@ async function embedAndSearch(queries: string[], limit: number): Promise<{
 }
 
 export const searchIconVector = onCall({
-    memory: "1GiB",
+    memory: "2GiB",
     timeoutSeconds: 60,
     maxInstances: 10,
 }, async (request) => {

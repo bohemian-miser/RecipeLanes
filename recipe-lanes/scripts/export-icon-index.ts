@@ -22,13 +22,16 @@ async function run() {
     dotenv.config({ path: path.resolve(__dirname, `../${envFile}`) });
 
     const serviceAccountPath = path.resolve(__dirname, `../${envArg}-service-account.json`);
-    if (!fs.existsSync(serviceAccountPath)) {
-        console.error(`Service account file not found at ${serviceAccountPath}`);
-        process.exit(1);
-    }
-
     if (!admin.apps.length) {
-        admin.initializeApp({ credential: admin.credential.cert(require(serviceAccountPath)) });
+        if (fs.existsSync(serviceAccountPath)) {
+            admin.initializeApp({ credential: admin.credential.cert(require(serviceAccountPath)) });
+        } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+            // CI / ADC path — credentials set via environment
+            admin.initializeApp({ credential: admin.credential.applicationDefault() });
+        } else {
+            console.error(`No credentials: ${serviceAccountPath} not found and GOOGLE_APPLICATION_CREDENTIALS not set.`);
+            process.exit(1);
+        }
     }
 
     const db = admin.firestore();

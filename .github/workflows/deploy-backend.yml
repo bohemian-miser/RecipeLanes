@@ -57,6 +57,14 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: echo "DEPLOY_TARGET=default" >> $GITHUB_ENV
 
+      - name: Export Icon Index (Staging)
+        if: github.ref == 'refs/heads/staging'
+        run: npx tsx scripts/export-icon-index.ts --staging
+
+      - name: Export Icon Index (Prod)
+        if: github.ref == 'refs/heads/main'
+        run: npx tsx scripts/export-icon-index.ts --prod
+
       - name: Deploy
         run: |
           firebase use $DEPLOY_TARGET

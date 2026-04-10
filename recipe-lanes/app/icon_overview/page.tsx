@@ -36,6 +36,7 @@ import { getNodeIconUrl, getNodeIconId, getNodeIngredientName } from '@/lib/reci
 import { RecipeNode, IconStats } from '@/lib/recipe-lanes/types';
 import { IconDetailModal } from '@/components/icon-detail-modal';
 import { IconOverviewModal } from '@/components/icon-overview-modal';
+import { useHybridIconSearch } from '@/components/hooks/useHybridIconSearch';
 
 export default function Home() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -53,6 +54,9 @@ export default function Home() {
   const [searchMatchScores, setSearchMatchScores] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+
+  // New Hybrid Search State
+  const { search: triggerHybridSearch, isSearching: isHybridSearching, mergedResults, fastResults } = useHybridIconSearch();
 
   // Use a ref to track if we've already created a recipe to prevent double-creation in strict mode
   const recipeCreated = useRef(false);
@@ -161,6 +165,10 @@ export default function Home() {
     event.currentTarget.reset();
     setIsSearching(true);
     try {
+      // 1. Kick off the new hybrid approach
+      triggerHybridSearch(query, 12);
+
+      // 2. Kick off legacy Vertex approach
       const result = await searchIconCandidatesAction(query);
       setSearchCandidates(result.candidates);
       setSearchMatchScores(result.matchScores);
@@ -306,13 +314,29 @@ export default function Home() {
           />
 
           {mode === 'search' && (
-            <IconSearchCandidates
-              query={searchQuery}
-              candidates={searchCandidates}
-              matchScores={searchMatchScores}
-              isSearching={isSearching}
-              onIconClick={(candidate, matchScore) => setSelectedGalleryIcon({ icon: candidate, matchScore })}
-            />
+            <div className="space-y-8">
+              <div>
+                 <h2 className="text-xl font-bold mb-4">Legacy Vertex + DB Query</h2>
+                 <IconSearchCandidates
+                   query={searchQuery}
+                   candidates={searchCandidates}
+                   matchScores={searchMatchScores}
+                   isSearching={isSearching}
+                   onIconClick={(candidate, matchScore) => setSelectedGalleryIcon({ icon: candidate, matchScore })}
+                 />
+              </div>
+
+              <div>
+                 <h2 className="text-xl font-bold mb-4">New Node.js In-Memory CF (Hybrid)</h2>
+                 <IconSearchCandidates
+                   query={searchQuery}
+                   candidates={mergedResults}
+                   matchScores={searchMatchScores}
+                   isSearching={isHybridSearching}
+                   onIconClick={(candidate, matchScore) => setSelectedGalleryIcon({ icon: candidate, matchScore })}
+                 />
+              </div>
+            </div>
           )}
 
           {mode === 'forge' && <QueueMonitor />}

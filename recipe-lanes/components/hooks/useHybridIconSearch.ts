@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
-import { getActiveSearchStrategy, FastMatch } from '../../lib/icon-search-strategy';
-// import { collection, query, where, getDocs, ... } from 'firebase/firestore'; 
+import { getFastPass } from '../../lib/icon-search-strategy';
+import { collection, query, where, getDocs, documentId } from 'firebase/firestore'; 
+import { db } from '@/lib/firebase-client';
+import { IconStats } from '@/lib/recipe-lanes/types';
 
 export type HybridSearchResult = {
   icon_id: string;
@@ -10,8 +12,8 @@ export type HybridSearchResult = {
 
 export function useHybridIconSearch() {
   const [isSearching, setIsSearching] = useState(false);
-  const [fastResults, setFastResults] = useState<HybridSearchResult[]>([]);
-  const [mergedResults, setMergedResults] = useState<HybridSearchResult[]>([]);
+  const [fastResults, setFastResults] = useState<IconStats[]>([]);
+  const [mergedResults, setMergedResults] = useState<IconStats[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const search = useCallback(async (queryStr: string, limit: number = 12) => {
@@ -25,49 +27,48 @@ export function useHybridIconSearch() {
     setError(null);
 
     try {
-      const strategy = getActiveSearchStrategy();
-      
       // 1. FAST PASS (0-50ms)
-      const { embedding, fast_matches, snapshot_timestamp } = await strategy.getFastPass(queryStr, limit);
+      const { embedding, fast_matches, snapshot_timestamp } = await getFastPass(queryStr, limit);
       
-      // Map to standard result format
       const formattedFast = fast_matches.map(m => ({ ...m, is_fresh: false }));
+      const idsToFetch = formattedFast.map(f => f.icon_id);
       
-      // INSTANT RENDER
-      setFastResults(formattedFast);
-      setMergedResults(formattedFast); 
-
-      // 2. SLOW PASS (Live Firestore query in parallel)
-      // Note: This relies on Next.js / Firebase client SDK. 
-      // This is a stub showing the logic we will flesh out when the schema refactor is done.
-      // 
-      // const iconsRef = collection(db, 'icons');
-      // const q = query(iconsRef, where('created_at', '>', snapshot_timestamp));
-      // const snap = await getDocs(q); ... and then we do cosine similarity locally on the new deltas
+      const scoresMap: Record<string, number> = {};
+      formattedFast.forEach(f => scoresMap[f.icon_id] = f.score);
       
-      const freshIcons: HybridSearchResult[] = []; // fetch from live DB...
-      
-      // 3. MERGE
-      if (freshIcons.length > 0) {
-        const combinedMap = new Map<string, HybridSearchResult>();
-        
-        // Add fast matches to map
-        formattedFast.forEach(res => combinedMap.set(res.icon_id, res));
-        
-        // Add or overwrite with fresh matches if they score higher
-        freshIcons.forEach(res => {
-          const existing = combinedMap.get(res.icon_id);
-          if (!existing || res.score > existing.score) {
-             combinedMap.set(res.icon_id, res);
+      // Hydrate via Firestore (In production this could be cached or bundled)
+      let hydratedFast: IconStats[] = [];
+      if (idsToFetch.length > 0) {
+          // Chunk to 10 for 'in' query limits
+          const chunks = [];
+          for (let i = 0; i < idsToFetch.length; i += 10) {
+             chunks.push(idsToFetch.slice(i, i + 10));
           }
-        });
-        
-        const finalRanked = Array.from(combinedMap.values())
-          .sort((a, b) => b.score - a.score)
-          .slice(0, limit);
           
-        setMergedResults(finalRanked);
+          for (const chunk of chunks) {
+              const q = query(collection(db, 'icon_index'), where(documentId(), 'in', chunk));
+              const snap = await getDocs(q);
+              snap.docs.forEach(doc => {
+                  const data = doc.data();
+                  hydratedFast.push({
+                      id: doc.id,
+                      visualDescription: data.visualDescription || data.ingredient_name,
+                      score: data.score,
+                      impressions: data.impressions,
+                      rejections: data.rejections,
+                      metadata: data.metadata,
+                      searchTerms: data.searchTerms,
+                  });
+              });
+          }
       }
+      
+      // Sort hydrated to match original ranked order
+      hydratedFast.sort((a, b) => (scoresMap[b.id] || 0) - (scoresMap[a.id] || 0));
+
+      // INSTANT RENDER
+      setFastResults(hydratedFast);
+      setMergedResults(hydratedFast); 
 
     } catch (err: any) {
       console.error('[useHybridIconSearch] Error:', err);
@@ -84,4 +85,15 @@ export function useHybridIconSearch() {
     mergedResults,
     error
   };
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  if (normA === 0 || normB === 0) return 0;
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }

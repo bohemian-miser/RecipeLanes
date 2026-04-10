@@ -27,6 +27,33 @@ export interface AIService {
   embedTexts(texts: string[]): Promise<number[]>;
 }
 
+export class NodeCFAIService implements AIService {
+    async generateText(prompt: string): Promise<string> {
+        return new RealAIService().generateText(prompt);
+    }
+    async generateImage(prompt: string): Promise<string> {
+        return new RealAIService().generateImage(prompt);
+    }
+    async embedTexts(texts: string[]): Promise<number[]> {
+        if (texts.length === 0) return [];
+        // Average multiple texts if provided, or just embed the first one
+        // For simplicity, we just use the first text for the Node CF call right now
+        // since the CF is optimized for single query strings.
+        const query = texts.join(" "); 
+        try {
+            const { getFunctions, httpsCallable } = require('firebase/functions');
+            const { app } = require('./firebase-client');
+            const functions = getFunctions(app, 'us-central1');
+            const searchIconVector = httpsCallable(functions, 'vectorSearch-searchIconVector');
+            const result: any = await searchIconVector({ query, limit: 1 });
+            return result.data.embedding;
+        } catch (e: any) {
+            console.error("[NodeCFAIService] Failed to get embedding from CF:", e);
+            throw e;
+        }
+    }
+}
+
 export class RealAIService implements AIService {
   async generateText(prompt: string): Promise<string> {
     try {
@@ -285,7 +312,16 @@ const isMockMode =
   process.env.FUNCTIONS_EMULATOR === 'true' || 
   process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true';
 
-let currentService: AIService = isMockMode ? new MockAIService() : new RealAIService();
+const useNodeCF = process.env.NEXT_PUBLIC_ICON_SEARCH_MODE === 'node_cf';
+
+let currentService: AIService;
+if (isMockMode) {
+    currentService = new MockAIService();
+} else if (useNodeCF) {
+    currentService = new NodeCFAIService();
+} else {
+    currentService = new RealAIService();
+}
 
 export function getAIService(): AIService {
   return currentService;

@@ -8,3 +8,9 @@ typings/
 # Node.js dependency directory
 node_modules/
 *.local
+
+# Model/embedding caches and Rust build artifacts
+.fastembed_cache/
+rust-vector-search/.fastembed_cache/
+rust-vector-search/target/
+rust-vector-search/icon_index.json

@@ -8,7 +8,8 @@
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "test": "jest"
   },
   "engines": {
     "node": "20"
@@ -17,18 +18,20 @@
   "dependencies": {
     "@genkit-ai/firebase": "^1.26.0",
     "@genkit-ai/google-genai": "^1.25.0",
+    "@huggingface/transformers": "^4.0.1",
     "clsx": "^2.1.1",
     "firebase-admin": "^13.6.0",
     "firebase-functions": "^7.0.3",
     "genkit": "^1.26.0",
     "jpeg-js": "^0.4.4",
     "pngjs": "^7.0.0",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^3.4.0",
     "uuid": "^13.0.0",
-    "sharp": "^0.34.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/jpeg-js": "^0.3.7",
     "@types/pngjs": "^6.0.5",
     "@typescript-eslint/eslint-plugin": "^5.12.0",
@@ -37,6 +40,8 @@
     "eslint-config-google": "^0.14.0",
     "eslint-plugin-import": "^2.25.4",
     "firebase-functions-test": "^3.1.0",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.9",
     "typescript": "^5"
   },
   "private": true

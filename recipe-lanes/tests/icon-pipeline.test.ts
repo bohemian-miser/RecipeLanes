@@ -24,39 +24,38 @@ const makeIcon = (id: string): IconStats => ({
     score: 0.9,
 });
 
-/** Stub embedFn that returns a fixed vector and records how many times it was called. */
+/** Stub searchFn that returns a fixed vector and fast matches and records how many times it was called. */
 function makeEmbedSpy() {
     let callCount = 0;
-    const embedFn = async (_texts: string[]): Promise<number[]> => {
+    const searchFn = async (_texts: string[]): Promise<{ embedding: number[], fast_matches: any[] }> => {
         callCount++;
-        return [0.1, 0.2, 0.3];
+        return { embedding: [0.1, 0.2, 0.3], fast_matches: [] };
     };
-    return { embedFn, getCallCount: () => callCount };
+    return { searchFn, getCallCount: () => callCount };
 }
-
-/** A MemoryDataService subclass that tracks resolveRecipeIcons calls, including embedFn. */
+/** A MemoryDataService subclass that tracks resolveRecipeIcons calls, including searchFn. */
 class SpyMemoryDataService extends MemoryDataService {
     public resolveCallArgs: Array<{ recipeId: string; hadEmbedFn: boolean }> = [];
 
-    override async resolveRecipeIcons(recipeId: string, embedFn?: (texts: string[]) => Promise<number[]>): Promise<void> {
-        this.resolveCallArgs.push({ recipeId, hadEmbedFn: embedFn !== undefined });
-        return super.resolveRecipeIcons(recipeId, embedFn);
+    override async resolveRecipeIcons(recipeId: string, searchFn?: (texts: string[]) => Promise<{ embedding: number[], fast_matches: any[] }>): Promise<void> {
+        this.resolveCallArgs.push({ recipeId, hadEmbedFn: searchFn !== undefined });
+        return super.resolveRecipeIcons(recipeId, searchFn);
     }
 }
 
-/** A MemoryDataService subclass that captures embedFn passed to rejectRecipeIcon. */
+/** A MemoryDataService subclass that captures searchFn passed to rejectRecipeIcon. */
 class RejectSpyDataService extends MemoryDataService {
-    public rejectCalls: Array<{ embedFnProvided: boolean }> = [];
+    public rejectCalls: Array<{ searchFnProvided: boolean }> = [];
 
     override async rejectRecipeIcon(
         recipeId: string,
         ingredientName: string,
         currentIconId?: string,
         userId?: string,
-        embedFn?: (texts: string[]) => Promise<number[]>,
+        searchFn?: (texts: string[]) => Promise<{ embedding: number[], fast_matches: any[] }>,
     ): Promise<{ success: boolean; error?: string }> {
-        this.rejectCalls.push({ embedFnProvided: embedFn !== undefined });
-        return super.rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId, embedFn);
+        this.rejectCalls.push({ searchFnProvided: searchFn !== undefined });
+        return super.rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId, searchFn);
     }
 }
 
@@ -73,7 +72,7 @@ async function makeRecipe(service: MemoryDataService): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// resolveRecipeIcons — embedFn behaviour
+// resolveRecipeIcons — searchFn behaviour
 // ---------------------------------------------------------------------------
 
 describe('MemoryDataService.resolveRecipeIcons', () => {
@@ -87,7 +86,7 @@ describe('MemoryDataService.resolveRecipeIcons', () => {
         service = getDataService() as MemoryDataService;
     });
 
-    it('resolves icons for nodes without icons (no embedFn)', async () => {
+    it('resolves icons for nodes without icons (no searchFn)', async () => {
         const recipeId = await makeRecipe(service);
         await service.addNodeToRecipe(recipeId, 'Carrot');
 
@@ -101,51 +100,51 @@ describe('MemoryDataService.resolveRecipeIcons', () => {
         assert.ok(typeof url === 'string' && url.length > 0, 'icon url should be set after resolve');
     });
 
-    it('still resolves icons when embedFn is provided (backward compat)', async () => {
+    it('still resolves icons when searchFn is provided (backward compat)', async () => {
         const recipeId = await makeRecipe(service);
         await service.addNodeToRecipe(recipeId, 'Tomato');
 
-        // Call resolveRecipeIcons explicitly with an embedFn
-        const { embedFn } = makeEmbedSpy();
-        await service.resolveRecipeIcons(recipeId, embedFn);
+        // Call resolveRecipeIcons explicitly with an searchFn
+        const { searchFn } = makeEmbedSpy();
+        await service.resolveRecipeIcons(recipeId, searchFn);
 
         const recipe = await service.getRecipe(recipeId);
         // standardizeIngredientName title-cases the name: 'Tomato'
         const node = recipe!.graph.nodes.find(n => n.visualDescription === 'Tomato');
         assert.ok(node, 'Tomato node should exist');
-        // The icon should already be set after addNodeToRecipe; resolveRecipeIcons with embedFn is a no-op
+        // The icon should already be set after addNodeToRecipe; resolveRecipeIcons with searchFn is a no-op
         const url = getNodeIconUrl(node!);
         assert.ok(typeof url === 'string' && url.length > 0, 'icon url should still be set');
     });
 
-    it('does not call embedFn when all nodes already have icons (no-op path)', async () => {
+    it('does not call searchFn when all nodes already have icons (no-op path)', async () => {
         const recipeId = await makeRecipe(service);
         await service.addNodeToRecipe(recipeId, 'Onion');
 
         // All nodes now have icons — a second resolveRecipeIcons call should be a no-op
         const spy = makeEmbedSpy();
-        await service.resolveRecipeIcons(recipeId, spy.embedFn);
+        await service.resolveRecipeIcons(recipeId, spy.searchFn);
 
-        // In MemoryDataService, embedFn is not wired to searchIconsByEmbedding, so callCount stays 0
+        // In MemoryDataService, searchFn is not wired to searchIconsByEmbedding, so callCount stays 0
         assert.strictEqual(spy.getCallCount(), 0,
-            'embedFn must not be called when all nodes already have icons');
+            'searchFn must not be called when all nodes already have icons');
     });
 
     it('handles a recipe with no nodes gracefully', async () => {
         const recipeId = await makeRecipe(service);
-        const { embedFn } = makeEmbedSpy();
+        const { searchFn } = makeEmbedSpy();
         // Must not throw
-        await assert.doesNotReject(() => service.resolveRecipeIcons(recipeId, embedFn));
+        await assert.doesNotReject(() => service.resolveRecipeIcons(recipeId, searchFn));
     });
 
     it('handles a non-existent recipeId gracefully', async () => {
-        const { embedFn } = makeEmbedSpy();
-        await assert.doesNotReject(() => service.resolveRecipeIcons('does-not-exist', embedFn));
+        const { searchFn } = makeEmbedSpy();
+        await assert.doesNotReject(() => service.resolveRecipeIcons('does-not-exist', searchFn));
     });
 });
 
 // ---------------------------------------------------------------------------
-// rejectRecipeIcon — embedFn pass-through
+// rejectRecipeIcon — searchFn pass-through
 // ---------------------------------------------------------------------------
 
 describe('MemoryDataService.rejectRecipeIcon', () => {
@@ -159,7 +158,7 @@ describe('MemoryDataService.rejectRecipeIcon', () => {
         setAuthService(new MockAuthService());
     });
 
-    it('records no embedFn when called without one (forge path)', async () => {
+    it('records no searchFn when called without one (forge path)', async () => {
         const recipeId = await makeRecipe(service);
         await service.addNodeToRecipe(recipeId, 'Pepper');
 
@@ -167,16 +166,16 @@ describe('MemoryDataService.rejectRecipeIcon', () => {
         const node = recipe!.graph.nodes[0];
         const iconId = getNodeIconId(node);
 
-        // Simulate forgeIconAction — no embedFn
+        // Simulate forgeIconAction — no searchFn
         const result = await service.rejectRecipeIcon(recipeId, 'Pepper', iconId ?? undefined, 'user-1');
         assert.strictEqual(result.success, true, 'rejectRecipeIcon should succeed');
 
         const lastCall = service.rejectCalls[service.rejectCalls.length - 1];
-        assert.strictEqual(lastCall.embedFnProvided, false,
-            'forge path must NOT pass an embedFn');
+        assert.strictEqual(lastCall.searchFnProvided, false,
+            'forge path must NOT pass an searchFn');
     });
 
-    it('records embedFn when called with one (rejectIcon path)', async () => {
+    it('records searchFn when called with one (rejectIcon path)', async () => {
         const recipeId = await makeRecipe(service);
         await service.addNodeToRecipe(recipeId, 'Garlic');
 
@@ -184,15 +183,15 @@ describe('MemoryDataService.rejectRecipeIcon', () => {
         const node = recipe!.graph.nodes[0];
         const iconId = getNodeIconId(node);
 
-        const { embedFn } = makeEmbedSpy();
+        const { searchFn } = makeEmbedSpy();
 
-        // Simulate rejectIcon action — embedFn provided
-        const result = await service.rejectRecipeIcon(recipeId, 'Garlic', iconId ?? undefined, 'user-1', embedFn);
+        // Simulate rejectIcon action — searchFn provided
+        const result = await service.rejectRecipeIcon(recipeId, 'Garlic', iconId ?? undefined, 'user-1', searchFn);
         assert.strictEqual(result.success, true, 'rejectRecipeIcon should succeed');
 
         const lastCall = service.rejectCalls[service.rejectCalls.length - 1];
-        assert.strictEqual(lastCall.embedFnProvided, true,
-            'rejectIcon path MUST pass an embedFn');
+        assert.strictEqual(lastCall.searchFnProvided, true,
+            'rejectIcon path MUST pass an searchFn');
     });
 
     it('returns error for unauthorized user', async () => {
@@ -205,10 +204,10 @@ describe('MemoryDataService.rejectRecipeIcon', () => {
 });
 
 // ---------------------------------------------------------------------------
-// forgeIconAction vs rejectIcon — verifying embedFn wiring via actions layer
+// forgeIconAction vs rejectIcon — verifying searchFn wiring via actions layer
 // ---------------------------------------------------------------------------
 
-describe('forgeIconAction vs rejectIcon — embedFn wiring', () => {
+describe('forgeIconAction vs rejectIcon — searchFn wiring', () => {
     let spyService: RejectSpyDataService;
 
     beforeEach(() => {
@@ -219,7 +218,7 @@ describe('forgeIconAction vs rejectIcon — embedFn wiring', () => {
         setAuthService(new MockAuthService());
     });
 
-    it('forgeIconAction calls rejectRecipeIcon WITHOUT embedFn', async () => {
+    it('forgeIconAction calls rejectRecipeIcon WITHOUT searchFn', async () => {
         // Import dynamically to ensure the service singleton is set above
         const { forgeIconAction } = await import('../app/actions');
 
@@ -234,11 +233,11 @@ describe('forgeIconAction vs rejectIcon — embedFn wiring', () => {
 
         assert.ok(spyService.rejectCalls.length > 0, 'rejectRecipeIcon should have been called');
         const lastCall = spyService.rejectCalls[spyService.rejectCalls.length - 1];
-        assert.strictEqual(lastCall.embedFnProvided, false,
-            'forgeIconAction must NOT pass embedFn — it skips index search');
+        assert.strictEqual(lastCall.searchFnProvided, false,
+            'forgeIconAction must NOT pass searchFn — it skips index search');
     });
 
-    it('rejectIcon calls rejectRecipeIcon WITH an embedFn', async () => {
+    it('rejectIcon calls rejectRecipeIcon WITH an searchFn', async () => {
         const { rejectIcon } = await import('../app/actions');
 
         const recipeId = await makeRecipe(spyService);
@@ -252,8 +251,8 @@ describe('forgeIconAction vs rejectIcon — embedFn wiring', () => {
 
         assert.ok(spyService.rejectCalls.length > 0, 'rejectRecipeIcon should have been called');
         const lastCall = spyService.rejectCalls[spyService.rejectCalls.length - 1];
-        assert.strictEqual(lastCall.embedFnProvided, true,
-            'rejectIcon must pass embedFn so index search is attempted before generation');
+        assert.strictEqual(lastCall.searchFnProvided, true,
+            'rejectIcon must pass searchFn so index search is attempted before generation');
     });
 });
 

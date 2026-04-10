@@ -32,6 +32,8 @@ import {  FieldValue } from "firebase-admin/firestore";
 
 // const db = getFirestore();
 
+export * as vectorSearch from './vector-search';
+
 export const processIconTask = onTaskDispatched({
     serviceAccount: `icon-processor@${process.env.GCLOUD_PROJECT}.iam.gserviceaccount.com`,
     retryConfig: {

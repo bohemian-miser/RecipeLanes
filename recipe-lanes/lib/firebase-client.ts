@@ -84,4 +84,4 @@ if (firebaseConfig.apiKey) {
   googleProvider = {} as GoogleAuthProvider;
 }
 
-export { auth, db, storage, functions, googleProvider, isInitialized };
+export { app, auth, db, storage, functions, googleProvider, isInitialized };

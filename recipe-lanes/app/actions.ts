@@ -29,6 +29,7 @@ import { standardizeIngredientName } from '@/lib/utils';
 import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import {  DB_COLLECTION_RECIPES } from '@/lib/config';
+import { unifiedIconSearch } from '@/lib/search-orchestrator';
 
 // Input Validation Schemas
 const IngredientSchema = z.string().min(1).max(100);
@@ -46,8 +47,7 @@ export async function rejectIcon(recipeId: string, ingredientName: string, curre
     try {
         const session = await getAuthService().verifyAuth();
         const userId = session?.uid;
-        const embedFn = getAIService().embedTexts.bind(getAIService());
-        return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId, embedFn);
+        return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId, unifiedIconSearch);
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -99,7 +99,18 @@ export async function addIngredientNodeAction(recipeId: string, ingredientName: 
     }
     const result = await getDataService().addNodeToRecipe(recipeId, ingredientName, undefined, hydeQueries);
     if (result.success) {
-        await getDataService().resolveRecipeIcons(recipeId, getAIService().embedTexts.bind(getAIService()));
+        // 5. Trigger icon resolution in background (or foreground if preferred)
+        try {
+            if (process.env.NODE_ENV === 'test') {
+                await getDataService().resolveRecipeIcons(recipeId, unifiedIconSearch);
+            } else {
+                after(() => getDataService().resolveRecipeIcons(recipeId, unifiedIconSearch));
+            }
+        } catch (e) {
+            // Fallback for environments where 'after' is not supported (like some older Next.js versions or non-request contexts)
+            console.log("[addIngredientNodeAction] 'after' not supported or outside request scope, running sync");
+            await getDataService().resolveRecipeIcons(recipeId, unifiedIconSearch);
+        }
     }
     return result;
 }
@@ -193,9 +204,14 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
         // Falls back to awaiting directly when outside a Next.js request context (tests).
         const embedFn = getAIService().embedTexts.bind(getAIService());
         try {
-            after(() => getDataService().resolveRecipeIcons(id, embedFn));
-        } catch {
-            await getDataService().resolveRecipeIcons(id, embedFn);
+            if (process.env.NODE_ENV === 'test') {
+                await getDataService().resolveRecipeIcons(id, unifiedIconSearch);
+            } else {
+                after(() => getDataService().resolveRecipeIcons(id, unifiedIconSearch));
+            }
+        } catch (e) {
+            console.log("[createVisualRecipeAction] 'after' not supported or outside request scope, running sync", e);
+            await getDataService().resolveRecipeIcons(id, unifiedIconSearch);
         }
 
         console.log(`[createVisualRecipeAction] ✅ Saved. ID: ${id} (icons resolving in background)`);
@@ -490,6 +506,17 @@ export async function vetRecipeAction(recipeId: string, isVetted: boolean) {
     }
 }
 
+
+export async function getLegacyEmbeddingAction(query: string): Promise<number[]> {
+  if (!query.trim()) return [];
+  try {
+    console.log(`[getLegacyEmbeddingAction] getting Vertex embedding for "${query}"`);
+    return await getAIService().embedTexts([query]);
+  } catch (e: any) {
+    console.error('[getLegacyEmbeddingAction] failed:', e);
+    throw new Error(e.message || 'Failed to generate embedding');
+  }
+}
 
 export async function searchIconCandidatesAction(query: string): Promise<{ candidates: IconStats[], matchScores: Record<string, number>, error?: string }> {
   if (!query.trim()) return { candidates: [], matchScores: {} };

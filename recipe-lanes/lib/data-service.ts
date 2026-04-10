@@ -448,6 +448,7 @@ export class FirebaseDataService implements DataService {
         }));
 
         const t0 = Date.now();
+        console.log(`[resolveFromIndex] calling batchSearchFn with ${ingredients.length} ingredients, total queries: ${ingredients.reduce((s, i) => s + i.queries.length, 0)}`);
         let batchResults: { name: string, embedding: number[], fast_matches: any[] }[];
         try {
             batchResults = await batchSearchFn(ingredients, 12);
@@ -455,7 +456,7 @@ export class FirebaseDataService implements DataService {
             console.warn(`[resolveFromIndex] batch search failed:`, e);
             return unresolvedNames;
         }
-        console.log(`[resolveFromIndex] batch CF call: ${ingredients.length} ingredients in ${Date.now() - t0}ms`);
+        console.log(`[resolveFromIndex] batch CF call done: ${ingredients.length} ingredients in ${Date.now() - t0}ms`);
 
         const unresolved: string[] = [];
         await Promise.all(batchResults.map(async ({ name: stdName, embedding: vec, fast_matches }) => {

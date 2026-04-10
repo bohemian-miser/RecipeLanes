@@ -3,9 +3,11 @@ import { pipeline, env } from "@huggingface/transformers";
 import * as fs from "fs";
 import * as path from "path";
 
-// Disable local models cache from huggingface to avoid writing to read-only function directories
-// Alternatively we can use /tmp, but it's simpler to let transformers handle it inside its default node-cache
-env.cacheDir = "/tmp/.cache/huggingface";
+// Load the model from the bundled cache shipped with the function.
+// /tmp fallback only if bundle is missing (should not happen in production).
+const BUNDLED_MODEL_CACHE = path.resolve(__dirname, './model-cache');
+env.cacheDir = BUNDLED_MODEL_CACHE;
+env.allowRemoteModels = false;
 
 interface IconRecord {
   id: string;

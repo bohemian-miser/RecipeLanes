@@ -11,7 +11,7 @@
       ".env"
     ],
     "predeploy": [
-      "cd \"$RESOURCE_DIR\" && npm run build"
+      "cd \"$RESOURCE_DIR\" && npm run download-model && npm run build"
     ]
   },
   "hosting": {

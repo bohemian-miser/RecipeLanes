@@ -9,6 +9,9 @@ typings/
 node_modules/
 *.local
 
+# Model cache (downloaded at deploy time, not committed)
+src/vector-search/model-cache/
+
 # Model/embedding caches and Rust build artifacts
 .fastembed_cache/
 rust-vector-search/.fastembed_cache/

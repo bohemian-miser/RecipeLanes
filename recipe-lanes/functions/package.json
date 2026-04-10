@@ -2,7 +2,8 @@
   "name": "functions",
   "scripts": {
     "lint": "eslint .",
-    "build": "tsc",
+    "download-model": "node scripts/download-model.js",
+    "build": "tsc && cp -r src/vector-search/data lib/functions/src/vector-search/ && cp -rL src/vector-search/model-cache lib/functions/src/vector-search/",
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",

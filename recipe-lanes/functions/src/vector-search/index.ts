@@ -62,24 +62,48 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
+/** Average a set of unit vectors and re-normalise the result. */
+function averageEmbeddings(vecs: number[][]): number[] {
+  const dim = vecs[0].length;
+  const avg = new Array<number>(dim).fill(0);
+  for (const v of vecs) {
+    for (let i = 0; i < dim; i++) avg[i] += v[i];
+  }
+  for (let i = 0; i < dim; i++) avg[i] /= vecs.length;
+  // Re-normalise so cosine similarity stays well-defined.
+  let norm = 0;
+  for (let i = 0; i < dim; i++) norm += avg[i] * avg[i];
+  norm = Math.sqrt(norm);
+  if (norm > 0) for (let i = 0; i < dim; i++) avg[i] /= norm;
+  return avg;
+}
+
 export const searchIconVector = onCall({
-    memory: "1GiB", // Model needs some RAM
+    memory: "1GiB",
     timeoutSeconds: 60,
     maxInstances: 10,
 }, async (request) => {
-  const query = request.data.query;
+  // Accept either queries[] (preferred) or legacy query string.
+  const rawQueries: string | string[] = request.data.queries ?? request.data.query;
+  const queries: string[] = Array.isArray(rawQueries)
+    ? rawQueries.filter((q: any) => typeof q === "string" && q.trim())
+    : (typeof rawQueries === "string" && rawQueries.trim() ? [rawQueries] : []);
   const limit = request.data.limit || 12;
 
-  if (!query || typeof query !== "string") {
-    throw new HttpsError("invalid-argument", "The function must be called with a 'query' string.");
+  if (queries.length === 0) {
+    throw new HttpsError("invalid-argument", "Provide 'queries' (string[]) or 'query' (string).");
   }
 
   await initialize();
 
-  // Generate embedding
-  const output = await embedderPipeline(query, { pooling: "mean", normalize: true });
-  // output is a Tensor. We need it as an array.
-  const queryEmbedding = Array.from(output.data) as number[];
+  // Embed all queries in parallel, then average + re-normalise.
+  const outputs = await Promise.all(
+    queries.map(q => embedderPipeline(q, { pooling: "mean", normalize: true }))
+  );
+  const vecs = outputs.map((o: any) => Array.from(o.data) as number[]);
+  const queryEmbedding = vecs.length === 1 ? vecs[0] : averageEmbeddings(vecs);
+
+  console.log(`[VectorSearch] embedded ${queries.length} quer${queries.length === 1 ? 'y' : 'ies'}, dim=${queryEmbedding.length}`);
 
   // Perform cosine similarity search
   const fastMatches: { icon_id: string; score: number }[] = [];

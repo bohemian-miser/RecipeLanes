@@ -37,20 +37,17 @@ if (!firebaseConfig.apiKey) {
 
 const app = initializeApp(firebaseConfig);
 
-// Usage: npx tsx scripts/test-search.ts [query] [--local|--staging|--prod]
+// Usage: npx tsx scripts/test-search.ts "query 1" "query 2" ... [--local|--staging|--prod]
+// All positional args become the queries array — the CF embeds them in parallel and averages.
 async function run() {
-  let query = "A bowl of fresh eggs";
-
-  for (const arg of args) {
-    if (!arg.startsWith('--')) query = arg;
-  }
+  const queries = args.filter(a => !a.startsWith('--'));
+  if (queries.length === 0) queries.push('A bowl of fresh eggs');
 
   const env = envArg;
   const project = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '(unknown)';
 
   console.log(`===================================================`);
   console.log(` Env:     ${env} (${project})`);
-  console.log(` Query:   "${query}"`);
   console.log(`===================================================`);
 
   const functions = getFunctions(app, 'us-central1');
@@ -60,15 +57,17 @@ async function run() {
       console.log('Connected to local emulator on :5001');
   }
 
-  const searchIconVector = httpsCallable<{ query: string; limit: number }, any>(
+    const searchIconVector = httpsCallable<{ queries: string[]; limit: number }, any>(
       functions, 'vectorSearch-searchIconVector'
   );
 
+  console.log(`Queries (${queries.length}):`);
+  queries.forEach((q, i) => console.log(`  ${i + 1}. "${q}"`));
   console.log('Calling vectorSearch-searchIconVector...');
   const t0 = Date.now();
 
   try {
-      const res = await searchIconVector({ query, limit: 12 });
+      const res = await searchIconVector({ queries, limit: 12 });
       const ms = Date.now() - t0;
       const { embedding, fast_matches, snapshot_timestamp } = res.data;
 
@@ -77,7 +76,7 @@ async function run() {
           : null;
 
       console.log(`\n OK  ${ms}ms`);
-      console.log(` Embedding dim:    ${embedding?.length ?? 'n/a'}`);
+      console.log(` Embedding dim:    ${embedding?.length ?? 'n/a'} (averaged over ${queries.length} quer${queries.length === 1 ? 'y' : 'ies'})`);
       console.log(` Index snapshot:   ${snapshot_timestamp ? new Date(snapshot_timestamp).toISOString() : 'n/a'}${snapshotAge !== null ? ` (${snapshotAge}h ago)` : ''}`);
       console.log(` Matches returned: ${fast_matches?.length ?? 0}`);
 

@@ -30,10 +30,11 @@ export async function getFastPass(queryInput: string | string[], limit: number =
   const query = Array.isArray(queryInput) ? queryInput.join(" ") : queryInput;
 
   if (mode === 'node_cf') {
-    const searchIconVector = httpsCallable<{ query: string, limit: number }, SearchResponse>(functions, 'vectorSearch-searchIconVector');
-    
+    const searchIconVector = httpsCallable<{ queries: string[], limit: number }, SearchResponse>(functions, 'vectorSearch-searchIconVector');
+    const queries = Array.isArray(queryInput) ? queryInput : [queryInput];
+
     try {
-      const result = await searchIconVector({ query, limit });
+      const result = await searchIconVector({ queries, limit });
       return result.data;
     } catch (e: any) {
       throw new Error(`Node CF backend failed: ${e.message}`);
@@ -41,6 +42,7 @@ export async function getFastPass(queryInput: string | string[], limit: number =
   }
 
   if (mode === 'legacy') {
+    // Legacy path embeds a single concatenated string via Vertex.
     const embedding = await getLegacyEmbeddingAction(query);
     
     return {

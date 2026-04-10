@@ -115,14 +115,19 @@ export const searchIconVector = onCall({
       throw new HttpsError("invalid-argument", "ingredients array is empty.");
     }
     console.log(`[VectorSearch] batch: ${ingredients.length} ingredients`);
-    const results = await Promise.all(
-      ingredients.map(async (ing) => {
-        const queries = ing.queries.filter(q => typeof q === "string" && q.trim());
-        if (queries.length === 0) return { name: ing.name, embedding: [], fast_matches: [] };
-        const { embedding, fast_matches } = await embedAndSearch(queries, limit);
-        return { name: ing.name, embedding, fast_matches };
-      })
-    );
+    // Process sequentially — ONNX runtime is single-threaded so parallel embed calls
+    // just queue up and inflate wall time. Sequential is faster end-to-end.
+    const results: { name: string; embedding: number[]; fast_matches: { icon_id: string; score: number }[] }[] = [];
+    for (const ing of ingredients) {
+      const queries = ing.queries.filter(q => typeof q === "string" && q.trim());
+      if (queries.length === 0) {
+        results.push({ name: ing.name, embedding: [], fast_matches: [] });
+        continue;
+      }
+      const { embedding, fast_matches } = await embedAndSearch(queries, limit);
+      results.push({ name: ing.name, embedding, fast_matches });
+    }
+    console.log(`[VectorSearch] batch done: ${results.length} ingredients`);
     return { results, snapshot_timestamp: snapshotTimestamp };
   }
 

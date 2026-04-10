@@ -121,43 +121,6 @@ function scoreBar(score: number): string {
     return '█'.repeat(filled).padEnd(20, '░');
 }
 
-async function searchOne(
-    fn: ReturnType<typeof httpsCallable>,
-    queries: string[],
-    groupIdx: number,
-): Promise<void> {
-    const label = queries.map(q => `"${q}"`).join(', ');
-    console.log(`\n[${groupIdx + 1}] ${label}`);
-    const t0 = Date.now();
-    try {
-        const res: any = await fn({ queries, limit: Math.max(topN, 12) });
-        const ms = Date.now() - t0;
-        const { embedding, fast_matches, snapshot_timestamp } = res.data;
-        const snapshotAge = snapshot_timestamp
-            ? Math.round((Date.now() - snapshot_timestamp) / 1000 / 60 / 60)
-            : null;
-
-        console.log(
-            `    OK  ${ms}ms  |  dim=${embedding?.length}  |  ` +
-            `snapshot ${snapshotAge !== null ? `${snapshotAge}h ago` : 'n/a'}  |  ` +
-            `${fast_matches?.length ?? 0} matches`
-        );
-
-        const topMatches = (fast_matches ?? []).slice(0, topN);
-        const names = await resolveIconNames(topMatches.map((m: any) => m.icon_id));
-
-        console.log(`    Top ${topN}:`);
-        for (const m of topMatches) {
-            const name = names.get(m.icon_id) ?? m.icon_id;
-            const bar = scoreBar(m.score ?? 0);
-            console.log(`      ${m.score?.toFixed(4)}  |${bar}|  ${name}`);
-        }
-    } catch (err: any) {
-        const ms = Date.now() - t0;
-        console.error(`    FAIL  ${ms}ms  ${err.message}${err.code ? `  (${err.code})` : ''}`);
-    }
-}
-
 async function run() {
     const groups = parseQueryGroups(args);
     const env = envArg;
@@ -165,7 +128,7 @@ async function run() {
 
     console.log(`===================================================`);
     console.log(` Env:    ${env} (${project})`);
-    console.log(` Groups: ${groups.length}  (parallel)  |  top ${topN} per group`);
+    console.log(` Groups: ${groups.length}  (1 batch call)  |  top ${topN} per group`);
     groups.forEach((g, i) => console.log(`  [${i + 1}] ${g.map(q => `"${q}"`).join(', ')}`));
     console.log(`===================================================`);
 
@@ -176,9 +139,43 @@ async function run() {
     }
 
     const fn = httpsCallable(functions, 'vectorSearch-searchIconVector');
+    const ingredients = groups.map((queries, i) => ({ name: `group-${i + 1}`, queries }));
 
     const t0 = Date.now();
-    await Promise.all(groups.map((g, i) => searchOne(fn, g, i)));
+    let batchResults: any[];
+    let snapshotTimestamp: number | null = null;
+    try {
+        const res: any = await fn({ ingredients, limit: Math.max(topN, 12) });
+        const ms = Date.now() - t0;
+        batchResults = res.data.results;
+        snapshotTimestamp = res.data.snapshot_timestamp ?? null;
+        const snapshotAge = snapshotTimestamp
+            ? Math.round((Date.now() - snapshotTimestamp) / 1000 / 60 / 60)
+            : null;
+        console.log(`\n  OK  ${ms}ms  |  snapshot ${snapshotAge !== null ? `${snapshotAge}h ago` : 'n/a'}  |  ${batchResults.length} ingredients`);
+    } catch (err: any) {
+        console.error(`\n  FAIL  ${Date.now() - t0}ms  ${err.message}${err.code ? `  (${err.code})` : ''}`);
+        return;
+    }
+
+    // Collect all icon IDs for a single Firestore name lookup
+    const allIconIds = batchResults.flatMap((r: any) => (r.fast_matches ?? []).slice(0, topN).map((m: any) => m.icon_id));
+    const names = await resolveIconNames(allIconIds);
+
+    for (let i = 0; i < batchResults.length; i++) {
+        const { name, embedding, fast_matches } = batchResults[i];
+        const label = groups[i].map(q => `"${q}"`).join(', ');
+        console.log(`\n[${i + 1}] ${label}`);
+        console.log(`    dim=${embedding?.length}  |  ${fast_matches?.length ?? 0} matches`);
+        const topMatches = (fast_matches ?? []).slice(0, topN);
+        console.log(`    Top ${topN}:`);
+        for (const m of topMatches) {
+            const iconName = names.get(m.icon_id) ?? m.icon_id;
+            const bar = scoreBar(m.score ?? 0);
+            console.log(`      ${m.score?.toFixed(4)}  |${bar}|  ${iconName}`);
+        }
+    }
+
     console.log(`\n===================================================`);
     console.log(` Total wall time: ${Date.now() - t0}ms`);
 }

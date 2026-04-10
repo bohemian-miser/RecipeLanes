@@ -442,11 +442,7 @@ export class FirebaseDataService implements DataService {
         hydeQueriesMap: Map<string, string[]>,
         searchFn: (texts: string[]) => Promise<{ embedding: number[], fast_matches: any[] }>
     ): Promise<string[]> {
-        const CONCURRENCY = 2;
-        const settled: (string | null)[] = [];
-        for (let i = 0; i < unresolvedNames.length; i += CONCURRENCY) {
-            const batch = unresolvedNames.slice(i, i + CONCURRENCY);
-            const batchResults = await Promise.all(batch.map(async (stdName) => {
+        const results = await Promise.all(unresolvedNames.map(async (stdName) => {
                 try {
                     const queries = hydeQueriesMap.get(stdName);
                     const textsToEmbed = queries && queries.length > 0 ? queries : [stdName];
@@ -496,9 +492,7 @@ export class FirebaseDataService implements DataService {
                     return stdName;
                 }
             }));
-            settled.push(...batchResults);
-        }
-        return settled.filter((n): n is string => n !== null);
+        return results.filter((n): n is string => n !== null);
     }
 
     /**

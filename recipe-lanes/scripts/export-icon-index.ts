@@ -56,8 +56,9 @@ async function run() {
         records.push({ id: doc.id, embedding: arr });
     }
 
+    const exportedAt = Date.now();
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-    fs.writeFileSync(outputPath, JSON.stringify(records));
+    fs.writeFileSync(outputPath, JSON.stringify({ exportedAt, records }));
 
     console.log(`Exported ${records.length} icons (${missing} skipped — no embedding_minilm).`);
     console.log(`Written to: ${outputPath}`);

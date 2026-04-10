@@ -1,13 +1,13 @@
 import * as path from 'path';
 import * as dotenv from 'dotenv';
 
-// Parse arguments early to load correct env
+// Parse arguments early so env is set before firebase-client imports
 const args = process.argv.slice(2);
 let envArg = 'local';
 for (const arg of args) {
-  if (arg === '--local') envArg = 'local';
-  else if (arg === '--staging') envArg = 'staging';
+  if (arg === '--staging') envArg = 'staging';
   else if (arg === '--prod') envArg = 'prod';
+  else if (arg === '--local') envArg = 'local';
 }
 
 if (envArg === 'staging') {
@@ -18,59 +18,89 @@ if (envArg === 'staging') {
     dotenv.config({ path: path.resolve(__dirname, '../.env') });
 }
 
+import { initializeApp } from 'firebase/app';
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
-import { app } from '../lib/firebase-client';
 
-// Usage: npx tsx test-search.ts [query] [--local|--staging|--prod]
+const firebaseConfig = {
+    apiKey:            process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain:        process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId:         process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket:     process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId:             process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
+
+if (!firebaseConfig.apiKey) {
+    console.error('Missing NEXT_PUBLIC_FIREBASE_API_KEY — check your .env file.');
+    process.exit(1);
+}
+
+const app = initializeApp(firebaseConfig);
+
+// Usage: npx tsx scripts/test-search.ts [query] [--local|--staging|--prod]
 async function run() {
   let query = "A bowl of fresh eggs";
-  let env = envArg;
 
-  // Parse query
   for (const arg of args) {
     if (!arg.startsWith('--')) query = arg;
   }
 
-  if (args.includes('--prod') && args.includes('--staging')) {
-    console.error('Error: --staging and --prod are mutually exclusive.');
-    process.exit(1);
-  }
+  const env = envArg;
+  const project = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '(unknown)';
 
   console.log(`===================================================`);
-  console.log(`🔍 Environment: ${env}`);
-  console.log(`🔍 Searching for: '${query}'`);
+  console.log(` Env:     ${env} (${project})`);
+  console.log(` Query:   "${query}"`);
   console.log(`===================================================`);
 
-  const functions = getFunctions(app, 'us-central1'); // adjust region if needed
-  
+  const functions = getFunctions(app, 'us-central1');
+
   if (env === 'local') {
-      connectFunctionsEmulator(functions, "127.0.0.1", 5001);
-      console.log('🔗 Connected to local Firebase Emulator on port 5001.');
-  } else {
-      console.log(`🔗 Targeting Firebase Functions for project: ${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'default'}`);
+      connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+      console.log('Connected to local emulator on :5001');
   }
 
-  const searchIconVector = httpsCallable<{ query: string, limit: number }, any>(functions, 'vectorSearch-searchIconVector');
-  
+  const searchIconVector = httpsCallable<{ query: string; limit: number }, any>(
+      functions, 'vectorSearch-searchIconVector'
+  );
+
+  console.log('Calling vectorSearch-searchIconVector...');
+  const t0 = Date.now();
+
   try {
-      console.log('⏳ Invoking searchIconVector Cloud Function...');
-      const t0 = Date.now();
       const res = await searchIconVector({ query, limit: 12 });
-      const duration = Date.now() - t0;
-      
+      const ms = Date.now() - t0;
       const { embedding, fast_matches, snapshot_timestamp } = res.data;
-      console.log(`✅ Success in ${duration}ms!`);
-      console.log(`- Returned embedding vector length: ${embedding?.length}`);
-      console.log(`- Snapshot timestamp: ${new Date(snapshot_timestamp).toISOString()}`);
-      console.log(`- Fast matches found: ${fast_matches?.length}`);
-      
-      console.log('Top 3 Matches:');
-      (fast_matches || []).slice(0, 3).forEach((m: any, i: number) => {
-          console.log(`   ${i + 1}. [${m.icon_id}] Score: ${m.score.toFixed(4)}`);
-      });
+
+      const snapshotAge = snapshot_timestamp
+          ? Math.round((Date.now() - snapshot_timestamp) / 1000 / 60 / 60)
+          : null;
+
+      console.log(`\n OK  ${ms}ms`);
+      console.log(` Embedding dim:    ${embedding?.length ?? 'n/a'}`);
+      console.log(` Index snapshot:   ${snapshot_timestamp ? new Date(snapshot_timestamp).toISOString() : 'n/a'}${snapshotAge !== null ? ` (${snapshotAge}h ago)` : ''}`);
+      console.log(` Matches returned: ${fast_matches?.length ?? 0}`);
+
+      if (fast_matches?.length > 0) {
+          console.log(`\n Top matches:`);
+          (fast_matches as any[]).slice(0, 5).forEach((m: any, i: number) => {
+              const bar = '█'.repeat(Math.round((m.score ?? 0) * 20)).padEnd(20);
+              console.log(`   ${i + 1}. ${m.icon_id}`);
+              console.log(`      score: ${m.score?.toFixed(4)} |${bar}|`);
+          });
+      } else {
+          console.warn('\n  No matches — icon index may be empty or model failed to load.');
+          console.warn('  Run: npx tsx scripts/export-icon-index.ts --staging');
+          console.warn('  Then redeploy: ./scripts/vector-search.sh deploy --staging');
+      }
   } catch (err: any) {
-      console.error(`❌ Cloud Function Error: ${err.message}`);
+      const ms = Date.now() - t0;
+      console.error(`\n FAIL  ${ms}ms`);
+      console.error(` ${err.message}`);
+      if (err.code) console.error(` code: ${err.code}`);
   }
+
+  console.log(`\n===================================================`);
 }
 
 run().catch(console.error);

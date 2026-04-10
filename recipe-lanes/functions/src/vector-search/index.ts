@@ -33,13 +33,20 @@ async function initialize() {
     const indexPath = path.resolve(__dirname, "./data/icon_index.json");
     if (fs.existsSync(indexPath)) {
       const raw = fs.readFileSync(indexPath, "utf8");
-      iconIndex = JSON.parse(raw) as IconRecord[];
-      snapshotTimestamp = fs.statSync(indexPath).mtimeMs;
-      console.log(`[VectorSearch] Loaded ${iconIndex.length} icons into memory.`);
+      const parsed = JSON.parse(raw);
+      // Support both { exportedAt, records } (new) and plain array (legacy)
+      if (Array.isArray(parsed)) {
+        iconIndex = parsed as IconRecord[];
+        snapshotTimestamp = 0;
+      } else {
+        iconIndex = parsed.records as IconRecord[];
+        snapshotTimestamp = parsed.exportedAt ?? 0;
+      }
+      console.log(`[VectorSearch] Loaded ${iconIndex.length} icons (exported ${snapshotTimestamp ? new Date(snapshotTimestamp).toISOString() : 'unknown'}).`);
     } else {
       console.warn(`[VectorSearch] icon_index.json not found at ${indexPath}. Embed-only mode.`);
       iconIndex = [];
-      snapshotTimestamp = Date.now();
+      snapshotTimestamp = 0;
     }
   }
 }

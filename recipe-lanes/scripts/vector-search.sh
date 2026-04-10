@@ -1,25 +1,35 @@
 #!/bin/bash
 set -e
 
-# Usage: ./vector-search.sh [deploy|test|status] [--local|--staging|--prod]
+# Usage (run from recipe-lanes/scripts/):
+#   ./vector-search.sh deploy  --staging
+#   ./vector-search.sh test    --staging [query]
+#   ./vector-search.sh status  --staging
 
 COMMAND=$1
 ENV=$2
+QUERY="${3:-}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RECIPE_LANES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 if [ -z "$COMMAND" ] || [ -z "$ENV" ]; then
-  echo "Usage: ./vector-search.sh [deploy|test|status] [--local|--staging|--prod]"
+  echo "Usage: ./vector-search.sh [deploy|test|status] [--local|--staging|--prod] [query]"
   exit 1
 fi
 
 case $ENV in
   --local)
     PROJECT="local"
+    ENV_NAME="local"
     ;;
   --staging)
     PROJECT="recipe-lanes-staging"
+    ENV_NAME="staging"
     ;;
   --prod)
-    PROJECT="recipe-lanes-prod"
+    PROJECT="recipe-lanes"
+    ENV_NAME="prod"
     ;;
   *)
     echo "Error: Environment must be --local, --staging, or --prod."
@@ -28,45 +38,55 @@ case $ENV in
 esac
 
 echo "==================================================="
-echo "🚀 Target Environment: $ENV ($PROJECT)"
+echo " Target: $ENV ($PROJECT)"
 echo "==================================================="
 
 if [ "$COMMAND" == "deploy" ]; then
     if [ "$ENV" == "--local" ]; then
-      echo "You cannot deploy to local. Run 'npm run serve' inside functions/ to start emulators."
+      echo "Cannot deploy to local. Run 'npm run serve' inside functions/ to start emulators."
       exit 1
     fi
-    
-    echo "1. Pulling latest $ENV database to bake into Cloud Function..."
-    ENV_NAME=$(echo $ENV | sed 's/--//')
-    npx tsx pull-db.ts --$ENV_NAME
 
-    echo "2. Building Node.js Firebase Functions..."
-    cd ../functions
-    npm run build
+    echo "1. Exporting icon index (embedding_minilm) from Firestore $ENV_NAME..."
+    cd "$SCRIPT_DIR"
+    npx tsx export-icon-index.ts --$ENV_NAME
 
-    echo "3. Deploying vectorSearch-searchIconVector to $PROJECT..."
-    # We only deploy the specific function to keep deployments lightning fast
-    firebase deploy --project $PROJECT --only functions:vectorSearch-searchIconVector
+    echo "2. Deploying vectorSearch-searchIconVector to $PROJECT..."
+    echo "   (predeploy will download model + rebuild)"
+    cd "$RECIPE_LANES_DIR"
+    firebase deploy --project "$PROJECT" --only functions:vectorSearch-searchIconVector
 
 elif [ "$COMMAND" == "test" ]; then
-    echo "1. Running integration test query..."
-    npx tsx test-search.ts "Spicy Chicken Curry" $ENV
-    
+    cd "$SCRIPT_DIR"
+    QUERY_ARG="${QUERY:-Spicy Chicken Curry}"
+    echo "Query: '$QUERY_ARG'"
+    npx tsx test-search.ts "$QUERY_ARG" $ENV
+
 elif [ "$COMMAND" == "status" ]; then
     if [ "$ENV" == "--local" ]; then
-        echo "Local emulators running status: check your terminal window."
+        echo "Local: check your emulators terminal."
         exit 0
     fi
-    echo "Fetching Cloud Function status and recent logs..."
-    gcloud functions describe vectorSearch-searchIconVector --project $PROJECT --region us-central1 --format="value(state, updateTime, environment)"
-    echo "Recent Logs:"
-    gcloud logging read "resource.type=cloud_function AND resource.labels.function_name=vectorSearch-searchIconVector" --project $PROJECT --limit=5 --format="table(timestamp, textPayload)"
+
+    echo "--- Cloud Run services ---"
+    gcloud run services list --project "$PROJECT" --region us-central1 \
+      --filter="SERVICE:vectorsearch OR SERVICE:processicontask" \
+      --format="table(SERVICE,LAST_DEPLOYED_AT,URL)" 2>/dev/null || \
+      echo "(gcloud run services list failed)"
+
+    echo ""
+    echo "--- Recent logs (vectorsearch-searchiconvector, last 20) ---"
+    gcloud logging read \
+      "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"vectorsearch-searchiconvector\"" \
+      --project "$PROJECT" \
+      --limit=20 \
+      --format="table(timestamp,textPayload)" 2>/dev/null || \
+      echo "(log fetch failed)"
 
 else
-    echo "Error: Unknown command. Use deploy, test, or status."
+    echo "Error: Unknown command '$COMMAND'. Use: deploy, test, status."
     exit 1
 fi
 
 echo "==================================================="
-echo "✅ Complete."
+echo " Done."

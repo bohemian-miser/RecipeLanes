@@ -99,11 +99,12 @@ async function run() {
       if (!isVectorValid(data.embedding, 768)) {
           try {
               const result = await ai.embed({ embedder: embeddingModel, content: name });
-              if (result.embedding && result.embedding.length === 768) {
-                  updates.embedding = FieldValue.vector(result.embedding);
+              const vertexVec = result[0]?.embedding;
+              if (vertexVec && vertexVec.length === 768) {
+                  updates.embedding = FieldValue.vector(vertexVec);
                   backfilledVertex++;
               } else {
-                  throw new Error(`Vertex produced vector of length ${result.embedding?.length}`);
+                  throw new Error(`Vertex produced vector of length ${vertexVec?.length}`);
               }
           } catch (e: any) {
               console.error(`Failed to generate Vertex embedding for ${name}:`, e.message);

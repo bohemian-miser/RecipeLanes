@@ -3,7 +3,7 @@
   "scripts": {
     "lint": "eslint .",
     "download-model": "node scripts/download-model.js",
-    "build": "tsc && cp -r src/vector-search/data lib/functions/src/vector-search/ && ([ -d src/vector-search/model-cache ] && cp -rL src/vector-search/model-cache lib/functions/src/vector-search/ || true)",
+    "build": "tsc && ([ -d src/vector-search/data ] && cp -r src/vector-search/data lib/functions/src/vector-search/ || true) && ([ -d src/vector-search/model-cache ] && cp -rL src/vector-search/model-cache lib/functions/src/vector-search/ || true)",
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",

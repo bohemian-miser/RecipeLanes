@@ -3,24 +3,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { pipeline, env } from '@huggingface/transformers';
 import * as dotenv from 'dotenv';
+import { ai, embeddingModel } from '../lib/genkit';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.staging') });
 
 env.cacheDir = "/tmp/.cache/huggingface";
 
 async function getVertexEmbedding(text: string): Promise<number[]> {
-  const { VertexAI } = require('@google-cloud/vertexai');
-  const project = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
-  const location = 'us-central1';
-  const vertexAI = new VertexAI({ project, location });
-  const model = 'text-embedding-004';
-  const embedder = vertexAI.getGenerativeModel({ model });
-  
-  const req = {
-    content: [{text: text}],
-  };
-  const result = await embedder.embedContent(req);
-  return result.embeddings[0].values;
+  const result = await ai.embed({ embedder: embeddingModel, content: text });
+  return result.embedding;
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -98,27 +89,21 @@ async function run() {
       // 1. Test Vertex (Legacy)
       if (icon.vertexVec) {
           validVertexCount++;
-          // Embed the name with Vertex
-          try {
-              const queryVec = await getVertexEmbedding(icon.name);
-              const scores = icons
-                  .filter(ic => ic.vertexVec)
-                  .map(ic => ({ id: ic.id, score: cosineSimilarity(queryVec, ic.vertexVec!) }))
-                  .sort((a, b) => b.score - a.score);
-                  
-              const rank = scores.findIndex(s => s.id === icon.id);
-              if (rank === 0) vertexTop1++;
-              if (rank >= 0 && rank < 12) vertexTop12++;
-          } catch (e: any) {
-              console.warn(`Vertex embedding failed for ${icon.name}:`, e.message);
-          }
+          const queryVec = icon.vertexVec;
+          const scores = icons
+              .filter(ic => ic.vertexVec)
+              .map(ic => ({ id: ic.id, score: cosineSimilarity(queryVec, ic.vertexVec!) }))
+              .sort((a, b) => b.score - a.score);
+              
+          const rank = scores.findIndex(s => s.id === icon.id);
+          if (rank === 0) vertexTop1++;
+          if (rank >= 0 && rank < 12) vertexTop12++;
       }
 
       // 2. Test MiniLM (Node CF)
       if (icon.minilmVec) {
           validMinilmCount++;
-          const output = await embedderPipeline(icon.name, { pooling: "mean", normalize: true });
-          const queryVec = Array.from(output.data) as number[];
+          const queryVec = icon.minilmVec;
           
           const scores = icons
               .filter(ic => ic.minilmVec)

@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as dotenv from 'dotenv';
 
-// Parse arguments early so env is set before firebase-client imports
+// Parse env flag early — must happen before firebase imports
 const args = process.argv.slice(2);
 let envArg = 'local';
 for (const arg of args) {
@@ -35,71 +35,93 @@ if (!firebaseConfig.apiKey) {
     process.exit(1);
 }
 
+// ---------------------------------------------------------------------------
+// CLI syntax
+//
+// Single ingredient (queries are HyDE variants, averaged by the CF):
+//   npx tsx scripts/test-search.ts "fresh tomatoes" "sliced red tomato" --staging
+//
+// Multiple ingredients in parallel (groups separated by --):
+//   npx tsx scripts/test-search.ts "fresh tomatoes" "red tomato" -- "rack of lamb" "lamb chop" -- "butter" --staging
+//
+// Each group is one CF call; all groups run in parallel.
+// ---------------------------------------------------------------------------
+
+function parseQueryGroups(args: string[]): string[][] {
+    const groups: string[][] = [];
+    let current: string[] = [];
+    for (const arg of args) {
+        if (arg.startsWith('--')) {
+            // env flags and '--' separator
+            if (arg === '--') {
+                if (current.length) { groups.push(current); current = []; }
+            }
+            // skip env flags
+        } else {
+            current.push(arg);
+        }
+    }
+    if (current.length) groups.push(current);
+    return groups.length ? groups : [['A bowl of fresh eggs']];
+}
+
 const app = initializeApp(firebaseConfig);
 
-// Usage: npx tsx scripts/test-search.ts "query 1" "query 2" ... [--local|--staging|--prod]
-// All positional args become the queries array — the CF embeds them in parallel and averages.
+async function searchOne(
+    fn: ReturnType<typeof httpsCallable>,
+    queries: string[],
+    groupIdx: number,
+): Promise<void> {
+    const label = queries.length === 1 ? `"${queries[0]}"` : `[${queries.map(q => `"${q}"`).join(', ')}]`;
+    process.stdout.write(`[${groupIdx + 1}] ${label} — calling...\n`);
+    const t0 = Date.now();
+    try {
+        const res: any = await fn({ queries, limit: 12 });
+        const ms = Date.now() - t0;
+        const { embedding, fast_matches, snapshot_timestamp } = res.data;
+        const snapshotAge = snapshot_timestamp
+            ? Math.round((Date.now() - snapshot_timestamp) / 1000 / 60 / 60)
+            : null;
+
+        const top = (fast_matches ?? []).slice(0, 3)
+            .map((m: any) => `${m.score?.toFixed(3)} ${m.icon_id.slice(0, 8)}`)
+            .join('  ');
+
+        console.log(
+            `[${groupIdx + 1}] OK  ${ms}ms  dim=${embedding?.length}  ` +
+            `snapshot=${snapshotAge !== null ? `${snapshotAge}h ago` : 'n/a'}  ` +
+            `matches=${fast_matches?.length ?? 0}`
+        );
+        console.log(`[${groupIdx + 1}] top: ${top || '(none)'}`);
+    } catch (err: any) {
+        const ms = Date.now() - t0;
+        console.error(`[${groupIdx + 1}] FAIL  ${ms}ms  ${err.message}${err.code ? `  (${err.code})` : ''}`);
+    }
+}
+
 async function run() {
-  const queries = args.filter(a => !a.startsWith('--'));
-  if (queries.length === 0) queries.push('A bowl of fresh eggs');
+    const groups = parseQueryGroups(args);
+    const env = envArg;
+    const project = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '(unknown)';
 
-  const env = envArg;
-  const project = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '(unknown)';
+    console.log(`===================================================`);
+    console.log(` Env:     ${env} (${project})`);
+    console.log(` Groups:  ${groups.length}  (all run in parallel)`);
+    groups.forEach((g, i) => console.log(`  [${i + 1}] ${g.map(q => `"${q}"`).join(', ')}`));
+    console.log(`===================================================`);
 
-  console.log(`===================================================`);
-  console.log(` Env:     ${env} (${project})`);
-  console.log(`===================================================`);
+    const functions = getFunctions(app, 'us-central1');
+    if (env === 'local') {
+        connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+        console.log('Connected to local emulator on :5001');
+    }
 
-  const functions = getFunctions(app, 'us-central1');
+    const fn = httpsCallable(functions, 'vectorSearch-searchIconVector');
 
-  if (env === 'local') {
-      connectFunctionsEmulator(functions, '127.0.0.1', 5001);
-      console.log('Connected to local emulator on :5001');
-  }
-
-    const searchIconVector = httpsCallable<{ queries: string[]; limit: number }, any>(
-      functions, 'vectorSearch-searchIconVector'
-  );
-
-  console.log(`Queries (${queries.length}):`);
-  queries.forEach((q, i) => console.log(`  ${i + 1}. "${q}"`));
-  console.log('Calling vectorSearch-searchIconVector...');
-  const t0 = Date.now();
-
-  try {
-      const res = await searchIconVector({ queries, limit: 12 });
-      const ms = Date.now() - t0;
-      const { embedding, fast_matches, snapshot_timestamp } = res.data;
-
-      const snapshotAge = snapshot_timestamp
-          ? Math.round((Date.now() - snapshot_timestamp) / 1000 / 60 / 60)
-          : null;
-
-      console.log(`\n OK  ${ms}ms`);
-      console.log(` Embedding dim:    ${embedding?.length ?? 'n/a'} (averaged over ${queries.length} quer${queries.length === 1 ? 'y' : 'ies'})`);
-      console.log(` Index snapshot:   ${snapshot_timestamp ? new Date(snapshot_timestamp).toISOString() : 'n/a'}${snapshotAge !== null ? ` (${snapshotAge}h ago)` : ''}`);
-      console.log(` Matches returned: ${fast_matches?.length ?? 0}`);
-
-      if (fast_matches?.length > 0) {
-          console.log(`\n Top matches:`);
-          (fast_matches as any[]).slice(0, 5).forEach((m: any, i: number) => {
-              const bar = '█'.repeat(Math.round((m.score ?? 0) * 20)).padEnd(20);
-              console.log(`   ${i + 1}. ${m.icon_id}`);
-              console.log(`      score: ${m.score?.toFixed(4)} |${bar}|`);
-          });
-      } else {
-          console.warn('\n  No matches — icon index may be empty or model failed to load.');
-          console.warn('  Run: npx tsx scripts/export-icon-index.ts --staging');
-          console.warn('  Then redeploy: ./scripts/vector-search.sh deploy --staging');
-      }
-  } catch (err: any) {
-      const ms = Date.now() - t0;
-      console.error(`\n FAIL  ${ms}ms`);
-      console.error(` ${err.message}`);
-      if (err.code) console.error(` code: ${err.code}`);
-  }
-
-  console.log(`\n===================================================`);
+    const t0 = Date.now();
+    await Promise.all(groups.map((g, i) => searchOne(fn, g, i)));
+    console.log(`\n===================================================`);
+    console.log(` Total wall time: ${Date.now() - t0}ms`);
 }
 
 run().catch(console.error);

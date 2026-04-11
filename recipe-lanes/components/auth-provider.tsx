@@ -19,11 +19,13 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User, signInWithPopup, signOut } from 'firebase/auth';
-import { auth, googleProvider, isInitialized } from '@/lib/firebase-client';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, googleProvider, isInitialized, db } from '@/lib/firebase-client';
 import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
   user: User | null;
+  isAdmin: boolean;
   loading: boolean;
   error: string | null;
   signIn: () => Promise<void>;
@@ -32,6 +34,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  isAdmin: false,
   loading: true,
   error: null,
   signIn: async () => {},
@@ -40,6 +43,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -52,18 +56,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (currentUser) {
           try {
               const token = await currentUser.getIdToken();
-              await fetch('/api/auth/login', { 
-                  method: 'POST', 
-                  body: JSON.stringify({ idToken: token }) 
+              await fetch('/api/auth/login', {
+                  method: 'POST',
+                  body: JSON.stringify({ idToken: token })
               });
               router.refresh();
           } catch (e) {
               console.error('Failed to sync session:', e);
           }
+          // Check isAdmin from Firestore — not a security control, just for UI visibility
+          try {
+              const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+              setIsAdmin(userDoc.data()?.isAdmin === true);
+          } catch {
+              setIsAdmin(false);
+          }
       } else {
           // ensure cookie is cleared if firebase thinks we are logged out
           await fetch('/api/auth/logout', { method: 'POST' });
           router.refresh();
+          setIsAdmin(false);
       }
       setLoading(false);
     });
@@ -109,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, signIn, logout }}>
+    <AuthContext.Provider value={{ user, isAdmin, loading, error, signIn, logout }}>
       {children}
     </AuthContext.Provider>
   );

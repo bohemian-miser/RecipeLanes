@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
+import { useAuth } from '@/components/auth-provider';
 
 type IconPoint = {
     id: string;
@@ -20,6 +21,8 @@ function iconUrl(id: string, name: string, bucket: string): string {
 }
 
 export default function UmapPage() {
+    // Not a security gate — admin check is just to hide confusing dev tooling from regular users
+    const { isAdmin, loading: authLoading } = useAuth();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [points, setPoints] = useState<IconPoint[]>([]);
     const [loading, setLoading] = useState(true);
@@ -156,6 +159,9 @@ export default function UmapPage() {
         camera.current.y = sy - wy * camera.current.scale;
         draw();
     }
+
+    if (authLoading) return null;
+    if (!isAdmin) return null;
 
     return (
         <div className="w-screen h-screen bg-zinc-950 flex flex-col">

@@ -40,7 +40,7 @@ import { db, functions } from '@/lib/firebase-client';
 import { FeedbackModal } from '@/components/feedback-modal';
 
 function RecipeLanesContent() {
-  const { user, loading: authLoading, signIn } = useAuth();
+  const { user, isAdmin, loading: authLoading, signIn } = useAuth();
   const searchParams = useSearchParams();
   const recipeId = searchParams.get('id');
   const router = useRouter();
@@ -804,8 +804,8 @@ const handleVisualize = async () => {
 
                     <div className="h-4 w-px bg-zinc-200 mx-2" />
 
-                    {/* Batch icon search */}
-                    {graph && recipeId && (
+                    {/* Batch icon search — admin only, not a security gate, just hides confusing dev controls */}
+                    {isAdmin && graph && recipeId && (
                         <div className="flex items-center gap-2">
                             <span className="text-xs font-mono text-zinc-400">Icons</span>
                             <select

@@ -853,7 +853,7 @@ const handleVisualize = async () => {
                             </button>
                             {/* Dropdown menu */}
                             {iconDropdownOpen && (
-                                <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-zinc-200 rounded-lg shadow-lg py-1 min-w-[220px]">
+                                <div className="absolute bottom-full left-0 mb-1 z-50 bg-white border border-zinc-200 rounded-lg shadow-lg py-1 min-w-[220px]">
                                     {iconSearchMethods.map(method => (
                                         <button
                                             key={method.id}

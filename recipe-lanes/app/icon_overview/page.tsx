@@ -31,8 +31,12 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { DB_COLLECTION_RECIPES } from '@/lib/config';
 import { standardizeIngredientName } from '@/lib/utils';
-import { getNodeIconUrl, getNodeIconId } from '@/lib/recipe-lanes/model-utils';
-import { RecipeNode } from '@/lib/recipe-lanes/types';
+import { getNodeIconUrl, getNodeIconId, getNodeIngredientName } from '@/lib/recipe-lanes/model-utils';
+import { RecipeNode, IconStats } from '@/lib/recipe-lanes/types';
+import { IconDetailModal } from '@/components/icon-detail-modal';
+import { IconOverviewModal } from '@/components/icon-overview-modal';
+import { iconSearchProviders } from '@/lib/icon-search-providers';
+import { SearchProviderPanel } from '@/components/search-provider-panel';
 
 export default function Home() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -42,6 +46,11 @@ export default function Home() {
   
   const [rerollingIds, setRerollingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [selectedNode, setSelectedNode] = useState<RecipeNode | null>(null);
+  const [selectedGalleryIcon, setSelectedGalleryIcon] = useState<{ icon: IconStats; matchScore?: number } | null>(null);
+
+  const [mode, setMode] = useState<'forge' | 'search'>('forge');
+  const [activeQuery, setActiveQuery] = useState('');
 
   // Use a ref to track if we've already created a recipe to prevent double-creation in strict mode
   const recipeCreated = useRef(false);
@@ -141,6 +150,15 @@ export default function Home() {
     }
   };
 
+  const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const q = formData.get('ingredient') as string;
+    if (!q) return;
+    event.currentTarget.reset();
+    setActiveQuery(q);
+  };
+
   const handleReroll = async (nodeToReroll: RecipeNode) => {
     if (rerollingIds.has(nodeToReroll.id)) return;
     if (!recipeId) return;
@@ -153,7 +171,7 @@ export default function Home() {
     
     try {
         const currentIconId = getNodeIconId(nodeToReroll);
-        const ingredient = standardizeIngredientName(nodeToReroll.visualDescription || nodeToReroll.text);
+        const ingredient = standardizeIngredientName(getNodeIngredientName(nodeToReroll));
 
         const result = await rejectIcon(
             recipeId,
@@ -242,27 +260,76 @@ export default function Home() {
             <p className="text-lg text-zinc-400 font-mono">
               Convert text to pixel-art assets.
             </p>
+            <div className="flex items-center justify-center gap-6 pt-2">
+              <button
+                onClick={() => setMode('forge')}
+                className={`font-mono text-sm uppercase tracking-wider pb-1 transition-colors ${
+                  mode === 'forge'
+                    ? 'text-yellow-500 border-b-2 border-yellow-500'
+                    : 'text-zinc-500 border-b-2 border-transparent hover:text-zinc-300'
+                }`}
+              >
+                Forge
+              </button>
+              <button
+                onClick={() => setMode('search')}
+                className={`font-mono text-sm uppercase tracking-wider pb-1 transition-colors ${
+                  mode === 'search'
+                    ? 'text-yellow-500 border-b-2 border-yellow-500'
+                    : 'text-zinc-500 border-b-2 border-transparent hover:text-zinc-300'
+                }`}
+              >
+                Search
+              </button>
+            </div>
           </section>
 
           <IngredientForm
-            onSubmit={handleSubmit}
+            onSubmit={mode === 'forge' ? handleSubmit : handleSearch}
             isLoading={false}
           />
 
-          <QueueMonitor />
+          {mode === 'search' && (
+            <div className="space-y-8">
+              {iconSearchProviders.map(provider => (
+                <SearchProviderPanel
+                  key={provider.id}
+                  provider={provider}
+                  activeQuery={activeQuery}
+                  onIconClick={(icon, matchScore) => setSelectedGalleryIcon({ icon, matchScore })}
+                />
+              ))}
+            </div>
+          )}
 
-          <IconDisplay
-            nodes={nodes}
-            onReroll={handleReroll}
-            onDelete={handleInventoryDelete}
-            rerollingIds={rerollingIds}
-            error={error}
-            highlightedIconId={null}
+          {mode === 'forge' && <QueueMonitor />}
+
+          {mode === 'forge' && (
+            <IconDisplay
+              nodes={nodes}
+              onReroll={handleReroll}
+              onDelete={handleInventoryDelete}
+              rerollingIds={rerollingIds}
+              error={error}
+              highlightedIconId={null}
+              onIconClick={setSelectedNode}
+            />
+          )}
+
+          <SharedGallery
+            onIconClick={(icon) => setSelectedGalleryIcon({ icon })}
           />
-
-          <SharedGallery />
         </div>
       </main>
+
+      <IconDetailModal node={selectedNode} onClose={() => setSelectedNode(null)} />
+      {selectedGalleryIcon && (
+        <IconOverviewModal
+          icon={selectedGalleryIcon.icon}
+          matchScore={selectedGalleryIcon.matchScore}
+          onClose={() => setSelectedGalleryIcon(null)}
+        />
+      )}
     </div>
   );
 }

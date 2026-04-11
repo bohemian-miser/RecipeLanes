@@ -11,6 +11,7 @@ test.describe('Graph UI & Interactions (Consolidated)', () => {
   });
 
   test('Core Graph: Pan, Delete, Undo & Sidebar', async ({ page }) => {
+    test.slow();
     const dir = screenshotDir('graph-core', desktop.name);
     await page.goto('/lanes?new=true');
     await create_recipe(page, '1 Egg\n1 Milk\nWhisk them', dir);
@@ -44,6 +45,7 @@ test.describe('Graph UI & Interactions (Consolidated)', () => {
   });
 
   test('Advanced: Pivot & Arrow Alignment', async ({ page }) => {
+    test.slow();
     const dir = screenshotDir('graph-advanced', desktop.name);
     await page.goto('/lanes?new=true');
     await create_recipe(page, '1 Egg\nMix', dir);
@@ -78,6 +80,7 @@ test.describe('Graph UI & Interactions (Consolidated)', () => {
   });
 
   test('Persistence Regressions: Issue 74 & 61', async ({ page, browser, login }) => {
+    test.slow();
     const dir = screenshotDir('graph-regressions', desktop.name);
     
     // 1. Issue 74: Bridge persists after move

@@ -31,6 +31,7 @@ const RecipeGraphSchema = z.object({
     laneId: z.string(),
     text: z.string(),
     visualDescription: z.string(),
+    hydeQueries: z.array(z.string()).optional(),
     type: z.enum(['ingredient', 'action']),
     inputs: z.array(z.string()).optional(),
     temperature: z.string().optional(),
@@ -84,6 +85,7 @@ interface RecipeGraph {
     laneId: string; // Must match a lane.id
     text: string; // Concise instruction e.g. "Add onions" or "2 Onions"
     visualDescription: string; // Detailed prompt for pixel-art icon
+    hydeQueries: string[]; // 12 image-search terms for this node's icon (see below)
     type: 'ingredient' | 'action';
     inputs?: string[]; // IDs of previous nodes flowing into this one
     temperature?: string; // e.g. "Medium Heat" (for actions)
@@ -138,9 +140,51 @@ These are cached, so simplicity and consistency is key.
 
 2. **ACTION Nodes (The "State"):
 
+### hydeQueries Guidelines (CRITICAL)
+For every node, generate exactly 12 search terms that describe what its 64×64 icon looks like (colorful, white background, recipe card). Provide:
+- 4 short tags (1–3 words, e.g. "oven mitt", "red glove")
+- 4 medium phrases (4–6 words, e.g. "red oven mitt icon", "cooking glove recipe")
+- 4 longer visual descriptions (7–12 words, e.g. "red oven mitt with white heart and flame, simple icon")
+
 ### Input Recipe
 "${recipeText}"
 `;
+}
+
+/**
+ * Prompt for generating HyDE search terms for a single ingredient/node name.
+ * Used when generating icons outside the recipe flow (e.g. icon_overview direct generation).
+ */
+export function generateHydeQueriesPrompt(ingredientName: string, nodeType: 'ingredient' | 'action' = 'ingredient'): string {
+  const isAction = nodeType === 'action';
+  const shortEx = isAction ? '"pan with sauce", "sizzling skillet"' : '"cracked egg", "raw egg"';
+  const medEx = isAction ? '"onions frying in pan icon", "saucepan with boiling liquid"' : '"cracked egg icon", "whole egg cooking"';
+  const longEx = isAction
+    ? '"overhead view of frying pan with golden onions and wisps of steam rising"'
+    : '"cracked raw egg, translucent white with bright yellow yolk, oval form"';
+  const extra = isAction
+    ? '\nFor action icons: ≥2 terms must name the vessel/container (pan, pot, bowl) and ≥2 must describe a visible state cue (steam, bubbles, browning, sizzling).'
+    : '\nFor ingredient icons: ≥2 terms must describe colour/shape/texture WITHOUT naming the ingredient (e.g. "white oval grain", "purple layered crescent").';
+
+  return `Generate exactly 12 search terms describing a 64×64 pixel-art icon for "${ingredientName}" in a recipe card style.
+Return ONLY a raw JSON array of 12 strings. No explanation, no markdown:
+- 4 short tags covering DIFFERENT angles: (1) ingredient/action name, (2) visual synonym or colour, (3) prep/cooking state, (4) category label. (e.g. ${shortEx})
+- 4 medium phrases — one semantic (what it IS), one visual (what it LOOKS LIKE), one contextual (how it's used), one categorical. (e.g. ${medEx})
+- 4 longer visual descriptions focusing on shape, colour, texture and visible detail — no style or background references. (e.g. ${longEx})${extra}`;
+}
+
+/**
+ * Parses the LLM response from generateHydeQueriesPrompt into a string[].
+ * Returns [] on any parse failure so callers can proceed without queries.
+ */
+export function parseHydeQueries(aiResponse: string): string[] {
+  try {
+    let json = aiResponse.trim();
+    if (json.startsWith('```')) json = json.replace(/^```(json)?/, '').replace(/```$/, '').trim();
+    const parsed = JSON.parse(json);
+    if (Array.isArray(parsed) && parsed.every(s => typeof s === 'string')) return parsed;
+  } catch {}
+  return [];
 }
 
 export function parseRecipeGraph(aiResponse: string): RecipeGraph {

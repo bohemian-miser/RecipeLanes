@@ -23,3 +23,4 @@ export const DB_COLLECTION_INGREDIENTS = 'ingredients_new';
 export const DB_COLLECTION_QUEUE = 'icon_queue';
 export const DB_COLLECTION_RECIPES = 'recipes';
 export const DB_COLLECTION_FEEDBACK = 'feedback';
+export const DB_COLLECTION_ICON_INDEX = 'icon_index';

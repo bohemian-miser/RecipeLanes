@@ -17,53 +17,70 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { createDebugRecipeAction, addIngredientNodeAction, rejectIcon } from '../app/actions';
+import { createDebugRecipeAction, addIngredientNodeAction, forgeIconAction } from '../app/actions';
 import { setAIService, MockAIService } from '../lib/ai-service';
 import { getDataService } from '../lib/data-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
-import { getNodeIconUrl, getNodeIconId } from '../lib/recipe-lanes/model-utils';
+import { getNodeIconId } from '../lib/recipe-lanes/model-utils';
 
-// Explicitly use Mocks for tests
 setAIService(new MockAIService());
 setAuthService(new MockAuthService());
 
-async function getNodeIcon(recipeId: string, nodeId: string) {
-    const recipeData = await getDataService().getRecipe(recipeId);
-    const node = recipeData?.graph?.nodes?.find((n: any) => n.id === nodeId);
-    if (!node) return { iconUrl: undefined, iconId: undefined };
-    return { iconUrl: getNodeIconUrl(node), iconId: getNodeIconId(node) };
+/** Poll the recipe node until it has an icon different from `excludeId`, or timeout. */
+async function pollForIcon(
+    recipeId: string,
+    nodeId: string,
+    excludeId: string | undefined,
+    timeoutMs = 60_000
+): Promise<string | null> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const recipe = await getDataService().getRecipe(recipeId);
+        const node = recipe?.graph?.nodes?.find((n: any) => n.id === nodeId);
+        const iconId = node ? getNodeIconId(node) : undefined;
+        if (iconId && iconId !== excludeId) return iconId;
+        await new Promise(r => setTimeout(r, 500));
+    }
+    return null;
 }
 
 describe('Recipe & Icon Lifecycle', () => {
-    it('should follow the full creation and reroll flow', async () => {
-        const ingredient = "Integration-Burger-" + Date.now();
-        const service = getDataService();
+    it('should follow the full creation and shortlist-cycle reroll flow', async () => {
+        const ingredient = 'Integration-Egg-' + Date.now();
 
-        // 1. Create Debug Recipe
+        const r1 = await createDebugRecipeAction() as any;
+        assert.ok(r1.recipeId, 'createDebugRecipeAction should return a recipeId');
+        const recipeId = r1.recipeId;
+
+        const r2 = await addIngredientNodeAction(recipeId, ingredient) as any;
+        assert.ok(r2.nodeId, 'addIngredientNodeAction should return a nodeId');
+        const nodeId = r2.nodeId;
+
+        const iconId = await pollForIcon(recipeId, nodeId, undefined);
+        assert.ok(iconId, `Icon not generated within timeout for "${ingredient}"`);
+    });
+
+    it('forge produces a new icon distinct from the original', async () => {
+        const ingredient = 'Forge-Egg-' + Date.now();
+
         const r1 = await createDebugRecipeAction() as any;
         assert.ok(r1.recipeId);
         const recipeId = r1.recipeId;
 
-        // 2. Add Ingredient Node
         const r2 = await addIngredientNodeAction(recipeId, ingredient) as any;
         assert.ok(r2.nodeId);
         const nodeId = r2.nodeId;
 
-        // 3. Resolve (Wait for Cloud Function)
-        await service.waitForQueue(ingredient);
-        
-        let current = await getNodeIcon(recipeId, nodeId);
-        assert.ok(current.iconUrl, "Failed to generate Icon A");
-        const urlA = current.iconUrl;
+        const initialIconId = await pollForIcon(recipeId, nodeId, undefined);
+        assert.ok(initialIconId, `Initial icon not generated within timeout for "${ingredient}"`);
 
-        // 4. Reroll
-        await rejectIcon(recipeId, ingredient, current.iconId!);
-        await service.waitForQueue(ingredient);
+        // Forge — clears current icon and queues a brand-new generation
+        const forgeResult = await forgeIconAction(recipeId, ingredient, initialIconId) as any;
+        assert.ok(forgeResult.success, `forgeIconAction failed: ${forgeResult.error}`);
 
-        current = await getNodeIcon(recipeId, nodeId);
-        assert.ok(current.iconUrl, "Failed to generate Icon B");
-        const urlB = current.iconUrl;
-        
-        assert.notStrictEqual(urlA, urlB, "Should have a new icon after reroll");
+        // Wait for a different icon to land on the node
+        const forgedIconId = await pollForIcon(recipeId, nodeId, initialIconId);
+        assert.ok(forgedIconId, 'Forged icon did not appear within timeout');
+        assert.notStrictEqual(forgedIconId, initialIconId, 'Forged icon should be a new icon');
     });
 });

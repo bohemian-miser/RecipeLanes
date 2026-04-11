@@ -24,10 +24,13 @@ import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
-import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction } from '@/app/actions';
+import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
+import { iconSearchMethods, defaultIconSearchMethod } from '@/lib/icon-search-registry';
+import { standardizeIngredientName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
-import { getNodeIconUrl, getNodeIconId, applyIconToNode, hasNodeIcon } from '@/lib/recipe-lanes/model-utils';
+import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries } from '@/lib/recipe-lanes/model-utils';
+import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
@@ -37,17 +40,19 @@ import { db, functions } from '@/lib/firebase-client';
 import { FeedbackModal } from '@/components/feedback-modal';
 
 function RecipeLanesContent() {
-  const { user, loading: authLoading, signIn } = useAuth();
+  const { user, isAdmin, loading: authLoading, signIn } = useAuth();
   const searchParams = useSearchParams();
+  const recipeId = searchParams.get('id');
   const router = useRouter();
-  
+
   const [recipeTitle, setRecipeTitle] = useState('');
   const [editingTitle, setEditingTitle] = useState(false);
   const [recipeText, setRecipeText] = useState('');
   const [chatInput, setChatInput] = useState('');
-  const [graph, setGraph] = useState<RecipeGraph | null>(null);
-  const [ownerId, setOwnerId] = useState<string | null>(null);
-  const [ownerName, setOwnerName] = useState<string | null>(null);
+  const graph = useRecipeStore(s => s.graph);
+  const ownerId = useRecipeStore(s => s.ownerId);
+  const ownerName = useRecipeStore(s => s.ownerName);
+  const { mergeSnapshot, setGraph, reset: resetRecipeStore } = useRecipeStore.getState();
   
   useEffect(() => {
       console.log('[RecipeLanesPage] User:', user?.uid, 'Owner:', ownerId);
@@ -59,6 +64,9 @@ function RecipeLanesContent() {
   const [showJson, setShowJson] = useState(false);
   const [showIngredients, setShowIngredients] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [iconSearchStatus, setIconSearchStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [iconSearchMethodId, setIconSearchMethodId] = useState(defaultIconSearchMethod.id);
+  const [iconSearchElapsed, setIconSearchElapsed] = useState<number | null>(null);
   const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
   const [iconTheme, setIconTheme] = useState<'classic' | 'modern' | 'modern_clean'>('classic');
@@ -71,6 +79,7 @@ function RecipeLanesContent() {
   const diagramRef = useRef<ReactFlowDiagramHandle>(null);
   const isForking = useRef(false);
   const titleBeforeEdit = useRef('');
+  const autoFillIconsRef = useRef(false);
 
   const isOwner = !ownerId || (!!user && user.uid === ownerId);
 
@@ -136,13 +145,8 @@ function RecipeLanesContent() {
   // Sync graph to jsonText
   useEffect(() => {
       if (graph) {
-          const safeGraph = { 
-              ...graph, 
-                                nodes: graph.nodes.map(n => {
-                                    // const { icon, ...rest } = n;// this removes the whole icon, i just want to remove the url.
-                                    // const { icon, ...rest } = n;
-                                    return n;
-                                })          };
+          // url is no longer in the graph so it's safe.
+          const safeGraph = { ...graph };
           setJsonText(JSON.stringify(safeGraph, null, 2));
       }
   }, [graph]);
@@ -166,7 +170,44 @@ function RecipeLanesContent() {
       setTimeout(() => setNotification(null), 3000);
   };
 
-  const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
+  const handleBatchIconSearch = async (methodId?: string) => {
+      if (!graph || !recipeId) return;
+      const mid = methodId ?? iconSearchMethodId;
+      const method = iconSearchMethods.find(m => m.id === mid) ?? iconSearchMethods[0];
+
+      setIconSearchStatus('running');
+      setIconSearchElapsed(null);
+      try {
+          const hydeMap = new Map<string, string[]>();
+          for (const node of graph.nodes) {
+              if (!node.visualDescription) continue;
+              const stdName = standardizeIngredientName(getNodeIngredientName(node));
+              const queries = getNodeHydeQueries(node);
+              const existing = hydeMap.get(stdName) ?? [];
+              hydeMap.set(stdName, Array.from(new Set([...existing, ...queries])));
+          }
+          const ingredients = Array.from(hydeMap.entries()).map(([name, queries]) => ({
+              name,
+              queries: queries.length ? queries : [name],
+          }));
+          if (ingredients.length === 0) { setIconSearchStatus('idle'); return; }
+
+          console.log(`[batchIconSearch] ${method.name} — ${ingredients.length} ingredients`);
+          const results = await method.search(ingredients, 12);
+          const res = await applyIconSearchResultsAction(recipeId, results);
+          if (!res.success) throw new Error(res.error);
+          console.log(`[batchIconSearch] applied ${res.applied} in ${res.elapsed}ms`);
+          setIconSearchElapsed(res.elapsed);
+          setIconSearchStatus('done');
+          setTimeout(() => setIconSearchStatus('idle'), 4000);
+      } catch (e: any) {
+          console.error('[handleBatchIconSearch]', e);
+          setIconSearchStatus('error');
+          setTimeout(() => setIconSearchStatus('idle'), 3000);
+      }
+  };
+
+const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       const currentId = searchParams.get('id');
       const isNotOwner = (user && ownerId && user.uid !== ownerId) || (!user && ownerId);
       
@@ -205,7 +246,6 @@ function RecipeLanesContent() {
           url.searchParams.delete('new');
           url.searchParams.set('id', res.id);
           window.history.replaceState({}, '', url.pathname + url.search);
-          if (user) setOwnerId(user.uid);
       }
       return res;
   };
@@ -217,11 +257,10 @@ function RecipeLanesContent() {
           // Restore icons from existing graph
           const newNodes = partialGraph.nodes.map((n: any) => {
               const original = graph?.nodes.find(o => o.id === n.id);
-              const updatedNode = { ...n };
-              if (original?.icon) {
-                  updatedNode.icon = original.icon;
+              if (original && getNodeShortlistLength(original) > 0) {
+                  return preserveNodeShortlist(n, original);
               }
-              return updatedNode;
+              return n;
           });
           
           const newGraph = { ...partialGraph, nodes: newNodes };
@@ -243,10 +282,7 @@ function RecipeLanesContent() {
           if (freshGraph) {
               const safeGraph = { 
                   ...freshGraph, 
-                  nodes: freshGraph.nodes.map(n => {
-                      const { icon, ...rest } = n;
-                      return rest;
-                  })
+                  nodes: freshGraph.nodes
               };
               setJsonText(JSON.stringify(safeGraph, null, 2));
           }
@@ -268,52 +304,29 @@ function RecipeLanesContent() {
   }, [inputExpanded]);
 
   // Listener for Recipe Updates
+  // NOTE: Depends on `recipeId` (string), NOT `searchParams` (object).
+  // Using searchParams as a dependency caused the listener to re-run on every save
+  // because window.history.replaceState (called in handleSave) makes useSearchParams
+  // return a new object reference, even when the ID hasn't changed. This caused
+  // resetRecipeStore() → graph = null → DiagramInner remount → stale position restore.
   useEffect(() => {
-      const id = searchParams.get('id');
-      if (!id) return;
+      if (!recipeId) return;
 
-      debugLogAction('Setting up listener for recipe: ' + id);
+      resetRecipeStore();
+      debugLogAction('Setting up listener for recipe: ' + recipeId);
       setStatus('loading');
       setWarningDismissed(false);
 
       // Use Firestore Listener
-      const unsubscribe = onSnapshot(doc(db, 'recipes', id), (docSnapshot) => {
+      const unsubscribe = onSnapshot(doc(db, 'recipes', recipeId), (docSnapshot) => {
           if (docSnapshot.exists()) {
               const data = docSnapshot.data();
               const currentGraph = data.graph as RecipeGraph;
-              
               if (data.visibility) currentGraph.visibility = data.visibility as any;
-
-              // Merge logic: preserve local layout state if dragging? 
-              // For now, simpler: Just update graph. 
-              // Ideally check timestamp or just merge updated icons.
-              setGraph((prevGraph) => {
-                  if (!prevGraph) return currentGraph;
-                  
-                  // Only update if content changed or icons populated
-                  // We specifically look for new iconUrls
-                  const newNodes = currentGraph.nodes.map(n => {
-                      const prevNode = prevGraph.nodes.find(p => p.id === n.id);
-                      if (prevNode) {
-                          const nUrl = getNodeIconUrl(n);
-                          const prevUrl = getNodeIconUrl(prevNode);
-                          if (nUrl && !prevUrl) {
-                              const updatedNode = { ...prevNode };
-                              if (n.icon) applyIconToNode(updatedNode, n.icon);
-                              return updatedNode;
-                          }
-                      }
-                      return n;
-                  });
-                  
-                  // If we are just populating icons, we don't want to reset the whole graph 
-                  // and lose selection/scroll state if possible.
-                  // But ReactFlow handles props updates well.
-                  return { ...currentGraph, nodes: newNodes };
+              mergeSnapshot(currentGraph, {
+                  ownerId: data.ownerId || undefined,
+                  ownerName: data.ownerName || undefined,
               });
-
-              if (data.ownerId) setOwnerId(data.ownerId);
-              if (data.ownerName) setOwnerName(data.ownerName);
               setRecipeText(currentGraph.originalText || '');
               setRecipeTitle(currentGraph.title || '');
               setStatus('complete');
@@ -327,34 +340,42 @@ function RecipeLanesContent() {
       });
 
       return () => unsubscribe();
-  }, [searchParams]);
+  }, [recipeId]);
+
+  // After a new recipe is created, auto-fill icons using the default (client-side) method
+  // once the graph has loaded. The server-side path may not have a CF URL configured.
+  useEffect(() => {
+      if (!autoFillIconsRef.current) return;
+      if (!graph || !recipeId || graph.nodes.length === 0) return;
+      autoFillIconsRef.current = false;
+      handleBatchIconSearch(defaultIconSearchMethod.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph, recipeId]);
 
   useEffect(() => {
-      const id = searchParams.get('id');
       setExistingCopiesDismissed(false);
-      
+
       // If we don't have a user or ownerId yet, we can't determine copies.
       // Set to null to block auto-forking until we know for sure.
-      if (!id || !user || !ownerId) {
+      if (!recipeId || !user || !ownerId) {
           setExistingCopies(null);
           return;
       }
 
       if (user.uid !== ownerId) {
            setExistingCopies(null); // Reset to loading before fetch
-           checkExistingCopiesAction(id).then(res => {
+           checkExistingCopiesAction(recipeId).then(res => {
                setExistingCopies(res.copies || []);
            });
       } else {
            setExistingCopies([]); // Owner doesn't need copy check
       }
-  }, [searchParams, user, ownerId]);
+  }, [recipeId, user, ownerId]);
 
   const handleNew = () => {
       setRecipeText('');
       setRecipeTitle('');
-      setGraph(null);
-      setOwnerId(null);
+      resetRecipeStore();
       setError(null);
       setStatus('idle');
       setWarningDismissed(false);
@@ -403,7 +424,6 @@ function RecipeLanesContent() {
           const url = new URL(window.location.href);
           url.searchParams.set('id', res.id);
           router.push(url.pathname + url.search);
-          if (user) setOwnerId(user.uid);
           setWarningDismissed(true);
           setStatus('complete');
           setRecipeTitle(newGraph.title!);
@@ -439,7 +459,6 @@ function RecipeLanesContent() {
                    const url = new URL(window.location.href);
                    url.searchParams.set('id', res.id);
                    router.push(url.pathname + url.search);
-                   setOwnerId(user.uid);
                    showNotification("Saved copy to your profile.");
                }
           }
@@ -495,19 +514,11 @@ const handleVisualize = async () => {
         url.searchParams.delete('new');
         url.searchParams.set('id', res.id);
         
+        autoFillIconsRef.current = true;
         router.push(url.pathname + url.search);
-        
-        if (user) setOwnerId(user.uid); // is this needed??
-
-        // The Snapshot Listener in useEffect will pick this up if we pushed URL?
-        // Actually pushState doesn't trigger useEffect on searchParams unless we use router.push or Next.js handles it.
-        // Next.js `useSearchParams` does update on pushState/replaceState in App Router usually.
-        // But to be safe, we can rely on router.push if we want the effect to run.
-        // Or better: we already have the graph. The listener will attach on next render/effect cycle.
-        
 
         setStatus('complete');
-        // No explicit populateIcons call. Background worker handles it.
+        // autoFillIconsRef triggers client-side icon fill once the graph snapshot loads.
         setWarningDismissed(false);
         localStorage.setItem('recipe_draft', recipeText);
     } catch (e: any) {
@@ -790,6 +801,42 @@ const handleVisualize = async () => {
                             <RotateCcw className="w-3 h-3" />
                         </button>
                     </div>
+
+                    <div className="h-4 w-px bg-zinc-200 mx-2" />
+
+                    {/* Batch icon search — admin only, not a security gate, just hides confusing dev controls */}
+                    {isAdmin && graph && recipeId && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-zinc-400">Icons</span>
+                            <select
+                                value={iconSearchMethodId}
+                                onChange={e => setIconSearchMethodId(e.target.value)}
+                                disabled={iconSearchStatus === 'running'}
+                                className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1.5 text-zinc-700 font-medium focus:ring-1 focus:ring-yellow-500/50 outline-none"
+                            >
+                                {iconSearchMethods.map(m => (
+                                    <option key={m.id} value={m.id}>{m.name}</option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={() => handleBatchIconSearch()}
+                                disabled={iconSearchStatus === 'running'}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${
+                                    iconSearchStatus === 'done' ? 'bg-green-100 text-green-700' :
+                                    iconSearchStatus === 'error' ? 'bg-red-100 text-red-700' :
+                                    iconSearchStatus === 'running' ? 'bg-yellow-100 text-yellow-700' :
+                                    'text-zinc-600 hover:bg-zinc-100'
+                                }`}
+                            >
+                                <Sparkles className="w-4 h-4 shrink-0" />
+                                <span className="hidden sm:inline whitespace-nowrap">
+                                    {iconSearchStatus === 'running' ? 'RUNNING...' :
+                                     iconSearchStatus === 'done' ? `DONE${iconSearchElapsed != null ? ` ${(iconSearchElapsed / 1000).toFixed(1)}s` : ''}` :
+                                     iconSearchStatus === 'error' ? 'ERROR' : 'FILL'}
+                                </span>
+                            </button>
+                        </div>
+                    )}
 
                     <div className="h-4 w-px bg-zinc-200 mx-2" />
 

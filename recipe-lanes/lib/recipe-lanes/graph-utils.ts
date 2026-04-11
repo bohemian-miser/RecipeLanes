@@ -16,13 +16,13 @@
  */
 
 import { Position, Node } from 'reactflow';
-import { getNodeIconMetadata } from './model-utils';
+import { getNodeIconMetadata, getNodeTheme } from './model-utils';
 
 // Helper to get center
 function getCenter(node: Node, handlePos?: { x: number, y: number }) {
     // For MinimalNode, we know exact geometry relative to node position
     if (node.type === 'minimal') {
-        const theme = node.data?.iconTheme || 'classic';
+        const theme = getNodeTheme(node.data);
         const meta = getNodeIconMetadata(node.data); // { center: {x,y}, bbox: ... } normalized 0-1
 
         if (theme === 'modern' || theme === 'modern_clean') {
@@ -49,21 +49,21 @@ function getCenter(node: Node, handlePos?: { x: number, y: number }) {
             // Handles are ALWAYS centered in the Icon Container (top-1/2 left-1/2).
             // We MUST use handlePos because node width is unreliable (text wrapping).
             if (handlePos) {
-                console.log(`Using handlePos: ${handlePos.x}, ${handlePos.y} for classic icon node:`, node.id);
-                 // Red Dot Visualization uses the full 80x80 container for metadata mapping.
-                 // To align arrows with the red dot, we must use the same reference frame.
-                 const imageSize = 80;
+                // Red Dot Visualization uses the full 80x80 container for metadata mapping.
+                // To align arrows with the red dot, we must use the same reference frame.
+                const imageSize = 80;
                 const imageX = handlePos.x - imageSize/2; // Handle is center.
                 const imageY = handlePos.y; 
-
-                 if (meta && meta.center) {
+                
+                if (meta && meta.center) {
                     return {
                         x: imageX + meta.center.x * imageSize,
                         y: imageY + meta.center.y * imageSize
                     };
-                 }
-                 return handlePos; // Default to handle (center)
+                }
+                return handlePos; // Default to handle (center)
             }
+            
             
             // Fallback if no handlePos (rare/initial): Use heuristics but accept they might be off
             // ... (keep existing fallback logic if desired, or simplify) ...
@@ -96,7 +96,7 @@ function getBBox(node: Node, handlePos?: {x: number, y: number}) {
     const meta = getNodeIconMetadata(node.data);
     if (!meta || !meta.bbox) return null;
     
-    const theme = node.data?.iconTheme || 'classic';
+    const theme = getNodeTheme(node.data);
     const isIngredient = node.data?.type === 'ingredient';
     let imageX = 0, imageY = 0, imageSize = 0;
 
@@ -195,7 +195,7 @@ function getRadius(node: Node, hasHandle: boolean) {
     if (node.type !== 'minimal') {
         return (Math.min(node.width??100, node.height??50)/2 + 5);
     }
-    const theme = node.data?.iconTheme || 'classic';
+    const theme = getNodeTheme(node.data);
     if (theme === 'modern' || theme === 'modern_clean') {
         return 58; // 96px / 2
     }

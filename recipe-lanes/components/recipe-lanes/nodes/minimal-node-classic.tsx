@@ -17,28 +17,33 @@
 
 import React from 'react';
 import { Handle, Position } from 'reactflow';
-import { RefreshCw, X } from 'lucide-react';
+import { RefreshCw, X, Hammer } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
-import { getNodeIconUrl } from '../../../lib/recipe-lanes/model-utils';
+import { getNodeIngredientName, getNodeIconStatus } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
     selected?: boolean;
     isRerolling: boolean;
+    isForging: boolean;
     isPivotMode: boolean;
+    /** Current icon URL driven by the shortlist store — do not call getNodeIconUrl(data) here. */
+    iconUrl: string | undefined;
+    /** Whether the current shortlist entry was resolved via search rather than generation. */
+    isSearchMatched: boolean;
     handlers: {
         onReroll: (e: React.MouseEvent) => void;
+        onForge: (e: React.MouseEvent) => void;
         onDelete: (e: React.MouseEvent) => void;
         onTouchStart: () => void;
         onTouchEnd: () => void;
     };
 }
 
-export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({ 
-    data, selected, isRerolling, isPivotMode, handlers 
+export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
+    data, selected, isRerolling, isForging, isPivotMode, iconUrl, isSearchMatched, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
-    const iconUrl = getNodeIconUrl(data);
     const textPos = data.textPos || 'bottom';
     const isVertical = textPos === 'top' || textPos === 'bottom';
   
@@ -74,7 +79,7 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                 width: isVertical ? verticalMinWidth : 'auto', 
                 minWidth: isVertical ? verticalMinWidth : horizontalMinWidth
             }}
-            title={data.visualDescription || data.text}
+            title={getNodeIngredientName(data)}
             onTouchStart={handlers.onTouchStart}
             onTouchEnd={handlers.onTouchEnd}
         >
@@ -91,34 +96,53 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                         style={{ imageRendering: 'pixelated' }}
                     />
                 ) : (
-                    data.icon?.status === 'failed' ? (
+                    getNodeIconStatus(data) === 'failed' ? (
                        <div className="flex flex-col items-center justify-center text-red-500">
                            <X className="w-5 h-5 mb-0.5" />
                            <span className="text-[8px] font-bold uppercase leading-none">Failed</span>
                        </div>
                     ) : (
-                       <span className={`text-5xl drop-shadow-sm ${data.icon?.status === 'processing' || data.icon?.status === 'pending' ? 'animate-pulse opacity-50' : ''}`}>{isIngredient ? '🥕' : '🍳'}</span>
+                       <span className={`text-5xl drop-shadow-sm ${getNodeIconStatus(data) === 'processing' || getNodeIconStatus(data) === 'pending' ? 'animate-pulse opacity-50' : ''}`}>{isIngredient ? '🥕' : '🍳'}</span>
                     )
                 )}
                 
                 {/* Reroll Button */}
-                <button 
+                <button
                     onClick={handlers.onReroll}
-                    disabled={isRerolling}
+                    disabled={isRerolling || isForging}
                     className={`nodrag absolute -top-2 -right-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-blue-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isRerolling ? '!opacity-100 block cursor-not-allowed' : ''}`}
-                    title="Reroll Icon"
+                    title="Cycle shortlist"
                 >
                     <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin text-blue-500' : ''}`} />
                 </button>
 
+                {/* Forge Button */}
+                <button
+                    onClick={handlers.onForge}
+                    disabled={isRerolling || isForging}
+                    className={`nodrag absolute -bottom-2 -right-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-amber-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isForging ? '!opacity-100 block cursor-not-allowed' : ''}`}
+                    title="Forge new icon"
+                >
+                    <Hammer className={`w-3 h-3 ${isForging ? 'text-amber-500' : ''}`} />
+                </button>
+
                 {/* Delete Button */}
-                <button 
+                <button
                     onClick={handlers.onDelete}
                     className={`nodrag absolute -top-2 -left-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-red-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}
                     title="Delete Step"
                 >
                     <X className="w-3 h-3" />
                 </button>
+
+                {/* Search-match confidence dot */}
+                {isSearchMatched && (
+                    <span
+                        className="absolute bottom-0 right-0 w-[5px] h-[5px] rounded-full bg-amber-400 pointer-events-none z-20"
+                        title="Icon matched by search"
+                        data-testid="search-match-indicator"
+                    />
+                )}
             </div>
 
             {/* Text Container - Scaled Up */}

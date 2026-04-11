@@ -20,8 +20,8 @@
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase-client';
 import { collection, onSnapshot, query, where, orderBy, limit, getCountFromServer } from 'firebase/firestore';
-import { Loader2, XCircle, Clock, RotateCw, ChevronLeft, ChevronRight } from 'lucide-react';
-import { retryIconGenerationAction } from '@/app/actions';
+import { Loader2, XCircle, Clock, RotateCw, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { retryIconGenerationAction, clearIconQueueAction } from '@/app/actions';
 import { DB_COLLECTION_QUEUE } from '@/lib/config';
 
 interface QueueItem {
@@ -91,6 +91,14 @@ export function QueueMonitor() {
       }
   };
 
+  const handleClearQueue = async () => {
+      if (!confirm(`Clear all ${items.length} queue items? Pending tasks will be cancelled.`)) return;
+      const result = await clearIconQueueAction();
+      if (!result.success) {
+          alert(result.error ?? 'Failed to clear queue');
+      }
+  };
+
   if (items.length === 0) return null;
 
   const totalPages = Math.ceil(items.length / PAGE_SIZE);
@@ -103,9 +111,18 @@ export function QueueMonitor() {
           <Clock className="w-3 h-3" />
           Forge Backlog
         </h3>
-        <span className="text-[10px] font-mono text-zinc-600 bg-zinc-800 px-1.5 rounded">
-          {items.length === totalCount ? `${items.length} ACTIVE` : `${items.length} / ${totalCount} ACTIVE`}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono text-zinc-600 bg-zinc-800 px-1.5 rounded">
+            {items.length === totalCount ? `${items.length} ACTIVE` : `${items.length} / ${totalCount} ACTIVE`}
+          </span>
+          <button
+            onClick={handleClearQueue}
+            className="p-1 hover:bg-zinc-800 rounded text-zinc-600 hover:text-red-400 transition-colors"
+            title="Clear entire queue"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
       </div>
       <div className="divide-y divide-zinc-900">
         {paginatedItems.map((item) => (

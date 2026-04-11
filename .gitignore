@@ -2,6 +2,7 @@ debug/
 
 # gemini-cli settings
 .gemini/
+!.gemini/skills/
 *.log
 # GitHub App credentials
 gha-creds-*.json
@@ -10,3 +11,4 @@ test-results/
 recipe-lanes/functions/.env
 *service-account.json
 .playwright-mcp/
+.claude

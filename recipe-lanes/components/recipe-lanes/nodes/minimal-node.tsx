@@ -16,48 +16,63 @@
  */
 
 import React, { memo, useState } from 'react';
-import { useReactFlow } from 'reactflow';
-import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { useSearchParams } from 'next/navigation';
 import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
-import { functions } from '@/lib/firebase-client';
-import { httpsCallable } from 'firebase/functions';
-import { rejectIcon } from '@/app/actions';
-import { getNodeIconId, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
+import { forgeIconAction } from '@/app/actions';
+import {
+    getNodeIngredientName,
+    getNodeTheme,
+    getNodeIconId,
+    getNodeShortlistLength,
+    getNodeShortlistKey,
+    getNodeIconUrlAt,
+    isIconSearchMatchedAt,
+    currentShortlistIndex,
+} from '@/lib/recipe-lanes/model-utils';
+import { useRecipeStore } from '@/lib/stores/recipe-store';
 
-// Track rejected URLs for the session to prevent them from reappearing immediately
-const sessionRejectedUrls = new Set<string>();
-
-export const MinimalNode: React.FC<any> = ({ 
+export const MinimalNode: React.FC<any> = ({
     data, selected, isConnectable, id
 }) => {
-  const [isRerolling, setIsRerolling] = useState(false);
-  const [prevIconUrl, setPrevIconUrl] = useState(getNodeIconUrl(data));
-  
-  const currentIconUrl = getNodeIconUrl(data);
-  if (currentIconUrl !== prevIconUrl) {
-      setPrevIconUrl(currentIconUrl);
-      // Only stop rerolling if we received a valid URL (ignore clearing updates)
-      if (isRerolling && currentIconUrl) {
-          setIsRerolling(false);
-      }
-  }
-
+  const [isForging, setIsForging] = useState(false);
   const [isPivotMode, setIsPivotMode] = useState(false);
   const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
-  const { setNodes } = useReactFlow();
   const searchParams = useSearchParams();
   const recipeId = searchParams.get('id');
 
-  const iconTheme = data.iconTheme || 'classic';
+  // Subscribe to this node in the recipe store.
+  // cycleShortlist writes shortlistIndex directly onto graph.nodes[i], so this
+  // selector re-renders only when this specific node changes.
+  const storeNode = useRecipeStore(s => s.graph?.nodes.find(n => n.id === id));
+  const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
+
+  // Use storeNode when available (it has up-to-date shortlistIndex after cycling).
+  // Fall back to data prop for nodes not yet in the store.
+  const node = storeNode ?? data;
+  const iconTheme = getNodeTheme(data);
+
+  const shortlistKey = getNodeShortlistKey(node);
+  const currentIndex = Math.max(0, currentShortlistIndex(node));
+  const iconUrl = getNodeIconUrlAt(node, currentIndex);
+  const isSearchMatched = isIconSearchMatchedAt(node, currentIndex);
+
+  // ---------------------------------------------------------------------------
+  // Forge state: cleared when a forge result arrives via Firestore snapshot,
+  // which causes mergeSnapshot to reset shortlistIndex and update the store node.
+  // ---------------------------------------------------------------------------
+  const [prevShortlistKey, setPrevShortlistKey] = useState(shortlistKey);
+  if (shortlistKey !== prevShortlistKey) {
+      setPrevShortlistKey(shortlistKey);
+      if (isForging) setIsForging(false);
+  }
 
   const handleTouchStart = () => {
       longPressTimer.current = setTimeout(() => {
           setIsPivotMode(true);
           if (data.onSetLongPress) data.onSetLongPress(true);
           if (navigator.vibrate) navigator.vibrate(50);
-      }, 300); 
+      }, 300);
   };
 
   const handleTouchEnd = () => {
@@ -65,7 +80,7 @@ export const MinimalNode: React.FC<any> = ({
           clearTimeout(longPressTimer.current);
           longPressTimer.current = null;
       }
-      setTimeout(() => setIsPivotMode(false), 500); 
+      setTimeout(() => setIsPivotMode(false), 500);
   };
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -73,41 +88,43 @@ export const MinimalNode: React.FC<any> = ({
       if (data.onDelete) data.onDelete();
   };
 
-  const handleReroll = async (e: React.MouseEvent) => {
+  const handleReroll = (e: React.MouseEvent) => {
       e.stopPropagation();
-      setIsRerolling(true);
-      const ingredientName = data.visualDescription || data.text;
+      cycleShortlist(id);
+      // TODO: record impression fire-and-forget once a lightweight
+      // recordImpressionAction (touching only ingredients_new, not the recipe
+      // doc) is available. See docs/STATE_AND_PERSISTENCE.md.
+  };
+
+  const handleForge = async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setIsForging(true);
+      const ingredientName = getNodeIngredientName(data);
       try {
-        const result = await rejectIcon(
-            recipeId || '', 
-            ingredientName,
-            getNodeIconId(data) || '',
-        );
-        
-        if (result && !result.success) {
-            console.error("Reroll failed:", result.error);
-            setIsRerolling(false);
-            // Optionally alert the user here, but for now we just stop the spinner
-        }
-        // Success state update handled by prop change from Firestore listener
+          const result = await forgeIconAction(recipeId || '', ingredientName, getNodeIconId(data) || '');
+          if (result && !result.success) {
+              console.error("Forge failed:", result.error);
+              setIsForging(false);
+          }
       } catch (err) {
-          console.error("Reroll exception:", err);
-          setIsRerolling(false);
+          console.error("Forge exception:", err);
+          setIsForging(false);
       }
   };
 
   const handlers = {
       onReroll: handleReroll,
+      onForge: handleForge,
       onDelete: handleDelete,
       onTouchStart: handleTouchStart,
       onTouchEnd: handleTouchEnd
   };
 
   if (iconTheme === 'modern' || iconTheme === 'modern_clean') {
-      return <MinimalNodeModern data={data} selected={selected} isRerolling={isRerolling} isPivotMode={isPivotMode} handlers={handlers} />;
+      return <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
   }
 
-  return <MinimalNodeClassic data={data} selected={selected} isRerolling={isRerolling} isPivotMode={isPivotMode} handlers={handlers} />;
+  return <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
 };
 
 export default memo(MinimalNode);

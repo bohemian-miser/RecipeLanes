@@ -23,19 +23,55 @@ export interface Lane {
   type: 'prep' | 'cook' | 'serve';
 }
 
+export interface SearchTerm {
+  text: string
+  embedding?: number[]
+  source: 'hyde_from_img' | 'user_desc' | 'llm_vision'
+  addedAt: number
+}
+
 export interface IconStats {
     id: string;
-    url?: string;
-    path?: string;
+    /** The canonical ingredient/visual description used to derive the storage path. */
+    visualDescription?: string;
     score?: number;
-    prompt?: string;
     impressions?: number;
     rejections?: number;
     metadata?: {
         center: { x: number, y: number };
         bbox: { x: number, y: number, w: number, h: number };
     };
-    status?: 'pending' | 'processing' | 'failed';
+    searchTerms?: SearchTerm[];
+}
+
+/** Shape of a document in the Firestore `icon_index` collection. Internal to data-service. */
+export interface IconIndexEntry {
+    icon_id: string;
+    ingredient_name: string;
+    created_at?: any;
+}
+
+/**
+ * Shape of a document in the Firestore `ingredients_new` collection.
+ * Doc ID = standardized ingredient name (same as visualDescription).
+ * `icons` is a slice of IconStats (up to 50 most recent).
+ */
+// this also has 'embedding' which is a 768 dimensional vector.
+export interface IngredientDoc {
+    icons: IconStats[];
+    created_at: any;
+    updated_at: any;
+}
+
+export interface ShortlistEntry {
+    icon: IconStats;
+    matchType: 'generated' | 'search';
+    /** Cosine similarity [0, 1] between the search query embedding and this icon's embedding. */
+    matchScore?: number;
+    /** True once an impression has been recorded for this entry in the backend. */
+    hasImpressed?: boolean;
+    /** True once a rejection has been recorded for this entry in the backend. */
+    hasRejected?: boolean;
 }
 
 export interface RecipeNode {
@@ -45,7 +81,16 @@ export interface RecipeNode {
   visualDescription: string; // "A carrot going into a grater"
   
   // Icon Data
-  icon?: IconStats;
+  iconShortlist?: ShortlistEntry[];
+  shortlistIndex?: number;   // current position in iconShortlist, 0-based
+  shortlistCycled?: boolean; // true once the user has wrapped all the way around the shortlist
+  iconQuery?: {
+    queryUsed: string;
+    method: string;
+    outcome?: 'accepted' | 'rerolled_past' | 'regenerated';
+  };
+  status?: 'pending' | 'processing' | 'failed';
+  hydeQueries?: string[];
 
   type: 'ingredient' | 'action';
   inputs?: string[]; // IDs of nodes that flow into this one
@@ -90,7 +135,7 @@ export interface RecipeGraph {
   nodes: RecipeNode[];
   layouts?: Record<string, NodeLayout[]>;
   
-  // Persistent user preferences for this recipe
+  // Persistent user preferences for this recipe (not needed anymore since we moved to shortlist)
   rejections?: Record<string, string[]>; // Map<VisualDescription, RejectedIconIDs[]>
 }
 

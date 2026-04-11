@@ -1,0 +1,4 @@
+umap-learn==0.5.7
+scikit-learn<1.6
+numpy>=1.24
+firebase-admin>=6.0

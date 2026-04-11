@@ -136,5 +136,20 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [],
+  "vectorIndexes": [
+    {
+      "collectionGroup": "icon_index",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "embedding",
+          "vectorConfig": {
+            "dimension": 768,
+            "flat": {}
+          }
+        }
+      ]
+    }
+  ]
 }

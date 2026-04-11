@@ -17,7 +17,7 @@
 
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth, User, connectAuthEmulator, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, Firestore, connectFirestoreEmulator, doc, setDoc, updateDoc, collection, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, Firestore, connectFirestoreEmulator, doc, setDoc, updateDoc, collection, getDocs, deleteDoc, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
 
@@ -60,7 +60,7 @@ if (firebaseConfig.apiKey) {
    if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {                                                                                                                                                                       
        (window as any)._firebaseAuth = auth;
        (window as any)._firebaseDb = db;
-       (window as any)._firebaseFirestore = { doc, setDoc, updateDoc, collection, getDocs, query, orderBy, limit, serverTimestamp };
+       (window as any)._firebaseFirestore = { doc, setDoc, updateDoc, collection, getDocs, deleteDoc, query, orderBy, limit, serverTimestamp };
        (window as any)._signInWithCustomToken = signInWithCustomToken;                                                                                                                                                                                 
    }
 } else {
@@ -84,4 +84,4 @@ if (firebaseConfig.apiKey) {
   googleProvider = {} as GoogleAuthProvider;
 }
 
-export { auth, db, storage, functions, googleProvider, isInitialized };
+export { app, auth, db, storage, functions, googleProvider, isInitialized };

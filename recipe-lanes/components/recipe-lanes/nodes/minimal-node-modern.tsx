@@ -17,17 +17,23 @@
 
 import React from 'react';
 import { Handle, Position } from 'reactflow';
-import { RefreshCw, X } from 'lucide-react';
+import { RefreshCw, X, Hammer } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
-import { getNodeIconUrl } from '../../../lib/recipe-lanes/model-utils';
+import { getNodeIngredientName, getNodeTheme } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
     selected?: boolean;
     isRerolling: boolean;
+    isForging: boolean;
     isPivotMode: boolean;
+    /** Current icon URL driven by the shortlist store — do not call getNodeIconUrl(data) here. */
+    iconUrl: string | undefined;
+    /** Whether the current shortlist entry was resolved via search rather than generation. */
+    isSearchMatched: boolean;
     handlers: {
         onReroll: (e: React.MouseEvent) => void;
+        onForge: (e: React.MouseEvent) => void;
         onDelete: (e: React.MouseEvent) => void;
         onTouchStart: () => void;
         onTouchEnd: () => void;
@@ -43,13 +49,12 @@ const parseNodeText = (text: string) => {
     return { qty: '', unit: '', name: text };
 };
 
-export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({ 
-    data, selected, isRerolling, isPivotMode, handlers 
+export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
+    data, selected, isRerolling, isForging, isPivotMode, iconUrl, isSearchMatched, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
-    const themeVariant = data.iconTheme || 'modern'; // 'modern' or 'modern_clean'
-    const iconUrl = getNodeIconUrl(data);
-    
+    const themeVariant = getNodeTheme(data) === 'modern_clean' ? 'modern_clean' : 'modern';
+
     // Compact size for ingredients (80px), full size for actions/others (120px)
     const containerSize = isIngredient ? { width: 80, height: 80 } : { width: 120, height: 120 };
     const iconClass = isIngredient ? 'w-16 h-16' : 'w-24 h-24';
@@ -63,7 +68,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                                 <div 
                                     className="relative flex flex-col items-center justify-center transition-transform duration-300 hover:z-50 group"
                                     style={containerSize} 
-                                    title={data.visualDescription || data.text}
+                                    title={getNodeIngredientName(data)}
                                     onTouchStart={handlers.onTouchStart}
                                     onTouchEnd={handlers.onTouchEnd}
                                 >
@@ -92,13 +97,25 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 
                         {/* Controls */}
                         <div className="absolute -top-2 -right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                            <button onClick={handlers.onReroll} disabled={isRerolling} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500">
+                            <button onClick={handlers.onReroll} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500">
                                 <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin' : ''}`} />
+                            </button>
+                            <button onClick={handlers.onForge} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-amber-500" title="Forge new icon">
+                                <Hammer className={`w-3 h-3 ${isForging ? 'text-amber-500' : ''}`} />
                             </button>
                             <button onClick={handlers.onDelete} className="bg-white/80 rounded-full p-1 shadow hover:text-red-500">
                                 <X className="w-3 h-3" />
                             </button>
                         </div>
+
+                        {/* Search-match confidence dot */}
+                        {isSearchMatched && (
+                            <span
+                                className="absolute bottom-0 right-0 w-[5px] h-[5px] rounded-full bg-amber-400 pointer-events-none z-20"
+                                title="Icon matched by search"
+                                data-testid="search-match-indicator"
+                            />
+                        )}
                     </div>
 
                     {/* Pill Text (Name Only) - Wrapped */}
@@ -115,7 +132,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                 <div 
                     className="relative flex flex-col items-center justify-center transition-transform duration-300 hover:z-50 group"
                     style={containerSize} 
-                    title={data.visualDescription || data.text}
+                    title={getNodeIngredientName(data)}
                     onTouchStart={handlers.onTouchStart}
                     onTouchEnd={handlers.onTouchEnd}
                 >
@@ -137,13 +154,25 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 
                         {/* Controls */}
                         <div className="absolute -top-2 -right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                            <button onClick={handlers.onReroll} disabled={isRerolling} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500">
+                            <button onClick={handlers.onReroll} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500">
                                 <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin' : ''}`} />
+                            </button>
+                            <button onClick={handlers.onForge} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-amber-500" title="Forge new icon">
+                                <Hammer className={`w-3 h-3 ${isForging ? 'text-amber-500' : ''}`} />
                             </button>
                             <button onClick={handlers.onDelete} className="bg-white/80 rounded-full p-1 shadow hover:text-red-500">
                                 <X className="w-3 h-3" />
                             </button>
                         </div>
+
+                        {/* Search-match confidence dot */}
+                        {isSearchMatched && (
+                            <span
+                                className="absolute bottom-0 right-0 w-[5px] h-[5px] rounded-full bg-amber-400 pointer-events-none z-20"
+                                title="Icon matched by search"
+                                data-testid="search-match-indicator"
+                            />
+                        )}
                     </div>
 
                     {/* Inline Pill (Qty + Name) - Wrapped */}
@@ -216,13 +245,25 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 
                   {/* Controls */}
                   <div className="absolute top-0 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                      <button onClick={handlers.onReroll} disabled={isRerolling} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500">
+                      <button onClick={handlers.onReroll} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500" title="Cycle shortlist">
                           <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin' : ''}`} />
+                      </button>
+                      <button onClick={handlers.onForge} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-amber-500" title="Forge new icon">
+                          <Hammer className={`w-3 h-3 ${isForging ? 'text-amber-500' : ''}`} />
                       </button>
                       <button onClick={handlers.onDelete} className="bg-white/80 rounded-full p-1 shadow hover:text-red-500">
                           <X className="w-3 h-3" />
                       </button>
                   </div>
+
+                  {/* Search-match confidence dot */}
+                  {isSearchMatched && (
+                      <span
+                          className="absolute bottom-0 right-0 w-[5px] h-[5px] rounded-full bg-amber-400 pointer-events-none z-20"
+                          title="Icon matched by search"
+                          data-testid="search-match-indicator"
+                      />
+                  )}
               </div>
           </div>
         );

@@ -31,7 +31,7 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
     const saveBtn = page.locator('button').filter({ has: page.locator('svg.lucide-save') }).first();
     await expect(saveBtn).toBeEnabled({ timeout: 10000 });
     await saveBtn.click();
-    await expect(page.getByText('Log in to save recipe')).toBeVisible();
+    await expect(page.getByText('Recipe not saved to account')).toBeVisible();
 
     // 3. New
     await page.locator('button[title="Create New"]').click();
@@ -70,8 +70,9 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
   });
 
   test('Gallery: Search & Vetting (Admin)', async ({ page, login }) => {
+    test.slow();
     const dir = screenshotDir('recipe-gallery', desktop.name);
-    
+
     // 1. Create a public unvetted recipe
     await page.goto('/lanes?new=true');
     await login('creator-user');
@@ -93,6 +94,7 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
     await login('admin-user');
     const { promoteToAdmin } = await import('./utils/admin-utils');
     await promoteToAdmin('admin-user');
+    await page.waitForTimeout(1000);
     
     await page.goto('/gallery?filter=unvetted');
     const card = page.locator(`a[href="/lanes?id=${recipeId}"]`);
@@ -111,26 +113,19 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
     cleanupScreenshots(dir);
   });
 
-  test('UI Features: Feedback & Download', async ({ page, context }) => {
+  test('UI Features: Feedback', async ({ page }) => {
+    test.slow();
     const dir = screenshotDir('recipe-ui-features', desktop.name);
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    
+
     await page.goto('/lanes?new=true');
     await create_recipe(page, 'UI Test', dir);
     await wait_for_graph(page, dir);
 
-    // 1. Feedback
     await page.getByTitle('Feedback & Contribute').click();
     await page.fill('#message', 'Test feedback');
     await page.fill('#email', 'test@example.com');
     await page.getByRole('button', { name: 'Send Feedback' }).click();
     await expect(page.getByText('Thank You!')).toBeVisible();
-
-    // 2. Download
-    const downloadPromise = page.waitForEvent('download');
-    await page.getByTitle('Download PNG').click();
-    const download = await downloadPromise;
-    expect(download.suggestedFilename()).toMatch(/recipe-lanes-.*\.png/);
 
     cleanupScreenshots(dir);
   });

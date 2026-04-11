@@ -20,8 +20,14 @@
 import { useEffect, useState } from 'react';
 import { getPagedIconsAction, deleteIconByIdAction } from '@/app/actions';
 import { Search, ChevronLeft, ChevronRight, Loader2, Trash2, Sparkles } from 'lucide-react';
+import { IconStats } from '@/lib/recipe-lanes/types';
+import { getIconThumbUrl } from '@/lib/recipe-lanes/model-utils';
 
-export function SharedGallery() {
+interface SharedGalleryProps {
+  onIconClick?: (icon: IconStats, ingredientName: string) => void;
+}
+
+export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
   const [icons, setIcons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -92,9 +98,11 @@ export function SharedGallery() {
           <div className="text-center text-zinc-600 py-12 text-sm">No icons found.</div>
       ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
-              {icons.map((icon) => (
-                <div 
-                    key={icon.id} 
+              {icons.map((icon) => {
+                const thumbUrl = getIconThumbUrl(icon);
+                return (
+                <div
+                    key={icon.id}
                     className="relative aspect-square bg-zinc-800 border-2 border-zinc-700 shadow-md group overflow-hidden rounded-lg"
                     data-testid="gallery-item"
                     data-ingredient={icon.ingredient_name || icon.ingredient || icon.visualDescription}
@@ -117,15 +125,36 @@ export function SharedGallery() {
                    <div className="absolute bottom-0 left-0 right-0 z-10 bg-black/70 p-1 text-[9px] text-zinc-300 text-center truncate backdrop-blur-sm translate-y-full group-hover:translate-y-0 transition-transform">
                        {icon.ingredient_name || icon.ingredient || icon.visualDescription}
                    </div>
-                   <img 
-                     src={icon.url} 
-                     alt={icon.ingredient_name || icon.visualDescription}
-                     title={icon.visualDescription || icon.ingredient_name}
-                     className="w-full h-full object-contain rendering-pixelated transition-transform group-hover:scale-110"
-                     style={{ imageRendering: 'pixelated' }}
-                   />
+                   {onIconClick ? (
+                     <button
+                       type="button"
+                       className="w-full h-full cursor-pointer focus:outline-none"
+                       onClick={() => {
+                         const ingredientName = icon.ingredient_name || icon.ingredient || icon.visualDescription || '';
+                         onIconClick(icon as IconStats, ingredientName);
+                       }}
+                       title="View details"
+                     >
+                       <img
+                         src={thumbUrl}
+                         alt={icon.ingredient_name || icon.visualDescription}
+                         title={icon.visualDescription || icon.ingredient_name}
+                         className="w-full h-full object-contain rendering-pixelated transition-transform group-hover:scale-110"
+                         style={{ imageRendering: 'pixelated' }}
+                       />
+                     </button>
+                   ) : (
+                     <img
+                       src={thumbUrl}
+                       alt={icon.ingredient_name || icon.visualDescription}
+                       title={icon.visualDescription || icon.ingredient_name}
+                       className="w-full h-full object-contain rendering-pixelated transition-transform group-hover:scale-110"
+                       style={{ imageRendering: 'pixelated' }}
+                     />
+                   )}
                 </div>
-              ))}
+                );
+              })}
           </div>
       )}
 

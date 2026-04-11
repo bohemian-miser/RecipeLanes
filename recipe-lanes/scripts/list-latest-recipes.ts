@@ -21,7 +21,7 @@ async function listLatestRecipes() {
 
     // Default to 10 recipes if not specified
     const limitArg = args.find(a => !a.startsWith('--')) ;
-    const limit = limitArg ? parseInt(limitArg) : 10;
+    const limit = limitArg ? parseInt(limitArg) : 1000;
     const baseUrl = isStaging ? 'https://recipe-lanes-staging.web.app' : 'https://recipelanes.com';
 
     console.log(`Fetching latest recipes from ${DB_COLLECTION_RECIPES}...`);
@@ -70,7 +70,7 @@ async function listLatestRecipes() {
                 Date: data.created_at?.toDate()?.toLocaleDateString() || 'Unknown',
                 Time: data.created_at?.toDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
                 Author: (data.ownerName || data.ownerId || 'Anon').substring(0, 15),
-                Title: (data.title || 'Untitled').substring(0, 20),
+                Title: (data.title || 'Untitled').substring(0, 50),
                 Nodes: data.graph?.nodes?.length || 0,
                 Link: `${baseUrl}/lanes?id=${doc.id}`
             };

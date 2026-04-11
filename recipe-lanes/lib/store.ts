@@ -79,20 +79,8 @@ class MemoryStore {
     return this.icons;
   }
 
-  updateIconPopularity(iconId: string, adjustment: number) {
-    const icon = this.icons.find(i => i.id === iconId || i.url === iconId);
-    if (icon) {
-      icon.popularity_score += adjustment;
-      // Simple logic: count siblings
-      const siblings = this.icons.filter(i => i.ingredientId === icon.ingredientId);
-      if (icon.popularity_score < -Math.max(siblings.length, 100)) {
-        icon.marked_for_deletion = true;
-      }
-    }
-  }
-
   deleteIcon(iconId: string) {
-      this.icons = this.icons.filter(i => i.id !== iconId && i.url !== iconId);
+      this.icons = this.icons.filter(i => i.id !== iconId);
   }
 
   deleteIngredient(name: string) {

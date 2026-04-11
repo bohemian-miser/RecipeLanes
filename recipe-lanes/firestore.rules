@@ -13,6 +13,9 @@ service cloud.firestore {
     match /ingredients_new/{ingredientId} {
       allow read: if true;
     }
+    match /icon_index/{iconId} {
+      allow read: if true;
+    }
     match /feed_icons/{iconId} {
       allow read: if true;
     }

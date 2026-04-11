@@ -92,6 +92,7 @@ export async function delete_node(page: Page, text: string, dir: string) {
 }
 
 export async function create_recipe(page: Page, text: string, dir: string) {
+    await page.getByPlaceholder('Paste recipe here...').waitFor({ timeout: 30000 });
     await page.getByPlaceholder('Paste recipe here...').fill(text);
     await screenshot(page, dir, 'recipe-entered');
     await page.locator('button:has(svg.lucide-arrow-right)').click();

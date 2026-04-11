@@ -18,17 +18,10 @@
 import { getAIService } from '../../lib/ai-service';
 import { getDataService } from '../../lib/data-service';
 import { processIcon } from './image-processing';
-import { randomUUID } from 'crypto';
-
-interface GenerateIconOptions {
-    ingredientName: string;
-    visualDescription?: string;
-    skipStorage?: boolean; // For testing/mock
-}
+import type { IconStats } from '../../lib/recipe-lanes/types';
 
 // This function should only be called from Cloud Functions.
-export async function generateIconData(ingredientName: string) {
-    // const { ingredientName, visualDescription = ingredientName, skipStorage = false } = options;
+export async function generateIconData(ingredientName: string): Promise<IconStats> {
     console.log(`[IconGenerator] 🟢 Generating icon for: "${ingredientName}"`);
 
     // 1. Generate Image (AI)
@@ -36,7 +29,7 @@ export async function generateIconData(ingredientName: string) {
     The style should be distinct, colorful, and clearly recognizable, suitable for a game inventory or flowchart.
     Use clean outlines and bright colors.
     Ensure the background is white.`;
-    
+
     console.log(`[IconGenerator] 🎨 Prompting AI: "${prompt.substring(0, 50)}..."`);
     const aiService = getAIService();
     const downloadURL = await aiService.generateImage(prompt);
@@ -53,7 +46,7 @@ export async function generateIconData(ingredientName: string) {
 
     // 3. Process Image (Transparency)
     let processedBuffer: Buffer;
-    let metadata: any; 
+    let metadata: IconStats['metadata'];
 
     try {
         console.log(`[IconGenerator] Processing image (background removal)...`);
@@ -65,34 +58,13 @@ export async function generateIconData(ingredientName: string) {
         processedBuffer = Buffer.from(arrayBuffer);
     }
 
-    // 4. Save to Storage (Upload)
+    // 4. Upload to Storage
     console.log(`[IconGenerator] Uploading to Storage...`);
-    const dataService = getDataService();
-    
-    // Image Metadata.
-    const meta = {
-        geometry: metadata 
-    };
+    const { iconId } = await getDataService().uploadIcon(ingredientName, processedBuffer, { geometry: metadata });
 
-    const uploadResult = await dataService.uploadIcon(ingredientName, processedBuffer, meta);
-
-    // Construct the full Icon object ready for publishing
-    const iconData = {
-        id: uploadResult.iconId,
-        path: uploadResult.path,
-        url: uploadResult.url,
-        score: 0,
-        impressions: 0,
-        rejections: 0,
+    return {
+        id: iconId,
         visualDescription: ingredientName,
-        fullPrompt: prompt,
-        textModel: '',
-        imageModel: '',
-        metadata: metadata,
-        created_at: new Date().toISOString()
-    };
-
-    return { 
-        iconData
+        metadata,
     };
 }

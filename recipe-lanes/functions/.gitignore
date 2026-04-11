@@ -1,6 +1,7 @@
 # Compiled JavaScript files
 lib/**/*.js
 lib/**/*.js.map
+lib/
 
 # TypeScript v1 declaration files
 typings/
@@ -8,3 +9,12 @@ typings/
 # Node.js dependency directory
 node_modules/
 *.local
+
+# Model cache (downloaded at deploy time, not committed)
+src/vector-search/model-cache/
+
+# Model/embedding caches and Rust build artifacts
+.fastembed_cache/
+rust-vector-search/.fastembed_cache/
+rust-vector-search/target/
+rust-vector-search/icon_index.json

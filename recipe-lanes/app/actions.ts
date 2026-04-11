@@ -17,18 +17,19 @@
 
 'use server';
 
+import { after } from 'next/server';
 import { getAIService } from '@/lib/ai-service';
 import { getDataService } from '@/lib/data-service';
 import { getAuthService } from '@/lib/auth-service';
 import { z } from 'zod';
-import { generateRecipePrompt, parseRecipeGraph, extractServes } from '@/lib/recipe-lanes/parser';
+import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQueriesPrompt, parseHydeQueries } from '@/lib/recipe-lanes/parser';
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
-import type { RecipeGraph } from '@/lib/recipe-lanes/types';
+import type { RecipeGraph, IconStats } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
-import { applyIconToNode, getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
+import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
-import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from '@/lib/config';
+import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
+import { unifiedIconSearch, serverBatchIconSearch } from '@/lib/search-orchestrator';
 
 // Input Validation Schemas
 const IngredientSchema = z.string().min(1).max(100);
@@ -41,10 +42,22 @@ const SeenUrlsSchema = z.array(z.string().url()).default([]);
  * Server Action for clients to reject an icon.
  * Records the rejection, clears the icon from the node, and triggers a refill.
  */
+// icon_overview only
 export async function rejectIcon(recipeId: string, ingredientName: string, currentIconId?: string) {
     try {
         const session = await getAuthService().verifyAuth();
         const userId = session?.uid;
+        return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId, serverBatchIconSearch);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function forgeIconAction(recipeId: string, ingredientName: string, currentIconId?: string) {
+    try {
+        const session = await getAuthService().verifyAuth();
+        const userId = session?.uid;
+        // Forge: reject current and queue brand-new generation (no index search — skip embedFn)
         return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId);
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -74,9 +87,32 @@ export async function createDebugRecipeAction() {
         return { error: e.message };
     }
 }
-
+// icon_overview and tests only.
 export async function addIngredientNodeAction(recipeId: string, ingredientName: string) {
-    return getDataService().addNodeToRecipe(recipeId, ingredientName);
+    // Generate HyDE queries so the icon_index entry gets rich search terms
+    let hydeQueries: string[] = [];
+    try {
+        const raw = await getAIService().generateText(generateHydeQueriesPrompt(ingredientName));
+        hydeQueries = parseHydeQueries(raw);
+    } catch (e) {
+        console.warn('[addIngredientNodeAction] HyDE query generation failed (non-fatal):', e);
+    }
+    const result = await getDataService().addNodeToRecipe(recipeId, ingredientName, undefined, hydeQueries);
+    if (result.success) {
+        // 5. Trigger icon resolution in background (or foreground if preferred)
+        try {
+            if (process.env.NODE_ENV === 'test') {
+                await getDataService().resolveRecipeIcons(recipeId, serverBatchIconSearch);
+            } else {
+                after(() => getDataService().resolveRecipeIcons(recipeId, serverBatchIconSearch));
+            }
+        } catch (e) {
+            // Fallback for environments where 'after' is not supported (like some older Next.js versions or non-request contexts)
+            console.log("[addIngredientNodeAction] 'after' not supported or outside request scope, running sync");
+            await getDataService().resolveRecipeIcons(recipeId, serverBatchIconSearch);
+        }
+    }
+    return result;
 }
 
 /* TODO: REPLACE these with just calling resolveIcons when we make a new recipe instead of relying on the cloud function */
@@ -163,11 +199,23 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
         console.log('[createVisualRecipeAction] 💾 Saving initial recipe...');
         const id = await getDataService().saveRecipe(graph, targetId, userId, visibility);
 
-        console.log('[createVisualRecipeAction] Resolving icons');
-        await getDataService().resolveRecipeIcons(id);
-        
-        console.log(`[createVisualRecipeAction] ✅ Complete. ID: ${id}`);
-        return {id} ;
+        // Return the ID immediately — the client's snapshot listener will pick up
+        // icon shortlists as resolveRecipeIcons writes them to Firestore.
+        // Falls back to awaiting directly when outside a Next.js request context (tests).
+        const embedFn = getAIService().embedTexts.bind(getAIService());
+        try {
+            if (process.env.NODE_ENV === 'test') {
+                await getDataService().resolveRecipeIcons(id, serverBatchIconSearch);
+            } else {
+                after(() => getDataService().resolveRecipeIcons(id, serverBatchIconSearch));
+            }
+        } catch (e) {
+            console.log("[createVisualRecipeAction] 'after' not supported or outside request scope, running sync", e);
+            await getDataService().resolveRecipeIcons(id, serverBatchIconSearch);
+        }
+
+        console.log(`[createVisualRecipeAction] ✅ Saved. ID: ${id} (icons resolving in background)`);
+        return {id};
 
     } catch (e: any) {
         console.error('[createVisualRecipeAction] Failed:', e);
@@ -178,44 +226,44 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
 
 
 // TODO: Why is this needed for a test??
-export async function getOrCreateIconAction(
-    rawIngredient: string,
-    rawSessionRejections = 0,
-    rawSeenUrls: string[] = []
-) {
-    try {
-        const ingredient = standardizeIngredientName(rawIngredient);
-        const service = getDataService();
+// export async function getOrCreateIconAction(
+//     rawIngredient: string,
+//     rawSessionRejections = 0,
+//     rawSeenUrls: string[] = []
+// ) {
+//     try {
+//         const ingredient = standardizeIngredientName(rawIngredient);
+//         const service = getDataService();
         
-        const hits = await service.queueIcons([{ ingredientName: ingredient }]);
+//         const hits = await service.queueIcons([{ ingredientName: ingredient }]);
         
-        if (hits.has(ingredient)) {
-            const hit = hits.get(ingredient)!;
-            return {
-                id: hit.id,
-                url: hit.url,
-                isNew: false,
-                popularityScore: hit.score || 0,
-                visualDescription: ingredient
-            };
-        }
+//         if (hits.has(ingredient)) {
+//             const hit = hits.get(ingredient)!;
+//             return {
+//                 id: hit.id,
+//                 url: getIconThumbUrl(hit.id, ingredient),
+//                 isNew: false,
+//                 popularityScore: hit.score || 0,
+//                 visualDescription: ingredient
+//             };
+//         }
+
+//         const completion = await service.waitForQueue(ingredient);
+//         if (completion) {
+//              return {
+//                 id: completion.id,
+//                 url: getIconThumbUrl(completion.id, ingredient),
+//                 isNew: true,
+//                 popularityScore: 0,
+//                 visualDescription: ingredient
+//             };
+//         }
         
-        const completion = await service.waitForQueue(ingredient);
-        if (completion) {
-             return {
-                id: completion.id,
-                url: completion.url,
-                isNew: true,
-                popularityScore: 0,
-                visualDescription: ingredient
-            };
-        }
-        
-        return { error: 'Generation timed out' };
-    } catch (e: any) {
-        return { error: e.message };
-    }
-}
+//         return { error: 'Generation timed out' };
+//     } catch (e: any) {
+//         return { error: e.message };
+//     }
+// }
 
 export async function getAllIconsAction() {
     const session = await getAuthService().verifyAuth();
@@ -290,11 +338,10 @@ export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: stri
     const newGraph = parseRecipeGraph(text);
 
     // Restore icons if ID matches and AI forgot them
-    newGraph.nodes.forEach(n => {
-        if (!getNodeIconUrl(n)) {
-            const old = currentGraph.nodes.find(o => o.id === n.id);
-            if (old && old.icon) applyIconToNode(n, old.icon);
-        }
+    newGraph.nodes = newGraph.nodes.map(n => {
+        if (getNodeIconUrl(n)) return n;
+        const old = currentGraph.nodes.find(o => o.id === n.id);
+        return old ? preserveNodeShortlist(n, old) : n;
     });
 
     return { graph: newGraph, adjustment: prompt };
@@ -393,10 +440,121 @@ export async function retryIconGenerationAction(ingredientName: string) {
 export async function debugLogAction(message: string) {
     console.log(`[CLIENT-LOG] ${message}`);
 }
+
+// Hydrate icon IDs from Firestore for multiple ingredients in one pass.
+type FastMatch = { icon_id: string; score: number };
+async function hydrateBatch(
+    items: { name: string; fast_matches: FastMatch[] }[]
+): Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]> {
+    const allIds = [...new Set(items.flatMap(i => i.fast_matches.map(m => m.icon_id)))];
+    const iconMap = new Map<string, IconStats>();
+    for (let i = 0; i < allIds.length; i += 20) {
+        const refs = allIds.slice(i, i + 20).map(id => db.collection('icon_index').doc(id));
+        const docs = await db.getAll(...refs);
+        docs.filter(d => d.exists).forEach(d => {
+            const { embedding, embedding_minilm, created_at, updated_at, ...rest } = d.data()!;
+            iconMap.set(d.id, { id: d.id, ...rest } as IconStats);
+        });
+    }
+    return items.map(({ name, fast_matches }) => {
+        const matchScores = Object.fromEntries(fast_matches.map(m => [m.icon_id, m.score]));
+        const icons = fast_matches.map(m => iconMap.get(m.icon_id)).filter(Boolean) as IconStats[];
+        return { name, icons, matchScores };
+    });
+}
+
+// Search via CF fetched from the Next.js server.
+export async function serverBatchSearchAction(
+    ingredients: { name: string; queries: string[] }[],
+    limit = 12,
+): Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]> {
+    const raw = await serverBatchIconSearch(ingredients, limit);
+    return hydrateBatch(raw.map(r => ({ name: r.name, fast_matches: r.fast_matches ?? [] })));
+}
+
+// Search via ONNX model baked into the Next.js container.
+export async function nextjsBatchSearchAction(
+    ingredients: { name: string; queries: string[] }[],
+    limit = 12,
+): Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]> {
+    const { nextjsEmbedAndSearch } = await import('@/lib/server-vector-search');
+    const raw = await nextjsEmbedAndSearch(ingredients, limit);
+    return hydrateBatch(raw.map(r => ({ name: r.name, fast_matches: r.fast_matches ?? [] })));
+}
+
+// Apply search results to a recipe's nodes, bypassing nodeNeedsProcessing.
+// All nodes are written in a single transaction to avoid cross-transaction contention.
+export async function applyIconSearchResultsAction(
+    recipeId: string,
+    results: { name: string; icons: IconStats[]; matchScores: Record<string, number> }[],
+): Promise<{ success: boolean; applied: number; elapsed: number; error?: string }> {
+    const t0 = Date.now();
+    try {
+        // Build all shortlists outside the transaction (pure computation, no I/O).
+        const shortlists = results
+            .filter(r => r.icons.length > 0)
+            .map(({ name, icons, matchScores }) => ({
+                name,
+                entries: markEntryImpressedAtIndex(
+                    icons
+                        .map(icon => buildShortlistEntry(icon, 'search', matchScores[icon.id] ?? 0))
+                        .sort((a: any, b: any) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
+                        .slice(0, 8),
+                    0,
+                ),
+            }));
+
+        // Single transaction — read once, mutate all nodes, write once.
+        let applied = 0;
+        const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+        await db.runTransaction(async (t) => {
+            const snap = await t.get(recipeRef);
+            if (!snap.exists) return;
+            const nodes: any[] = snap.data()?.graph?.nodes || [];
+            for (const { name, entries } of shortlists) {
+                const changed = mutateNodesByIngredient(nodes, name, (n: any) => {
+                    n.iconShortlist = entries;
+                    n.shortlistIndex = 0;
+                    delete n.status;
+                });
+                if (changed) applied++;
+            }
+            t.update(recipeRef, { 'graph.nodes': nodes });
+        });
+        return { success: true, applied, elapsed: Date.now() - t0 };
+    } catch (e: any) {
+        return { success: false, applied: 0, elapsed: Date.now() - t0, error: e.message };
+    }
+}
+
+export async function clearIconQueueAction(): Promise<{ success: boolean; deleted: number; error?: string }> {
+    const session = await getAuthService().verifyAuth();
+    if (!session) return { success: false, deleted: 0, error: 'Login required' };
+    const userDoc = await db.collection('users').doc(session.uid).get();
+    if (!userDoc.data()?.isAdmin) return { success: false, deleted: 0, error: 'Admin required' };
+
+    try {
+        const snap = await db.collection(DB_COLLECTION_QUEUE).get();
+        const docs = snap.docs;
+        // Batch delete in chunks of 500
+        let deleted = 0;
+        for (let i = 0; i < docs.length; i += 500) {
+            const batch = db.batch();
+            docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+            await batch.commit();
+            deleted += Math.min(500, docs.length - i);
+        }
+        console.log(`[clearIconQueue] Deleted ${deleted} queue docs`);
+        return { success: true, deleted };
+    } catch (e: any) {
+        return { success: false, deleted: 0, error: e.message };
+    }
+}
+
 /* ^ Triaged ^ */
 
 
-// this is for the shared gallery on '/'.
+// this is for the shared gallery on '/icon_overview'.
 export async function deleteIconByIdAction(iconId: string, ingredientName?: string): Promise<{ success: boolean; error?: string }> {
     const session = await getAuthService().verifyAuth();
     if (!session) return { success: false, error: 'Login required' };
@@ -414,19 +572,18 @@ export async function deleteIconByIdAction(iconId: string, ingredientName?: stri
     }
 }
 
-export async function recordRejectionAction(iconId: string, ingredientName: string) {
-    const session = await getAuthService().verifyAuth();
-    if (!session?.isAdmin) return { error: 'Admin required' };
-
-    try {
-        const stdName = standardizeIngredientName(ingredientName);
-        await getDataService().recordRejection(iconId, ingredientName, stdName);
-        return { success: true };
-    } catch (e: any) {
-        console.error('recordRejectionAction failed:', e);
-        return { error: e.message };
-    }
-}
+// export async function recordRejectionAction(iconId: string, ingredientName: string) {
+//     const session = await getAuthService().verifyAuth();
+//     if (!session?.isAdmin) return { error: 'Admin required' };
+//     try {
+//         const stdName = standardizeIngredientName(ingredientName);
+//         await getDataService().recordRejection(iconId, ingredientName, stdName);
+//         return { success: true };
+//     } catch (e: any) {
+//         console.error('recordRejectionAction failed:', e);
+//         return { error: e.message };
+//     }
+// }
 
 export async function submitFeedbackAction(data: { message: string, url: string, email?: string, graphJson?: string }) {
     try {
@@ -458,6 +615,39 @@ export async function vetRecipeAction(recipeId: string, isVetted: boolean) {
     } catch (e: any) {
         return { error: e.message };
     }
+}
+
+
+export async function getLegacyEmbeddingAction(query: string): Promise<number[]> {
+  if (!query.trim()) return [];
+  try {
+    console.log(`[getLegacyEmbeddingAction] getting Vertex embedding for "${query}"`);
+    return await getAIService().embedTexts([query]);
+  } catch (e: any) {
+    console.error('[getLegacyEmbeddingAction] failed:', e);
+    throw new Error(e.message || 'Failed to generate embedding');
+  }
+}
+
+export async function searchIconCandidatesAction(query: string): Promise<{ candidates: IconStats[], matchScores: Record<string, number>, error?: string }> {
+  if (!query.trim()) return { candidates: [], matchScores: {} };
+  try {
+    console.log(`[searchIconCandidatesAction] query="${query}"`);
+    const embedding = await getAIService().embedTexts([query]);
+    console.log(`[searchIconCandidatesAction] embedding dim=${embedding.length}`);
+    const candidates = await getDataService().searchIconsByEmbedding(embedding, 12);
+    console.log(`[searchIconCandidatesAction] got ${candidates.length} candidates`);
+    const embeddings = await getDataService().getIconEmbeddings(candidates.map(c => c.id));
+    const matchScores: Record<string, number> = {};
+    for (const c of candidates) {
+      const vec = embeddings.get(c.id);
+      if (vec) matchScores[c.id] = cosineSimilarity(embedding, vec);
+    }
+    return { candidates, matchScores };
+  } catch (e: any) {
+    console.error('[searchIconCandidatesAction] failed:', e);
+    return { candidates: [], matchScores: {}, error: e.message };
+  }
 }
 
 export async function getUnvettedRecipesAction(limit: number = 20) {

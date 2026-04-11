@@ -560,10 +560,10 @@ export class FirebaseDataService implements DataService {
         // Collect unresolved names (all nodes without icons go directly to index search + generation)
         const unresolvedNames = Array.from(hydeQueriesMap.keys());
 
-        // Mark all unresolved nodes as pending so the UI blocks forge/reroll immediately.
-        await setIngredientStatuses(recipeId, unresolvedNames, 'pending');
-
         // 2. One batch CF call for all ingredients → returns any that still need generation.
+        // NOTE: do NOT mark nodes pending here — queueIconForGeneration sets status atomically
+        // inside its transaction. Setting it here races with after() being killed, leaving
+        // nodes permanently stuck pending with no queue doc.
         let toGenerate = unresolvedNames;
         let resolveMs = 0;
         if (batchSearchFn) {

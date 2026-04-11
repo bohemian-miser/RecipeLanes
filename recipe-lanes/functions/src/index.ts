@@ -47,10 +47,10 @@ export const processIconTask = onTaskDispatched({
     memory: "1GiB",
     timeoutSeconds: 300, // 5 minutes sufficient for one icon
 }, async (req) => {
-    await processIconTaskHandler(req.data);
+    await processIconTaskHandler(req.data, req.retryCount ?? 0);
 });
 
-export const processIconTaskHandler = async (data: { ingredientName: string }) => {
+export const processIconTaskHandler = async (data: { ingredientName: string }, retryCount: number = 0) => {
     const { ingredientName } = data;
     console.log(`[Task-${ingredientName}] 🚀 Started`);
 
@@ -145,8 +145,19 @@ export const processIconTaskHandler = async (data: { ingredientName: string }) =
         const isTransient = error.code === 429 || error.status === 429 || error.code === 503 || error.status === 503 || error.message?.includes('quota');
         
         if (isTransient) {
-            await docRef.update({ status: 'retrying', last_error: error.message }).catch(() => {});
-            throw error; // Trigger Cloud Task Retry
+            const MAX_ATTEMPTS = 5;
+            if (retryCount >= MAX_ATTEMPTS - 1) {
+                // Last attempt exhausted — mark failed so UI shows error and nodes clear pending
+                console.error(`[Task-${ingredientName}] Retry limit reached (${retryCount}), marking failed.`);
+                await docRef.update({ status: 'failed', error: error.message, updated_at: FieldValue.serverTimestamp() }).catch(() => {});
+                const qDoc = await docRef.get();
+                const recipes = qDoc.data()?.recipes || [];
+                const dataService = getDataService();
+                for (const rId of recipes) await dataService.failRecipeIcon(rId, ingredientName, error.message);
+                return; // ACK — don't retry
+            }
+            await docRef.update({ status: 'retrying', last_error: error.message, retryCount }).catch(() => {});
+            throw error; // Trigger Cloud Task retry
         }
         
         // Permanent Error (Policy, 400, etc)

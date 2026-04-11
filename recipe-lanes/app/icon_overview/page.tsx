@@ -20,12 +20,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { IngredientForm } from '@/components/ingredient-form';
 import { IconDisplay } from '@/components/icon-display';
-import { IconSearchCandidates } from '@/components/icon-search-candidates';
 import { SharedGallery } from '@/components/shared-gallery';
 import { QueueMonitor } from '@/components/queue-monitor';
 import { LogoutButton } from '@/components/logout-button';
 import { useAuth } from '@/components/auth-provider';
-import { createDebugRecipeAction, addIngredientNodeAction, rejectIcon, deleteRecipeAction, searchIconCandidatesAction } from '@/app/actions';
+import { createDebugRecipeAction, addIngredientNodeAction, rejectIcon, deleteRecipeAction } from '@/app/actions';
 import { ChefHat, Globe, Plus, Github } from 'lucide-react';
 import Link from 'next/link';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -36,7 +35,8 @@ import { getNodeIconUrl, getNodeIconId, getNodeIngredientName } from '@/lib/reci
 import { RecipeNode, IconStats } from '@/lib/recipe-lanes/types';
 import { IconDetailModal } from '@/components/icon-detail-modal';
 import { IconOverviewModal } from '@/components/icon-overview-modal';
-import { useHybridIconSearch } from '@/components/hooks/useHybridIconSearch';
+import { iconSearchProviders } from '@/lib/icon-search-providers';
+import { SearchProviderPanel } from '@/components/search-provider-panel';
 
 export default function Home() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -50,13 +50,7 @@ export default function Home() {
   const [selectedGalleryIcon, setSelectedGalleryIcon] = useState<{ icon: IconStats; matchScore?: number } | null>(null);
 
   const [mode, setMode] = useState<'forge' | 'search'>('forge');
-  const [searchCandidates, setSearchCandidates] = useState<IconStats[]>([]);
-  const [searchMatchScores, setSearchMatchScores] = useState<Record<string, number>>({});
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-
-  // New Hybrid Search State
-  const { search: triggerHybridSearch, isSearching: isHybridSearching, mergedResults, fastResults } = useHybridIconSearch();
+  const [activeQuery, setActiveQuery] = useState('');
 
   // Use a ref to track if we've already created a recipe to prevent double-creation in strict mode
   const recipeCreated = useRef(false);
@@ -156,31 +150,13 @@ export default function Home() {
     }
   };
 
-  const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const query = formData.get('ingredient') as string;
-    if (!query) return;
-
+    const q = formData.get('ingredient') as string;
+    if (!q) return;
     event.currentTarget.reset();
-    setIsSearching(true);
-    try {
-      // 1. Kick off the new hybrid approach
-      triggerHybridSearch(query, 12);
-
-      // 2. Kick off legacy Vertex approach
-      const result = await searchIconCandidatesAction(query);
-      setSearchCandidates(result.candidates);
-      setSearchMatchScores(result.matchScores);
-      setSearchQuery(query);
-    } catch (e: any) {
-      console.error(e);
-      setSearchCandidates([]);
-      setSearchMatchScores({});
-      setSearchQuery(query);
-    } finally {
-      setIsSearching(false);
-    }
+    setActiveQuery(q);
   };
 
   const handleReroll = async (nodeToReroll: RecipeNode) => {
@@ -315,27 +291,14 @@ export default function Home() {
 
           {mode === 'search' && (
             <div className="space-y-8">
-              <div>
-                 <h2 className="text-xl font-bold mb-4">Legacy Vertex + DB Query</h2>
-                 <IconSearchCandidates
-                   query={searchQuery}
-                   candidates={searchCandidates}
-                   matchScores={searchMatchScores}
-                   isSearching={isSearching}
-                   onIconClick={(candidate, matchScore) => setSelectedGalleryIcon({ icon: candidate, matchScore })}
-                 />
-              </div>
-
-              <div>
-                 <h2 className="text-xl font-bold mb-4">New Node.js In-Memory CF (Hybrid)</h2>
-                 <IconSearchCandidates
-                   query={searchQuery}
-                   candidates={mergedResults}
-                   matchScores={searchMatchScores}
-                   isSearching={isHybridSearching}
-                   onIconClick={(candidate, matchScore) => setSelectedGalleryIcon({ icon: candidate, matchScore })}
-                 />
-              </div>
+              {iconSearchProviders.map(provider => (
+                <SearchProviderPanel
+                  key={provider.id}
+                  provider={provider}
+                  activeQuery={activeQuery}
+                  onIconClick={(icon, matchScore) => setSelectedGalleryIcon({ icon, matchScore })}
+                />
+              ))}
             </div>
           )}
 

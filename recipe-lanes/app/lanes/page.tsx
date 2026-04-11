@@ -173,7 +173,7 @@ function RecipeLanesContent() {
       try {
           const hydeMap = new Map<string, string[]>();
           for (const node of graph.nodes) {
-              if (node.type !== 'ingredient') continue;
+              if (!node.visualDescription) continue;
               const stdName = standardizeIngredientName(getNodeIngredientName(node));
               const queries = getNodeHydeQueries(node);
               const existing = hydeMap.get(stdName) ?? [];

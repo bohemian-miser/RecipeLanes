@@ -32,13 +32,15 @@ export async function serverBatchIconSearch(
     ingredients: BatchIngredient[],
     limit: number = 12,
 ): Promise<BatchSearchResult[]> {
-    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-    const region = 'us-central1';
-    const url = `https://${region}-${projectId}.cloudfunctions.net/vectorSearch-searchIconVector`;
+    // VECTOR_SEARCH_CF_URL must be the direct Cloud Run URL (no redirects).
+    // The cloudfunctions.net alias redirects POST → GET which Firebase rejects.
+    const url = process.env.VECTOR_SEARCH_CF_URL;
+    if (!url) throw new Error('VECTOR_SEARCH_CF_URL env var not set');
 
     const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        redirect: 'error',
         body: JSON.stringify({ data: { ingredients, limit } }),
     });
 

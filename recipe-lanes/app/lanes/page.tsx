@@ -79,6 +79,7 @@ function RecipeLanesContent() {
   const diagramRef = useRef<ReactFlowDiagramHandle>(null);
   const isForking = useRef(false);
   const titleBeforeEdit = useRef('');
+  const autoFillIconsRef = useRef(false);
 
   const isOwner = !ownerId || (!!user && user.uid === ownerId);
 
@@ -341,6 +342,16 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       return () => unsubscribe();
   }, [recipeId]);
 
+  // After a new recipe is created, auto-fill icons using the default (client-side) method
+  // once the graph has loaded. The server-side path may not have a CF URL configured.
+  useEffect(() => {
+      if (!autoFillIconsRef.current) return;
+      if (!graph || !recipeId || graph.nodes.length === 0) return;
+      autoFillIconsRef.current = false;
+      handleBatchIconSearch(defaultIconSearchMethod.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph, recipeId]);
+
   useEffect(() => {
       setExistingCopiesDismissed(false);
 
@@ -503,17 +514,11 @@ const handleVisualize = async () => {
         url.searchParams.delete('new');
         url.searchParams.set('id', res.id);
         
+        autoFillIconsRef.current = true;
         router.push(url.pathname + url.search);
 
-        // The Snapshot Listener in useEffect will pick this up if we pushed URL?
-        // Actually pushState doesn't trigger useEffect on searchParams unless we use router.push or Next.js handles it.
-        // Next.js `useSearchParams` does update on pushState/replaceState in App Router usually.
-        // But to be safe, we can rely on router.push if we want the effect to run.
-        // Or better: we already have the graph. The listener will attach on next render/effect cycle.
-        
-
         setStatus('complete');
-        // No explicit populateIcons call. Background worker handles it.
+        // autoFillIconsRef triggers client-side icon fill once the graph snapshot loads.
         setWarningDismissed(false);
         localStorage.setItem('recipe_draft', recipeText);
     } catch (e: any) {

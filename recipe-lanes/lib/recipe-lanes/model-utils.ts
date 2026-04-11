@@ -405,6 +405,7 @@ export function hasNodeIcon(node: RecipeNode): boolean {
 /**
  * Reconstructs the public Firebase Storage URL from a path.
  * In emulator environments (local-project-id), points to the Storage emulator.
+ * Format: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{encoded-path}?alt=media
  */
 export function getIconUrl(path: string): string {
     const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'recipe-lanes.firebasestorage.app';

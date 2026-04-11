@@ -23,9 +23,10 @@ export async function batchIconSearch(
 }
 
 /**
- * Server-side batch search — calls the CF directly via HTTP using ADC.
- * Bypasses Firebase client SDK routing overhead (~70s → ~2s).
- * Use this from server actions and server components only.
+ * Server-side batch search — calls the CF directly via HTTP (no Firebase client SDK).
+ * Firebase onCall functions accept unauthenticated requests; the callable protocol
+ * just wraps the body as { data: {...} } and returns { result: {...} }.
+ * This avoids the ~70s overhead the Firebase client SDK adds in Cloud Run.
  */
 export async function serverBatchIconSearch(
     ingredients: BatchIngredient[],
@@ -35,15 +36,9 @@ export async function serverBatchIconSearch(
     const region = 'us-central1';
     const url = `https://${region}-${projectId}.cloudfunctions.net/vectorSearch-searchIconVector`;
 
-    // Get OIDC token via ADC (available in Cloud Run automatically)
-    const { GoogleAuth } = await import('google-auth-library');
-    const auth = new GoogleAuth();
-    const client = await auth.getIdTokenClient(url);
-    const headers = await client.getRequestHeaders(url);
-
     const res = await fetch(url, {
         method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data: { ingredients, limit } }),
     });
 

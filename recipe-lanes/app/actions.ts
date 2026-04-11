@@ -458,6 +458,24 @@ export async function serverIconSearchAction(
     return { icons, matchScores };
 }
 
+export async function nextjsIconSearchAction(
+    queryStr: string,
+    limit: number = 12,
+): Promise<{ icons: IconStats[]; matchScores: Record<string, number> }> {
+    const { nextjsEmbedAndSearch } = await import('@/lib/server-vector-search');
+    const results = await nextjsEmbedAndSearch([{ name: queryStr, queries: [queryStr] }], limit);
+    const fastMatches = results[0]?.fast_matches ?? [];
+    if (fastMatches.length === 0) return { icons: [], matchScores: {} };
+    const refs = fastMatches.map((m: { icon_id: string; score: number }) => db.collection('icon_index').doc(m.icon_id));
+    const docs = await db.getAll(...refs);
+    const matchScores: Record<string, number> = Object.fromEntries(fastMatches.map((m: { icon_id: string; score: number }) => [m.icon_id, m.score]));
+    const icons = docs
+        .filter(d => d.exists)
+        .map(d => { const { embedding, embedding_minilm, ...rest } = d.data()!; return { id: d.id, ...rest } as IconStats; })
+        .sort((a, b) => (matchScores[b.id] || 0) - (matchScores[a.id] || 0));
+    return { icons, matchScores };
+}
+
 // Applies pre-computed CF batch results directly to recipe nodes, bypassing the
 // nodeNeedsProcessing filter so it works even when nodes already have shortlists.
 export async function applyBatchIconSearchAction(

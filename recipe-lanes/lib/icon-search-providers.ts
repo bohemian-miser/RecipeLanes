@@ -1,5 +1,5 @@
 import type { IconStats } from './recipe-lanes/types';
-import { searchIconCandidatesAction, serverIconSearchAction } from '@/app/actions';
+import { searchIconCandidatesAction, serverIconSearchAction, nextjsIconSearchAction } from '@/app/actions';
 import { getBatchFastPass } from './icon-search-strategy';
 import { collection, query as fsQuery, where, getDocs, documentId } from 'firebase/firestore';
 import { db } from './firebase-client';
@@ -66,6 +66,14 @@ export const iconSearchProviders: IconSearchProvider[] = [
         search: async (queryStr, _limit) => {
             const result = await searchIconCandidatesAction(queryStr);
             return { icons: result.candidates, matchScores: result.matchScores };
+        },
+    },
+    {
+        id: 'nextjs-inprocess',
+        name: 'Next.js · in-process',
+        description: 'MiniLM 384d · ONNX baked into container, zero network hops',
+        search: async (queryStr, limit) => {
+            return nextjsIconSearchAction(queryStr, limit);
         },
     },
 ];

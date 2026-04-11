@@ -6,6 +6,7 @@
     "dev": "next dev -p 8001",
     "dev:staging": "npx env-cmd -f .env.staging next dev -p 8001",
     "dev:staging:clean": "rm -rf .next && npx env-cmd -f .env.staging next dev -p 8001",
+    "prebuild": "node scripts/prebuild.js",
     "build": "next build",
     "start": "next start -p 8001",
     "lint": "eslint",

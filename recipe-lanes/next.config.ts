@@ -23,6 +23,8 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // Keep ONNX/transformers out of webpack bundling — they use native binaries
+  serverExternalPackages: ['@huggingface/transformers', 'onnxruntime-node'],
   experimental: {
     serverActions: {
       bodySizeLimit: '5mb',

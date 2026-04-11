@@ -483,35 +483,44 @@ export async function nextjsBatchSearchAction(
 }
 
 // Apply search results to a recipe's nodes, bypassing nodeNeedsProcessing.
+// All nodes are written in a single transaction to avoid cross-transaction contention.
 export async function applyIconSearchResultsAction(
     recipeId: string,
     results: { name: string; icons: IconStats[]; matchScores: Record<string, number> }[],
 ): Promise<{ success: boolean; applied: number; elapsed: number; error?: string }> {
     const t0 = Date.now();
     try {
+        // Build all shortlists outside the transaction (pure computation, no I/O).
+        const shortlists = results
+            .filter(r => r.icons.length > 0)
+            .map(({ name, icons, matchScores }) => ({
+                name,
+                entries: markEntryImpressedAtIndex(
+                    icons
+                        .map(icon => buildShortlistEntry(icon, 'search', matchScores[icon.id] ?? 0))
+                        .sort((a: any, b: any) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
+                        .slice(0, 8),
+                    0,
+                ),
+            }));
+
+        // Single transaction — read once, mutate all nodes, write once.
         let applied = 0;
-        await Promise.all(results.map(async ({ name: stdName, icons, matchScores }) => {
-            if (icons.length === 0) return;
-            const ranked = icons
-                .map(icon => buildShortlistEntry(icon, 'search', matchScores[icon.id] ?? 0))
-                .sort((a: any, b: any) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
-                .slice(0, 8);
-            const markedEntries = markEntryImpressedAtIndex(ranked, 0);
-            const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
-            let changed = false;
-            await db.runTransaction(async (t) => {
-                const snap = await t.get(recipeRef);
-                if (!snap.exists) return;
-                const nodes: any[] = snap.data()?.graph?.nodes || [];
-                changed = mutateNodesByIngredient(nodes, stdName, (n: any) => {
-                    n.iconShortlist = markedEntries;
+        const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+        await db.runTransaction(async (t) => {
+            const snap = await t.get(recipeRef);
+            if (!snap.exists) return;
+            const nodes: any[] = snap.data()?.graph?.nodes || [];
+            for (const { name, entries } of shortlists) {
+                const changed = mutateNodesByIngredient(nodes, name, (n: any) => {
+                    n.iconShortlist = entries;
                     n.shortlistIndex = 0;
                     delete n.status;
                 });
-                if (changed) t.update(recipeRef, { 'graph.nodes': nodes });
-            });
-            if (changed) applied++;
-        }));
+                if (changed) applied++;
+            }
+            t.update(recipeRef, { 'graph.nodes': nodes });
+        });
         return { success: true, applied, elapsed: Date.now() - t0 };
     } catch (e: any) {
         return { success: false, applied: 0, elapsed: Date.now() - t0, error: e.message };

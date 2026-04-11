@@ -32,7 +32,7 @@ import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, ChevronDown, Check } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -67,8 +67,6 @@ function RecipeLanesContent() {
   const [iconSearchStatus, setIconSearchStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [iconSearchMethodId, setIconSearchMethodId] = useState(defaultIconSearchMethod.id);
   const [iconSearchElapsed, setIconSearchElapsed] = useState<number | null>(null);
-  const [iconDropdownOpen, setIconDropdownOpen] = useState(false);
-  const iconDropdownRef = useRef<HTMLDivElement>(null);
   const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
   const [iconTheme, setIconTheme] = useState<'classic' | 'modern' | 'modern_clean'>('classic');
@@ -178,7 +176,6 @@ function RecipeLanesContent() {
 
       setIconSearchStatus('running');
       setIconSearchElapsed(null);
-      setIconDropdownOpen(false);
       try {
           const hydeMap = new Map<string, string[]>();
           for (const node of graph.nodes) {
@@ -209,19 +206,7 @@ function RecipeLanesContent() {
       }
   };
 
-  // Close icon-search dropdown on outside click
-  useEffect(() => {
-      if (!iconDropdownOpen) return;
-      const handler = (e: MouseEvent) => {
-          if (iconDropdownRef.current && !iconDropdownRef.current.contains(e.target as Node)) {
-              setIconDropdownOpen(false);
-          }
-      };
-      document.addEventListener('mousedown', handler);
-      return () => document.removeEventListener('mousedown', handler);
-  }, [iconDropdownOpen]);
-
-  const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
+const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       const currentId = searchParams.get('id');
       const isNotOwner = (user && ownerId && user.uid !== ownerId) || (!user && ownerId);
       
@@ -814,65 +799,37 @@ const handleVisualize = async () => {
 
                     <div className="h-4 w-px bg-zinc-200 mx-2" />
 
-                    {/* Batch icon search — split button with method dropdown */}
+                    {/* Batch icon search */}
                     {graph && recipeId && (
-                        <div ref={iconDropdownRef} className="relative flex items-center">
-                            {/* Main trigger */}
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-zinc-400">Icons</span>
+                            <select
+                                value={iconSearchMethodId}
+                                onChange={e => setIconSearchMethodId(e.target.value)}
+                                disabled={iconSearchStatus === 'running'}
+                                className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1.5 text-zinc-700 font-medium focus:ring-1 focus:ring-yellow-500/50 outline-none"
+                            >
+                                {iconSearchMethods.map(m => (
+                                    <option key={m.id} value={m.id}>{m.name}</option>
+                                ))}
+                            </select>
                             <button
                                 onClick={() => handleBatchIconSearch()}
                                 disabled={iconSearchStatus === 'running'}
-                                className={`flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-l-md text-xs font-bold transition-colors border-r border-current/20 ${
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${
                                     iconSearchStatus === 'done' ? 'bg-green-100 text-green-700' :
                                     iconSearchStatus === 'error' ? 'bg-red-100 text-red-700' :
                                     iconSearchStatus === 'running' ? 'bg-yellow-100 text-yellow-700' :
                                     'text-zinc-600 hover:bg-zinc-100'
                                 }`}
-                                title={`Fill icons using ${iconSearchMethods.find(m => m.id === iconSearchMethodId)?.name ?? 'selected method'}`}
                             >
                                 <Sparkles className="w-4 h-4 shrink-0" />
                                 <span className="hidden sm:inline whitespace-nowrap">
                                     {iconSearchStatus === 'running' ? 'RUNNING...' :
                                      iconSearchStatus === 'done' ? `DONE${iconSearchElapsed != null ? ` ${(iconSearchElapsed / 1000).toFixed(1)}s` : ''}` :
-                                     iconSearchStatus === 'error' ? 'ERROR' :
-                                     (iconSearchMethods.find(m => m.id === iconSearchMethodId)?.name ?? 'ICONS')}
+                                     iconSearchStatus === 'error' ? 'ERROR' : 'FILL'}
                                 </span>
                             </button>
-                            {/* Dropdown toggle */}
-                            <button
-                                onClick={() => setIconDropdownOpen(o => !o)}
-                                disabled={iconSearchStatus === 'running'}
-                                className={`flex items-center px-1.5 py-1.5 rounded-r-md text-xs font-bold transition-colors ${
-                                    iconSearchStatus === 'done' ? 'bg-green-100 text-green-700' :
-                                    iconSearchStatus === 'error' ? 'bg-red-100 text-red-700' :
-                                    iconSearchStatus === 'running' ? 'bg-yellow-100 text-yellow-700' :
-                                    'text-zinc-600 hover:bg-zinc-100'
-                                }`}
-                                title="Select search method"
-                            >
-                                <ChevronDown className="w-3 h-3" />
-                            </button>
-                            {/* Dropdown menu */}
-                            {iconDropdownOpen && (
-                                <div className="absolute bottom-full left-0 mb-1 z-50 bg-white border border-zinc-200 rounded-lg shadow-lg py-1 min-w-[220px]">
-                                    {iconSearchMethods.map(method => (
-                                        <button
-                                            key={method.id}
-                                            onClick={() => {
-                                                setIconSearchMethodId(method.id);
-                                                setIconDropdownOpen(false);
-                                                handleBatchIconSearch(method.id);
-                                            }}
-                                            className="w-full text-left px-3 py-2 hover:bg-zinc-50 flex items-start gap-2 group"
-                                        >
-                                            <Check className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${method.id === iconSearchMethodId ? 'text-yellow-500' : 'invisible'}`} />
-                                            <div>
-                                                <div className="text-xs font-semibold text-zinc-800">{method.name}</div>
-                                                <div className="text-[10px] text-zinc-400 font-mono mt-0.5">{method.description}</div>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
                         </div>
                     )}
 

@@ -24,15 +24,15 @@ import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
-import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction, applyBatchIconSearchAction } from '@/app/actions';
-import { getBatchFastPass } from '@/lib/icon-search-strategy';
+import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction } from '@/app/actions';
+import { iconSearchMethods, defaultIconSearchMethod, batchIconSearchMethods } from '@/lib/icon-search-registry';
 import { standardizeIngredientName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, ChevronDown, Check } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -64,7 +64,11 @@ function RecipeLanesContent() {
   const [showJson, setShowJson] = useState(false);
   const [showIngredients, setShowIngredients] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
-  const [iconSearchStatus, setIconSearchStatus] = useState<'idle' | 'searching' | 'applying' | 'done' | 'error'>('idle');
+  const [iconSearchStatus, setIconSearchStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [iconSearchMethodId, setIconSearchMethodId] = useState(defaultIconSearchMethod.id);
+  const [iconSearchElapsed, setIconSearchElapsed] = useState<number | null>(null);
+  const [iconDropdownOpen, setIconDropdownOpen] = useState(false);
+  const iconDropdownRef = useRef<HTMLDivElement>(null);
   const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
   const [iconTheme, setIconTheme] = useState<'classic' | 'modern' | 'modern_clean'>('classic');
@@ -167,9 +171,15 @@ function RecipeLanesContent() {
       setTimeout(() => setNotification(null), 3000);
   };
 
-  const handleClientBatchIconSearch = async () => {
+  const handleBatchIconSearch = async (methodId?: string) => {
       if (!graph || !recipeId) return;
-      setIconSearchStatus('searching');
+      const mid = methodId ?? iconSearchMethodId;
+      const method = batchIconSearchMethods.find(m => m.id === mid) ?? batchIconSearchMethods[0];
+      if (!method?.batchApply) return;
+
+      setIconSearchStatus('running');
+      setIconSearchElapsed(null);
+      setIconDropdownOpen(false);
       try {
           const hydeMap = new Map<string, string[]>();
           for (const node of graph.nodes) {
@@ -185,20 +195,30 @@ function RecipeLanesContent() {
           }));
           if (ingredients.length === 0) { setIconSearchStatus('idle'); return; }
 
-          console.log(`[batchIconSearch] calling CF with ${ingredients.length} ingredients`);
-          const batchResults = await getBatchFastPass(ingredients, 12);
-          console.log(`[batchIconSearch] CF returned ${batchResults.length} results`);
-          setIconSearchStatus('applying');
-          const res = await applyBatchIconSearchAction(recipeId, batchResults as any);
-          console.log(`[batchIconSearch] applied:`, res);
-          setIconSearchStatus(res.success ? 'done' : 'error');
-          setTimeout(() => setIconSearchStatus('idle'), 3000);
+          console.log(`[batchIconSearch] ${method.name} — ${ingredients.length} ingredients`);
+          const { applied, elapsed } = await method.batchApply(recipeId, ingredients);
+          console.log(`[batchIconSearch] applied ${applied} in ${elapsed}ms`);
+          setIconSearchElapsed(elapsed);
+          setIconSearchStatus('done');
+          setTimeout(() => setIconSearchStatus('idle'), 4000);
       } catch (e: any) {
-          console.error('[handleClientBatchIconSearch]', e);
+          console.error('[handleBatchIconSearch]', e);
           setIconSearchStatus('error');
           setTimeout(() => setIconSearchStatus('idle'), 3000);
       }
   };
+
+  // Close icon-search dropdown on outside click
+  useEffect(() => {
+      if (!iconDropdownOpen) return;
+      const handler = (e: MouseEvent) => {
+          if (iconDropdownRef.current && !iconDropdownRef.current.contains(e.target as Node)) {
+              setIconDropdownOpen(false);
+          }
+      };
+      document.addEventListener('mousedown', handler);
+      return () => document.removeEventListener('mousedown', handler);
+  }, [iconDropdownOpen]);
 
   const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       const currentId = searchParams.get('id');
@@ -793,27 +813,66 @@ const handleVisualize = async () => {
 
                     <div className="h-4 w-px bg-zinc-200 mx-2" />
 
-                    {/* Client-side batch icon search */}
+                    {/* Batch icon search — split button with method dropdown */}
                     {graph && recipeId && (
-                        <button
-                            onClick={handleClientBatchIconSearch}
-                            disabled={iconSearchStatus !== 'idle'}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${
-                                iconSearchStatus === 'done' ? 'bg-green-100 text-green-700' :
-                                iconSearchStatus === 'error' ? 'bg-red-100 text-red-700' :
-                                iconSearchStatus !== 'idle' ? 'bg-yellow-100 text-yellow-700' :
-                                'text-zinc-600 hover:bg-zinc-100'
-                            }`}
-                            title="Search icons for all ingredients (client-side)"
-                        >
-                            <Sparkles className="w-4 h-4" />
-                            <span className="hidden sm:inline">
-                                {iconSearchStatus === 'searching' ? 'SEARCHING...' :
-                                 iconSearchStatus === 'applying' ? 'APPLYING...' :
-                                 iconSearchStatus === 'done' ? 'DONE' :
-                                 iconSearchStatus === 'error' ? 'ERROR' : 'ICONS'}
-                            </span>
-                        </button>
+                        <div ref={iconDropdownRef} className="relative flex items-center">
+                            {/* Main trigger */}
+                            <button
+                                onClick={() => handleBatchIconSearch()}
+                                disabled={iconSearchStatus === 'running'}
+                                className={`flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-l-md text-xs font-bold transition-colors border-r border-current/20 ${
+                                    iconSearchStatus === 'done' ? 'bg-green-100 text-green-700' :
+                                    iconSearchStatus === 'error' ? 'bg-red-100 text-red-700' :
+                                    iconSearchStatus === 'running' ? 'bg-yellow-100 text-yellow-700' :
+                                    'text-zinc-600 hover:bg-zinc-100'
+                                }`}
+                                title={`Fill icons using ${batchIconSearchMethods.find(m => m.id === iconSearchMethodId)?.name ?? 'selected method'}`}
+                            >
+                                <Sparkles className="w-4 h-4 shrink-0" />
+                                <span className="hidden sm:inline whitespace-nowrap">
+                                    {iconSearchStatus === 'running' ? 'RUNNING...' :
+                                     iconSearchStatus === 'done' ? `DONE${iconSearchElapsed != null ? ` ${(iconSearchElapsed / 1000).toFixed(1)}s` : ''}` :
+                                     iconSearchStatus === 'error' ? 'ERROR' :
+                                     (batchIconSearchMethods.find(m => m.id === iconSearchMethodId)?.name ?? 'ICONS')}
+                                </span>
+                            </button>
+                            {/* Dropdown toggle */}
+                            <button
+                                onClick={() => setIconDropdownOpen(o => !o)}
+                                disabled={iconSearchStatus === 'running'}
+                                className={`flex items-center px-1.5 py-1.5 rounded-r-md text-xs font-bold transition-colors ${
+                                    iconSearchStatus === 'done' ? 'bg-green-100 text-green-700' :
+                                    iconSearchStatus === 'error' ? 'bg-red-100 text-red-700' :
+                                    iconSearchStatus === 'running' ? 'bg-yellow-100 text-yellow-700' :
+                                    'text-zinc-600 hover:bg-zinc-100'
+                                }`}
+                                title="Select search method"
+                            >
+                                <ChevronDown className="w-3 h-3" />
+                            </button>
+                            {/* Dropdown menu */}
+                            {iconDropdownOpen && (
+                                <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-zinc-200 rounded-lg shadow-lg py-1 min-w-[220px]">
+                                    {batchIconSearchMethods.map(method => (
+                                        <button
+                                            key={method.id}
+                                            onClick={() => {
+                                                setIconSearchMethodId(method.id);
+                                                setIconDropdownOpen(false);
+                                                handleBatchIconSearch(method.id);
+                                            }}
+                                            className="w-full text-left px-3 py-2 hover:bg-zinc-50 flex items-start gap-2 group"
+                                        >
+                                            <Check className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${method.id === iconSearchMethodId ? 'text-yellow-500' : 'invisible'}`} />
+                                            <div>
+                                                <div className="text-xs font-semibold text-zinc-800">{method.name}</div>
+                                                <div className="text-[10px] text-zinc-400 font-mono mt-0.5">{method.description}</div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     )}
 
                     <div className="h-4 w-px bg-zinc-200 mx-2" />

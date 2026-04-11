@@ -3,11 +3,12 @@
  * The embedding model and icon index are bundled into the container image
  * via scripts/prebuild.js (runs before `next build`).
  *
- * This mirrors the Cloud Function logic exactly — same model, same index,
- * same cosine similarity — but runs in-process with zero network round-trips.
+ * Uses @huggingface/transformers loaded lazily inside initialize() so that
+ * a native-binary failure (e.g. missing libonnxruntime.so.1 in some container
+ * environments) surfaces as a caught error rather than an unhandled rejection
+ * that crashes the route.
  */
 
-import { pipeline, env } from '@huggingface/transformers';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -28,6 +29,10 @@ let initPromise: Promise<void> | null = null;
 async function initialize(): Promise<void> {
     if (initPromise) return initPromise;
     initPromise = (async () => {
+        // Dynamic import keeps the module-level load clean even if onnxruntime
+        // native binaries are unavailable in the current environment.
+        const { pipeline, env } = await import('@huggingface/transformers');
+
         if (!embedder) {
             console.log('[ServerVectorSearch] Loading model from', MODEL_CACHE);
             env.cacheDir = MODEL_CACHE;
@@ -36,22 +41,22 @@ async function initialize(): Promise<void> {
             console.log('[ServerVectorSearch] Model ready');
         }
 
-        if (iconIndex.length === 0) {
-            if (fs.existsSync(INDEX_PATH)) {
-                const raw = fs.readFileSync(INDEX_PATH, 'utf8');
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                    iconIndex = parsed;
-                } else {
-                    iconIndex = parsed.records ?? [];
-                    snapshotTimestamp = parsed.exportedAt ?? 0;
-                }
-                console.log(`[ServerVectorSearch] Loaded ${iconIndex.length} icons (snapshot ${snapshotTimestamp ? new Date(snapshotTimestamp).toISOString() : 'unknown'})`);
+        if (iconIndex.length === 0 && fs.existsSync(INDEX_PATH)) {
+            const raw = fs.readFileSync(INDEX_PATH, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                iconIndex = parsed;
             } else {
-                console.warn('[ServerVectorSearch] icon_index.json not found — returning embeddings only');
+                iconIndex = parsed.records ?? [];
+                snapshotTimestamp = parsed.exportedAt ?? 0;
             }
+            console.log(`[ServerVectorSearch] Loaded ${iconIndex.length} icons (snapshot ${snapshotTimestamp ? new Date(snapshotTimestamp).toISOString() : 'unknown'})`);
         }
-    })();
+    })().catch(e => {
+        // Reset so the next call retries rather than returning a permanently-rejected promise
+        initPromise = null;
+        throw e;
+    });
     return initPromise;
 }
 

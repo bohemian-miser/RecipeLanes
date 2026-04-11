@@ -8,7 +8,7 @@
     "dev:staging:clean": "rm -rf .next && npx env-cmd -f .env.staging next dev -p 8001",
     "prebuild": "node scripts/prebuild.js",
     "build": "next build",
-    "start": "next start -p 8001",
+    "start": "bash scripts/start.sh",
     "lint": "eslint",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "./scripts/test-unit.sh",

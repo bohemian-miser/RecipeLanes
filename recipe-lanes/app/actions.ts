@@ -523,6 +523,63 @@ export async function applyBatchIconSearchAction(
     }
 }
 
+// Server-side batch search + apply in one round-trip (avoids shipping embeddings to client).
+// method: 'server-cf' uses VECTOR_SEARCH_CF_URL; 'nextjs' runs ONNX in-process.
+export async function serverBatchIconSearchApplyAction(
+    recipeId: string,
+    ingredients: { name: string; queries: string[] }[],
+    method: 'server-cf' | 'nextjs',
+): Promise<{ success: boolean; applied: number; elapsed: number; error?: string }> {
+    const t0 = Date.now();
+    try {
+        let batchResults: { name: string; embedding: number[]; fast_matches: { icon_id: string; score: number }[] }[];
+        if (method === 'nextjs') {
+            const { nextjsEmbedAndSearch } = await import('@/lib/server-vector-search');
+            batchResults = await nextjsEmbedAndSearch(ingredients, 12);
+        } else {
+            batchResults = await serverBatchIconSearch(ingredients, 12);
+        }
+        const elapsed = Date.now() - t0;
+
+        // Apply (same logic as applyBatchIconSearchAction)
+        let applied = 0;
+        await Promise.all(batchResults.map(async ({ name: stdName, fast_matches }) => {
+            if (!fast_matches || fast_matches.length === 0) return;
+            const refs = fast_matches.slice(0, 20).map((m: any) => db.collection('icon_index').doc(m.icon_id));
+            const docs = await db.getAll(...refs);
+            const icons = docs
+                .filter(d => d.exists)
+                .map(d => { const { embedding, embedding_minilm, ...rest } = d.data()!; return { id: d.id, ...rest }; });
+            if (icons.length === 0) return;
+            const ranked = icons
+                .map((icon: any) => {
+                    const fm = fast_matches.find((m: any) => m.icon_id === icon.id);
+                    return buildShortlistEntry(icon, 'search', fm?.score ?? 0);
+                })
+                .sort((a: any, b: any) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
+                .slice(0, 8);
+            const markedEntries = markEntryImpressedAtIndex(ranked, 0);
+            const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+            let changed = false;
+            await db.runTransaction(async (t) => {
+                const snap = await t.get(recipeRef);
+                if (!snap.exists) return;
+                const nodes: any[] = snap.data()?.graph?.nodes || [];
+                changed = mutateNodesByIngredient(nodes, stdName, (n: any) => {
+                    n.iconShortlist = markedEntries;
+                    n.shortlistIndex = 0;
+                    delete n.status;
+                });
+                if (changed) t.update(recipeRef, { 'graph.nodes': nodes });
+            });
+            if (changed) applied++;
+        }));
+        return { success: true, applied, elapsed };
+    } catch (e: any) {
+        return { success: false, applied: 0, elapsed: Date.now() - t0, error: e.message };
+    }
+}
+
 export async function clearIconQueueAction(): Promise<{ success: boolean; deleted: number; error?: string }> {
     const session = await getAuthService().verifyAuth();
     if (!session) return { success: false, deleted: 0, error: 'Login required' };

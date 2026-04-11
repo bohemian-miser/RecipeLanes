@@ -453,7 +453,7 @@ export async function serverIconSearchAction(
     const matchScores: Record<string, number> = Object.fromEntries(fastMatches.map(m => [m.icon_id, m.score]));
     const icons = docs
         .filter(d => d.exists)
-        .map(d => { const { embedding, embedding_minilm, ...rest } = d.data()!; return { id: d.id, ...rest } as IconStats; })
+        .map(d => { const { embedding, embedding_minilm, created_at, updated_at, ...rest } = d.data()!; return { id: d.id, ...rest } as IconStats; })
         .sort((a, b) => (matchScores[b.id] || 0) - (matchScores[a.id] || 0));
     return { icons, matchScores };
 }
@@ -471,7 +471,7 @@ export async function nextjsIconSearchAction(
     const matchScores: Record<string, number> = Object.fromEntries(fastMatches.map((m: { icon_id: string; score: number }) => [m.icon_id, m.score]));
     const icons = docs
         .filter(d => d.exists)
-        .map(d => { const { embedding, embedding_minilm, ...rest } = d.data()!; return { id: d.id, ...rest } as IconStats; })
+        .map(d => { const { embedding, embedding_minilm, created_at, updated_at, ...rest } = d.data()!; return { id: d.id, ...rest } as IconStats; })
         .sort((a, b) => (matchScores[b.id] || 0) - (matchScores[a.id] || 0));
     return { icons, matchScores };
 }

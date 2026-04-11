@@ -362,17 +362,11 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                              baseServes: graph.baseServes
                          };
 
-                         if (dbUrl && dbUrl !== currentUrl) {
-                             changed = true;
-                         }
-
                          // Copy shortlist from DB when the icon changed (forge result arrived).
-                         const newData = (dbUrl && dbUrl !== currentUrl && getNodeShortlistLength(dbNode) > 0)
-                             ? preserveNodeShortlist(baseData, dbNode)
-                             : baseData;
+                         const newData = preserveNodeShortlist(baseData, dbNode);
                          
                          // If serves or text changed, mark as changed to trigger re-render
-                         if (n.data.serves !== graph.serves || n.data.text !== dbNode.text) changed = true;
+                         if (n.data.serves !== graph.serves || n.data.text !== dbNode.text || newData !== baseData) changed = true;
 
                          return { 
                              ...n, 

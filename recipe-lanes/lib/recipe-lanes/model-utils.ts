@@ -715,9 +715,12 @@ export function mutateNodesByIngredient(
  */
 export function preserveNodeShortlist<T extends RecipeNode>(target: T, source: RecipeNode): T {
     if (!source.iconShortlist || source.iconShortlist.length === 0) return target;
+    const targetIds = new Set(target.iconShortlist?.map(e => getEntryIcon(e).id) ?? []);
+    const additional = source.iconShortlist.filter(e => !targetIds.has(getEntryIcon(e).id));
+    const newShortlist = [...(target.iconShortlist ?? []), ...additional];
     return {
         ...target,
-        iconShortlist: source.iconShortlist,
+        iconShortlist: newShortlist,
         shortlistIndex: source.shortlistIndex,
     };
 }

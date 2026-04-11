@@ -441,121 +441,59 @@ export async function debugLogAction(message: string) {
     console.log(`[CLIENT-LOG] ${message}`);
 }
 
-export async function serverIconSearchAction(
-    queryStr: string,
-    limit: number = 12,
-): Promise<{ icons: IconStats[]; matchScores: Record<string, number> }> {
-    const results = await serverBatchIconSearch([{ name: queryStr, queries: [queryStr] }], limit);
-    const fastMatches: { icon_id: string; score: number }[] = results[0]?.fast_matches ?? [];
-    if (fastMatches.length === 0) return { icons: [], matchScores: {} };
-    const refs = fastMatches.map(m => db.collection('icon_index').doc(m.icon_id));
-    const docs = await db.getAll(...refs);
-    const matchScores: Record<string, number> = Object.fromEntries(fastMatches.map(m => [m.icon_id, m.score]));
-    const icons = docs
-        .filter(d => d.exists)
-        .map(d => { const { embedding, embedding_minilm, created_at, updated_at, ...rest } = d.data()!; return { id: d.id, ...rest } as IconStats; })
-        .sort((a, b) => (matchScores[b.id] || 0) - (matchScores[a.id] || 0));
-    return { icons, matchScores };
-}
-
-export async function nextjsIconSearchAction(
-    queryStr: string,
-    limit: number = 12,
-): Promise<{ icons: IconStats[]; matchScores: Record<string, number> }> {
-    const { nextjsEmbedAndSearch } = await import('@/lib/server-vector-search');
-    const results = await nextjsEmbedAndSearch([{ name: queryStr, queries: [queryStr] }], limit);
-    const fastMatches = results[0]?.fast_matches ?? [];
-    if (fastMatches.length === 0) return { icons: [], matchScores: {} };
-    const refs = fastMatches.map((m: { icon_id: string; score: number }) => db.collection('icon_index').doc(m.icon_id));
-    const docs = await db.getAll(...refs);
-    const matchScores: Record<string, number> = Object.fromEntries(fastMatches.map((m: { icon_id: string; score: number }) => [m.icon_id, m.score]));
-    const icons = docs
-        .filter(d => d.exists)
-        .map(d => { const { embedding, embedding_minilm, created_at, updated_at, ...rest } = d.data()!; return { id: d.id, ...rest } as IconStats; })
-        .sort((a, b) => (matchScores[b.id] || 0) - (matchScores[a.id] || 0));
-    return { icons, matchScores };
-}
-
-// Applies pre-computed CF batch results directly to recipe nodes, bypassing the
-// nodeNeedsProcessing filter so it works even when nodes already have shortlists.
-export async function applyBatchIconSearchAction(
-    recipeId: string,
-    batchResults: { name: string; embedding: number[]; fast_matches: { icon_id: string; score: number }[] }[]
-): Promise<{ success: boolean; applied: number; error?: string }> {
-    try {
-        let applied = 0;
-        await Promise.all(batchResults.map(async ({ name: stdName, fast_matches }) => {
-            if (!fast_matches || fast_matches.length === 0) return;
-            // Hydrate icon docs from icon_index
-            const refs = fast_matches.slice(0, 20).map((m: any) => db.collection('icon_index').doc(m.icon_id));
-            const docs = await db.getAll(...refs);
-            const icons = docs
-                .filter(d => d.exists)
-                .map(d => { const { embedding, embedding_minilm, ...rest } = d.data()!; return { id: d.id, ...rest }; });
-            if (icons.length === 0) return;
-            const ranked = icons
-                .map((icon: any) => {
-                    const fm = fast_matches.find((m: any) => m.icon_id === icon.id);
-                    return buildShortlistEntry(icon, 'search', fm?.score ?? 0);
-                })
-                .sort((a: any, b: any) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
-                .slice(0, 8);
-            const markedEntries = markEntryImpressedAtIndex(ranked, 0);
-            // Write directly — no nodeNeedsProcessing check
-            const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
-            let changed = false;
-            await db.runTransaction(async (t) => {
-                const doc = await t.get(recipeRef);
-                if (!doc.exists) return;
-                const nodes: any[] = doc.data()?.graph?.nodes || [];
-                changed = mutateNodesByIngredient(nodes, stdName, (n: any) => {
-                    n.iconShortlist = markedEntries;
-                    n.shortlistIndex = 0;
-                    delete n.status;
-                });
-                if (changed) t.update(recipeRef, { 'graph.nodes': nodes });
-            });
-            if (changed) applied++;
-        }));
-        return { success: true, applied };
-    } catch (e: any) {
-        return { success: false, applied: 0, error: e.message };
+// Hydrate icon IDs from Firestore for multiple ingredients in one pass.
+type FastMatch = { icon_id: string; score: number };
+async function hydrateBatch(
+    items: { name: string; fast_matches: FastMatch[] }[]
+): Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]> {
+    const allIds = [...new Set(items.flatMap(i => i.fast_matches.map(m => m.icon_id)))];
+    const iconMap = new Map<string, IconStats>();
+    for (let i = 0; i < allIds.length; i += 20) {
+        const refs = allIds.slice(i, i + 20).map(id => db.collection('icon_index').doc(id));
+        const docs = await db.getAll(...refs);
+        docs.filter(d => d.exists).forEach(d => {
+            const { embedding, embedding_minilm, created_at, updated_at, ...rest } = d.data()!;
+            iconMap.set(d.id, { id: d.id, ...rest } as IconStats);
+        });
     }
+    return items.map(({ name, fast_matches }) => {
+        const matchScores = Object.fromEntries(fast_matches.map(m => [m.icon_id, m.score]));
+        const icons = fast_matches.map(m => iconMap.get(m.icon_id)).filter(Boolean) as IconStats[];
+        return { name, icons, matchScores };
+    });
 }
 
-// Server-side batch search + apply in one round-trip (avoids shipping embeddings to client).
-// method: 'server-cf' uses VECTOR_SEARCH_CF_URL; 'nextjs' runs ONNX in-process.
-export async function serverBatchIconSearchApplyAction(
-    recipeId: string,
+// Search via CF fetched from the Next.js server.
+export async function serverBatchSearchAction(
     ingredients: { name: string; queries: string[] }[],
-    method: 'server-cf' | 'nextjs',
+    limit = 12,
+): Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]> {
+    const raw = await serverBatchIconSearch(ingredients, limit);
+    return hydrateBatch(raw.map(r => ({ name: r.name, fast_matches: r.fast_matches ?? [] })));
+}
+
+// Search via ONNX model baked into the Next.js container.
+export async function nextjsBatchSearchAction(
+    ingredients: { name: string; queries: string[] }[],
+    limit = 12,
+): Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]> {
+    const { nextjsEmbedAndSearch } = await import('@/lib/server-vector-search');
+    const raw = await nextjsEmbedAndSearch(ingredients, limit);
+    return hydrateBatch(raw.map(r => ({ name: r.name, fast_matches: r.fast_matches ?? [] })));
+}
+
+// Apply search results to a recipe's nodes, bypassing nodeNeedsProcessing.
+export async function applyIconSearchResultsAction(
+    recipeId: string,
+    results: { name: string; icons: IconStats[]; matchScores: Record<string, number> }[],
 ): Promise<{ success: boolean; applied: number; elapsed: number; error?: string }> {
     const t0 = Date.now();
     try {
-        let batchResults: { name: string; embedding: number[]; fast_matches: { icon_id: string; score: number }[] }[];
-        if (method === 'nextjs') {
-            const { nextjsEmbedAndSearch } = await import('@/lib/server-vector-search');
-            batchResults = await nextjsEmbedAndSearch(ingredients, 12);
-        } else {
-            batchResults = await serverBatchIconSearch(ingredients, 12);
-        }
-        const elapsed = Date.now() - t0;
-
-        // Apply (same logic as applyBatchIconSearchAction)
         let applied = 0;
-        await Promise.all(batchResults.map(async ({ name: stdName, fast_matches }) => {
-            if (!fast_matches || fast_matches.length === 0) return;
-            const refs = fast_matches.slice(0, 20).map((m: any) => db.collection('icon_index').doc(m.icon_id));
-            const docs = await db.getAll(...refs);
-            const icons = docs
-                .filter(d => d.exists)
-                .map(d => { const { embedding, embedding_minilm, ...rest } = d.data()!; return { id: d.id, ...rest }; });
+        await Promise.all(results.map(async ({ name: stdName, icons, matchScores }) => {
             if (icons.length === 0) return;
             const ranked = icons
-                .map((icon: any) => {
-                    const fm = fast_matches.find((m: any) => m.icon_id === icon.id);
-                    return buildShortlistEntry(icon, 'search', fm?.score ?? 0);
-                })
+                .map(icon => buildShortlistEntry(icon, 'search', matchScores[icon.id] ?? 0))
                 .sort((a: any, b: any) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
                 .slice(0, 8);
             const markedEntries = markEntryImpressedAtIndex(ranked, 0);
@@ -574,7 +512,7 @@ export async function serverBatchIconSearchApplyAction(
             });
             if (changed) applied++;
         }));
-        return { success: true, applied, elapsed };
+        return { success: true, applied, elapsed: Date.now() - t0 };
     } catch (e: any) {
         return { success: false, applied: 0, elapsed: Date.now() - t0, error: e.message };
     }

@@ -24,8 +24,8 @@ import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
-import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction } from '@/app/actions';
-import { iconSearchMethods, defaultIconSearchMethod, batchIconSearchMethods } from '@/lib/icon-search-registry';
+import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
+import { iconSearchMethods, defaultIconSearchMethod } from '@/lib/icon-search-registry';
 import { standardizeIngredientName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
@@ -174,8 +174,7 @@ function RecipeLanesContent() {
   const handleBatchIconSearch = async (methodId?: string) => {
       if (!graph || !recipeId) return;
       const mid = methodId ?? iconSearchMethodId;
-      const method = batchIconSearchMethods.find(m => m.id === mid) ?? batchIconSearchMethods[0];
-      if (!method?.batchApply) return;
+      const method = iconSearchMethods.find(m => m.id === mid) ?? iconSearchMethods[0];
 
       setIconSearchStatus('running');
       setIconSearchElapsed(null);
@@ -196,9 +195,11 @@ function RecipeLanesContent() {
           if (ingredients.length === 0) { setIconSearchStatus('idle'); return; }
 
           console.log(`[batchIconSearch] ${method.name} — ${ingredients.length} ingredients`);
-          const { applied, elapsed } = await method.batchApply(recipeId, ingredients);
-          console.log(`[batchIconSearch] applied ${applied} in ${elapsed}ms`);
-          setIconSearchElapsed(elapsed);
+          const results = await method.search(ingredients, 12);
+          const res = await applyIconSearchResultsAction(recipeId, results);
+          if (!res.success) throw new Error(res.error);
+          console.log(`[batchIconSearch] applied ${res.applied} in ${res.elapsed}ms`);
+          setIconSearchElapsed(res.elapsed);
           setIconSearchStatus('done');
           setTimeout(() => setIconSearchStatus('idle'), 4000);
       } catch (e: any) {
@@ -826,14 +827,14 @@ const handleVisualize = async () => {
                                     iconSearchStatus === 'running' ? 'bg-yellow-100 text-yellow-700' :
                                     'text-zinc-600 hover:bg-zinc-100'
                                 }`}
-                                title={`Fill icons using ${batchIconSearchMethods.find(m => m.id === iconSearchMethodId)?.name ?? 'selected method'}`}
+                                title={`Fill icons using ${iconSearchMethods.find(m => m.id === iconSearchMethodId)?.name ?? 'selected method'}`}
                             >
                                 <Sparkles className="w-4 h-4 shrink-0" />
                                 <span className="hidden sm:inline whitespace-nowrap">
                                     {iconSearchStatus === 'running' ? 'RUNNING...' :
                                      iconSearchStatus === 'done' ? `DONE${iconSearchElapsed != null ? ` ${(iconSearchElapsed / 1000).toFixed(1)}s` : ''}` :
                                      iconSearchStatus === 'error' ? 'ERROR' :
-                                     (batchIconSearchMethods.find(m => m.id === iconSearchMethodId)?.name ?? 'ICONS')}
+                                     (iconSearchMethods.find(m => m.id === iconSearchMethodId)?.name ?? 'ICONS')}
                                 </span>
                             </button>
                             {/* Dropdown toggle */}
@@ -853,7 +854,7 @@ const handleVisualize = async () => {
                             {/* Dropdown menu */}
                             {iconDropdownOpen && (
                                 <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-zinc-200 rounded-lg shadow-lg py-1 min-w-[220px]">
-                                    {batchIconSearchMethods.map(method => (
+                                    {iconSearchMethods.map(method => (
                                         <button
                                             key={method.id}
                                             onClick={() => {

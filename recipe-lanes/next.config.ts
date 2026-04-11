@@ -22,9 +22,22 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: true,
   turbopack: {
     root: __dirname,
+    // Replace native onnxruntime-node with onnxruntime-web (WASM) so the
+    // in-process vector search runs in Cloud Run without native .so files.
+    // The alias must be applied by the bundler, so neither package should be
+    // in serverExternalPackages (external = loaded by Node.js, bypasses alias).
+    resolveAlias: {
+      'onnxruntime-node': 'onnxruntime-web',
+    },
   },
-  // Keep ONNX/transformers out of webpack bundling — they use native binaries
-  serverExternalPackages: ['@huggingface/transformers', 'onnxruntime-node'],
+  // Production webpack alias (Turbopack handles dev builds).
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'onnxruntime-node': 'onnxruntime-web',
+    };
+    return config;
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: '5mb',

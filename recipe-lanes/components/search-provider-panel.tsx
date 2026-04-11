@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { IconSearchProvider, IconSearchResult } from '@/lib/icon-search-providers';
+import type { IconSearchMethod } from '@/lib/icon-search-registry';
 import { IconSearchCandidates } from './icon-search-candidates';
 import type { IconStats } from '@/lib/recipe-lanes/types';
 
@@ -11,12 +11,13 @@ export function SearchProviderPanel({
     limit = 12,
     onIconClick,
 }: {
-    provider: IconSearchProvider;
+    provider: IconSearchMethod;
     activeQuery: string;
     limit?: number;
     onIconClick: (icon: IconStats, matchScore?: number) => void;
 }) {
-    const [result, setResult] = useState<IconSearchResult>({ icons: [], matchScores: {} });
+    const [icons, setIcons] = useState<IconStats[]>([]);
+    const [matchScores, setMatchScores] = useState<Record<string, number>>({});
     const [isSearching, setIsSearching] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -24,8 +25,13 @@ export function SearchProviderPanel({
         if (!activeQuery) return;
         setIsSearching(true);
         setError(null);
-        provider.search(activeQuery, limit)
-            .then(r => setResult(r))
+        provider
+            .search([{ name: activeQuery, queries: [activeQuery] }], limit)
+            .then(results => {
+                const r = results[0] ?? { icons: [], matchScores: {} };
+                setIcons(r.icons);
+                setMatchScores(r.matchScores);
+            })
             .catch(e => setError(e.message))
             .finally(() => setIsSearching(false));
     }, [activeQuery, provider.id, limit]);
@@ -39,8 +45,8 @@ export function SearchProviderPanel({
             {error && <p className="text-red-400 text-xs mb-2 font-mono">{error}</p>}
             <IconSearchCandidates
                 query={activeQuery}
-                candidates={result.icons}
-                matchScores={result.matchScores}
+                candidates={icons}
+                matchScores={matchScores}
                 isSearching={isSearching}
                 onIconClick={(icon, matchScore) => onIconClick(icon, matchScore)}
             />

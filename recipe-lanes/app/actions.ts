@@ -441,6 +441,19 @@ export async function debugLogAction(message: string) {
     console.log(`[CLIENT-LOG] ${message}`);
 }
 
+export async function applyBatchIconSearchAction(
+    recipeId: string,
+    batchResults: { name: string; embedding: number[]; fast_matches: { icon_id: string; score: number }[] }[]
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const mockBatchFn = async () => batchResults;
+        await getDataService().resolveRecipeIcons(recipeId, mockBatchFn as any);
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 export async function clearIconQueueAction(): Promise<{ success: boolean; deleted: number; error?: string }> {
     const session = await getAuthService().verifyAuth();
     if (!session) return { success: false, deleted: 0, error: 'Login required' };

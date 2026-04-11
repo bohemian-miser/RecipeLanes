@@ -24,10 +24,12 @@ import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
-import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction } from '@/app/actions';
+import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction, applyBatchIconSearchAction } from '@/app/actions';
+import { getBatchFastPass } from '@/lib/icon-search-strategy';
+import { standardizeIngredientName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
-import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength } from '@/lib/recipe-lanes/model-utils';
+import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github } from 'lucide-react';
@@ -62,6 +64,7 @@ function RecipeLanesContent() {
   const [showJson, setShowJson] = useState(false);
   const [showIngredients, setShowIngredients] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [iconSearchStatus, setIconSearchStatus] = useState<'idle' | 'searching' | 'applying' | 'done' | 'error'>('idle');
   const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
   const [iconTheme, setIconTheme] = useState<'classic' | 'modern' | 'modern_clean'>('classic');
@@ -162,6 +165,36 @@ function RecipeLanesContent() {
   const showNotification = (msg: string) => {
       setNotification(msg);
       setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleClientBatchIconSearch = async () => {
+      if (!graph || !recipeId) return;
+      setIconSearchStatus('searching');
+      try {
+          const hydeMap = new Map<string, string[]>();
+          for (const node of graph.nodes) {
+              if (node.type !== 'ingredient') continue;
+              const stdName = standardizeIngredientName(getNodeIngredientName(node));
+              const queries = getNodeHydeQueries(node);
+              const existing = hydeMap.get(stdName) ?? [];
+              hydeMap.set(stdName, Array.from(new Set([...existing, ...queries])));
+          }
+          const ingredients = Array.from(hydeMap.entries()).map(([name, queries]) => ({
+              name,
+              queries: queries.length ? queries : [name],
+          }));
+          if (ingredients.length === 0) { setIconSearchStatus('idle'); return; }
+
+          const batchResults = await getBatchFastPass(ingredients, 12);
+          setIconSearchStatus('applying');
+          const res = await applyBatchIconSearchAction(recipeId, batchResults as any);
+          setIconSearchStatus(res.success ? 'done' : 'error');
+          setTimeout(() => setIconSearchStatus('idle'), 3000);
+      } catch (e: any) {
+          console.error('[handleClientBatchIconSearch]', e);
+          setIconSearchStatus('error');
+          setTimeout(() => setIconSearchStatus('idle'), 3000);
+      }
   };
 
   const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
@@ -754,6 +787,31 @@ const handleVisualize = async () => {
                             <RotateCcw className="w-3 h-3" />
                         </button>
                     </div>
+
+                    <div className="h-4 w-px bg-zinc-200 mx-2" />
+
+                    {/* Client-side batch icon search */}
+                    {graph && recipeId && (
+                        <button
+                            onClick={handleClientBatchIconSearch}
+                            disabled={iconSearchStatus !== 'idle'}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${
+                                iconSearchStatus === 'done' ? 'bg-green-100 text-green-700' :
+                                iconSearchStatus === 'error' ? 'bg-red-100 text-red-700' :
+                                iconSearchStatus !== 'idle' ? 'bg-yellow-100 text-yellow-700' :
+                                'text-zinc-600 hover:bg-zinc-100'
+                            }`}
+                            title="Search icons for all ingredients (client-side)"
+                        >
+                            <Sparkles className="w-4 h-4" />
+                            <span className="hidden sm:inline">
+                                {iconSearchStatus === 'searching' ? 'SEARCHING...' :
+                                 iconSearchStatus === 'applying' ? 'APPLYING...' :
+                                 iconSearchStatus === 'done' ? 'DONE' :
+                                 iconSearchStatus === 'error' ? 'ERROR' : 'ICONS'}
+                            </span>
+                        </button>
+                    )}
 
                     <div className="h-4 w-px bg-zinc-200 mx-2" />
 

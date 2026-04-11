@@ -185,9 +185,12 @@ function RecipeLanesContent() {
           }));
           if (ingredients.length === 0) { setIconSearchStatus('idle'); return; }
 
+          console.log(`[batchIconSearch] calling CF with ${ingredients.length} ingredients`);
           const batchResults = await getBatchFastPass(ingredients, 12);
+          console.log(`[batchIconSearch] CF returned ${batchResults.length} results`);
           setIconSearchStatus('applying');
           const res = await applyBatchIconSearchAction(recipeId, batchResults as any);
+          console.log(`[batchIconSearch] applied:`, res);
           setIconSearchStatus(res.success ? 'done' : 'error');
           setTimeout(() => setIconSearchStatus('idle'), 3000);
       } catch (e: any) {

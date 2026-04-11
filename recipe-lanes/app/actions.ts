@@ -26,7 +26,7 @@ import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQuer
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import type { RecipeGraph, IconStats } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
-import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist } from '@/lib/recipe-lanes/model-utils';
+import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
 import { unifiedIconSearch, serverBatchIconSearch } from '@/lib/search-orchestrator';
@@ -441,16 +441,50 @@ export async function debugLogAction(message: string) {
     console.log(`[CLIENT-LOG] ${message}`);
 }
 
+// Applies pre-computed CF batch results directly to recipe nodes, bypassing the
+// nodeNeedsProcessing filter so it works even when nodes already have shortlists.
 export async function applyBatchIconSearchAction(
     recipeId: string,
     batchResults: { name: string; embedding: number[]; fast_matches: { icon_id: string; score: number }[] }[]
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; applied: number; error?: string }> {
     try {
-        const mockBatchFn = async () => batchResults;
-        await getDataService().resolveRecipeIcons(recipeId, mockBatchFn as any);
-        return { success: true };
+        let applied = 0;
+        await Promise.all(batchResults.map(async ({ name: stdName, fast_matches }) => {
+            if (!fast_matches || fast_matches.length === 0) return;
+            // Hydrate icon docs from icon_index
+            const refs = fast_matches.slice(0, 20).map((m: any) => db.collection('icon_index').doc(m.icon_id));
+            const docs = await db.getAll(...refs);
+            const icons = docs
+                .filter(d => d.exists)
+                .map(d => { const { embedding, embedding_minilm, ...rest } = d.data()!; return { id: d.id, ...rest }; });
+            if (icons.length === 0) return;
+            const ranked = icons
+                .map((icon: any) => {
+                    const fm = fast_matches.find((m: any) => m.icon_id === icon.id);
+                    return buildShortlistEntry(icon, 'search', fm?.score ?? 0);
+                })
+                .sort((a: any, b: any) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
+                .slice(0, 8);
+            const markedEntries = markEntryImpressedAtIndex(ranked, 0);
+            // Write directly — no nodeNeedsProcessing check
+            const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
+            let changed = false;
+            await db.runTransaction(async (t) => {
+                const doc = await t.get(recipeRef);
+                if (!doc.exists) return;
+                const nodes: any[] = doc.data()?.graph?.nodes || [];
+                changed = mutateNodesByIngredient(nodes, stdName, (n: any) => {
+                    n.iconShortlist = markedEntries;
+                    n.shortlistIndex = 0;
+                    delete n.status;
+                });
+                if (changed) t.update(recipeRef, { 'graph.nodes': nodes });
+            });
+            if (changed) applied++;
+        }));
+        return { success: true, applied };
     } catch (e: any) {
-        return { success: false, error: e.message };
+        return { success: false, applied: 0, error: e.message };
     }
 }
 

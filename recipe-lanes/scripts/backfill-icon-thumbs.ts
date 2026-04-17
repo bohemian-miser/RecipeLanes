@@ -74,37 +74,61 @@ async function main() {
         process.exit(0);
     }
 
-    for (let i = 0; i < toProcess.length; i++) {
+    const CONCURRENCY = 20;
+    const startTime = Date.now();
+
+    const pool: Promise<void>[] = [];
+    for (let i = toProcess.length - 1; i >= 0; i--) {
         const f = toProcess[i];
         const thumbName = f.name.replace(/\.png$/, '.thumb.png');
-        try {
-            // Download original
-            const [contents] = await f.download();
+        
+        const promise = (async () => {
+            try {
+                // Download original
+                const [contents] = await f.download();
 
-            // Resize to 128x128 nearest-neighbour (pixel art)
-            const thumbBuffer = await sharp(contents)
-                .resize(128, 128, { kernel: sharp.kernel.nearest })
-                .png()
-                .toBuffer();
+                // Resize to 128x128 nearest-neighbour (pixel art)
+                const thumbBuffer = await sharp(contents)
+                    .resize(128, 128, { kernel: sharp.kernel.nearest })
+                    .png()
+                    .toBuffer();
 
-            // Upload thumbnail
-            const thumbFile = bucket.file(thumbName);
-            await thumbFile.save(thumbBuffer, {
-                metadata: { contentType: 'image/png' }
-            });
-            await thumbFile.makePublic();
+                // Upload thumbnail
+                const thumbFile = bucket.file(thumbName);
+                await thumbFile.save(thumbBuffer, {
+                    metadata: { contentType: 'image/png' },
+                    public: true
+                });
 
-            newlyCreated++;
-            if ((i + 1) % 10 === 0 || i === toProcess.length - 1) {
-                process.stdout.write(`\r[backfill-thumbs] ${i + 1}/${toProcess.length} done (${errors} errors)  `);
+                newlyCreated++;
+            } catch (e: any) {
+                console.error(`\n[backfill-thumbs] error processing ${f.name}: ${e.message}`);
+                errors++;
+            } finally {
+                const finished = newlyCreated + errors;
+                if (finished % 10 === 0 || finished === toProcess.length) {
+                    const elapsed = (Date.now() - startTime) / 1000;
+                    const rate = finished / elapsed;
+                    const remaining = (toProcess.length - finished) / rate;
+                    process.stdout.write(`\r[backfill-thumbs] ${finished}/${toProcess.length} done (${errors} errors) - ${rate.toFixed(1)} files/s - ETA ${remaining.toFixed(0)}s    `);
+                }
             }
-        } catch (e: any) {
-            console.error(`\n[backfill-thumbs] error processing ${f.name}: ${e.message}`);
-            errors++;
+        })();
+
+        pool.push(promise);
+        promise.finally(() => {
+            const idx = pool.indexOf(promise);
+            if (idx > -1) pool.splice(idx, 1);
+        });
+
+        if (pool.length >= CONCURRENCY) {
+            await Promise.race(pool);
         }
     }
+    await Promise.all(pool);
 
-    console.log(`\n[backfill-thumbs] Done. already_had_thumb=${alreadyHaveThumb}, newly_created=${newlyCreated}, errors=${errors}`);
+    const totalTime = (Date.now() - startTime) / 1000;
+    console.log(`\n[backfill-thumbs] Done in ${totalTime.toFixed(1)}s. already_had_thumb=${alreadyHaveThumb}, newly_created=${newlyCreated}, errors=${errors}`);
     process.exit(0);
 }
 

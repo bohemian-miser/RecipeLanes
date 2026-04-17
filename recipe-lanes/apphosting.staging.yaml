@@ -13,5 +13,3 @@ env:
     value: "1:580985798196:web:893cbbe80706ffd59c5461"
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
-  - variable: VECTOR_SEARCH_CF_URL
-    value: https://vectorsearch-searchiconvector-ny4jkedkka-uc.a.run.app

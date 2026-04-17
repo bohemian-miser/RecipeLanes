@@ -13,7 +13,7 @@ i=1
 while [[ $i -le $# ]]; do
   arg="${!i}"
   case "$arg" in
-    --prod)   PROJECT="recipe-lanes-prod" ;;
+    --prod)   PROJECT="recipe-lanes" ;;
     --since)  i=$((i+1)); SINCE="${!i}" ;;
     --since=*) SINCE="${arg#--since=}" ;;
     --*) ;;

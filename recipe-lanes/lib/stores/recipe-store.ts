@@ -120,7 +120,9 @@ function mergeNode(existing: RecipeNode, incoming: RecipeNode): RecipeNode {
         existing.text === incoming.text &&
         existing.quantity === incoming.quantity &&
         existing.unit === incoming.unit &&
-        existing.visualDescription === incoming.visualDescription
+        existing.visualDescription === incoming.visualDescription &&
+        existing.x === incoming.x &&
+        existing.y === incoming.y
     ) {
         return existing;
     }

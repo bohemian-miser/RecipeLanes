@@ -40,7 +40,10 @@ import { getNodeIconUrl, getNodeIconId, preserveNodeShortlist, getNodeShortlistL
 import MinimalNode from './nodes/minimal-node';
 import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
+import TimelineNode from './nodes/timeline-node';
 import FloatingEdge from './edges/floating-edge';
+import TimelineEdge from './edges/timeline-edge';
+import TimelineBackground, { type TimelineData } from './timeline-background';
 import { toPng } from 'html-to-image';
 import { Download, Share2, Undo, Redo, Check, Save } from 'lucide-react';
 import { useHistoryManager } from './hooks/useHistoryManager';
@@ -73,11 +76,13 @@ export interface ReactFlowDiagramHandle {
 const INITIAL_NODE_TYPES = {
     minimal: MinimalNode,
     lane: LaneNode,
-    micro: MicroNode
+    micro: MicroNode,
+    'timeline-node': TimelineNode,
 };
 
 const INITIAL_EDGE_TYPES = {
-    floating: FloatingEdge
+    floating: FloatingEdge,
+    timeline: TimelineEdge,
 };
 
 const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme = 'classic' }, ref) => {
@@ -94,6 +99,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const getEdges = getEdgesRaw as () => any[];
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
+    const [timelineData, setTimelineData] = useState<TimelineData | null>(null);
     const {
         copied,
         saved,
@@ -239,7 +245,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         const canPreserve = shouldUseSavedLayout;
 
         if (canPreserve) {
-            const safeMode = (['swimlanes', 'dagre', 'dagre-lr'].includes(mode as string)) ? (mode as LayoutMode) : 'dagre';
+            const safeMode = (['swimlanes', 'dagre', 'dagre-lr', 'timeline'].includes(mode as string)) ? (mode as LayoutMode) : 'dagre';
             layout = calculateLayout(effectiveGraph, safeMode, spacing, true);
         } else if (mode === 'repulsive') {
             layout = calculateRepulsiveCurvesLayout(effectiveGraph, spacing);
@@ -247,51 +253,86 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             layout = calculateLayout(effectiveGraph, mode as LayoutMode, spacing);
         }
 
+        const isTimeline = mode === 'timeline';
+
         const newNodes: Node[] = [];
-        
+
         layout.lanes.forEach(lane => {
              newNodes.push({
                  id: lane.id,
                  type: 'lane',
                  position: { x: lane.x, y: lane.y },
                  data: { label: lane.label, color: lane.color },
-                 style: { width: lane.width, height: lane.height, zIndex: -1 },
+                 style: {
+                     width: lane.width,
+                     height: lane.height,
+                     zIndex: -1,
+                     // In timeline mode: colored band background + no pointer events so
+                     // clicking empty space deselects nodes correctly.
+                     ...(isTimeline ? { backgroundColor: lane.color, pointerEvents: 'none' } : {}),
+                 },
                  draggable: false,
                  selectable: false,
+                 focusable: false,
                  zIndex: -1
              });
         });
 
-        const nodeType = 'minimal'; 
-        // TODO: Double check the logic here.
         layout.nodes.forEach(n => {
              const originalNode = graph.nodes.find(gn => gn.id === n.id);
+             const nodeType = isTimeline ? 'timeline-node' : 'minimal';
              newNodes.push({
                  id: n.id,
                  type: nodeType,
                  position: { x: n.x, y: n.y },
-                 data: { ...originalNode, ...n.data, textPos, depth: n.depth, onDelete: () => handleDeleteNode(n.id), onSetLongPress: setLongPress, iconTheme },
+                 data: {
+                     ...originalNode, ...n.data,
+                     ...(isTimeline ? { lineColor: n.lineColor } : {}),
+                     textPos, depth: n.depth,
+                     onDelete: () => handleDeleteNode(n.id),
+                     onSetLongPress: setLongPress,
+                     iconTheme,
+                 },
                  width: n.width,
                  height: n.height,
                  draggable: true,
              });
         });
 
-        const newEdges: Edge[] = layout.edges.map(e => ({
-            id: e.id,
-            source: e.sourceId,
-            target: e.targetId,
-            type: 'floating',
-            data: { variant: edgeStyle },
-            style: { stroke: '#9ca3af', strokeWidth: 1.5 },
-            markerEnd: {
-                type: MarkerType.ArrowClosed,
-                color: '#9ca3af',
-                width: 20,
-                height: 20
-            },
-            animated: false
-        }));
+        // Capture timeline grid data so the background can render it.
+        if (isTimeline && layout.timelineData) {
+            setTimelineData(layout.timelineData);
+        } else if (!isTimeline) {
+            setTimelineData(null);
+        }
+
+        const newEdges: Edge[] = layout.edges.map(e => {
+            if (isTimeline) {
+                return {
+                    id: e.id,
+                    source: e.sourceId,
+                    target: e.targetId,
+                    type: 'timeline',
+                    data: { lineColor: e.lineColor, kind: e.kind },
+                    style: {},
+                };
+            }
+            return {
+                id: e.id,
+                source: e.sourceId,
+                target: e.targetId,
+                type: 'floating',
+                data: { variant: edgeStyle },
+                style: { stroke: '#9ca3af', strokeWidth: 1.5 },
+                markerEnd: {
+                    type: MarkerType.ArrowClosed,
+                    color: '#9ca3af',
+                    width: 20,
+                    height: 20,
+                },
+                animated: false,
+            };
+        });
 
         // Sort by Y for depth buffering (Painter's Algo)
         newNodes.sort((a, b) => a.position.y - b.position.y);
@@ -371,6 +412,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             runLayout(true);
             return;
         }
+
 
         if (isDirty || hasInitialLayoutRef.current) {
             // Detect full regeneration: if none of the incoming graph node IDs match
@@ -715,7 +757,10 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                 onlyRenderVisibleElements={false}
                 multiSelectionKeyCode={['Shift']}
             >
-                <Background color="#f4f4f5" gap={20} />
+                {timelineData
+                    ? <TimelineBackground data={timelineData} />
+                    : <Background color="#f4f4f5" gap={20} />
+                }
                 <Controls showInteractive={false} />
                 <Panel position="top-right" className="flex gap-2">
                     <div className="flex gap-1 mr-2 border-r border-zinc-200 pr-2">

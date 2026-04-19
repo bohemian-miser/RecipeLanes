@@ -28,6 +28,7 @@ import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkEx
 import { iconSearchMethods, defaultIconSearchMethod } from '@/lib/icon-search-registry';
 import { standardizeIngredientName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
+import { TimelineView } from '@/components/recipe-lanes/timeline-view';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
 import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
@@ -68,7 +69,7 @@ function RecipeLanesContent() {
   const [iconSearchMethodId, setIconSearchMethodId] = useState(defaultIconSearchMethod.id);
   const [iconSearchElapsed, setIconSearchElapsed] = useState<number | null>(null);
   const [jsonText, setJsonText] = useState('');
-  const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
+  const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive' | 'timeline2'>('dagre');
   const layoutModeRestoredRef = useRef(false);
   const [iconTheme, setIconTheme] = useState<'classic' | 'modern' | 'modern_clean'>('classic');
   const [showForkPrompt, setShowForkPrompt] = useState(false);
@@ -347,6 +348,7 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
                   ownerId: data.ownerId || undefined,
                   ownerName: data.ownerName || undefined,
               });
+              if (currentGraph.layoutMode) setLayoutMode(currentGraph.layoutMode as any);
               setRecipeText(currentGraph.originalText || '');
               setRecipeTitle(currentGraph.title || '');
               setStatus('complete');
@@ -811,6 +813,8 @@ const handleVisualize = async () => {
                             <option value="dagre">Smart</option>
                             <option value="dagre-lr">Smart LR</option>
                             <option value="repulsive">Repulsive</option>
+                            <option value="timeline">Timeline</option>
+                            <option value="timeline2">Timeline (Classic)</option>
                         </select>
                         {/* Reset Layout Button */}
                         <button 
@@ -963,16 +967,18 @@ const handleVisualize = async () => {
                 />
             )}
 
-            <div className="flex-1 relative"> 
-                {graph ? (
-                    <ReactFlowDiagram 
+            <div className="flex-1 relative">
+                {graph && layoutMode === 'timeline2' ? (
+                    <TimelineView graph={graph} />
+                ) : graph ? (
+                    <ReactFlowDiagram
                         ref={diagramRef}
-                        graph={graph} 
-                        mode={layoutMode} 
-                        spacing={spacing} 
-                        edgeStyle={edgeStyle} 
-                        textPos={textPos} 
-                        isLive={isLive} 
+                        graph={graph}
+                        mode={layoutMode as LayoutMode | 'repulsive'}
+                        spacing={spacing}
+                        edgeStyle={edgeStyle}
+                        textPos={textPos}
+                        isLive={isLive}
                         iconTheme={iconTheme}
                         onInteraction={() => setInputExpanded(false)}
                         onEdit={handleEditAttempt}

@@ -17,9 +17,10 @@
 
 import type { RecipeGraph, LayoutGraph, VisualNode, VisualEdge, VisualLane, RecipeNode } from './types';
 import dagre from 'dagre';
+import { buildTimelineLayout, TL } from './timeline-layout';
 
-// Only keeping Lanes, Smart, Smart LR
-export type LayoutMode = 'swimlanes' | 'dagre' | 'dagre-lr';
+// Only keeping Lanes, Smart, Smart LR, Timeline
+export type LayoutMode = 'swimlanes' | 'dagre' | 'dagre-lr' | 'timeline';
 
 const CONSTANTS = {
   standard: {
@@ -55,7 +56,97 @@ const LANE_COLORS = {
   default: '#FAFAFA'
 };
 
+// ── Timeline adapter ─────────────────────────────────────────────────────────
+
+// Both node types are 40×40 circles (TL.NODE_R = 20)
+export const TIMELINE_NODE_SIZE = TL.NODE_R * 2;   // 40px
+
+function calculateTimelineLayout(graph: RecipeGraph): LayoutGraph {
+  const tl = buildTimelineLayout(graph);
+
+  const laneLineColor = new Map(tl.lanes.map(l => [l.laneId, l.lineColor]));
+
+  const s = TIMELINE_NODE_SIZE;
+  const nodes: VisualNode[] = tl.nodes.map(n => {
+    const lineColor = laneLineColor.get(n.laneId) ?? '#D4D4D8';
+    return {
+      id: n.id,
+      type: n.data.type,
+      x: n.cx - s / 2,
+      y: n.cy - s / 2,
+      width: s,
+      height: s,
+      data: n.data,
+      lineColor,
+    };
+  });
+
+  // Edges: path is ignored by TimelineEdge (computed from node positions), but
+  // lineColor and kind are used by the custom edge renderer.
+  const tlNodeMap = new Map(tl.nodes.map(n => [n.id, n]));
+  const edges: VisualEdge[] = tl.edges.map(e => {
+    const src = tlNodeMap.get(e.sourceId);
+    const tgt = tlNodeMap.get(e.targetId);
+    const lineColor =
+      e.kind === 'spur'
+        ? (laneLineColor.get(tgt?.laneId ?? '') ?? '#D4D4D8')
+        : (laneLineColor.get(src?.laneId ?? '') ?? '#D4D4D8');
+    return {
+      id: e.id,
+      sourceId: e.sourceId,
+      targetId: e.targetId,
+      path: '',
+      lineColor,
+      kind: e.kind,
+    };
+  });
+
+  // Lane bands – horizontal strips
+  const lanes: VisualLane[] = tl.lanes.map(l => ({
+    id: l.laneId,
+    label: l.label,
+    x: 0,
+    y: l.yMin,
+    width: tl.totalWidth,
+    height: l.yMax - l.yMin,
+    color: l.color,
+  }));
+
+  return {
+    nodes, edges, lanes,
+    width: tl.totalWidth,
+    height: tl.totalHeight,
+    timelineData: {
+      pixelsPerMin:  tl.pixelsPerMin,
+      totalMinutes:  tl.totalMinutes,
+      actionZoneY:   tl.actionZoneY,
+      totalHeight:   tl.totalHeight,
+      rulerHeight:   TL.RULER_H,
+      laneLabelWidth: TL.LANE_LABEL_W,
+      gridInterval:  TL.GRID_INTERVAL,
+    },
+  };
+}
+
+// ── Public entry point ────────────────────────────────────────────────────────
+
 export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'dagre', spacing: number = 1, preservePositions: boolean = false): LayoutGraph => {
+  // Timeline needs its full structure (lanes, edge kinds, timelineData) even when
+  // restoring saved positions — run the algo then override x/y from saved values.
+  if (preservePositions && mode === 'timeline' && graph.nodes.some(n => n.x !== undefined)) {
+    const layout = calculateTimelineLayout(graph);
+    const savedPos = new Map(
+      graph.nodes.filter(n => n.x !== undefined).map(n => [n.id, { x: n.x!, y: n.y! }])
+    );
+    return {
+      ...layout,
+      nodes: layout.nodes.map(n => {
+        const pos = savedPos.get(n.id);
+        return pos ? { ...n, x: pos.x, y: pos.y } : n;
+      }),
+    };
+  }
+
   // If preserving positions (and at least one exists), bypass algo
   if (preservePositions && graph.nodes.some(n => n.x !== undefined)) {
       const nodes: VisualNode[] = graph.nodes.map(n => ({
@@ -117,6 +208,8 @@ export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'dagre', 
       return calculateDagreLayout(graph, spacing, 'TB');
     case 'dagre-lr':
       return calculateDagreLayout(graph, spacing, 'LR');
+    case 'timeline':
+      return calculateTimelineLayout(graph);
     case 'swimlanes':
     default:
       // Default to standard swimlane if 'swimlanes' selected

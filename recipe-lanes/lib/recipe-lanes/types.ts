@@ -150,6 +150,7 @@ export interface VisualNode {
   height: number;
   depth?: number;
   data: RecipeNode;
+  lineColor?: string;
 }
 
 export interface VisualEdge {
@@ -157,6 +158,8 @@ export interface VisualEdge {
   sourceId: string;
   targetId: string;
   path: string; // SVG path d attribute
+  lineColor?: string;
+  kind?: 'chain' | 'spur';
 }
 
 export interface VisualLane {
@@ -175,4 +178,14 @@ export interface LayoutGraph {
   lanes: VisualLane[];
   width: number;
   height: number;
+  /** Present only for 'timeline' mode. */
+  timelineData?: {
+    pixelsPerMin: number;
+    totalMinutes: number;
+    actionZoneY: number;
+    totalHeight: number;
+    rulerHeight: number;
+    laneLabelWidth: number;
+    gridInterval: number;
+  };
 }

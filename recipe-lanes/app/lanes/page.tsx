@@ -579,12 +579,29 @@ const handleVisualize = async () => {
       }
   };
 
-    const handleLayoutClick = (mode: LayoutMode | 'repulsive') => {
+    const handleLayoutClick = async (mode: LayoutMode | 'repulsive' | 'timeline2') => {
         if (layoutMode === mode) {
             diagramRef.current?.resetLayout();
         } else {
             setLayoutMode(mode);
             if (mode === 'repulsive') setEdgeStyle('bezier');
+            
+            if (graph) {
+                // Clear x/y from main nodes so the new mode computes a fresh layout 
+                // (unless it already exists in graph.layouts). This prevents using 
+                // the previous mode's coordinates for the new mode.
+                const freshNodes = graph.nodes.map(n => {
+                    const { x, y, ...rest } = n;
+                    return rest as any;
+                });
+                
+                const newGraph = { ...graph, layoutMode: mode, nodes: freshNodes };
+                setGraph(newGraph);
+                
+                if (user && isOwner && recipeId) {
+                    await saveRecipeAction(newGraph, recipeId);
+                }
+            }
         }
     };
 
@@ -969,7 +986,24 @@ const handleVisualize = async () => {
 
             <div className="flex-1 relative">
                 {graph && layoutMode === 'timeline2' ? (
-                    <TimelineView graph={graph} />
+                    <TimelineView 
+                        graph={graph} 
+                        onSave={async (newGraph) => {
+                            // Update layouts map for consistency with ReactFlowDiagram
+                            const layouts = newGraph.layouts || {};
+                            layouts['timeline2'] = newGraph.nodes.map(n => ({ 
+                                id: n.id, 
+                                x: n.x ?? 0, 
+                                y: n.y ?? 0 
+                            }));
+                            const finalGraph = { ...newGraph, layouts };
+                            
+                            setGraph(finalGraph);
+                            if (user && isOwner && recipeId) {
+                                await saveRecipeAction(finalGraph, recipeId);
+                            }
+                        }}
+                    />
                 ) : graph ? (
                     <ReactFlowDiagram
                         ref={diagramRef}

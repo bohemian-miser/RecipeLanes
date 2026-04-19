@@ -132,7 +132,9 @@ function ActionNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSelecte
   return (
     <g opacity={isDone ? 0.4 : 1} style={{ cursor: 'pointer' }}
       onMouseDown={onMouseDown}
-      onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+      onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
+      data-testid={`node-${node.id}`}
+    >
       {isActive   && <circle cx={cx} cy={cy} r={TL.NODE_R + 8} fill={lineColor} opacity={0.15}/>}
       {isSelected && <circle cx={cx} cy={cy} r={TL.NODE_R + 4} fill="none" stroke="#6366f1" strokeWidth={1.5} opacity={0.5}/>}
       <circle cx={cx} cy={cy} r={TL.NODE_R}
@@ -178,7 +180,9 @@ function IngredientNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSel
   return (
     <g opacity={playbackMin !== null ? 0.6 : 1} style={{ cursor: 'pointer' }}
       onMouseDown={onMouseDown}
-      onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+      onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
+      data-testid={`node-${node.id}`}
+    >
       {isSelected && <circle cx={cx} cy={cy} r={TL.NODE_R + 4} fill="none" stroke="#6366f1" strokeWidth={1.5} opacity={0.5}/>}
       <circle cx={cx} cy={cy} r={TL.NODE_R}
         fill="white" stroke={ring} strokeWidth={isSelected ? 2.5 : 1.5} strokeDasharray="3 2"/>
@@ -205,7 +209,7 @@ function IngredientNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSel
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export function TimelineView({ graph }: { graph: RecipeGraph }) {
+export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (graph: RecipeGraph) => void }) {
   const searchParams   = useSearchParams();
   const recipeId       = searchParams.get('id');
   const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
@@ -297,7 +301,21 @@ export function TimelineView({ graph }: { graph: RecipeGraph }) {
   useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
 
   // ── Position overrides ────────────────────────────────────────────────────
-  const [posOverrides, setPosOverrides] = useState<Map<string, { cx: number; cy: number }>>(new Map());
+  const [posOverrides, setPosOverrides] = useState<Map<string, { cx: number; cy: number }>>(() => {
+    const m = new Map<string, { cx: number; cy: number }>();
+    if (graph.layouts?.['timeline2']) {
+      graph.layouts['timeline2'].forEach(l => {
+        m.set(l.id, { cx: l.x + TL.NODE_R, cy: l.y + TL.NODE_R });
+      });
+    } else if (graph.layoutMode === 'timeline2') {
+      graph.nodes.forEach(n => {
+        if (n.x !== undefined && n.y !== undefined) {
+          m.set(n.id, { cx: n.x + TL.NODE_R, cy: n.y + TL.NODE_R });
+        }
+      });
+    }
+    return m;
+  });
   const posOverridesRef                 = useRef(posOverrides);
   useEffect(() => { posOverridesRef.current = posOverrides; }, [posOverrides]);
 
@@ -449,7 +467,18 @@ export function TimelineView({ graph }: { graph: RecipeGraph }) {
         setSelectedIds(new Set([d.nodeId, ...ancestors]));
       }
     }
-  }, [nodes]);
+
+    if (d.type === 'node' && d.moved) {
+      // Drag finished, apply positions to graph and save
+      const nextNodes = graphNodesRef.current.map(n => {
+        const over = posOverridesRef.current.get(n.id);
+        if (over) return { ...n, x: over.cx - TL.NODE_R, y: over.cy - TL.NODE_R };
+        return n;
+      });
+      const nextGraph = { ...graph, nodes: nextNodes };
+      onSave?.(nextGraph);
+    }
+  }, [nodes, graph, onSave]);
 
   const zoomBy    = useCallback((f: number) => {
     setVp(prev => {

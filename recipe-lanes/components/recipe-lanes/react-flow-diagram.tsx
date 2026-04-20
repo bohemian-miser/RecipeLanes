@@ -191,9 +191,9 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     }, [undo, redo]);
 
     // Initial Layout Calculation
-    const runLayout = useCallback(async (preservePositions = false, fit = true) => {
+    const runLayout = useCallback((preservePositions = false, fit = true) => {
         let layout;
-        
+
         // Determine effective graph and preservation status based on mode
         let effectiveGraph = graph;
         let shouldUseSavedLayout = false;
@@ -322,10 +322,12 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                 lastSnapshotRef.current = now;
             }
 
-            // Yield to main thread for UI updates
+            // Yield to main thread for UI updates.
+            // On mode change: restore saved positions if available. On spacing-only change: always re-run fresh layout.
+            const hasSavedPositions = modeChanged && !!(graph.layouts?.[mode]);
             const timer = setTimeout(() => {
-                const shouldFit = modeChanged; // Only fit if mode changed
-                runLayout(false, shouldFit);
+                const shouldFit = modeChanged;
+                runLayout(hasSavedPositions, shouldFit);
             }, 5);
             return () => clearTimeout(timer);
         }
@@ -335,16 +337,16 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         // re-sending identical data does not trigger an unnecessary re-layout.
         const currentLayoutsKey: string | null =
             graph.layouts?.[mode] ? JSON.stringify(graph.layouts[mode]) : null;
+        // Fires once when saved layout data arrives after the initial dagre render ran
+        // without it (two-snapshot scenario). The key comparison already prevents
+        // re-firing on unchanged data, so we don't need an !isDirty guard here.
         const layoutsJustArrived =
             hasInitialLayoutRef.current &&
-            !isDirty &&
             currentLayoutsKey !== null &&
             currentLayoutsKey !== prevLayoutsKeyRef.current;
         prevLayoutsKeyRef.current = currentLayoutsKey;
 
         if (layoutsJustArrived) {
-            // Saved positions arrived after the initial layout already ran without
-            // them. Apply them now so the user sees the positions they last saved.
             runLayout(true);
             return;
         }
@@ -357,7 +359,13 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                 getNodes().filter((n: any) => n.type !== 'lane').map((n: any) => n.id)
             );
             const incomingIds = graph.nodes.map(n => n.id);
-            const hasOverlap = incomingIds.length === 0 || incomingIds.some(id => currentRFNodeIds.has(id));
+            // Guard: if rfNodes is empty but hasInitialLayoutRef is true, runLayout
+            // just executed synchronously and the RF store hasn't rendered yet.
+            // Treat as overlap to avoid incorrectly running a fresh dagre layout.
+            const hasOverlap =
+                currentRFNodeIds.size === 0 ||
+                incomingIds.length === 0 ||
+                incomingIds.some(id => currentRFNodeIds.has(id));
             if (!hasOverlap) {
                 hasInitialLayoutRef.current = false;
                 runLayout(false, true);

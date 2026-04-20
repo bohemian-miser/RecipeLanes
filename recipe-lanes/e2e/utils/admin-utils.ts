@@ -84,6 +84,17 @@ export async function promoteToAdmin(uid: string) {
 }
 
 /**
+ * Reads the graph field directly from Firestore.
+ * Used in tests to verify that save operations wrote the expected data.
+ */
+export async function getRecipeGraph(recipeId: string): Promise<any> {
+    const db = admin.firestore();
+    const doc = await db.collection('recipes').doc(recipeId).get();
+    if (!doc.exists) return null;
+    return doc.data()?.graph ?? null;
+}
+
+/**
  * Updates only the graph.layouts field of a recipe document.
  * Used in tests to simulate a second onSnapshot arriving with saved layouts
  * without touching nodes, lanes, or any other graph fields.

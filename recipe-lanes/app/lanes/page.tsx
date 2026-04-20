@@ -69,6 +69,7 @@ function RecipeLanesContent() {
   const [iconSearchElapsed, setIconSearchElapsed] = useState<number | null>(null);
   const [jsonText, setJsonText] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive'>('dagre');
+  const layoutModeRestoredRef = useRef(false);
   const [iconTheme, setIconTheme] = useState<'classic' | 'modern' | 'modern_clean'>('classic');
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
@@ -302,6 +303,25 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
           textareaRef.current.style.height = '';
       }
   }, [inputExpanded]);
+
+  // Reset the layout-mode restoration flag whenever the recipe changes so a
+  // fresh load picks up the saved layout mode from the new graph.
+  useEffect(() => {
+      layoutModeRestoredRef.current = false;
+  }, [recipeId]);
+
+  // Restore the layout mode from the saved graph on initial load.
+  // This ensures that if the user last saved in swimlanes mode, we restore
+  // to swimlanes mode on reload rather than defaulting to dagre.
+  useEffect(() => {
+      if (!graph || layoutModeRestoredRef.current) return;
+      if (graph.layoutMode && graph.layoutMode !== layoutMode) {
+          layoutModeRestoredRef.current = true;
+          setLayoutMode(graph.layoutMode as LayoutMode | 'repulsive');
+      } else {
+          layoutModeRestoredRef.current = true;
+      }
+  }, [graph?.layoutMode]);
 
   // Listener for Recipe Updates
   // NOTE: Depends on `recipeId` (string), NOT `searchParams` (object).

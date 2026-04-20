@@ -185,6 +185,7 @@ test.describe('Layout persistence', () => {
         const dir = screenshotDir('layout-persistence-reload', 'desktop');
         await page.setViewportSize({ width: 1280, height: 800 });
 
+
         // ── Step 1: create recipe as owner ────────────────────────────────────
         await page.goto('/lanes?new=true');
         await login('layout-reload-user-' + Date.now());

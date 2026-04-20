@@ -20,6 +20,34 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { RecipeGraph } from '../../../lib/recipe-lanes/types';
 import { saveRecipeAction } from '@/app/actions';
 
+/**
+ * Pure helper extracted from getGraph() so it can be tested without React.
+ * NOTE: intentionally preserves the existing mutation of graph.layouts — do not
+ * "fix" this here; the bug is tested in tests/layout-saving.test.ts.
+ */
+export function buildGraphForSave(
+    graph: RecipeGraph,
+    mode: string,
+    rfNodes: any[],
+    rfEdges: any[],
+): RecipeGraph {
+    const currentNodes = rfNodes.filter((n: any) => n.type !== 'lane');
+    const layouts = { ...(graph.layouts || {}) };
+    layouts[mode] = currentNodes.map((n: any) => ({ id: n.id, x: n.position.x, y: n.position.y }));
+
+    const nodesWithPos = graph.nodes
+        .filter(n => currentNodes.some((rn: any) => rn.id === n.id))
+        .map(n => {
+            const rfn = currentNodes.find((rn: any) => rn.id === n.id)!;
+            const inputs = rfEdges
+                .filter((e: any) => e.target === n.id)
+                .map((e: any) => e.source);
+            return { ...n, x: rfn.position.x, y: rfn.position.y, inputs };
+        });
+
+    return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
+}
+
 interface UseSaveAndForkParams {
     graph: RecipeGraph;
     mode: any;
@@ -76,29 +104,7 @@ export function useSaveAndFork({
     }, [graph.visibility, propIsPublic]);
 
     const getGraph = useCallback((): RecipeGraph => {
-        const currentNodes = getNodes().filter(n => n.type !== 'lane');
-        const currentEdges = getEdges();
-        const layouts = graph.layouts || {};
-        layouts[mode as string] = currentNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
-
-        // graph.nodes comes from recipe-store, which has up-to-date shortlistIndex
-        // values from cycleShortlist() — no separate overlay needed.
-
-        // Filter out nodes that are no longer in the ReactFlow state (deleted)
-        const nodesWithPos = graph.nodes
-            .filter(n => currentNodes.some(rn => rn.id === n.id))
-            .map(n => {
-                const rfn = currentNodes.find(rn => rn.id === n.id)!;
-
-                // Reconstruct inputs from current edges to capture bridging/changes
-                const inputs = currentEdges
-                    .filter(e => e.target === n.id)
-                    .map(e => e.source);
-
-                return { ...n, x: rfn.position.x, y: rfn.position.y, inputs };
-            });
-
-        return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
+        return buildGraphForSave(graph, mode as string, getNodes(), getEdges());
     }, [graph, mode, getNodes, getEdges]);
 
     const performSave = async () => {

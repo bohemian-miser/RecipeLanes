@@ -317,6 +317,13 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     // (component unmounts because {graph ? <Diagram/> : null} swaps it out).
     const hasInitialLayoutRef = useRef(false);
 
+    // Tracks the serialized content of graph.layouts[mode] from the last effect
+    // run. When the saved layout data arrives for the first time (or changes) after
+    // the initial dagre render, we must call runLayout(true) so those positions are
+    // applied — the "two-snapshot" bug: first Firestore snapshot has no layouts,
+    // second snapshot has them, but by then hasInitialLayoutRef is already true.
+    const prevLayoutsKeyRef = useRef<string | null | undefined>(undefined);
+
     // Layout Effect
     useEffect(() => {
         if (isLive) return; // Skip static layout if physics is running
@@ -328,23 +335,41 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             prevMode.current = mode;
             prevSpacing.current = spacing;
             setIsDirty(true);
-            
+
             // Throttle snapshot for spacing to prevent history spam and lag
             const now = Date.now();
             if (modeChanged || now - lastSnapshotRef.current > 500) {
                 takeSnapshot();
                 lastSnapshotRef.current = now;
             }
-            
+
             // Yield to main thread for UI updates
             const timer = setTimeout(() => {
                 const shouldFit = modeChanged; // Only fit if mode changed
-                runLayout(false, shouldFit); 
+                runLayout(false, shouldFit);
             }, 5);
             return () => clearTimeout(timer);
         }
 
-        
+        // Detect whether saved layout data has arrived or changed since the last
+        // render. We compare by JSON content (not by reference) so that Firebase
+        // re-sending identical data does not trigger an unnecessary re-layout.
+        const currentLayoutsKey: string | null =
+            graph.layouts?.[mode] ? JSON.stringify(graph.layouts[mode]) : null;
+        const layoutsJustArrived =
+            hasInitialLayoutRef.current &&
+            !isDirty &&
+            currentLayoutsKey !== null &&
+            currentLayoutsKey !== prevLayoutsKeyRef.current;
+        prevLayoutsKeyRef.current = currentLayoutsKey;
+
+        if (layoutsJustArrived) {
+            // Saved positions arrived after the initial layout already ran without
+            // them. Apply them now so the user sees the positions they last saved.
+            runLayout(true);
+            return;
+        }
+
         if (isDirty || hasInitialLayoutRef.current) {
             // Detect full regeneration: if none of the incoming graph node IDs match
             // current ReactFlow nodes, the recipe was re-parsed with all-new IDs.
@@ -373,8 +398,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                          // Check for Icon Update
                          const dbUrl = getNodeIconUrl(dbNode);
                          const currentUrl = getNodeIconUrl(n.data);
-                         
-                         // Always sync text/serves/baseServes from DB prop even if dirty, 
+
+                         // Always sync text/serves/baseServes from DB prop even if dirty,
                          // so that top-level scaling (serves) and background updates (icons) work.
                          const baseData = {
                              ...n.data,
@@ -385,12 +410,12 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
                          // Copy shortlist from DB when the icon changed (forge result arrived).
                          const newData = preserveNodeShortlist(baseData, dbNode);
-                         
+
                          // If serves or text changed, mark as changed to trigger re-render
                          if (n.data.serves !== graph.serves || n.data.text !== dbNode.text || newData !== baseData) changed = true;
 
-                         return { 
-                             ...n, 
+                         return {
+                             ...n,
                              data: newData
                          };
                      }
@@ -400,7 +425,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                 return changed ? newNodes : currentNodes;
             });
         } else {
-            runLayout(true); 
+            runLayout(true);
         }
     }, [graph, mode, spacing, runLayout, isDirty, setNodes, takeSnapshot]);
 

@@ -84,6 +84,20 @@ export async function promoteToAdmin(uid: string) {
 }
 
 /**
+ * Updates only the graph.layouts field of a recipe document.
+ * Used in tests to simulate a second onSnapshot arriving with saved layouts
+ * without touching nodes, lanes, or any other graph fields.
+ */
+export async function setRecipeLayouts(
+    recipeId: string,
+    layouts: Record<string, { id: string; x: number; y: number }[]>,
+) {
+    const db = admin.firestore();
+    // Dot-notation path: updates ONLY graph.layouts, leaves all other fields intact.
+    await db.collection('recipes').doc(recipeId).update({ 'graph.layouts': layouts });
+}
+
+/**
  * Clears the Firestore Emulator database.
  * Useful for tests that require a clean state (e.g. checking initial generation).
  */

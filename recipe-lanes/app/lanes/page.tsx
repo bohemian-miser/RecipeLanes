@@ -35,6 +35,7 @@ import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
+import { LoadingScreen, LoadingPhase } from '@/components/recipe-lanes/ui/loading-screen';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/lib/firebase-client';
@@ -613,6 +614,13 @@ const handleVisualize = async () => {
   // Common Nav Item Styles
   const navItemClass = "flex items-center gap-2 px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
 
+  let loadingPhase: LoadingPhase = null;
+  if (status === 'parsing' || status === 'loading') {
+      loadingPhase = 'graph';
+  } else if (iconSearchStatus === 'running') {
+      loadingPhase = 'icons';
+  }
+
   return (
     <div className="fixed inset-0 flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden overscroll-none">
         {/* Utility Bar */}
@@ -985,6 +993,7 @@ const handleVisualize = async () => {
             )}
 
             <div className="flex-1 relative">
+                <LoadingScreen phase={loadingPhase} />
                 {graph && layoutMode === 'timeline2' ? (
                     <TimelineView 
                         graph={graph} 

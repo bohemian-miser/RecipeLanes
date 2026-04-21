@@ -156,9 +156,30 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     
     // Long Press State for Mobile Pivot
     const longPressTriggered = useRef(false);
-    const setLongPress = useCallback((active: boolean) => {
+    const selectBranch = useCallback((nodeId: string) => {
+        const getAncestors = (id: string, visited = new Set<string>()): string[] => {
+            if (visited.has(id)) return [];
+            visited.add(id);
+            const incoming = edges.filter((e: any) => e.target === id);
+            const parents = incoming.map((e: any) => e.source);
+            return [...parents, ...parents.flatMap((p: any) => getAncestors(p, visited))];
+        };
+
+        const ancestors = getAncestors(nodeId);
+        const toSelect = new Set([nodeId, ...ancestors]);
+
+        setNodes((nds) => nds.map((n) => ({
+            ...n,
+            selected: toSelect.has(n.id) || n.selected
+        })));
+    }, [edges, setNodes]);
+
+    const setLongPress = useCallback((active: boolean, nodeId?: string) => {
         longPressTriggered.current = active;
-    }, []);
+        if (active && nodeId) {
+            selectBranch(nodeId);
+        }
+    }, [selectBranch]);
 
     // History
     const { past, future, takeSnapshot, undo, redo, handleDeleteNode } = useHistoryManager({
@@ -499,39 +520,10 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         getGraph: getGraph
     }));
 
-    const selectBranch = (nodeId: string) => {
-        const getAncestors = (id: string, visited = new Set<string>()): string[] => {
-            if (visited.has(id)) return [];
-            visited.add(id);
-            const incoming = edges.filter((e: any) => e.target === id);
-            const parents = incoming.map((e: any) => e.source);
-            return [...parents, ...parents.flatMap((p: any) => getAncestors(p, visited))];
-        };
-
-        const ancestors = getAncestors(nodeId);
-        const toSelect = new Set([nodeId, ...ancestors]);
-
-        setNodes((nds) => nds.map((n) => ({
-            ...n,
-            selected: toSelect.has(n.id) || n.selected
-        })));
-    };
-
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
         onInteraction?.();
-        if (event.altKey) {
-            takeSnapshot(); 
-            selectBranch(node.id);
-            return;
-        }
-        // Shift+Click handled by ReactFlow for multi-selection
-        if (event.shiftKey) {
-            takeSnapshot();
-        }
-        // Mobile/Click-again logic: If already selected, select branch
-        if (node.selected) {
-             selectBranch(node.id);
-        }
+        takeSnapshot(); 
+        selectBranch(node.id);
     };
 
     const onNodeContextMenu = (event: React.MouseEvent, node: Node) => {
@@ -540,49 +532,57 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         selectBranch(node.id);
     };
 
+    const initPivotDrag = (node: Node) => {
+        longPressTriggered.current = false; // Reset immediately
+        const allNodes = getNodes();
+        const outgoing = edges.find((e: any) => e.source === node.id);
+        const child = outgoing ? allNodes.find((n: any) => n.id === outgoing.target) : null;
+
+        if (child) {
+            const getAncestors = (id: string, visited = new Set<string>()): string[] => {
+                if (visited.has(id)) return [];
+                visited.add(id);
+                const incoming = edges.filter((e: any) => e.target === id);
+                const parents = incoming.map((e: any) => e.source);
+                return [...parents, ...parents.flatMap((p: any) => getAncestors(p, visited))];
+            };
+            
+            const ancestors = getAncestors(node.id);
+            
+            const initialPositions: Record<string, { x: number, y: number }> = {};
+            const candidates = [node.id, ...ancestors];
+            candidates.forEach((id: any) => {
+                const n = allNodes.find((an: any) => an.id === id);
+                if (n) initialPositions[id] = { ...n.position };
+            });
+
+            const dx = node.position.x - child.position.x;
+            const dy = node.position.y - child.position.y;
+            
+            dragRef.current = {
+                active: true,
+                pivot: { x: child.position.x, y: child.position.y },
+                startAngle: Math.atan2(dy, dx),
+                startDist: Math.sqrt(dx*dx + dy*dy),
+                ancestors,
+                initialPositions
+            };
+        }
+    };
+
     const onNodeDragStart = (event: React.MouseEvent, node: Node) => {
         onInteraction?.();
         takeSnapshot(); 
         if (event.shiftKey || longPressTriggered.current) {
-            longPressTriggered.current = false; // Reset immediately
-            const allNodes = getNodes();
-            const outgoing = edges.find((e: any) => e.source === node.id);
-            const child = outgoing ? allNodes.find((n: any) => n.id === outgoing.target) : null;
-
-            if (child) {
-                const getAncestors = (id: string, visited = new Set<string>()): string[] => {
-                    if (visited.has(id)) return [];
-                    visited.add(id);
-                    const incoming = edges.filter((e: any) => e.target === id);
-                    const parents = incoming.map((e: any) => e.source);
-                    return [...parents, ...parents.flatMap((p: any) => getAncestors(p, visited))];
-                };
-                
-                const ancestors = getAncestors(node.id);
-                
-                const initialPositions: Record<string, { x: number, y: number }> = {};
-                const candidates = [node.id, ...ancestors];
-                candidates.forEach((id: any) => {
-                    const n = allNodes.find((an: any) => an.id === id);
-                    if (n) initialPositions[id] = { ...n.position };
-                });
-
-                const dx = node.position.x - child.position.x;
-                const dy = node.position.y - child.position.y;
-                
-                dragRef.current = {
-                    active: true,
-                    pivot: { x: child.position.x, y: child.position.y },
-                    startAngle: Math.atan2(dy, dx),
-                    startDist: Math.sqrt(dx*dx + dy*dy),
-                    ancestors,
-                    initialPositions
-                };
-            }
+            initPivotDrag(node);
         }
     };
 
     const onNodeDrag = (event: React.MouseEvent, node: Node) => {
+        if (longPressTriggered.current && !dragRef.current.active) {
+            initPivotDrag(node);
+        }
+
         if (dragRef.current.active && dragRef.current.pivot && dragRef.current.initialPositions) {
             const { pivot, startAngle, startDist, ancestors, initialPositions } = dragRef.current;
             

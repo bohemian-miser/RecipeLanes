@@ -83,6 +83,7 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
             }}
             title={getNodeIngredientName(data)}
             onPointerDownCapture={handlers.onPointerDownCapture}
+            onPointerMoveCapture={handlers.onPointerMoveCapture}
             onPointerUpCapture={handlers.onPointerUpCapture}
             onPointerCancelCapture={handlers.onPointerCancelCapture}
         >

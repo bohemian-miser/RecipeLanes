@@ -33,11 +33,24 @@ import {
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 
 export const MinimalNode: React.FC<any> = ({
-    data, selected, isConnectable, id
+    data, selected, isConnectable, id, dragging
 }) => {
   const [isForging, setIsForging] = useState(false);
   const [isPivotMode, setIsPivotMode] = useState(false);
   const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
+
+  React.useEffect(() => {
+      if (dragging) {
+          if (longPressTimer.current) {
+              clearTimeout(longPressTimer.current);
+              longPressTimer.current = null;
+          }
+          setIsPivotMode(false);
+          if (data.onSetLongPress) {
+              data.onSetLongPress(false);
+          }
+      }
+  }, [dragging, data]);
   const searchParams = useSearchParams();
   const recipeId = searchParams.get('id');
 

@@ -36,6 +36,7 @@ interface MinimalNodeViewProps {
         onForge: (e: React.MouseEvent) => void;
         onDelete: (e: React.MouseEvent) => void;
         onPointerDownCapture: (e: React.PointerEvent) => void;
+        onPointerMoveCapture: (e: React.PointerEvent) => void;
         onPointerUpCapture: () => void;
         onPointerCancelCapture: () => void;
     };
@@ -71,7 +72,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                                     style={containerSize} 
                                     title={getNodeIngredientName(data)}
                                     onPointerDownCapture={handlers.onPointerDownCapture}
-                                    // onPointerMoveCapture={handlers.onPointerMoveCapture}
+                                    onPointerMoveCapture={handlers.onPointerMoveCapture}
                                     onPointerUpCapture={handlers.onPointerUpCapture}
                                     onPointerCancelCapture={handlers.onPointerCancelCapture}
                                 >
@@ -137,6 +138,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                     style={containerSize} 
                     title={getNodeIngredientName(data)}
                     onPointerDownCapture={handlers.onPointerDownCapture}
+                    onPointerMoveCapture={handlers.onPointerMoveCapture}
                     onPointerUpCapture={handlers.onPointerUpCapture} onPointerCancelCapture={handlers.onPointerCancelCapture}
                 >
                     {/* Icon Container */}
@@ -203,6 +205,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
               className="relative flex items-center justify-center group hover:z-50"
               style={{ width: 140, height: 140 }}
               onPointerDownCapture={handlers.onPointerDownCapture}
+              onPointerMoveCapture={handlers.onPointerMoveCapture}
               onPointerUpCapture={handlers.onPointerUpCapture} onPointerCancelCapture={handlers.onPointerCancelCapture}
           >
               {/* Text Bubble (Left) */}

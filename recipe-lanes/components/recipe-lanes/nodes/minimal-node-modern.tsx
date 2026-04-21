@@ -35,8 +35,9 @@ interface MinimalNodeViewProps {
         onReroll: (e: React.MouseEvent) => void;
         onForge: (e: React.MouseEvent) => void;
         onDelete: (e: React.MouseEvent) => void;
-        onTouchStart: () => void;
-        onTouchEnd: () => void;
+        onPointerDownCapture: (e: React.PointerEvent) => void;
+        onPointerUpCapture: () => void;
+        onPointerCancelCapture: () => void;
     };
 }
 
@@ -69,8 +70,10 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                                     className="relative flex flex-col items-center justify-center transition-transform duration-300 hover:z-50 group"
                                     style={containerSize} 
                                     title={getNodeIngredientName(data)}
-                                    onTouchStart={handlers.onTouchStart}
-                                    onTouchEnd={handlers.onTouchEnd}
+                                    onPointerDownCapture={handlers.onPointerDownCapture}
+                                    // onPointerMoveCapture={handlers.onPointerMoveCapture}
+                                    onPointerUpCapture={handlers.onPointerUpCapture}
+                                    onPointerCancelCapture={handlers.onPointerCancelCapture}
                                 >
                                     {/* Icon Container */}
                                     <div className={`relative ${iconClass} z-10 transition-transform duration-300 hover:scale-110 ${selected || isPivotMode ? 'drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : ''}`}>
@@ -133,8 +136,8 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                     className="relative flex flex-col items-center justify-center transition-transform duration-300 hover:z-50 group"
                     style={containerSize} 
                     title={getNodeIngredientName(data)}
-                    onTouchStart={handlers.onTouchStart}
-                    onTouchEnd={handlers.onTouchEnd}
+                    onPointerDownCapture={handlers.onPointerDownCapture}
+                    onPointerUpCapture={handlers.onPointerUpCapture} onPointerCancelCapture={handlers.onPointerCancelCapture}
                 >
                     {/* Icon Container */}
                     <div className={`relative ${iconClass} z-10 transition-transform duration-300 hover:scale-110 ${selected || isPivotMode ? 'drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : ''}`}>
@@ -199,8 +202,8 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
           <div 
               className="relative flex items-center justify-center group hover:z-50"
               style={{ width: 140, height: 140 }}
-              onTouchStart={handlers.onTouchStart}
-              onTouchEnd={handlers.onTouchEnd}
+              onPointerDownCapture={handlers.onPointerDownCapture}
+              onPointerUpCapture={handlers.onPointerUpCapture} onPointerCancelCapture={handlers.onPointerCancelCapture}
           >
               {/* Text Bubble (Left) */}
               <div className="absolute right-[55%] top-1/2 -translate-y-1/2 w-36 flex flex-col items-end text-right z-50 pointer-events-none opacity-90 hover:opacity-100 transition-opacity">

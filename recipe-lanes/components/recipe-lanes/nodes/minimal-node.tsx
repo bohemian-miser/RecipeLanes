@@ -67,15 +67,32 @@ export const MinimalNode: React.FC<any> = ({
       if (isForging) setIsForging(false);
   }
 
-  const handleTouchStart = () => {
+  const touchStartPos = React.useRef<{x: number, y: number} | null>(null);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+      // Only listen to touch or pen, ignore mouse for long-press pivot
+      if (e.pointerType === 'mouse') return;
+      
+      touchStartPos.current = { x: e.clientX, y: e.clientY };
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
       longPressTimer.current = setTimeout(() => {
           setIsPivotMode(true);
-          if (data.onSetLongPress) data.onSetLongPress(true);
+          if (data.onSetLongPress) data.onSetLongPress(true, id);
           if (navigator.vibrate) navigator.vibrate(50);
       }, 300);
   };
 
-  const handleTouchEnd = () => {
+  const handlePointerMove = (e: React.PointerEvent) => {
+      if (!longPressTimer.current || !touchStartPos.current) return;
+      const dx = e.clientX - touchStartPos.current.x;
+      const dy = e.clientY - touchStartPos.current.y;
+      if (Math.sqrt(dx*dx + dy*dy) > 10) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+      }
+  };
+
+  const handlePointerUpOrCancel = () => {
       if (longPressTimer.current) {
           clearTimeout(longPressTimer.current);
           longPressTimer.current = null;
@@ -91,9 +108,6 @@ export const MinimalNode: React.FC<any> = ({
   const handleReroll = (e: React.MouseEvent) => {
       e.stopPropagation();
       cycleShortlist(id);
-      // TODO: record impression fire-and-forget once a lightweight
-      // recordImpressionAction (touching only ingredients_new, not the recipe
-      // doc) is available. See docs/STATE_AND_PERSISTENCE.md.
   };
 
   const handleForge = async (e: React.MouseEvent) => {
@@ -116,8 +130,10 @@ export const MinimalNode: React.FC<any> = ({
       onReroll: handleReroll,
       onForge: handleForge,
       onDelete: handleDelete,
-      onTouchStart: handleTouchStart,
-      onTouchEnd: handleTouchEnd
+      onPointerDownCapture: handlePointerDown,
+      onPointerMoveCapture: handlePointerMove,
+      onPointerUpCapture: handlePointerUpOrCancel,
+      onPointerCancelCapture: handlePointerUpOrCancel
   };
 
   if (iconTheme === 'modern' || iconTheme === 'modern_clean') {

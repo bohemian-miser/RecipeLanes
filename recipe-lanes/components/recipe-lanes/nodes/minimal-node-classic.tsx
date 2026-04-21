@@ -35,8 +35,10 @@ interface MinimalNodeViewProps {
         onReroll: (e: React.MouseEvent) => void;
         onForge: (e: React.MouseEvent) => void;
         onDelete: (e: React.MouseEvent) => void;
-        onTouchStart: () => void;
-        onTouchEnd: () => void;
+        onPointerDownCapture: (e: React.PointerEvent) => void;
+        onPointerMoveCapture: (e: React.PointerEvent) => void;
+        onPointerUpCapture: () => void;
+        onPointerCancelCapture: () => void;
     };
 }
 
@@ -80,8 +82,9 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                 minWidth: isVertical ? verticalMinWidth : horizontalMinWidth
             }}
             title={getNodeIngredientName(data)}
-            onTouchStart={handlers.onTouchStart}
-            onTouchEnd={handlers.onTouchEnd}
+            onPointerDownCapture={handlers.onPointerDownCapture}
+            onPointerUpCapture={handlers.onPointerUpCapture}
+            onPointerCancelCapture={handlers.onPointerCancelCapture}
         >
             {/* Icon Container */}
             <div className={`relative ${containerSize} flex-shrink-0 flex items-center justify-center transition-all duration-200 z-10 ${selected || isPivotMode ? 'border-2 border-dashed border-blue-500 rounded-lg bg-blue-50/10' : ''} ${isPivotMode ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`}>

@@ -16,7 +16,7 @@ async function main() {
 
   const { db } = await import('../lib/firebase-admin');
   const { standardizeIngredientName } = await import('../lib/utils');
-  const { buildShortlistEntry, getNodeIngredientName, getNodeHydeQueries, mutateNodesByIngredient } = await import('../lib/recipe-lanes/model-utils');
+  const { buildShortlistEntry, getNodeIngredientName, getNodeHydeQueries, mutateNodesByIngredient, extractBatchIngredients } = await import('../lib/recipe-lanes/model-utils');
 
   const doc = await db.collection('recipes').doc(recipeId).get();
   if (!doc.exists) { console.error('Recipe not found'); process.exit(1); }
@@ -25,15 +25,7 @@ async function main() {
   console.log(`${pending.length} / ${nodes.length} nodes need icons`);
   if (pending.length === 0) { console.log('Nothing to do.'); process.exit(0); }
 
-  const hydeMap = new Map<string, string[]>();
-  for (const node of pending) {
-    if (!node.visualDescription) continue;
-    const stdName = standardizeIngredientName(getNodeIngredientName(node));
-    const queries = getNodeHydeQueries(node);
-    const existing = hydeMap.get(stdName) ?? [];
-    hydeMap.set(stdName, Array.from(new Set([...existing, ...queries])));
-  }
-  const ingredients = Array.from(hydeMap.entries()).map(([name, queries]) => ({ name, queries: queries.length ? queries : [name] }));
+  const ingredients = extractBatchIngredients(pending);
 
   const clientApp = initializeApp({
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,

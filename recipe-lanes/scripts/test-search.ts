@@ -111,25 +111,13 @@ async function loadGroupsFromRecipe(id: string): Promise<{ name: string; queries
     if (!db) throw new Error('Need service account or ADC to load recipe from Firestore');
 
     const { standardizeIngredientName } = await import('../lib/utils');
-    const { getNodeIngredientName, getNodeHydeQueries } = await import('../lib/recipe-lanes/model-utils');
+    const { getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients } = await import('../lib/recipe-lanes/model-utils');
 
     const doc = await db.collection('recipes').doc(id).get();
     if (!doc.exists) throw new Error(`Recipe ${id} not found`);
     const nodes: any[] = doc.data()?.graph?.nodes ?? [];
 
-    const hydeMap = new Map<string, string[]>();
-    for (const node of nodes) {
-        if (!node.visualDescription) continue;
-        const stdName = standardizeIngredientName(getNodeIngredientName(node));
-        const queries: string[] = getNodeHydeQueries(node);
-        const existing = hydeMap.get(stdName) ?? [];
-        hydeMap.set(stdName, Array.from(new Set([...existing, ...queries])));
-    }
-
-    return Array.from(hydeMap.entries()).map(([name, queries]) => ({
-        name,
-        queries: queries.length ? queries : [name],
-    }));
+    return extractBatchIngredients(nodes);
 }
 
 // ---------------------------------------------------------------------------

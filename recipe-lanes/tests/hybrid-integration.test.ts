@@ -6,10 +6,10 @@ import { setAuthService, MockAuthService } from '../lib/auth-service';
 import { db } from '../lib/firebase-admin';
 
 /**
- * Integration test for the Hybrid Search plumbing in FirebaseDataService.
+ * Integration test for the Search plumbing in FirebaseDataService.
  * This runs against the Firestore emulator.
  */
-describe('Hybrid Search Integration (Emulator)', () => {
+describe('Search Integration (Emulator)', () => {
     let service: FirebaseDataService;
 
     beforeEach(async () => {
@@ -18,14 +18,8 @@ describe('Hybrid Search Integration (Emulator)', () => {
         setAuthService(new MockAuthService());
     });
 
-    it('resolveRecipeIcons calls the provided searchFn and merges results', async () => {
-        // 0. Seed a mock icon in the index
+    it('resolveRecipeIcons calls the provided searchFn and applies hydrated results', async () => {
         const iconId = 'fast-icon-1';
-        await db.collection('icon_index').doc(iconId).set({
-            ingredient_name: 'Egg',
-            visualDescription: 'Egg',
-            embedding: new Array(384).fill(0.1)
-        });
 
         // 1. Create a dummy recipe
         const recipeId = 'test-hybrid-' + Date.now();
@@ -38,12 +32,18 @@ describe('Hybrid Search Integration (Emulator)', () => {
             }
         });
 
-        // 2. Define a batch search fn that returns a mock result
+        // 2. Define a batch search fn that returns a mock hydrated result
         const mockBatchSearchFn = async (ingredients: { name: string, queries: string[] }[], _limit: number) => {
             return ingredients.map(ing => ({
                 name: ing.name,
-                embedding: new Array(384).fill(0.1),
-                fast_matches: [{ icon_id: iconId, score: 0.99 }],
+                icons: [{
+                    id: iconId,
+                    visualDescription: 'Egg',
+                    score: 0,
+                    impressions: 0,
+                    rejections: 0
+                }],
+                matchScores: { [iconId]: 0.99 }
             }));
         };
 
@@ -56,64 +56,6 @@ describe('Hybrid Search Integration (Emulator)', () => {
         
         assert.ok(node.iconShortlist, 'Node should have a shortlist');
         assert.strictEqual(node.iconShortlist[0].icon.id, iconId);
-    });
-
-    it('falls back to findNearest when fast_matches is empty (Legacy Mode)', async () => {
-        // 0. Seed a mock icon in the index with a specific embedding
-        const legacyIconId = 'legacy-icon-1';
-        const legacyEmbedding = new Array(768).fill(0.2); // 768d for legacy
-        await db.collection('icon_index').doc(legacyIconId).set({
-            ingredient_name: 'Bacon',
-            visualDescription: 'Bacon',
-            embedding: legacyEmbedding
-        });
-
-        // 1. Create a dummy recipe
-        const recipeId = 'test-legacy-' + Date.now();
-        const recipeRef = db.collection('recipes').doc(recipeId);
-        await recipeRef.set({
-            graph: {
-                nodes: [
-                    { id: 'n1', text: 'Bacon', visualDescription: 'Bacon', type: 'ingredient' }
-                ]
-            }
-        });
-
-        // 2. Define a batch search fn simulating legacy mode (empty fast_matches, 768d embedding)
-        const mockBatchSearchFn = async (ingredients: { name: string, queries: string[] }[], _limit: number) => {
-            return ingredients.map(ing => ({
-                name: ing.name,
-                embedding: legacyEmbedding,
-                fast_matches: [] as any[], // Force fallback to findNearest
-            }));
-        };
-
-        // Give the Firestore emulator vector index a moment to update
-        // Note: Emulators can be flaky building vector indexes synchronously.
-        // We'll mock the actual `searchIconsByEmbedding` call just to prove the fallback logic routes correctly.
-        const originalSearch = service.searchIconsByEmbedding.bind(service);
-        let fallbackCalled = false;
-        service.searchIconsByEmbedding = async (vec, limit) => {
-            fallbackCalled = true;
-            return [{
-                id: legacyIconId,
-                visualDescription: 'Bacon',
-                score: 0.99
-            }];
-        };
-
-        // 3. Trigger resolution
-        await service.resolveRecipeIcons(recipeId, mockBatchSearchFn);
-
-        // Restore
-        service.searchIconsByEmbedding = originalSearch;
-
-        // 4. Verify that the node found the icon via the fallback
-        const doc = await recipeRef.get();
-        const node = doc.data()?.graph?.nodes[0];
-        
-        assert.ok(fallbackCalled, 'searchIconsByEmbedding should have been called as a fallback');
-        assert.ok(node.iconShortlist, 'Node should have a shortlist from legacy pass');
-        assert.strictEqual(node.iconShortlist[0].icon.id, legacyIconId);
+        assert.strictEqual(node.iconShortlist[0].matchScore, 0.99);
     });
 });

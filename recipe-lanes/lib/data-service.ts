@@ -25,7 +25,7 @@ import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/type
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined } from './utils';
 // import { calculateWilsonLCB } from './utils';
-import { applyIconToNode, buildShortlistEntry, clearNodeShortlist, computeShortlistDelta, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getPendingImpressionIds, getPendingRejectionIds, getPendingImpressionTargets, getPendingRejectionTargets, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, markEntryImpressedAtIndex, markSeenEntriesImpressed, markSeenEntriesRejected, mutateNodesByIngredient, prependToShortlist, rankIconsByEmbedding, toRecipeIcon, setNodeStatusByIngredient } from './recipe-lanes/model-utils';
+import { applyIconToNode, buildShortlistEntry, clearNodeShortlist, computeShortlistDelta, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getPendingImpressionIds, getPendingRejectionIds, getPendingImpressionTargets, getPendingRejectionTargets, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, markEntryImpressedAtIndex, markSeenEntriesImpressed, markSeenEntriesRejected, mutateNodesByIngredient, prependToShortlist, rankIconsByEmbedding, toRecipeIcon, setNodeStatusByIngredient, extractBatchIngredients } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -75,9 +75,9 @@ export interface DataService {
 //   waitForQueue(ingredientName: string, timeoutMs?: number): Promise<IconStats | null>;
   
   // New Methods for Refactor
-  resolveRecipeIcons(recipeId: string, batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>): Promise<void>;
+  resolveRecipeIcons(recipeId: string, batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]>): Promise<void>;
   addNodeToRecipe(recipeId: string, ingredientName: string, laneId?: string, hydeQueries?: string[]): Promise<{ success: boolean, nodeId?: string, error?: string }>;
-  rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>): Promise<{ success: boolean, error?: string }>;
+  rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]>): Promise<{ success: boolean, error?: string }>;
   imagineRecipeWithIcon(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<any>;
   setRecipeWithIcon(data: any, transaction?: any): Promise<void>;
   assignIconToRecipe(recipeId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<void>;
@@ -436,96 +436,11 @@ export class FirebaseDataService implements DataService {
      * Returns names that had no search results (still need generation).
      */
     // lanes. only on create.
-    private async resolveFromIndex(
-        recipeId: string,
-        unresolvedNames: string[],
-        hydeQueriesMap: Map<string, string[]>,
-        batchSearchFn: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>
-    ): Promise<string[]> {
-        const ingredients = unresolvedNames.map(name => ({
-            name,
-            queries: hydeQueriesMap.get(name) ?? [name],
-        }));
-
-        const t0 = Date.now();
-        console.log(`[resolveFromIndex] calling batchSearchFn with ${ingredients.length} ingredients, total queries: ${ingredients.reduce((s, i) => s + i.queries.length, 0)}`);
-        let batchResults: { name: string, embedding: number[], fast_matches: any[] }[];
-        try {
-            batchResults = await batchSearchFn(ingredients, 12);
-        } catch (e) {
-            console.warn(`[resolveFromIndex] batch search failed:`, e);
-            return unresolvedNames;
-        }
-        console.log(`[resolveFromIndex] batch CF call done: ${ingredients.length} ingredients in ${Date.now() - t0}ms`);
-
-        const unresolved: string[] = [];
-        await Promise.all(batchResults.map(async ({ name: stdName, embedding: vec, fast_matches }) => {
-            try {
-                // CF path: fast_matches pre-ranked in MiniLM space — hydrate and use scores directly.
-                if (fast_matches && fast_matches.length > 0) {
-                    const t1 = Date.now();
-                    const hydrated = await this.getIconsByIds(fast_matches.map((fm: any) => fm.icon_id));
-                    const ranked = hydrated
-                        .map(icon => {
-                            const fm = fast_matches.find((m: any) => m.icon_id === icon.id);
-                            return buildShortlistEntry(icon, 'search', fm?.score ?? 0);
-                        })
-                        .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
-                    await this.assignShortlistToRecipe(recipeId, stdName, ranked.slice(0, 8));
-                    console.log(`[resolveFromIndex] "${stdName}" → ${ranked.length} candidates from CF (hydrate ${Date.now() - t1}ms)`);
-                    return;
-                }
-
-                // Legacy fallback: Firestore findNearest (768d).
-                const t1 = Date.now();
-                const searchResults = await this.searchIconsByEmbedding(vec, 12);
-                const findMs = Date.now() - t1;
-                if (searchResults.length > 0) {
-                    const embeddings = await this.getIconEmbeddings(searchResults.map(r => r.id));
-                    const ranked = rankIconsByEmbedding(searchResults, vec, embeddings);
-                    await this.assignShortlistToRecipe(recipeId, stdName, ranked.slice(0, 8));
-                    console.log(`[resolveFromIndex] "${stdName}" → ${searchResults.length} candidates from Firestore (findNearest ${findMs}ms)`);
-                    return;
-                }
-                unresolved.push(stdName);
-            } catch (e) {
-                console.warn(`[resolveFromIndex] processing failed for "${stdName}":`, e);
-                unresolved.push(stdName);
-            }
-        }));
-
-        return unresolved;
-    }
-
     /**
      * Writes the pre-built shortlist entries (already ranked + scored) to matching nodes.
      */
     // lanes. good. only on create.
-    private async assignShortlistToRecipe(recipeId: string, stdName: string, entries: ShortlistEntry[]): Promise<void> {
-        const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
-        // Mark entry[0] as impressed — impression is recorded below after the write.
-        const markedEntries = markEntryImpressedAtIndex(entries, 0);
-        let changed = false;
-        await db.runTransaction(async (t) => {
-            const doc = await t.get(recipeRef);
-            if (!doc.exists) return;
-            const nodes: any[] = doc.data()?.graph?.nodes || [];
-            changed = mutateNodesByIngredient(nodes, stdName, (n) => {
-                n.iconShortlist = markedEntries;
-                n.shortlistIndex = 0;
-                delete n.status;
-            });
-            if (changed) t.update(recipeRef, { 'graph.nodes': nodes });
-        });
-        // Record impression for the icon now shown at index 0.
-        if (changed && entries[0]) {
-            const icon0 = getEntryIcon(entries[0]);
-            const ingId = icon0.visualDescription ? standardizeIngredientName(icon0.visualDescription) : stdName;
-            await this.recordImpression(icon0.id, ingId).catch(console.error);
-        }
-    }
-
-    async resolveRecipeIcons(recipeId: string, batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>): Promise<void> {
+    async resolveRecipeIcons(recipeId: string, batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]>): Promise<void> {
         console.log(`[FirebaseDataService] resolveRecipeIcons: ${recipeId}`);
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
         const doc = await recipeRef.get();
@@ -546,36 +461,62 @@ export class FirebaseDataService implements DataService {
         if (nodesToProcess.length === 0) return;
         console.log(`Processing ${nodesToProcess.length} nodes for recipe ${recipeId}`);
 
-        // Build merged hydeQueries map: stdName -> string[]
-        const hydeQueriesMap = new Map<string, string[]>();
-        for (const node of nodesToProcess) {
-            if (!node.visualDescription) continue;
-            const stdName = standardizeIngredientName(getNodeIngredientName(node));
-            const nodeQueries: string[] = getNodeHydeQueries(node);
-            const existing = hydeQueriesMap.get(stdName) || [];
-            const merged = Array.from(new Set([...existing, ...nodeQueries]));
-            hydeQueriesMap.set(stdName, merged);
-        }
-
-        // Collect unresolved names (all nodes without icons go directly to index search + generation)
-        const unresolvedNames = Array.from(hydeQueriesMap.keys());
-
-        // 2. One batch CF call for all ingredients → returns any that still need generation.
-        // NOTE: do NOT mark nodes pending here — queueIconForGeneration sets status atomically
-        // inside its transaction. Setting it here races with after() being killed, leaving
-        // nodes permanently stuck pending with no queue doc.
-        let toGenerate = unresolvedNames;
+        const ingredients = extractBatchIngredients(nodesToProcess);
+        
+        let toGenerate: string[] = ingredients.map(ing => ing.name);
         let resolveMs = 0;
+        
         if (batchSearchFn) {
             const t0 = Date.now();
-            toGenerate = await this.resolveFromIndex(recipeId, unresolvedNames, hydeQueriesMap, batchSearchFn);
-            resolveMs = Date.now() - t0;
+            try {
+                const results = await batchSearchFn(ingredients, 12);
+                resolveMs = Date.now() - t0;
+                
+                // Build shortlists
+                const shortlists = results
+                    .filter(r => r.icons.length > 0)
+                    .map(({ name, icons, matchScores }) => ({
+                        name,
+                        entries: markEntryImpressedAtIndex(
+                            icons
+                                .map(icon => buildShortlistEntry(icon, 'search', matchScores[icon.id] ?? 0))
+                                .sort((a: any, b: any) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
+                                .slice(0, 8),
+                            0,
+                        ),
+                    }));
+
+                // Apply shortlists to the DB
+                if (shortlists.length > 0) {
+                    await db.runTransaction(async (t) => {
+                        const snap = await t.get(recipeRef);
+                        if (!snap.exists) return;
+                        const nodes: any[] = snap.data()?.graph?.nodes || [];
+                        for (const { name, entries } of shortlists) {
+                            mutateNodesByIngredient(nodes, name, (n: any) => {
+                                n.iconShortlist = entries;
+                                n.shortlistIndex = 0;
+                                delete n.status;
+                            });
+                        }
+                        t.update(recipeRef, { 'graph.nodes': nodes });
+                    });
+                }
+
+                // The remaining ones to generate are those without icons in results
+                const matchedNames = new Set(shortlists.map(s => s.name));
+                toGenerate = ingredients.filter(ing => !matchedNames.has(ing.name)).map(ing => ing.name);
+            } catch (e: any) {
+                console.warn(`[FirebaseDataService] batch search failed:`, e);
+                // On failure, all ingredients must be generated
+                toGenerate = ingredients.map(ing => ing.name);
+            }
         }
 
-        // 3. Queue any names that still need generation. Log a concise, contextual message.
+        // 3. Queue any names that still need generation.
         if (toGenerate.length === 0) {
             if (batchSearchFn) {
-                console.log(`All ${unresolvedNames.length} ingredients resolved from index in ${resolveMs}ms — no generation needed.`);
+                console.log(`All ${ingredients.length} ingredients resolved from index in ${resolveMs}ms — no generation needed.`);
             } else {
                 console.log(`No ingredients need generation and no search fn provided.`);
             }
@@ -583,14 +524,15 @@ export class FirebaseDataService implements DataService {
         }
 
         const reason = batchSearchFn
-            ? `(${unresolvedNames.length - toGenerate.length} `
+            ? `(${ingredients.length - toGenerate.length} resolved from index in ${resolveMs}ms)`
             : '(no search fn)';
-        console.log(`Queueing ${toGenerate.length}/${unresolvedNames.length} ingredients for generation ${reason} resolved from index in ${resolveMs}ms)...`);
-        await Promise.all(toGenerate.map(stdName =>
-            this.queueIconForGeneration(recipeId, stdName, hydeQueriesMap.get(stdName))
-        ));
+        console.log(`Queueing ${toGenerate.length}/${ingredients.length} ingredients for generation ${reason}...`);
+        
+        await Promise.all(toGenerate.map(stdName => {
+            const ingredient = ingredients.find(i => i.name === stdName);
+            return this.queueIconForGeneration(recipeId, stdName, ingredient?.queries ?? [stdName]);
+        }));
     }
-
   // icon_overview and tests only.
   async addNodeToRecipe(recipeId: string, ingredientName: string, laneId: string = 'lane-1', hydeQueries?: string[]): Promise<{ success: boolean, nodeId?: string, error?: string }> {
       try {
@@ -630,7 +572,7 @@ export class FirebaseDataService implements DataService {
   }
 
     // this runs when forging and in icon_overview. We should make this keep the old options around maybe?
-  async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>): Promise<{ success: boolean, error?: string }> {
+  async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]>): Promise<{ success: boolean, error?: string }> {
       try {
         const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
         const stdName = standardizeIngredientName(String(ingredientName));
@@ -1388,7 +1330,7 @@ export class MemoryDataService implements DataService {
         return hits;
     }
 
-    async resolveRecipeIcons(recipeId: string, _batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>): Promise<void> {
+    async resolveRecipeIcons(recipeId: string, _batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]>): Promise<void> {
         const recipe = this.recipes.get(recipeId);
         if (!recipe) return;
         
@@ -1444,7 +1386,7 @@ export class MemoryDataService implements DataService {
         return { success: true, nodeId };
     }
 
-    async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, _batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>): Promise<{ success: boolean, error?: string }> {
+    async rejectRecipeIcon(recipeId: string, ingredientName: string, currentIconId?: string, userId?: string, _batchSearchFn?: (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]>): Promise<{ success: boolean, error?: string }> {
         const recipe = this.recipes.get(recipeId);
         if (!recipe) return { success: false, error: 'Recipe not found' };
 

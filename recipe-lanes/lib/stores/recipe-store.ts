@@ -43,7 +43,7 @@
  */
 
 import { create } from 'zustand';
-import { RecipeGraph, RecipeNode } from '../recipe-lanes/types';
+import { RecipeGraph, RecipeNode, IconStyleId, LineStyleId, LayoutModeId, BackgroundElementId } from '../recipe-lanes/types';
 import { getNodeShortlistKey, cycleShortlistNodes } from '../recipe-lanes/model-utils';
 
 // ---------------------------------------------------------------------------
@@ -60,6 +60,11 @@ interface RecipeState {
     ownerId: string | null;
     ownerName: string | null;
     isDirty: boolean;
+    iconStyle: IconStyleId;
+    lineStyle: LineStyleId;
+    nodeLayout: LayoutModeId;
+    backgrounds: BackgroundElementId[];
+    activePresetId: string;
 }
 
 interface RecipeActions {
@@ -98,6 +103,11 @@ interface RecipeActions {
 
     /** Clears all state — call when the user navigates away from a recipe. */
     reset: () => void;
+    setVisualPreset: (presetId: string) => void;
+    setIconStyle: (style: IconStyleId) => void;
+    setLineStyle: (style: LineStyleId) => void;
+    setNodeLayout: (layout: LayoutModeId) => void;
+    toggleBackground: (bg: BackgroundElementId) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +175,11 @@ const initialState: RecipeState = {
     ownerId: null,
     ownerName: null,
     isDirty: false,
+    iconStyle: 'classic',
+    lineStyle: 'straight',
+    nodeLayout: 'dagre',
+    backgrounds: [],
+    activePresetId: 'classic',
 };
 
 export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => ({
@@ -218,4 +233,9 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
     },
 
     reset: () => set(initialState),
+    setVisualPreset: (presetId) => set({ activePresetId: presetId }),
+    setIconStyle: (iconStyle) => set({ iconStyle, activePresetId: 'custom' }),
+    setLineStyle: (lineStyle) => set({ lineStyle, activePresetId: 'custom' }),
+    setNodeLayout: (nodeLayout) => set({ nodeLayout, activePresetId: 'custom' }),
+    toggleBackground: (bg) => set((state) => { const backgrounds = state.backgrounds.includes(bg) ? state.backgrounds.filter(b => b !== bg) : [...state.backgrounds, bg]; return { backgrounds, activePresetId: 'custom' }; }),
 }));

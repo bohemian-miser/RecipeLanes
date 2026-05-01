@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry, SearchTerm, RecipeGraph } from './types';
+import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry, SearchTerm, RecipeGraph, IconStyleId } from './types';
 import { standardizeIngredientName } from '../utils';
 
 /**
@@ -27,8 +27,8 @@ export function getNodeIngredientName(node: RecipeNode): string {
 }
 
 /** Returns the display theme for a node's icon. */
-export function getNodeTheme(node: RecipeNode): 'classic' | 'modern' | 'modern_clean' {
-    return (node.iconTheme as 'classic' | 'modern' | 'modern_clean') || 'classic';
+export function getNodeTheme(node: RecipeNode): IconStyleId {
+    return (node.iconTheme as IconStyleId) || 'classic';
 }
 
 /**
@@ -36,6 +36,25 @@ export function getNodeTheme(node: RecipeNode): 'classic' | 'modern' | 'modern_c
  */
 export function getNodeHydeQueries(node: RecipeNode): string[] {
     return node.hydeQueries || [];
+}
+
+/**
+ * Extracts a unique list of batch ingredients (with their aggregated HyDE queries)
+ * from a given list of nodes. Nodes without visual descriptions are ignored.
+ */
+export function extractBatchIngredients(nodes: RecipeNode[]): { name: string; queries: string[] }[] {
+    const hydeMap = new Map<string, string[]>();
+    for (const node of nodes) {
+        if (!node.visualDescription) continue;
+        const stdName = standardizeIngredientName(getNodeIngredientName(node));
+        const queries = getNodeHydeQueries(node);
+        const existing = hydeMap.get(stdName) ?? [];
+        hydeMap.set(stdName, Array.from(new Set([...existing, ...queries])));
+    }
+    return Array.from(hydeMap.entries()).map(([name, queries]) => ({
+        name,
+        queries: queries.length ? queries : [name],
+    }));
 }
 
 /** Derives the Storage path for an icon from its ID and ingredient name. */

@@ -48,6 +48,7 @@ import { toPng } from 'html-to-image';
 import { Download, Share2, Undo, Redo, Check, Save } from 'lucide-react';
 import { useHistoryManager } from './hooks/useHistoryManager';
 import { useSaveAndFork } from './hooks/useSaveAndFork';
+import { useRecipeStore } from '../../lib/stores/recipe-store';
 
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
@@ -85,7 +86,13 @@ const INITIAL_EDGE_TYPES = {
     timeline: TimelineEdge,
 };
 
-const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode, spacing = 1, edgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme = 'classic' }, ref) => {
+const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode: propMode, spacing = 1, edgeStyle: propEdgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme: propIconTheme = 'classic' }, ref) => {
+
+    const iconStyle = useRecipeStore(s => s.iconStyle);
+    const edgeStyle = useRecipeStore(s => s.lineStyle);
+    const mode = useRecipeStore(s => s.nodeLayout);
+    const backgrounds = useRecipeStore(s => s.backgrounds);
+    const iconTheme = iconStyle;
 
     // Cast hooks to avoid implicit any in callbacks
     const [nodes, setNodesRaw, onNodesChange] = useNodesState([]);

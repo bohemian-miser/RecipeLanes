@@ -1,7 +1,7 @@
 
 import 'dotenv/config';
 import dotenv from 'dotenv';
-import { db } from '../lib/firebase-admin';
+import { db } from '../../lib/firebase-admin';
 
 const DB_COLLECTION_RECIPES = 'recipes';
 

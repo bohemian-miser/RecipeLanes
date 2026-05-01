@@ -30,7 +30,7 @@ import { standardizeIngredientName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import { TimelineView } from '@/components/recipe-lanes/timeline-view';
 import type { RecipeGraph } from '@/lib/recipe-lanes/types';
-import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries } from '@/lib/recipe-lanes/model-utils';
+import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github } from 'lucide-react';
@@ -181,18 +181,7 @@ function RecipeLanesContent() {
       setIconSearchStatus('running');
       setIconSearchElapsed(null);
       try {
-          const hydeMap = new Map<string, string[]>();
-          for (const node of graph.nodes) {
-              if (!node.visualDescription) continue;
-              const stdName = standardizeIngredientName(getNodeIngredientName(node));
-              const queries = getNodeHydeQueries(node);
-              const existing = hydeMap.get(stdName) ?? [];
-              hydeMap.set(stdName, Array.from(new Set([...existing, ...queries])));
-          }
-          const ingredients = Array.from(hydeMap.entries()).map(([name, queries]) => ({
-              name,
-              queries: queries.length ? queries : [name],
-          }));
+          const ingredients = extractBatchIngredients(graph.nodes);
           if (ingredients.length === 0) { setIconSearchStatus('idle'); return; }
 
           console.log(`[batchIconSearch] ${method.name} — ${ingredients.length} ingredients`);

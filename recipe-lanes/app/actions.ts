@@ -47,7 +47,7 @@ export async function rejectIcon(recipeId: string, ingredientName: string, curre
     try {
         const session = await getAuthService().verifyAuth();
         const userId = session?.uid;
-        return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId, serverBatchIconSearch);
+        return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId, serverBatchSearchAction);
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -102,14 +102,14 @@ export async function addIngredientNodeAction(recipeId: string, ingredientName: 
         // 5. Trigger icon resolution in background (or foreground if preferred)
         try {
             if (process.env.NODE_ENV === 'test') {
-                await getDataService().resolveRecipeIcons(recipeId, serverBatchIconSearch);
+                await getDataService().resolveRecipeIcons(recipeId, serverBatchSearchAction);
             } else {
-                after(() => getDataService().resolveRecipeIcons(recipeId, serverBatchIconSearch));
+                after(() => getDataService().resolveRecipeIcons(recipeId, serverBatchSearchAction));
             }
         } catch (e) {
             // Fallback for environments where 'after' is not supported (like some older Next.js versions or non-request contexts)
             console.log("[addIngredientNodeAction] 'after' not supported or outside request scope, running sync");
-            await getDataService().resolveRecipeIcons(recipeId, serverBatchIconSearch);
+            await getDataService().resolveRecipeIcons(recipeId, serverBatchSearchAction);
         }
     }
     return result;
@@ -205,13 +205,13 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
         const embedFn = getAIService().embedTexts.bind(getAIService());
         try {
             if (process.env.NODE_ENV === 'test') {
-                await getDataService().resolveRecipeIcons(id, serverBatchIconSearch);
+                await getDataService().resolveRecipeIcons(id, serverBatchSearchAction);
             } else {
-                after(() => getDataService().resolveRecipeIcons(id, serverBatchIconSearch));
+                after(() => getDataService().resolveRecipeIcons(id, serverBatchSearchAction));
             }
         } catch (e) {
             console.log("[createVisualRecipeAction] 'after' not supported or outside request scope, running sync", e);
-            await getDataService().resolveRecipeIcons(id, serverBatchIconSearch);
+            await getDataService().resolveRecipeIcons(id, serverBatchSearchAction);
         }
 
         console.log(`[createVisualRecipeAction] ✅ Saved. ID: ${id} (icons resolving in background)`);

@@ -189,3 +189,19 @@ export interface LayoutGraph {
     gridInterval: number;
   };
 }
+
+// --- Visual Config & Presets ---
+
+export type IconStyleId = 'classic' | 'modern' | 'modern_clean' | 'timeline-circle';
+export type LineStyleId = 'straight' | 'floating' | 'step' | 'bezier' | 'timeline-path';
+export type LayoutModeId = 'dagre' | 'dagre-lr' | 'timeline' | 'swimlanes' | 'repulsive';
+export type BackgroundElementId = 'timeline-grid' | 'lane-bands-horizontal' | 'lane-bands-vertical';
+
+export interface LayoutPreset {
+    id: string;
+    name: string;
+    iconStyle: IconStyleId;
+    lineStyle: LineStyleId;
+    nodeLayout: LayoutModeId;
+    backgrounds: BackgroundElementId[];
+}

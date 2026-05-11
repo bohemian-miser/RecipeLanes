@@ -70,9 +70,10 @@ function RecipeLanesContent() {
   const [iconSearchMethodId, setIconSearchMethodId] = useState(defaultIconSearchMethod.id);
   const [iconSearchElapsed, setIconSearchElapsed] = useState<number | null>(null);
   const [jsonText, setJsonText] = useState('');
-  const [layoutMode, setLayoutMode] = useState<LayoutMode | 'repulsive' | 'timeline2'>('dagre');
+  const layoutMode = useRecipeStore(s => s.nodeLayout);
   const layoutModeRestoredRef = useRef(false);
-  const [iconTheme, setIconTheme] = useState<'classic' | 'modern' | 'modern_clean'>('classic');
+  const iconTheme = useRecipeStore(s => s.iconStyle) as 'classic' | 'modern' | 'modern_clean';
+  const { setNodeLayout, setIconStyle, setLineStyle } = useRecipeStore.getState();
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
@@ -283,7 +284,7 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
   };
 
   const [spacing, setSpacing] = useState(0.5);
-  const [edgeStyle, setEdgeStyle] = useState<'straight' | 'step' | 'bezier'>('straight');
+  const edgeStyle = useRecipeStore(s => s.lineStyle) as 'straight' | 'step' | 'bezier';
   const [textPos, setTextPos] = useState<'bottom' | 'top' | 'left' | 'right'>('bottom');
   const [isLive, setIsLive] = useState(false);
   const [inputExpanded, setInputExpanded] = useState(false);
@@ -308,7 +309,7 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       if (!graph || layoutModeRestoredRef.current) return;
       if (graph.layoutMode && graph.layoutMode !== layoutMode) {
           layoutModeRestoredRef.current = true;
-          setLayoutMode(graph.layoutMode as LayoutMode | 'repulsive');
+          setNodeLayout(graph.layoutMode as LayoutModeId);
       } else {
           layoutModeRestoredRef.current = true;
       }
@@ -338,7 +339,6 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
                   ownerId: data.ownerId || undefined,
                   ownerName: data.ownerName || undefined,
               });
-              if (currentGraph.layoutMode) setLayoutMode(currentGraph.layoutMode as any);
               setRecipeText(currentGraph.originalText || '');
               setRecipeTitle(currentGraph.title || '');
               setStatus('complete');
@@ -573,8 +573,8 @@ const handleVisualize = async () => {
         if (layoutMode === mode) {
             diagramRef.current?.resetLayout();
         } else {
-            setLayoutMode(mode);
-            if (mode === 'repulsive') setEdgeStyle('bezier');
+            setNodeLayout(mode as LayoutModeId);
+            if (mode === 'repulsive') setLineStyle('bezier');
             
             if (graph) {
                 // Clear x/y from main nodes so the new mode computes a fresh layout 
@@ -883,7 +883,7 @@ const handleVisualize = async () => {
                         <span className="text-xs font-mono text-zinc-400">Style</span>
                         <select 
                             value={iconTheme} 
-                            onChange={(e) => setIconTheme(e.target.value as any)}
+                            onChange={(e) => setIconStyle(e.target.value as any)}
                             className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1.5 text-zinc-700 font-medium focus:ring-1 focus:ring-yellow-500/50 outline-none"
                             title="Icon Style"
                         >
@@ -926,7 +926,7 @@ const handleVisualize = async () => {
                          <span className="text-xs font-mono text-zinc-400">Lines</span>
                          <select 
                              value={edgeStyle} 
-                             onChange={(e) => setEdgeStyle(e.target.value as any)}
+                             onChange={(e) => setLineStyle(e.target.value as any)}
                              className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1 text-zinc-900"
                          >
                              <option value="straight">Straight</option>

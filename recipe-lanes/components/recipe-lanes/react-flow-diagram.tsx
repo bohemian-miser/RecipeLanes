@@ -412,7 +412,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         const layoutsJustArrived =
             hasInitialLayoutRef.current &&
             currentLayoutsKey !== null &&
-            currentLayoutsKey !== prevLayoutsKeyRef.current;
+            prevLayoutsKeyRef.current === null;
         prevLayoutsKeyRef.current = currentLayoutsKey;
 
         if (layoutsJustArrived) {

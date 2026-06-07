@@ -25,7 +25,7 @@ import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
 import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
-import { iconSearchMethods, defaultIconSearchMethod } from '@/lib/icon-search-registry';
+import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
 import { standardizeIngredientName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import { TimelineView } from '@/components/recipe-lanes/timeline-view';
@@ -200,6 +200,38 @@ function RecipeLanesContent() {
       }
   };
 
+  const handleHydrateFastMatches = async () => {
+      if (!graph || !recipeId) return;
+      const itemsToHydrate: { name: string; fast_matches: { icon_id: string; score: number }[] }[] = [];
+      for (const node of graph.nodes) {
+          if (!node.fastMatches || node.fastMatches.length === 0) continue;
+          const stdName = standardizeIngredientName(getNodeIngredientName(node));
+          if (!itemsToHydrate.find(i => i.name === stdName)) {
+              itemsToHydrate.push({ name: stdName, fast_matches: node.fastMatches });
+          }
+      }
+      if (itemsToHydrate.length === 0) {
+          handleBatchIconSearch(defaultIconSearchMethod.id);
+          return;
+      }
+      setIconSearchStatus('running');
+      setIconSearchElapsed(null);
+      try {
+          const t0 = Date.now();
+          const results = await hydrateClientSide(itemsToHydrate);
+          const res = await applyIconSearchResultsAction(recipeId, results);
+          if (!res.success) throw new Error(res.error);
+          console.log(`[hydrateFastMatches] applied ${res.applied} in ${res.elapsed}ms (total: ${Date.now() - t0}ms)`);
+          setIconSearchElapsed(res.elapsed);
+          setIconSearchStatus('done');
+          setTimeout(() => setIconSearchStatus('idle'), 4000);
+      } catch (e: any) {
+          console.error('[handleHydrateFastMatches]', e);
+          setIconSearchStatus('error');
+          setTimeout(() => setIconSearchStatus('idle'), 3000);
+      }
+  };
+
 const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       const currentId = searchParams.get('id');
       const isNotOwner = (user && ownerId && user.uid !== ownerId) || (!user && ownerId);
@@ -354,13 +386,13 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       return () => unsubscribe();
   }, [recipeId]);
 
-  // After a new recipe is created, auto-fill icons using the default (client-side) method
-  // once the graph has loaded. The server-side path may not have a CF URL configured.
+  // After a new recipe is created, hydrate fastMatches (pre-populated server-side) or
+  // fall back to a full client-side search if none are present.
   useEffect(() => {
       if (!autoFillIconsRef.current) return;
       if (!graph || !recipeId || graph.nodes.length === 0) return;
       autoFillIconsRef.current = false;
-      handleBatchIconSearch(defaultIconSearchMethod.id);
+      handleHydrateFastMatches();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph, recipeId]);
 

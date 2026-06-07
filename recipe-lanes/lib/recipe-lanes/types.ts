@@ -44,6 +44,11 @@ export interface IconStats {
     searchTerms?: SearchTerm[];
 }
 
+export interface FastMatch {
+    icon_id: string;
+    score: number;
+}
+
 /** Shape of a document in the Firestore `icon_index` collection. Internal to data-service. */
 export interface IconIndexEntry {
     icon_id: string;
@@ -91,6 +96,7 @@ export interface RecipeNode {
   };
   status?: 'pending' | 'processing' | 'failed';
   hydeQueries?: string[];
+  fastMatches?: FastMatch[];
 
   type: 'ingredient' | 'action';
   inputs?: string[]; // IDs of nodes that flow into this one

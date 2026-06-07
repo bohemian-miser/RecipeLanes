@@ -24,9 +24,9 @@ import { getAuthService } from '@/lib/auth-service';
 import { z } from 'zod';
 import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQueriesPrompt, parseHydeQueries } from '@/lib/recipe-lanes/parser';
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
-import type { RecipeGraph, IconStats } from '@/lib/recipe-lanes/types';
+import type { RecipeGraph, IconStats, FastMatch } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
-import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon } from '@/lib/recipe-lanes/model-utils';
+import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon, extractBatchIngredients, getNodeIngredientName } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
 import { unifiedIconSearch, serverBatchIconSearch } from '@/lib/search-orchestrator';
@@ -151,8 +151,42 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
             graph.serves = 1;
         }
 
-        // 2. Optimistic Cache Lookup & Queuing (Unified)
-        console.log('[createVisualRecipeAction] 🔍 Checking cache & queuing...');
+        // 2. Synchronous icon pre-population — hydrate the top match per node before saving
+        // so the UI renders with icons on first snapshot, then the client hydrates the rest.
+        console.log('[createVisualRecipeAction] 🔍 Looking up icons from index...');
+        try {
+            const ingredients = extractBatchIngredients(graph.nodes);
+            if (ingredients.length > 0) {
+                const batchResults = await serverBatchIconSearch(ingredients, 12);
+                const topMatchesToHydrate: { name: string; fast_matches: FastMatch[] }[] = [];
+                const allMatchesByName = new Map<string, FastMatch[]>();
+
+                for (const res of batchResults) {
+                    if (res.fast_matches && res.fast_matches.length > 0) {
+                        allMatchesByName.set(res.name, res.fast_matches);
+                        topMatchesToHydrate.push({ name: res.name, fast_matches: [res.fast_matches[0]] });
+                    }
+                }
+
+                if (topMatchesToHydrate.length > 0) {
+                    const hydratedResults = await hydrateBatch(topMatchesToHydrate);
+                    for (const node of graph.nodes) {
+                        if (!node.visualDescription) continue;
+                        const stdName = standardizeIngredientName(getNodeIngredientName(node));
+                        const result = hydratedResults.find(r => r.name === stdName);
+                        if (result && result.icons.length > 0) {
+                            const icon = result.icons[0];
+                            node.iconShortlist = [buildShortlistEntry(icon, 'search', result.matchScores[icon.id] ?? 0)];
+                            node.shortlistIndex = 0;
+                        }
+                        const allMatches = allMatchesByName.get(stdName);
+                        if (allMatches && allMatches.length > 0) node.fastMatches = allMatches;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[createVisualRecipeAction] Icon pre-population failed (non-fatal):', e);
+        }
 
         // 3. Save to Firestore (Initial)
         const session = await getAuthService().verifyAuth();

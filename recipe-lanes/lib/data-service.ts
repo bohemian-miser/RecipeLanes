@@ -613,7 +613,13 @@ export class FirebaseDataService implements DataService {
         ]);
         settled.forEach((r, i) => { if (r.status === 'rejected') console.warn(`[rejectRecipeIcon] task[${i}] failed:`, r.reason); });
 
-        await this.resolveRecipeIcons(recipeId, batchSearchFn);
+        if (batchSearchFn) {
+            // Normal reject: search index for a replacement, only queue if nothing found.
+            await this.resolveRecipeIcons(recipeId, batchSearchFn);
+        } else {
+            // Forge: skip the index search and queue only this one ingredient for generation.
+            await this.queueIconForGeneration(recipeId, stdName);
+        }
         return { success: true };
       } catch (e: any) {
           return { success: false, error: e.message };

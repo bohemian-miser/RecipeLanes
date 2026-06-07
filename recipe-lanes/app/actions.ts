@@ -479,7 +479,6 @@ export async function debugLogAction(message: string) {
 }
 
 // Hydrate icon IDs from Firestore for multiple ingredients in one pass.
-type FastMatch = { icon_id: string; score: number };
 async function hydrateBatch(
     items: { name: string; fast_matches: FastMatch[] }[]
 ): Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]> {

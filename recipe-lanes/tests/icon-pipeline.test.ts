@@ -24,16 +24,17 @@ const makeIcon = (id: string): IconStats => ({
     score: 0.9,
 });
 
-/** Stub batch search fn that returns a fixed vector and fast matches and records how many times it was called. */
+type BatchSearchFn = (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]>;
+
+/** Stub batch search fn that returns an empty result and records how many times it was called. */
 function makeEmbedSpy() {
     let callCount = 0;
-    const searchFn = async (ingredients: { name: string, queries: string[] }[], _limit: number): Promise<{ name: string, embedding: number[], fast_matches: any[] }[]> => {
+    const searchFn: BatchSearchFn = async (ingredients, _limit) => {
         callCount++;
-        return ingredients.map(ing => ({ name: ing.name, embedding: [0.1, 0.2, 0.3], fast_matches: [] }));
+        return ingredients.map(ing => ({ name: ing.name, icons: [], matchScores: {} }));
     };
     return { searchFn, getCallCount: () => callCount };
 }
-type BatchSearchFn = (ingredients: { name: string, queries: string[] }[], limit: number) => Promise<{ name: string, embedding: number[], fast_matches: any[] }[]>;
 
 /** A MemoryDataService subclass that tracks resolveRecipeIcons calls, including batchSearchFn. */
 class SpyMemoryDataService extends MemoryDataService {

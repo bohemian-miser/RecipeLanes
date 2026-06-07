@@ -25,7 +25,7 @@ import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
 import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
-import { iconSearchMethods, defaultIconSearchMethod } from '@/lib/icon-search-registry';
+import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
 import { standardizeIngredientName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import { TimelineView } from '@/components/recipe-lanes/timeline-view';
@@ -365,13 +365,51 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       return () => unsubscribe();
   }, [recipeId]);
 
-  // After a new recipe is created, auto-fill icons using the default (client-side) method
-  // once the graph has loaded. The server-side path may not have a CF URL configured.
+  const handleHydrateFastMatches = async () => {
+      if (!graph || !recipeId) return;
+      setIconSearchStatus('running');
+      setIconSearchElapsed(null);
+      
+      try {
+          const itemsToHydrate: { name: string, fast_matches: any[] }[] = [];
+          for (const node of graph.nodes) {
+              if (node.fastMatches && node.fastMatches.length > 0) {
+                  const stdName = standardizeIngredientName(getNodeIngredientName(node));
+                  // Skip if already in itemsToHydrate to avoid duplicate work
+                  if (!itemsToHydrate.find(i => i.name === stdName)) {
+                      itemsToHydrate.push({ name: stdName, fast_matches: node.fastMatches });
+                  }
+              }
+          }
+          
+          if (itemsToHydrate.length === 0) {
+              setIconSearchStatus('idle');
+              return;
+          }
+          
+          const t0 = Date.now();
+          console.log(`[hydrateFastMatches] Hydrating ${itemsToHydrate.length} ingredients...`);
+          const results = await hydrateClientSide(itemsToHydrate);
+          const res = await applyIconSearchResultsAction(recipeId, results);
+          if (!res.success) throw new Error(res.error);
+          
+          console.log(`[hydrateFastMatches] Applied ${res.applied} in ${res.elapsed}ms (Total: ${Date.now() - t0}ms)`);
+          setIconSearchElapsed(res.elapsed);
+          setIconSearchStatus('done');
+          setTimeout(() => setIconSearchStatus('idle'), 4000);
+      } catch (e: any) {
+          console.error('[handleHydrateFastMatches] Failed:', e);
+          setIconSearchStatus('error');
+          setTimeout(() => setIconSearchStatus('idle'), 3000);
+      }
+  };
+
+  // After a new recipe is created, hydrate the rest of the matches using the client.
   useEffect(() => {
       if (!autoFillIconsRef.current) return;
       if (!graph || !recipeId || graph.nodes.length === 0) return;
       autoFillIconsRef.current = false;
-      handleBatchIconSearch(defaultIconSearchMethod.id);
+      handleHydrateFastMatches();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph, recipeId]);
 

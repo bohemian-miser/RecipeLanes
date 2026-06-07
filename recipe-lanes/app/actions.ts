@@ -24,9 +24,9 @@ import { getAuthService } from '@/lib/auth-service';
 import { z } from 'zod';
 import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQueriesPrompt, parseHydeQueries } from '@/lib/recipe-lanes/parser';
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
-import type { RecipeGraph, IconStats } from '@/lib/recipe-lanes/types';
+import type { RecipeGraph, IconStats, FastMatch } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
-import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon } from '@/lib/recipe-lanes/model-utils';
+import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon, getNodeIngredientName } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
 import { unifiedIconSearch, serverBatchIconSearch } from '@/lib/search-orchestrator';
@@ -151,8 +151,64 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
             graph.serves = 1;
         }
 
-        // 2. Optimistic Cache Lookup & Queuing (Unified)
-        console.log('[createVisualRecipeAction] 🔍 Checking cache & queuing...');
+        // 2. Initial Icon Lookup (synchronous before saving to avoid contention)
+        console.log('[createVisualRecipeAction] 🔍 Looking up icons from index...');
+        const hydeMap = new Map<string, string[]>();
+        for (const node of graph.nodes) {
+            if (!node.visualDescription) continue;
+            const stdName = standardizeIngredientName(getNodeIngredientName(node));
+            hydeMap.set(stdName, [stdName]); // Fallback to name since we don't have hydeQueries yet
+        }
+        
+        const ingredientsToSearch = Array.from(hydeMap.entries()).map(([name, queries]) => ({ name, queries }));
+        
+        if (ingredientsToSearch.length > 0) {
+            try {
+                const batchResults = await serverBatchIconSearch(ingredientsToSearch, 12);
+                
+                // Extract only the top fast_match for hydration
+                const topMatchesToHydrate: { name: string; fast_matches: FastMatch[] }[] = [];
+                const allFastMatchesByStdName = new Map<string, FastMatch[]>();
+                
+                for (const res of batchResults) {
+                    if (res.fast_matches && res.fast_matches.length > 0) {
+                        allFastMatchesByStdName.set(res.name, res.fast_matches);
+                        topMatchesToHydrate.push({
+                            name: res.name,
+                            fast_matches: [res.fast_matches[0]]
+                        });
+                    }
+                }
+                
+                if (topMatchesToHydrate.length > 0) {
+                    // Hydrate only the top matches
+                    const hydratedResults = await hydrateBatch(topMatchesToHydrate);
+                    
+                    // Assign to graph nodes
+                    for (const node of graph.nodes) {
+                        if (!node.visualDescription) continue;
+                        const stdName = standardizeIngredientName(getNodeIngredientName(node));
+                        const hydratedResult = hydratedResults.find(r => r.name === stdName);
+                        
+                        if (hydratedResult && hydratedResult.icons.length > 0) {
+                            const icon = hydratedResult.icons[0];
+                            const score = hydratedResult.matchScores[icon.id] ?? 0;
+                            // Set the top icon in the shortlist
+                            node.iconShortlist = [buildShortlistEntry(icon, 'search', score)];
+                            node.shortlistIndex = 0;
+                        }
+                        
+                        // Store the rest of the unhydrated matches on the node so the client can hydrate them
+                        const allMatches = allFastMatchesByStdName.get(stdName);
+                        if (allMatches && allMatches.length > 0) {
+                            node.fastMatches = allMatches;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('[createVisualRecipeAction] Icon lookup failed:', e);
+            }
+        }
 
         // 3. Save to Firestore (Initial)
         const session = await getAuthService().verifyAuth();
@@ -205,13 +261,13 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
         const embedFn = getAIService().embedTexts.bind(getAIService());
         try {
             if (process.env.NODE_ENV === 'test') {
-                await getDataService().resolveRecipeIcons(id, serverBatchIconSearch);
+                await getDataService().resolveRecipeIcons(id);
             } else {
-                after(() => getDataService().resolveRecipeIcons(id, serverBatchIconSearch));
+                after(() => getDataService().resolveRecipeIcons(id));
             }
         } catch (e) {
             console.log("[createVisualRecipeAction] 'after' not supported or outside request scope, running sync", e);
-            await getDataService().resolveRecipeIcons(id, serverBatchIconSearch);
+            await getDataService().resolveRecipeIcons(id);
         }
 
         console.log(`[createVisualRecipeAction] ✅ Saved. ID: ${id} (icons resolving in background)`);
@@ -441,9 +497,7 @@ export async function debugLogAction(message: string) {
     console.log(`[CLIENT-LOG] ${message}`);
 }
 
-// Hydrate icon IDs from Firestore for multiple ingredients in one pass.
-type FastMatch = { icon_id: string; score: number };
-async function hydrateBatch(
+export async function hydrateBatch(
     items: { name: string; fast_matches: FastMatch[] }[]
 ): Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]> {
     const allIds = [...new Set(items.flatMap(i => i.fast_matches.map(m => m.icon_id)))];

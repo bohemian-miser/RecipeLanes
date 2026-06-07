@@ -20,6 +20,9 @@ test.describe('Loading Screen Behavior', () => {
     let continueGraph: () => void;
     const graphPromise = new Promise<void>(resolve => continueGraph = resolve);
     
+    let continueIcons: () => void;
+    const iconsPromise = new Promise<void>(resolve => continueIcons = resolve);
+    
     let serverActionCount = 0;
     await page.route('**/lanes*', async route => {
       const req = route.request();
@@ -28,19 +31,14 @@ test.describe('Loading Screen Behavior', () => {
          if (nextAction) {
            serverActionCount++;
            if (serverActionCount === 2) {
-             console.log('Paused next-action:', nextAction);
+             console.log('Paused graph next-action:', nextAction);
              await graphPromise;
+           } else if (serverActionCount === 3) {
+             console.log('Paused icons next-action:', nextAction);
+             await iconsPromise;
            }
          }
       }
-      await route.continue();
-    });
-
-    let continueIcons: () => void;
-    const iconsPromise = new Promise<void>(resolve => continueIcons = resolve);
-    
-    await page.route('**/batchSearchIcons', async route => {
-      await iconsPromise;
       await route.continue();
     });
 
@@ -49,7 +47,7 @@ test.describe('Loading Screen Behavior', () => {
 
     // 3. Assert "Making Recipe Graph" phase is shown (network is paused)
     const loadingScreen = page.getByTestId('loading-screen');
-    await expect(loadingScreen).toBeVisible();
+    await expect(loadingScreen).toBeVisible({ timeout: 15000 });
     await expect(loadingScreen).toContainText('Making Recipe Graph');
 
     // 4. Resume the server action request

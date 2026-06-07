@@ -58,8 +58,9 @@ export class RealAIService implements AIService {
   async generateText(prompt: string): Promise<string> {
     try {
         const response = await ai.generate({
-        model: textModel,
-        prompt: prompt,
+            model: textModel,
+            prompt: prompt,
+            config: { thinkingConfig: { thinkingBudget: 0 } },
         });
         return response.text || '';
     } catch (e) {

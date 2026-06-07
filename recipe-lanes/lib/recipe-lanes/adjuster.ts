@@ -38,6 +38,28 @@ interface RecipeGraph {
 }
 `;
 
+/** Strip internal fields that bloat the prompt and confuse the model. */
+function stripGraphForPrompt(graph: RecipeGraph): object {
+  return {
+    title: graph.title,
+    serves: graph.serves,
+    baseServes: graph.baseServes,
+    lanes: graph.lanes,
+    nodes: graph.nodes.map(n => ({
+      id: n.id,
+      laneId: n.laneId,
+      text: n.text,
+      visualDescription: n.visualDescription,
+      type: n.type,
+      inputs: n.inputs,
+      temperature: n.temperature,
+      duration: n.duration,
+      quantity: n.quantity,
+      unit: n.unit,
+    })),
+  };
+}
+
 export function generateAdjustmentPrompt(currentGraph: RecipeGraph, userInstruction: string): string {
   const BLOCK_START = "```typescript";
   const BLOCK_END = "```";
@@ -48,10 +70,10 @@ Your goal is to MODIFY the provided "Current Graph" based on the "User Instructi
 
 ### Rules
 1. **Preserve ID/State:** Keep existing nodes/lanes if they are still relevant. Do not regenerate IDs for unchanged nodes.
-2. **Preserve Icons:** If you keep a node, KEEP its 
+2. **Preserve Icons:** If you keep a node, KEEP its
 iconUrl
  if present.
-3. **New Nodes:** If adding nodes, generate a 
+3. **New Nodes:** If adding nodes, generate a
 visualDescription
  following the guidelines (Active, Object-Focused, No Hands).
 4. **Schema:** The output must match the schema strictly.
@@ -62,7 +84,7 @@ ${SCHEMA_INTERFACE}
 ${BLOCK_END}
 
 ### Current Graph (JSON)
-${JSON.stringify(currentGraph, null, 2)}
+${JSON.stringify(stripGraphForPrompt(currentGraph), null, 2)}
 
 ### User Instruction
 "${userInstruction}"

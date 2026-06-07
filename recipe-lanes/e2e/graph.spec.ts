@@ -17,12 +17,18 @@ test.describe('Graph UI & Interactions (Consolidated)', () => {
     await create_recipe(page, '1 Egg\n1 Milk\nWhisk them', dir);
     await wait_for_graph(page, dir);
 
-    // 1. Pan
+    // 1. Pan — wait for loading screen to clear so it doesn't intercept mouse events
+    await expect(page.getByTestId('loading-screen')).not.toBeVisible({ timeout: 30000 });
     const viewport = page.locator('.react-flow__viewport');
+    const pane = page.locator('.react-flow__pane');
     const initialTransform = await viewport.getAttribute('style');
-    await page.mouse.move(100, 200);
+    const box = await pane.boundingBox();
+    expect(box).toBeTruthy();
+    const cx = box!.x + box!.width / 2;
+    const cy = box!.y + box!.height / 2;
+    await page.mouse.move(cx, cy);
     await page.mouse.down();
-    await page.mouse.move(300, 400, { steps: 10 });
+    await page.mouse.move(cx + 200, cy + 200, { steps: 10 });
     await page.mouse.up();
     await page.waitForTimeout(500);
     expect(await viewport.getAttribute('style')).not.toBe(initialTransform);

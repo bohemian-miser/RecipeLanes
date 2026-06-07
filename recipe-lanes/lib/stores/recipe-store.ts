@@ -43,7 +43,7 @@
  */
 
 import { create } from 'zustand';
-import { RecipeGraph, RecipeNode, IconStyleId, LineStyleId, LayoutModeId, BackgroundElementId } from '../recipe-lanes/types';
+import { RecipeGraph, RecipeNode, IconStyleId, LineStyleId, LayoutModeId, BackgroundElementId, ChatMessage } from '../recipe-lanes/types';
 import { getNodeShortlistKey, cycleShortlistNodes } from '../recipe-lanes/model-utils';
 
 // ---------------------------------------------------------------------------
@@ -65,6 +65,7 @@ interface RecipeState {
     nodeLayout: LayoutModeId;
     backgrounds: BackgroundElementId[];
     activePresetId: string;
+    messages: ChatMessage[];
 }
 
 interface RecipeActions {
@@ -100,6 +101,9 @@ interface RecipeActions {
      * Marks the recipe dirty — use mergeSnapshot for Firestore data.
      */
     setGraph: (graph: RecipeGraph) => void;
+
+    addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
+    clearMessages: () => void;
 
     /** Clears all state — call when the user navigates away from a recipe. */
     reset: () => void;
@@ -180,6 +184,7 @@ const initialState: RecipeState = {
     nodeLayout: 'dagre',
     backgrounds: [],
     activePresetId: 'classic',
+    messages: [],
 };
 
 export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => ({
@@ -231,6 +236,17 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
 
         set({ graph: { ...state.graph, nodes } });
     },
+
+    addMessage: ({ role, content }) => set((state) => ({
+        messages: [...state.messages, {
+            id: crypto.randomUUID(),
+            role,
+            content,
+            timestamp: Date.now(),
+        }],
+    })),
+
+    clearMessages: () => set({ messages: [] }),
 
     reset: () => set(initialState),
     setVisualPreset: (presetId) => set({ activePresetId: presetId }),

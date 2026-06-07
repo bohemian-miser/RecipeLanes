@@ -176,7 +176,10 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
                         const result = hydratedResults.find(r => r.name === stdName);
                         if (result && result.icons.length > 0) {
                             const icon = result.icons[0];
-                            node.iconShortlist = [buildShortlistEntry(icon, 'search', result.matchScores[icon.id] ?? 0)];
+                            node.iconShortlist = markEntryImpressedAtIndex(
+                                [buildShortlistEntry(icon, 'search', result.matchScores[icon.id] ?? 0)],
+                                0,
+                            );
                             node.shortlistIndex = 0;
                         }
                         const allMatches = allMatchesByName.get(stdName);

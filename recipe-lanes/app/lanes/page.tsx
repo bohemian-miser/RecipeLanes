@@ -25,6 +25,7 @@ import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
 import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
+import { ChatPanel } from '@/components/recipe-lanes/chat-panel';
 import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
 import { standardizeIngredientName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
@@ -51,11 +52,13 @@ function RecipeLanesContent() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [recipeText, setRecipeText] = useState('');
   const [chatInput, setChatInput] = useState('');
+  const [showChat, setShowChat] = useState(false);
   const graph = useRecipeStore(s => s.graph);
   const ownerId = useRecipeStore(s => s.ownerId);
   const ownerName = useRecipeStore(s => s.ownerName);
-  const { mergeSnapshot, setGraph, setGraphWithUndo, undo, reset: resetRecipeStore } = useRecipeStore.getState();
+  const { mergeSnapshot, setGraph, setGraphWithUndo, undo, reset: resetRecipeStore, addMessage, clearMessages } = useRecipeStore.getState();
   const canUndo = useRecipeStore(s => s.undoStack.length > 0);
+  const messageCount = useRecipeStore(s => s.messages.length);
   
   useEffect(() => {
       console.log('[RecipeLanesPage] User:', user?.uid, 'Owner:', ownerId);
@@ -572,6 +575,9 @@ const handleVisualize = async () => {
         url.searchParams.set('id', res.id);
         
         autoFillIconsRef.current = true;
+        clearMessages();
+        addMessage({ role: 'user', content: recipeText });
+        addMessage({ role: 'assistant', content: 'Recipe created! You can ask me to adjust ingredients, serving sizes, or cooking methods.' });
         router.push(url.pathname + url.search);
 
         setStatus('complete');
@@ -587,19 +593,22 @@ const handleVisualize = async () => {
 
   const handleAdjust = async () => {
       if (!graph || !chatInput.trim()) return;
-      
+
       const prompt = chatInput;
-      setChatInput(''); // Clear immediately
+      setChatInput('');
       setStatus('adjusting');
       setError(null);
+      addMessage({ role: 'user', content: prompt });
 
       try {
           const res = await adjustRecipeAction(graph, prompt);
           if (res.error || !res.graph) {
               throw new Error(res.error || 'Failed to adjust graph.');
           }
-          res.graph.title = recipeTitle; // Preserve title
+          res.graph.title = recipeTitle;
           setGraphWithUndo(res.graph);
+          addMessage({ role: 'assistant', content: (res as any).message || 'Done! The recipe has been updated.' });
+          setShowChat(true);
 
           const currentId = searchParams.get('id') || undefined;
           if (currentId) {
@@ -609,6 +618,7 @@ const handleVisualize = async () => {
           setStatus('complete');
       } catch (e: any) {
           console.error('Adjustment failed:', e);
+          addMessage({ role: 'assistant', content: `Sorry, that didn't work: ${e.message}` });
           setError(e.message);
           setStatus('error');
       }
@@ -1113,18 +1123,21 @@ const handleVisualize = async () => {
                         <div className="flex items-center gap-1 opacity-50"><span className="text-xs font-bold">Shift+Drag</span> Rotate Branch</div>
                     </div>
 
-                    <div className="hidden md:flex absolute bottom-4 left-1/2 -translate-x-1/2 justify-center pointer-events-auto w-full max-w-lg">
+                    <div className="hidden md:flex absolute bottom-4 left-1/2 -translate-x-1/2 justify-center pointer-events-auto w-full max-w-lg flex-col items-center gap-0">
+                        {showChat && <ChatPanel onClose={() => setShowChat(false)} />}
                         <div className="w-full bg-white/95 backdrop-blur border border-zinc-200 rounded-full shadow-xl flex items-center p-1">
-                            {canUndo && (
-                                <button
-                                    onClick={undo}
-                                    title="Undo (⌘Z)"
-                                    className="p-2 text-zinc-400 hover:text-zinc-700 rounded-full transition-colors ml-1"
-                                >
-                                    <RotateCcw className="w-4 h-4" />
-                                </button>
-                            )}
-                            {!canUndo && <MessageSquare className="w-5 h-5 text-zinc-400 ml-2" />}
+                            <button
+                                onClick={() => setShowChat(v => !v)}
+                                className="relative ml-1 p-1.5 rounded-full hover:bg-zinc-100 transition-colors"
+                                title="Chat history"
+                            >
+                                <MessageSquare className="w-5 h-5 text-zinc-400" />
+                                {messageCount > 0 && (
+                                    <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-yellow-400 rounded-full text-[9px] font-bold text-zinc-900 flex items-center justify-center">
+                                        {messageCount > 9 ? '9+' : messageCount}
+                                    </span>
+                                )}
+                            </button>
                             <input
                                 className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
                                 placeholder="Adjust recipe..."
@@ -1153,11 +1166,6 @@ const handleVisualize = async () => {
                         
                         {/* Chat (Right Half) */}
                         <div className="w-1/2 p-2 flex items-center gap-1">
-                            {canUndo && (
-                                <button onClick={undo} className="text-zinc-400 hover:text-zinc-700 shrink-0">
-                                    <RotateCcw className="w-3 h-3" />
-                                </button>
-                            )}
                             <input
                                 className="flex-1 bg-zinc-100 border border-zinc-200 rounded-md px-2 text-xs h-full text-zinc-800 outline-none"
                                 placeholder="Adjust..."

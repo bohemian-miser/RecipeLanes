@@ -85,6 +85,13 @@ export interface IngredientDoc {
     updated_at: any;
 }
 
+export interface ChatMessage {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: number;
+}
+
 export interface ShortlistEntry {
     icon: IconStats;
     matchType: 'generated' | 'search';

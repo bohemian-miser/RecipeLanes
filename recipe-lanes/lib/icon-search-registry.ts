@@ -45,7 +45,7 @@ export type IconSearchMethod = {
 };
 
 // Client-side hydration from the Firestore icon_index (batches in chunks of 10)
-async function hydrateClientSide(
+export async function hydrateClientSide(
     items: { name: string; fast_matches: { icon_id: string; score: number }[] }[]
 ): Promise<SearchResult[]> {
     const allIds = [...new Set(items.flatMap(i => i.fast_matches.map(m => m.icon_id)))];

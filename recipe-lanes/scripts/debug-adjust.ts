@@ -86,8 +86,9 @@ async function main() {
     const args = process.argv.slice(2);
     const recipeId = args[0];
     const instructions = args.slice(1);
-    if (!recipeId || instructions.length === 0) {
-        console.error('Usage: npx tsx --env-file=.env.staging scripts/debug-adjust.ts <recipeId> "<step1>" ["<step2>" ...]');
+    if (!recipeId) {
+        console.error('Usage: npx tsx --env-file=.env.staging scripts/debug-adjust.ts <recipeId> ["<step1>" "<step2>" ...]');
+        console.error('       (omit steps to just inspect the current recipe + chat history)');
         process.exit(1);
     }
 
@@ -96,11 +97,29 @@ async function main() {
     console.log(`${'═'.repeat(60)}`);
     const snap = await db.collection('recipes').doc(recipeId).get();
     if (!snap.exists) { console.error('Recipe not found'); process.exit(1); }
-    let graph = snap.data()!.graph as RecipeGraph;
+    const data = snap.data()!;
+    let graph = data.graph as RecipeGraph;
     console.log(`Title: ${graph.title}  Nodes: ${graph.nodes.length}  Lanes: ${graph.lanes.length}`);
-    console.log('Initial nodes:');
+    console.log('Current nodes:');
     printNodeList(graph);
 
+    // Show chat history if present
+    const chatHistory: any[] = data.chatHistory ?? [];
+    if (chatHistory.length > 0) {
+        console.log(`\n${'─'.repeat(60)}`);
+        console.log(`Chat history (${chatHistory.length} messages):`);
+        for (const msg of chatHistory) {
+            const ts = msg.timestamp ? new Date(msg.timestamp).toISOString() : '';
+            const label = msg.role === 'user' ? '👤 User' : '🤖 AI  ';
+            console.log(`  ${label} [${ts}] ${msg.content}`);
+        }
+    } else {
+        console.log('\n(No chat history stored)');
+    }
+
+    if (instructions.length === 0) return;
+
+    console.log(`\nRunning ${instructions.length} adjustment step(s)...`);
     for (let i = 0; i < instructions.length; i++) {
         graph = await runStep(graph, instructions[i], i + 1);
     }

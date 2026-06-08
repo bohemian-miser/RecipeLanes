@@ -771,7 +771,19 @@ export function applyPatch(graph: RecipeGraph, patch: RecipePatch): RecipeGraph 
 
     // Append new nodes (mark as pending so icons get resolved)
     if (patch.addNodes) {
-        nodes = [...nodes, ...patch.addNodes.map(n => ({ ...n, status: 'pending' as const }))];
+        const existingNodes = nodes;
+        nodes = [...nodes, ...patch.addNodes.map(n => {
+            const newNode: RecipeNode = { ...n, status: 'pending' as const };
+            // Place near first input parent if no position set
+            if (newNode.x === undefined && newNode.inputs?.length) {
+                const parent = existingNodes.find(e => e.id === newNode.inputs![0]);
+                if (parent?.x !== undefined && parent?.y !== undefined) {
+                    newNode.x = parent.x + 220;
+                    newNode.y = parent.y;
+                }
+            }
+            return newNode;
+        })];
     }
 
     // Lanes

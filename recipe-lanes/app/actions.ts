@@ -412,12 +412,26 @@ export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: stri
 export async function saveRecipeAction(graph: RecipeGraph, existingId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted') {
   try {
     const session = await getAuthService().verifyAuth();
-    const userId = session?.uid; 
+    const userId = session?.uid;
     const ownerName = session?.name;
-    
+
     const dataService = getDataService();
     const id = await dataService.saveRecipe(graph, existingId, userId, visibility, ownerName);
+    // Resolve icons for any pending nodes (e.g. added via AI adjustment)
+    const hasPending = graph.nodes.some(n => n.status === 'pending');
+    if (hasPending) {
+      after(() => dataService.resolveRecipeIcons(id, serverBatchSearchAction));
+    }
     return { id };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function saveChatHistoryAction(recipeId: string, messages: { role: 'user' | 'assistant'; content: string; timestamp: number }[]) {
+  try {
+    await db.collection('recipes').doc(recipeId).update({ chatHistory: messages });
+    return { success: true };
   } catch (e: any) {
     return { error: e.message };
   }

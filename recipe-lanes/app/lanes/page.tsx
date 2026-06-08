@@ -24,7 +24,7 @@ import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
-import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
+import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, saveChatHistoryAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
 import { ChatPanel } from '@/components/recipe-lanes/chat-panel';
 import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
 import { standardizeIngredientName } from '@/lib/utils';
@@ -600,6 +600,7 @@ const handleVisualize = async () => {
         initMessages.forEach(m => addMessage({ role: m.role, content: m.content }));
         // Save before router.push — resetRecipeStore() fires on recipeId change and would wipe messages
         localStorage.setItem(`chat_${res.id}`, JSON.stringify(initMessages));
+        saveChatHistoryAction(res.id, initMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })));
         router.push(url.pathname + url.search);
 
         setStatus('complete');
@@ -636,10 +637,11 @@ const handleVisualize = async () => {
           if (currentId) {
               await saveRecipeAction(res.graph, currentId);
           }
-          // Flush messages to localStorage immediately (don't wait for effect)
+          // Flush messages to localStorage and Firestore immediately
           if (currentId) {
               const allMessages = useRecipeStore.getState().messages;
               localStorage.setItem(`chat_${currentId}`, JSON.stringify(allMessages));
+              saveChatHistoryAction(currentId, allMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })));
           }
 
           setStatus('complete');

@@ -138,17 +138,29 @@ function mergeNode(existing: RecipeNode, incoming: RecipeNode): RecipeNode {
     const incomingShortlistKey = getNodeShortlistKey(incoming);
     const shortlistChanged = existingShortlistKey !== incomingShortlistKey;
 
-    // Fast path: nothing we care about changed → keep exact reference.
-    if (
-        !shortlistChanged &&
+    const structurallyIdentical =
         existing.text === incoming.text &&
         existing.quantity === incoming.quantity &&
         existing.unit === incoming.unit &&
         existing.visualDescription === incoming.visualDescription &&
         existing.x === incoming.x &&
-        existing.y === incoming.y
-    ) {
+        existing.y === incoming.y;
+
+    // Fast path: nothing changed → keep exact reference.
+    if (!shortlistChanged && structurallyIdentical) {
         return existing;
+    }
+
+    // Icons-only update (resolveRecipeIcons writes back shortlists without touching
+    // structure): preserve all local fields, splice in only the icon-related ones.
+    // This prevents a server write from overwriting local position/text state.
+    if (shortlistChanged && structurallyIdentical) {
+        return {
+            ...existing,
+            iconShortlist: incoming.iconShortlist,
+            shortlistIndex: incoming.shortlistIndex ?? 0,
+            status: incoming.status,
+        };
     }
 
     return {

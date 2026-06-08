@@ -396,6 +396,12 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
 
       // Use Firestore Listener
       const unsubscribe = onSnapshot(doc(db, 'recipes', recipeId), (docSnapshot) => {
+          // Skip the optimistic local echo of our own writes — wait for server confirmation.
+          // hasPendingWrites is true only for the immediate local-cache reflection before
+          // the server has confirmed. Server writes (resolveRecipeIcons, other devices) are
+          // always hasPendingWrites=false and will still come through.
+          if (docSnapshot.metadata.hasPendingWrites) return;
+
           if (docSnapshot.exists()) {
               const data = docSnapshot.data();
               const currentGraph = data.graph as RecipeGraph;
@@ -632,19 +638,17 @@ const handleVisualize = async () => {
           setGraphWithUndo(res.graph);
           addMessage({ role: 'assistant', content: (res as any).message || 'Done! The recipe has been updated.' });
           setShowChat(true);
+          setStatus('complete');
 
+          // Fire-and-forget — UI is already updated, don't block on the Firestore write
           const currentId = searchParams.get('id') || undefined;
           if (currentId) {
-              await saveRecipeAction(res.graph, currentId);
+              saveRecipeAction(res.graph, currentId).then(() => {
+                  const allMessages = useRecipeStore.getState().messages;
+                  localStorage.setItem(`chat_${currentId}`, JSON.stringify(allMessages));
+                  saveChatHistoryAction(currentId, allMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })));
+              }).catch(e => console.error('[handleAdjust] save failed:', e));
           }
-          // Flush messages to localStorage and Firestore immediately
-          if (currentId) {
-              const allMessages = useRecipeStore.getState().messages;
-              localStorage.setItem(`chat_${currentId}`, JSON.stringify(allMessages));
-              saveChatHistoryAction(currentId, allMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })));
-          }
-
-          setStatus('complete');
       } catch (e: any) {
           console.error('Adjustment failed:', e);
           addMessage({ role: 'assistant', content: `Sorry, that didn't work: ${e.message}` });

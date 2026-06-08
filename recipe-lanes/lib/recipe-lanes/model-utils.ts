@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry, SearchTerm, RecipeGraph, IconStyleId } from './types';
+import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry, SearchTerm, RecipeGraph, IconStyleId, RecipePatch } from './types';
 import { standardizeIngredientName } from '../utils';
 
 /**
@@ -742,5 +742,38 @@ export function preserveNodeShortlist<T extends RecipeNode>(target: T, source: R
         ...target,
         iconShortlist: newShortlist,
         shortlistIndex: source.shortlistIndex,
+    };
+}
+
+/**
+ * Applies a RecipePatch onto an existing graph, returning a new graph.
+ * Icon shortlists on surviving nodes are preserved unchanged.
+ */
+export function applyPatch(graph: RecipeGraph, patch: RecipePatch): RecipeGraph {
+    const removeSet = new Set(patch.removeNodeIds ?? []);
+    const removeLaneSet = new Set(patch.removeLaneIds ?? []);
+
+    // Keep surviving nodes, apply updates
+    let nodes = graph.nodes
+        .filter(n => !removeSet.has(n.id))
+        .map(n => {
+            const update = patch.updateNodes?.find(u => u.id === n.id);
+            return update ? { ...n, ...update } : n;
+        });
+
+    // Append new nodes (mark as pending so icons get resolved)
+    if (patch.addNodes) {
+        nodes = [...nodes, ...patch.addNodes.map(n => ({ ...n, status: 'pending' as const }))];
+    }
+
+    // Lanes
+    let lanes = graph.lanes.filter(l => !removeLaneSet.has(l.id));
+    if (patch.addLanes) lanes = [...lanes, ...patch.addLanes];
+
+    return {
+        ...graph,
+        nodes,
+        lanes,
+        ...(patch.updateTitle !== undefined && { title: patch.updateTitle }),
     };
 }

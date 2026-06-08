@@ -65,6 +65,7 @@ interface RecipeState {
     nodeLayout: LayoutModeId;
     backgrounds: BackgroundElementId[];
     activePresetId: string;
+    undoStack: RecipeGraph[];
 }
 
 interface RecipeActions {
@@ -100,6 +101,15 @@ interface RecipeActions {
      * Marks the recipe dirty — use mergeSnapshot for Firestore data.
      */
     setGraph: (graph: RecipeGraph) => void;
+
+    /**
+     * Pushes the current graph onto the undo stack, then applies the mutation.
+     * Call this before any user-initiated change that should be undoable.
+     */
+    setGraphWithUndo: (graph: RecipeGraph) => void;
+
+    /** Pops the last snapshot from the undo stack and restores it. */
+    undo: () => void;
 
     /** Clears all state — call when the user navigates away from a recipe. */
     reset: () => void;
@@ -167,6 +177,8 @@ function mergeNodes(
 // Store
 // ---------------------------------------------------------------------------
 
+const MAX_UNDO_DEPTH = 20;
+
 const initialState: RecipeState = {
     graph: null,
     recipeId: null,
@@ -180,6 +192,7 @@ const initialState: RecipeState = {
     nodeLayout: 'dagre',
     backgrounds: [],
     activePresetId: 'classic',
+    undoStack: [],
 };
 
 export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => ({
@@ -222,6 +235,21 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
     setDirty: (dirty) => set({ isDirty: dirty }),
 
     setGraph: (graph) => set({ graph, isDirty: true }),
+
+    setGraphWithUndo: (graph) => set((state) => ({
+        graph,
+        isDirty: true,
+        undoStack: state.graph
+            ? [...state.undoStack.slice(-MAX_UNDO_DEPTH + 1), state.graph]
+            : state.undoStack,
+    })),
+
+    undo: () => set((state) => {
+        if (state.undoStack.length === 0) return {};
+        const undoStack = [...state.undoStack];
+        const graph = undoStack.pop()!;
+        return { graph, undoStack, isDirty: true };
+    }),
 
     cycleShortlist: (nodeId) => {
         const state = get();

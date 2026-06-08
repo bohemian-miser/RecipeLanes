@@ -54,7 +54,8 @@ function RecipeLanesContent() {
   const graph = useRecipeStore(s => s.graph);
   const ownerId = useRecipeStore(s => s.ownerId);
   const ownerName = useRecipeStore(s => s.ownerName);
-  const { mergeSnapshot, setGraph, reset: resetRecipeStore } = useRecipeStore.getState();
+  const { mergeSnapshot, setGraph, setGraphWithUndo, undo, reset: resetRecipeStore } = useRecipeStore.getState();
+  const canUndo = useRecipeStore(s => s.undoStack.length > 0);
   
   useEffect(() => {
       console.log('[RecipeLanesPage] User:', user?.uid, 'Owner:', ownerId);
@@ -84,6 +85,18 @@ function RecipeLanesContent() {
   const isForking = useRef(false);
   const titleBeforeEdit = useRef('');
   const autoFillIconsRef = useRef(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        const { undoStack } = useRecipeStore.getState();
+        if (undoStack.length > 0) { e.preventDefault(); undo(); }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isOwner = !ownerId || (!!user && user.uid === ownerId);
 
@@ -586,18 +599,18 @@ const handleVisualize = async () => {
               throw new Error(res.error || 'Failed to adjust graph.');
           }
           res.graph.title = recipeTitle; // Preserve title
-          setGraph(res.graph);
-          
+          setGraphWithUndo(res.graph);
+
           const currentId = searchParams.get('id') || undefined;
           if (currentId) {
               await saveRecipeAction(res.graph, currentId);
           }
-          
+
           setStatus('complete');
       } catch (e: any) {
           console.error('Adjustment failed:', e);
           setError(e.message);
-          setStatus('error'); 
+          setStatus('error');
       }
   };
 
@@ -1102,8 +1115,17 @@ const handleVisualize = async () => {
 
                     <div className="hidden md:flex absolute bottom-4 left-1/2 -translate-x-1/2 justify-center pointer-events-auto w-full max-w-lg">
                         <div className="w-full bg-white/95 backdrop-blur border border-zinc-200 rounded-full shadow-xl flex items-center p-1">
-                            <MessageSquare className="w-5 h-5 text-zinc-400 ml-2" />
-                            <input 
+                            {canUndo && (
+                                <button
+                                    onClick={undo}
+                                    title="Undo (⌘Z)"
+                                    className="p-2 text-zinc-400 hover:text-zinc-700 rounded-full transition-colors ml-1"
+                                >
+                                    <RotateCcw className="w-4 h-4" />
+                                </button>
+                            )}
+                            {!canUndo && <MessageSquare className="w-5 h-5 text-zinc-400 ml-2" />}
+                            <input
                                 className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
                                 placeholder="Adjust recipe..."
                                 value={chatInput}
@@ -1131,7 +1153,12 @@ const handleVisualize = async () => {
                         
                         {/* Chat (Right Half) */}
                         <div className="w-1/2 p-2 flex items-center gap-1">
-                            <input 
+                            {canUndo && (
+                                <button onClick={undo} className="text-zinc-400 hover:text-zinc-700 shrink-0">
+                                    <RotateCcw className="w-3 h-3" />
+                                </button>
+                            )}
+                            <input
                                 className="flex-1 bg-zinc-100 border border-zinc-200 rounded-md px-2 text-xs h-full text-zinc-800 outline-none"
                                 placeholder="Adjust..."
                                 value={chatInput}

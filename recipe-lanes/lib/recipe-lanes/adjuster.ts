@@ -17,23 +17,28 @@
 
 import type { RecipeGraph } from './types';
 
-const SCHEMA_INTERFACE = `
-interface RecipeGraph {
-  lanes: {
-    id: string;
-    label: string; // e.g. "Skillet"
-    type: 'prep' | 'cook' | 'serve';
+const PATCH_SCHEMA = `
+interface RecipePatch {
+  message: string;          // one sentence describing what changed, shown to the user
+  addNodes?: {
+    id: string; laneId: string; text: string; visualDescription: string;
+    type: 'ingredient' | 'action'; inputs?: string[];
+    temperature?: string; duration?: string;
   }[];
+  updateNodes?: { id: string; [field: string]: any }[];  // only the fields that change
+  removeNodeIds?: string[];
+  addLanes?: { id: string; label: string; type: 'prep' | 'cook' | 'serve' }[];
+  removeLaneIds?: string[];
+  updateTitle?: string;
+}
+
+// Fallback — return a full graph only if the change is so extensive a patch would be larger:
+interface RecipeGraph {
+  lanes: { id: string; label: string; type: 'prep' | 'cook' | 'serve' }[];
   nodes: {
-    id: string;
-    laneId: string; // Must match a lane.id
-    text: string; // Concise instruction
-    visualDescription: string; // Active, object-focused visual prompt (no hands)
-    type: 'ingredient' | 'action';
-    inputs?: string[]; // IDs of previous nodes
-    temperature?: string;
-    duration?: string;
-    iconUrl?: string; // Preserve existing icon URLs if node is unchanged!
+    id: string; laneId: string; text: string; visualDescription: string;
+    type: 'ingredient' | 'action'; inputs?: string[];
+    temperature?: string; duration?: string;
   }[];
 }
 `;
@@ -61,34 +66,33 @@ function stripGraphForPrompt(graph: RecipeGraph): object {
 }
 
 export function generateAdjustmentPrompt(currentGraph: RecipeGraph, userInstruction: string): string {
-  const BLOCK_START = "```typescript";
-  const BLOCK_END = "```";
+  return `You are an expert recipe graph editor.
 
-  return `
-You are an expert recipe graph editor.
-Your goal is to MODIFY the provided "Current Graph" based on the "User Instruction".
+### Task
+Apply the "User Instruction" to the "Current Graph" and return a JSON object.
 
-### Rules
-1. **Preserve ID/State:** Keep existing nodes/lanes if they are still relevant. Do not regenerate IDs for unchanged nodes.
-2. **Preserve Icons:** If you keep a node, KEEP its
-iconUrl
- if present.
-3. **New Nodes:** If adding nodes, generate a
-visualDescription
- following the guidelines (Active, Object-Focused, No Hands).
-4. **Schema:** The output must match the schema strictly.
+### Preferred output: RecipePatch
+Return a patch when the change is surgical (add/remove/edit a few nodes).
+Return a full RecipeGraph only when the change rewrites most of the graph.
 
 ### Schema
-${BLOCK_START}
-${SCHEMA_INTERFACE}
-${BLOCK_END}
+\`\`\`typescript
+${PATCH_SCHEMA}
+\`\`\`
 
-### Current Graph (JSON)
+### Rules
+- **Prefer patch**: For most edits, a patch is smaller and faster to return.
+- **Preserve IDs**: Do not change IDs for unchanged nodes.
+- **New nodes**: Set \`visualDescription\` to an active, object-focused phrase (no hands).
+- **message**: Always include a one-sentence summary of what changed.
+
+### Current Graph
+\`\`\`json
 ${JSON.stringify(stripGraphForPrompt(currentGraph), null, 2)}
+\`\`\`
 
 ### User Instruction
 "${userInstruction}"
 
-Return ONLY the full updated JSON.
-`;
+Return ONLY the JSON object (no markdown, no explanation).`;
 }

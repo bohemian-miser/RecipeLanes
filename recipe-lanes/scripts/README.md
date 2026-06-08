@@ -55,6 +55,20 @@ npx tsx scripts/backfill-search-terms.ts --staging
 npx tsx scripts/backfill-names.ts --staging
 ```
 
+## Recipe / Adjust debugging
+
+```bash
+# Show all nodes, visual descriptions, shortlist sizes, and queue entries for a recipe
+npx tsx --env-file=.env.staging scripts/debug-recipe-nodes.ts <recipeId>
+
+# Run an adjustment against a live recipe — shows full AI prompt, raw response,
+# patch/graph detection, removeNodeId validation, and applyPatch result
+npx tsx --env-file=.env.staging scripts/debug-adjust.ts <recipeId> "<instruction>"
+
+# Show recent icon_queue entries (pass a name to look up a specific one)
+npx tsx --env-file=.env.staging scripts/check-queue.ts [<ingredient name>]
+```
+
 ## DB / Admin
 
 ```bash

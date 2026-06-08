@@ -350,23 +350,6 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       layoutModeRestoredRef.current = false;
   }, [recipeId]);
 
-  // Persist chat messages to localStorage per recipe, restore on load
-  useEffect(() => {
-      if (!recipeId) return;
-      const stored = localStorage.getItem(`chat_${recipeId}`);
-      if (stored) {
-          try {
-              const msgs = JSON.parse(stored);
-              if (Array.isArray(msgs) && msgs.length > 0) {
-                  // Only restore if store is currently empty (don't clobber live session)
-                  if (useRecipeStore.getState().messages.length === 0) {
-                      msgs.forEach((m: any) => addMessage({ role: m.role, content: m.content }));
-                  }
-              }
-          } catch {}
-      }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipeId]);
 
   const messages = useRecipeStore(s => s.messages);
   useEffect(() => {
@@ -397,6 +380,16 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       if (!recipeId) return;
 
       resetRecipeStore();
+      // Restore chat messages from localStorage after reset
+      try {
+          const stored = localStorage.getItem(`chat_${recipeId}`);
+          if (stored) {
+              const msgs = JSON.parse(stored);
+              if (Array.isArray(msgs) && msgs.length > 0) {
+                  msgs.forEach((m: any) => addMessage({ role: m.role, content: m.content }));
+              }
+          }
+      } catch {}
       debugLogAction('Setting up listener for recipe: ' + recipeId);
       setStatus('loading');
       setWarningDismissed(false);
@@ -600,8 +593,13 @@ const handleVisualize = async () => {
         
         autoFillIconsRef.current = true;
         clearMessages();
-        addMessage({ role: 'user', content: recipeText });
-        addMessage({ role: 'assistant', content: 'Recipe created! You can ask me to adjust ingredients, serving sizes, or cooking methods.' });
+        const initMessages = [
+            { id: crypto.randomUUID(), role: 'user' as const, content: recipeText, timestamp: Date.now() },
+            { id: crypto.randomUUID(), role: 'assistant' as const, content: 'Recipe created! You can ask me to adjust ingredients, serving sizes, or cooking methods.', timestamp: Date.now() },
+        ];
+        initMessages.forEach(m => addMessage({ role: m.role, content: m.content }));
+        // Save before router.push — resetRecipeStore() fires on recipeId change and would wipe messages
+        localStorage.setItem(`chat_${res.id}`, JSON.stringify(initMessages));
         router.push(url.pathname + url.search);
 
         setStatus('complete');
@@ -637,6 +635,11 @@ const handleVisualize = async () => {
           const currentId = searchParams.get('id') || undefined;
           if (currentId) {
               await saveRecipeAction(res.graph, currentId);
+          }
+          // Flush messages to localStorage immediately (don't wait for effect)
+          if (currentId) {
+              const allMessages = useRecipeStore.getState().messages;
+              localStorage.setItem(`chat_${currentId}`, JSON.stringify(allMessages));
           }
 
           setStatus('complete');

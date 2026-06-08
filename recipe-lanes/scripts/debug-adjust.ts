@@ -1,11 +1,12 @@
 /**
- * Debug script: run one or more adjustments against a live recipe in sequence.
- * Shows the full AI prompt, raw response, patch/graph detection, and applyPatch result.
+ * Debug script: inspect a recipe's state + chat history, and optionally run adjustments.
  *
  * Usage:
- *   npx tsx --env-file=.env.staging scripts/debug-adjust.ts <recipeId> "<step1>" ["<step2>" ...]
+ *   npx tsx --env-file=.env.staging scripts/debug-adjust.ts <recipeId> [--verbose] ["<step1>" ...]
  *
- * Each instruction is applied to the result of the previous one, simulating a real chat session.
+ * Without steps: shows current recipe state and stored chat history.
+ * With steps: runs each instruction in sequence against the live recipe.
+ * --verbose / -v: also prints the full raw AI response for each step.
  */
 import 'dotenv/config';
 import { db } from '../lib/firebase-admin';
@@ -23,7 +24,7 @@ function parseJson(raw: string): any {
     return JSON.parse(s);
 }
 
-async function runStep(graph: RecipeGraph, instruction: string, stepNum: number): Promise<RecipeGraph> {
+async function runStep(graph: RecipeGraph, instruction: string, stepNum: number, verbose: boolean): Promise<RecipeGraph> {
     console.log(`\n${'─'.repeat(60)}`);
     console.log(`Step ${stepNum}: "${instruction}"`);
     console.log(`${'─'.repeat(60)}`);
@@ -34,7 +35,12 @@ async function runStep(graph: RecipeGraph, instruction: string, stepNum: number)
     const t0 = Date.now();
     const raw = await getAIService().generateText(prompt);
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-    console.log(`\nAI response (${elapsed}s, ${raw.length} chars):\n${raw}`);
+
+    if (verbose) {
+        console.log(`\nRaw AI response (${elapsed}s, ${raw.length} chars):\n${raw}`);
+    } else {
+        console.log(`AI: ${elapsed}s, ${raw.length} chars`);
+    }
 
     let parsed: any;
     try { parsed = parseJson(raw); }
@@ -44,7 +50,6 @@ async function runStep(graph: RecipeGraph, instruction: string, stepNum: number)
         console.log('\n✅ Full graph returned');
         try {
             const newGraph = parseRecipeGraph(JSON.stringify(parsed));
-            // Restore icons for unchanged nodes
             newGraph.nodes = newGraph.nodes.map(n => {
                 const old = graph.nodes.find(o => o.id === n.id);
                 return old ? preserveNodeShortlist(n, old) : n;
@@ -56,14 +61,22 @@ async function runStep(graph: RecipeGraph, instruction: string, stepNum: number)
     } else {
         const patch = parsed as RecipePatch;
         console.log('\n✅ Patch returned');
-        console.log(`   message:      "${patch.message}"`);
-        console.log(`   addNodes:     ${patch.addNodes?.length ?? 0} ${(patch.addNodes ?? []).map(n => `"${n.text}"`).join(', ')}`);
-        console.log(`   updateNodes:  ${patch.updateNodes?.length ?? 0} ${(patch.updateNodes ?? []).map(n => n.id).join(', ')}`);
-        console.log(`   removeNodeIds:${JSON.stringify(patch.removeNodeIds ?? [])}`);
+        console.log(`   message:       "${patch.message}"`);
+        console.log(`   addNodes:      ${patch.addNodes?.length ?? 0}  ${(patch.addNodes ?? []).map(n => `"${n.text}"`).join(', ')}`);
+        console.log(`   updateNodes:   ${patch.updateNodes?.length ?? 0}  ${(patch.updateNodes ?? []).map(n => n.id).join(', ')}`);
+        console.log(`   removeNodeIds: ${JSON.stringify(patch.removeNodeIds ?? [])}`);
+        if (verbose) {
+            console.log('\n   Full patch JSON:');
+            console.log(JSON.stringify(patch, null, 2).split('\n').map(l => '   ' + l).join('\n'));
+        }
 
         const existingIds = new Set(graph.nodes.map(n => n.id));
         const missing = (patch.removeNodeIds ?? []).filter(id => !existingIds.has(id));
         if (missing.length) console.warn(`\n⚠️  removeNodeIds not in graph: ${JSON.stringify(missing)}`);
+
+        const hasRemovals = (patch.removeNodeIds?.length ?? 0) > 0;
+        const hasAdditions = (patch.addNodes?.length ?? 0) > 0;
+        if (hasRemovals && !hasAdditions) console.warn(`⚠️  Nodes removed but no addNodes — likely a bad merge response`);
 
         try {
             const result = applyPatch(graph, patch);
@@ -83,11 +96,14 @@ function printNodeList(graph: RecipeGraph) {
 }
 
 async function main() {
-    const args = process.argv.slice(2);
+    const rawArgs = process.argv.slice(2);
+    const verbose = rawArgs.includes('--verbose') || rawArgs.includes('-v');
+    const args = rawArgs.filter(a => a !== '--verbose' && a !== '-v');
+
     const recipeId = args[0];
     const instructions = args.slice(1);
     if (!recipeId) {
-        console.error('Usage: npx tsx --env-file=.env.staging scripts/debug-adjust.ts <recipeId> ["<step1>" "<step2>" ...]');
+        console.error('Usage: npx tsx --env-file=.env.staging scripts/debug-adjust.ts <recipeId> [-v] ["<step1>" ...]');
         console.error('       (omit steps to just inspect the current recipe + chat history)');
         process.exit(1);
     }
@@ -103,7 +119,6 @@ async function main() {
     console.log('Current nodes:');
     printNodeList(graph);
 
-    // Show chat history if present
     const chatHistory: any[] = data.chatHistory ?? [];
     if (chatHistory.length > 0) {
         console.log(`\n${'─'.repeat(60)}`);
@@ -119,9 +134,9 @@ async function main() {
 
     if (instructions.length === 0) return;
 
-    console.log(`\nRunning ${instructions.length} adjustment step(s)...`);
+    console.log(`\nRunning ${instructions.length} adjustment step(s)...${verbose ? ' (verbose)' : ''}`);
     for (let i = 0; i < instructions.length; i++) {
-        graph = await runStep(graph, instructions[i], i + 1);
+        graph = await runStep(graph, instructions[i], i + 1, verbose);
     }
 
     console.log(`\n${'═'.repeat(60)}`);

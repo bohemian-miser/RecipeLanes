@@ -179,14 +179,24 @@ function mergeNodes(
 ): RecipeNode[] {
     // Build a lookup map so merging is O(n) not O(n²).
     const existingById = new Map(existing.map(n => [n.id, n]));
+    const incomingIds = new Set(incoming.map(n => n.id));
+
     const merged = incoming.map(n => {
         const ex = existingById.get(n.id);
         return ex ? mergeNode(ex, n) : n;
     });
 
+    // Preserve locally-added nodes not yet written to Firestore.
+    // This prevents a race where resolveRecipeIcons fires a snapshot using the
+    // pre-adjustment Firestore state and silently drops nodes added by the AI.
+    // Downside: a node deleted on another device will linger until next full reload —
+    // acceptable given single-owner editing is the dominant use case.
+    const pendingLocal = existing.filter(n => !incomingIds.has(n.id));
+    const result = pendingLocal.length > 0 ? [...merged, ...pendingLocal] : merged;
+
     // Return the original array reference if nothing actually changed.
-    const changed = merged.some((n, i) => n !== existing[i] || existing.length !== incoming.length);
-    return changed ? merged : existing;
+    const changed = result.length !== existing.length || result.some((n, i) => n !== existing[i]);
+    return changed ? result : existing;
 }
 
 // ---------------------------------------------------------------------------

@@ -85,7 +85,7 @@ ${PATCH_SCHEMA}
 - **Preserve IDs**: Do not change IDs for unchanged nodes.
 - **New nodes**: Set \`visualDescription\` to an active, object-focused phrase (no hands).
 - **message**: Always include a one-sentence summary of what changed.
-- **Merging nodes**: Always do BOTH steps: (1) add the combined result in `addNodes`, (2) put every source node in `removeNodeIds`. Never remove nodes without adding their replacement. Inputs refs are cleaned automatically.
+- **Merging nodes**: Always do BOTH steps: (1) add the combined result in \`addNodes\`, (2) put every source node in \`removeNodeIds\`. Never remove nodes without adding their replacement. Inputs refs are cleaned automatically.
 
 ### Current Graph
 \`\`\`json

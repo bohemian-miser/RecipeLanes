@@ -1,83 +1,114 @@
 /**
- * Debug script: run an adjustment against a live recipe and show the full AI
- * request/response, patch/graph detection, and whether applyPatch worked.
+ * Debug script: run one or more adjustments against a live recipe in sequence.
+ * Shows the full AI prompt, raw response, patch/graph detection, and applyPatch result.
  *
  * Usage:
- *   npx tsx --env-file=.env.staging scripts/debug-adjust.ts <recipeId> "<instruction>"
+ *   npx tsx --env-file=.env.staging scripts/debug-adjust.ts <recipeId> "<step1>" ["<step2>" ...]
+ *
+ * Each instruction is applied to the result of the previous one, simulating a real chat session.
  */
 import 'dotenv/config';
 import { db } from '../lib/firebase-admin';
 import { generateAdjustmentPrompt } from '../lib/recipe-lanes/adjuster';
-import { applyPatch } from '../lib/recipe-lanes/model-utils';
+import { applyPatch, preserveNodeShortlist } from '../lib/recipe-lanes/model-utils';
 import { parseRecipeGraph } from '../lib/recipe-lanes/parser';
 import { getAIService } from '../lib/ai-service';
 import type { RecipeGraph, RecipePatch } from '../lib/recipe-lanes/types';
 
-async function main() {
-    const [recipeId, instruction] = process.argv.slice(2);
-    if (!recipeId || !instruction) {
-        console.error('Usage: npx tsx --env-file=.env.staging scripts/debug-adjust.ts <recipeId> "<instruction>"');
-        process.exit(1);
-    }
+function parseJson(raw: string): any {
+    let s = raw.trim();
+    const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fence) s = fence[1].trim();
+    else { const a = s.indexOf('{'), b = s.lastIndexOf('}'); if (a !== -1 && b > a) s = s.slice(a, b + 1); }
+    return JSON.parse(s);
+}
 
-    console.log(`\n=== Recipe: ${recipeId} ===`);
-    const snap = await db.collection('recipes').doc(recipeId).get();
-    if (!snap.exists) { console.error('Recipe not found'); process.exit(1); }
-    const graph = snap.data()!.graph as RecipeGraph;
-    console.log(`Title: ${graph.title}, Nodes: ${graph.nodes.length}`);
-    console.log('Node IDs & texts:');
-    graph.nodes.forEach(n => console.log(`  [${n.id}] "${n.text}" (${n.type}) vd="${n.visualDescription}"`));
+async function runStep(graph: RecipeGraph, instruction: string, stepNum: number): Promise<RecipeGraph> {
+    console.log(`\n${'─'.repeat(60)}`);
+    console.log(`Step ${stepNum}: "${instruction}"`);
+    console.log(`${'─'.repeat(60)}`);
 
-    console.log(`\n=== Instruction: "${instruction}" ===`);
     const prompt = generateAdjustmentPrompt(graph, instruction);
-    console.log(`\n--- Prompt (${prompt.length} chars) ---`);
-    console.log(prompt.slice(0, 1000) + (prompt.length > 1000 ? '\n...(truncated)' : ''));
+    console.log(`Prompt: ${prompt.length} chars`);
 
-    console.log('\n--- Calling AI... ---');
     const t0 = Date.now();
     const raw = await getAIService().generateText(prompt);
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-    console.log(`\n--- AI Response (${elapsed}s, ${raw.length} chars) ---`);
-    console.log(raw);
-
-    // Parse
-    let jsonStr = raw.trim();
-    const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fenceMatch) jsonStr = fenceMatch[1].trim();
-    else { const s = jsonStr.indexOf('{'), e = jsonStr.lastIndexOf('}'); if (s !== -1 && e > s) jsonStr = jsonStr.slice(s, e + 1); }
+    console.log(`\nAI response (${elapsed}s, ${raw.length} chars):\n${raw}`);
 
     let parsed: any;
-    try { parsed = JSON.parse(jsonStr); } catch (e) { console.error('\n❌ JSON parse failed:', e); process.exit(1); }
+    try { parsed = parseJson(raw); }
+    catch (e) { console.error('\n❌ JSON parse failed:', e); return graph; }
 
-    console.log('\n--- Parsed ---');
     if (parsed.lanes && parsed.nodes) {
-        console.log('✅ Full graph returned');
+        console.log('\n✅ Full graph returned');
         try {
-            const newGraph = parseRecipeGraph(jsonStr);
-            console.log(`   Nodes: ${newGraph.nodes.length}, Lanes: ${newGraph.lanes.length}`);
-        } catch (e) { console.error('❌ parseRecipeGraph failed:', e); }
+            const newGraph = parseRecipeGraph(JSON.stringify(parsed));
+            // Restore icons for unchanged nodes
+            newGraph.nodes = newGraph.nodes.map(n => {
+                const old = graph.nodes.find(o => o.id === n.id);
+                return old ? preserveNodeShortlist(n, old) : n;
+            });
+            console.log(`   ${newGraph.nodes.length} nodes, ${newGraph.lanes.length} lanes`);
+            printNodeList(newGraph);
+            return newGraph;
+        } catch (e) { console.error('❌ parseRecipeGraph failed:', e); return graph; }
     } else {
         const patch = parsed as RecipePatch;
-        console.log('✅ Patch returned');
-        console.log(`   message: "${patch.message}"`);
-        console.log(`   addNodes: ${patch.addNodes?.length ?? 0}`);
-        console.log(`   updateNodes: ${patch.updateNodes?.length ?? 0}`);
-        console.log(`   removeNodeIds: ${JSON.stringify(patch.removeNodeIds ?? [])}`);
-        console.log(`   addLanes: ${patch.addLanes?.length ?? 0}`);
-        console.log(`   removeLaneIds: ${JSON.stringify(patch.removeLaneIds ?? [])}`);
-        if (patch.updateTitle) console.log(`   updateTitle: "${patch.updateTitle}"`);
+        console.log('\n✅ Patch returned');
+        console.log(`   message:      "${patch.message}"`);
+        console.log(`   addNodes:     ${patch.addNodes?.length ?? 0} ${(patch.addNodes ?? []).map(n => `"${n.text}"`).join(', ')}`);
+        console.log(`   updateNodes:  ${patch.updateNodes?.length ?? 0} ${(patch.updateNodes ?? []).map(n => n.id).join(', ')}`);
+        console.log(`   removeNodeIds:${JSON.stringify(patch.removeNodeIds ?? [])}`);
 
-        // Validate removeNodeIds actually exist
         const existingIds = new Set(graph.nodes.map(n => n.id));
         const missing = (patch.removeNodeIds ?? []).filter(id => !existingIds.has(id));
-        if (missing.length) console.warn(`\n⚠️  removeNodeIds not found in graph: ${JSON.stringify(missing)}`);
+        if (missing.length) console.warn(`\n⚠️  removeNodeIds not in graph: ${JSON.stringify(missing)}`);
 
         try {
             const result = applyPatch(graph, patch);
-            console.log(`\n   applyPatch result: ${result.nodes.length} nodes (was ${graph.nodes.length})`);
-            result.nodes.forEach(n => console.log(`     [${n.id}] "${n.text}" status=${n.status ?? 'none'}`));
-        } catch (e) { console.error('❌ applyPatch failed:', e); }
+            const delta = result.nodes.length - graph.nodes.length;
+            console.log(`\n   applyPatch: ${result.nodes.length} nodes (${delta >= 0 ? '+' : ''}${delta})`);
+            printNodeList(result);
+            return result;
+        } catch (e) { console.error('❌ applyPatch failed:', e); return graph; }
     }
+}
+
+function printNodeList(graph: RecipeGraph) {
+    graph.nodes.forEach(n => {
+        const icon = n.iconShortlist?.length ? '🖼' : (n.status === 'pending' ? '⏳' : '❌');
+        console.log(`     ${icon} [${n.id}] "${n.text}" (${n.type})`);
+    });
+}
+
+async function main() {
+    const args = process.argv.slice(2);
+    const recipeId = args[0];
+    const instructions = args.slice(1);
+    if (!recipeId || instructions.length === 0) {
+        console.error('Usage: npx tsx --env-file=.env.staging scripts/debug-adjust.ts <recipeId> "<step1>" ["<step2>" ...]');
+        process.exit(1);
+    }
+
+    console.log(`\n${'═'.repeat(60)}`);
+    console.log(`Recipe: ${recipeId}`);
+    console.log(`${'═'.repeat(60)}`);
+    const snap = await db.collection('recipes').doc(recipeId).get();
+    if (!snap.exists) { console.error('Recipe not found'); process.exit(1); }
+    let graph = snap.data()!.graph as RecipeGraph;
+    console.log(`Title: ${graph.title}  Nodes: ${graph.nodes.length}  Lanes: ${graph.lanes.length}`);
+    console.log('Initial nodes:');
+    printNodeList(graph);
+
+    for (let i = 0; i < instructions.length; i++) {
+        graph = await runStep(graph, instructions[i], i + 1);
+    }
+
+    console.log(`\n${'═'.repeat(60)}`);
+    console.log('Final graph:');
+    console.log(`  ${graph.nodes.length} nodes, ${graph.lanes.length} lanes`);
+    printNodeList(graph);
 }
 
 main().catch(console.error);

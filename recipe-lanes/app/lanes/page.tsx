@@ -350,6 +350,30 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       layoutModeRestoredRef.current = false;
   }, [recipeId]);
 
+  // Persist chat messages to localStorage per recipe, restore on load
+  useEffect(() => {
+      if (!recipeId) return;
+      const stored = localStorage.getItem(`chat_${recipeId}`);
+      if (stored) {
+          try {
+              const msgs = JSON.parse(stored);
+              if (Array.isArray(msgs) && msgs.length > 0) {
+                  // Only restore if store is currently empty (don't clobber live session)
+                  if (useRecipeStore.getState().messages.length === 0) {
+                      msgs.forEach((m: any) => addMessage({ role: m.role, content: m.content }));
+                  }
+              }
+          } catch {}
+      }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipeId]);
+
+  const messages = useRecipeStore(s => s.messages);
+  useEffect(() => {
+      if (!recipeId || messages.length === 0) return;
+      localStorage.setItem(`chat_${recipeId}`, JSON.stringify(messages));
+  }, [recipeId, messages]);
+
   // Restore the layout mode from the saved graph on initial load.
   // This ensures that if the user last saved in swimlanes mode, we restore
   // to swimlanes mode on reload rather than defaulting to dagre.

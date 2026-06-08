@@ -753,12 +753,20 @@ export function applyPatch(graph: RecipeGraph, patch: RecipePatch): RecipeGraph 
     const removeSet = new Set(patch.removeNodeIds ?? []);
     const removeLaneSet = new Set(patch.removeLaneIds ?? []);
 
-    // Keep surviving nodes, apply updates
+    // Keep surviving nodes, apply updates, clean up dangling inputs refs
     let nodes = graph.nodes
         .filter(n => !removeSet.has(n.id))
         .map(n => {
             const update = patch.updateNodes?.find(u => u.id === n.id);
-            return update ? { ...n, ...update } : n;
+            const merged = update ? { ...n, ...update } : n;
+            // Remove any inputs that pointed to now-removed nodes
+            if (merged.inputs && removeSet.size > 0) {
+                const cleanInputs = merged.inputs.filter(id => !removeSet.has(id));
+                if (cleanInputs.length !== merged.inputs.length) {
+                    return { ...merged, inputs: cleanInputs };
+                }
+            }
+            return merged;
         });
 
     // Append new nodes (mark as pending so icons get resolved)

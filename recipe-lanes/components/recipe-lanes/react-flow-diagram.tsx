@@ -442,6 +442,18 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                 return;
             }
 
+            // Detect nodes added or removed since the last layout (e.g. AI adjustment).
+            // New nodes from applyPatch are in graph.nodes but have no RF node yet;
+            // removed nodes are in RF but gone from graph. Either case requires a fresh
+            // layout pass so the new/removed nodes are actually rendered.
+            const graphNodeIds = new Set(graph.nodes.map(n => n.id));
+            const hasNewNodes = graph.nodes.some(n => !currentRFNodeIds.has(n.id));
+            const hasRemovedNodes = [...currentRFNodeIds].some(id => !graphNodeIds.has(id));
+            if (hasNewNodes || hasRemovedNodes) {
+                runLayout(true, false);
+                return;
+            }
+
             // Once the initial layout has run (or while dirty), ONLY apply metadata updates
             // (icons, text, serves) from DB to EXISTING nodes.
             // We DO NOT restore deleted nodes or move nodes based on DB — that would reset

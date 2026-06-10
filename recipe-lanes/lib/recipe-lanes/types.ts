@@ -49,6 +49,23 @@ export interface FastMatch {
     score: number;
 }
 
+/**
+ * Surgical patch returned by the AI for recipe adjustments.
+ * The model returns this instead of a full graph to minimise output tokens.
+ * `applyPatch` merges it onto the existing graph.
+ */
+export interface RecipePatch {
+  /** Human-readable summary shown as the assistant chat message. */
+  message: string;
+  addNodes?: Omit<RecipeNode, 'iconShortlist' | 'shortlistIndex' | 'fastMatches'>[];
+  /** Only the fields that should change, plus `id`. */
+  updateNodes?: (Partial<RecipeNode> & { id: string })[];
+  removeNodeIds?: string[];
+  addLanes?: Lane[];
+  removeLaneIds?: string[];
+  updateTitle?: string;
+}
+
 /** Shape of a document in the Firestore `icon_index` collection. Internal to data-service. */
 export interface IconIndexEntry {
     icon_id: string;
@@ -66,6 +83,13 @@ export interface IngredientDoc {
     icons: IconStats[];
     created_at: any;
     updated_at: any;
+}
+
+export interface ChatMessage {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: number;
 }
 
 export interface ShortlistEntry {

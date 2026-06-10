@@ -188,12 +188,20 @@ export function parseHydeQueries(aiResponse: string): string[] {
 }
 
 export function parseRecipeGraph(aiResponse: string): RecipeGraph {
-  // 1. Clean Markdown code blocks if present
+  // 1. Extract JSON — handle markdown code fences and preamble prose
   let jsonStr = aiResponse.trim();
-  if (jsonStr.startsWith("```")) {
-    jsonStr = jsonStr.replace(/^```(json)?/, "").replace(/```$/, "");
+  // Try fenced code block first (anywhere in the response)
+  const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) {
+    jsonStr = fenceMatch[1].trim();
+  } else {
+    // Fall back to extracting the outermost { ... } object
+    const start = jsonStr.indexOf('{');
+    const end = jsonStr.lastIndexOf('}');
+    if (start !== -1 && end > start) {
+      jsonStr = jsonStr.slice(start, end + 1);
+    }
   }
-  jsonStr = jsonStr.trim();
   
   try {
     // 2. Parse JSON

@@ -149,6 +149,23 @@ export const calculateLayout = (graph: RecipeGraph, mode: LayoutMode = 'dagre', 
 
   // If preserving positions (and at least one exists), bypass algo
   if (preservePositions && graph.nodes.some(n => n.x !== undefined)) {
+      // Some nodes lack positions (e.g. just added by an AI patch). Run the full
+      // layout algo to place them, then restore saved positions for the nodes that
+      // already had them so the user's layout is not disturbed.
+      const hasUnpositioned = graph.nodes.some(n => n.x === undefined);
+      if (hasUnpositioned) {
+          const rankDir = mode === 'dagre-lr' ? 'LR' : 'TB';
+          const fullLayout = calculateDagreLayout(graph, spacing, rankDir);
+          const savedPos = new Map(
+              graph.nodes.filter(n => n.x !== undefined).map(n => [n.id, { x: n.x!, y: n.y! }])
+          );
+          fullLayout.nodes.forEach(n => {
+              const saved = savedPos.get(n.id);
+              if (saved) { n.x = saved.x; n.y = saved.y; }
+          });
+          return fullLayout;
+      }
+
       const nodes: VisualNode[] = graph.nodes.map(n => ({
           id: n.id,
           type: n.type,

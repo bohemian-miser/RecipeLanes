@@ -24,9 +24,9 @@ import { getAuthService } from '@/lib/auth-service';
 import { z } from 'zod';
 import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQueriesPrompt, parseHydeQueries } from '@/lib/recipe-lanes/parser';
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
-import type { RecipeGraph, IconStats, FastMatch } from '@/lib/recipe-lanes/types';
+import type { RecipeGraph, IconStats, FastMatch, RecipePatch } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
-import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon, extractBatchIngredients, getNodeIngredientName } from '@/lib/recipe-lanes/model-utils';
+import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon, extractBatchIngredients, getNodeIngredientName, applyPatch } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
 import { unifiedIconSearch, serverBatchIconSearch } from '@/lib/search-orchestrator';
@@ -372,16 +372,37 @@ export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: stri
     const fullPrompt = generateAdjustmentPrompt(currentGraph, prompt);
     const text = await getAIService().generateText(fullPrompt);
 
-    const newGraph = parseRecipeGraph(text);
+    // Parse the raw JSON from the response
+    let jsonStr = text.trim();
+    const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) jsonStr = fenceMatch[1].trim();
+    else {
+      const s = jsonStr.indexOf('{'), e = jsonStr.lastIndexOf('}');
+      if (s !== -1 && e > s) jsonStr = jsonStr.slice(s, e + 1);
+    }
+    const parsed = JSON.parse(jsonStr);
 
-    // Restore icons if ID matches and AI forgot them
-    newGraph.nodes = newGraph.nodes.map(n => {
+    let newGraph: RecipeGraph;
+    let message: string;
+
+    if (parsed.lanes && parsed.nodes) {
+      // Model returned a full graph
+      newGraph = parseRecipeGraph(jsonStr);
+      // Restore icons for unchanged nodes
+      newGraph.nodes = newGraph.nodes.map(n => {
         if (getNodeIconUrl(n)) return n;
         const old = currentGraph.nodes.find(o => o.id === n.id);
         return old ? preserveNodeShortlist(n, old) : n;
-    });
+      });
+      message = (parsed as any).message ?? prompt;
+    } else {
+      // Model returned a patch
+      const patch = parsed as RecipePatch;
+      newGraph = applyPatch(currentGraph, patch);
+      message = patch.message;
+    }
 
-    return { graph: newGraph, adjustment: prompt };
+    return { graph: newGraph, message };
   } catch (e: any) {
     console.error('adjustRecipeAction failed:', e);
     return { error: e.message };
@@ -391,12 +412,26 @@ export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: stri
 export async function saveRecipeAction(graph: RecipeGraph, existingId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted') {
   try {
     const session = await getAuthService().verifyAuth();
-    const userId = session?.uid; 
+    const userId = session?.uid;
     const ownerName = session?.name;
-    
+
     const dataService = getDataService();
     const id = await dataService.saveRecipe(graph, existingId, userId, visibility, ownerName);
+    // Resolve icons for any pending nodes (e.g. added via AI adjustment)
+    const hasPending = graph.nodes.some(n => n.status === 'pending');
+    if (hasPending) {
+      after(() => dataService.resolveRecipeIcons(id, serverBatchSearchAction));
+    }
     return { id };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function saveChatHistoryAction(recipeId: string, messages: { role: 'user' | 'assistant'; content: string; timestamp: number }[]) {
+  try {
+    await db.collection('recipes').doc(recipeId).update({ chatHistory: messages });
+    return { success: true };
   } catch (e: any) {
     return { error: e.message };
   }
@@ -479,7 +514,6 @@ export async function debugLogAction(message: string) {
 }
 
 // Hydrate icon IDs from Firestore for multiple ingredients in one pass.
-type FastMatch = { icon_id: string; score: number };
 async function hydrateBatch(
     items: { name: string; fast_matches: FastMatch[] }[]
 ): Promise<{ name: string; icons: IconStats[]; matchScores: Record<string, number> }[]> {

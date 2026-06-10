@@ -24,7 +24,8 @@ import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
-import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
+import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, saveChatHistoryAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
+import { ChatPanel } from '@/components/recipe-lanes/chat-panel';
 import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
 import { standardizeIngredientName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
@@ -51,10 +52,13 @@ function RecipeLanesContent() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [recipeText, setRecipeText] = useState('');
   const [chatInput, setChatInput] = useState('');
+  const [showChat, setShowChat] = useState(false);
   const graph = useRecipeStore(s => s.graph);
   const ownerId = useRecipeStore(s => s.ownerId);
   const ownerName = useRecipeStore(s => s.ownerName);
-  const { mergeSnapshot, setGraph, reset: resetRecipeStore } = useRecipeStore.getState();
+  const { mergeSnapshot, setGraph, setGraphWithUndo, undo, reset: resetRecipeStore, addMessage, clearMessages } = useRecipeStore.getState();
+  const canUndo = useRecipeStore(s => s.undoStack.length > 0);
+  const messageCount = useRecipeStore(s => s.messages.length);
   
   useEffect(() => {
       console.log('[RecipeLanesPage] User:', user?.uid, 'Owner:', ownerId);
@@ -84,6 +88,18 @@ function RecipeLanesContent() {
   const isForking = useRef(false);
   const titleBeforeEdit = useRef('');
   const autoFillIconsRef = useRef(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        const { undoStack } = useRecipeStore.getState();
+        if (undoStack.length > 0) { e.preventDefault(); undo(); }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isOwner = !ownerId || (!!user && user.uid === ownerId);
 
@@ -334,6 +350,13 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       layoutModeRestoredRef.current = false;
   }, [recipeId]);
 
+
+  const messages = useRecipeStore(s => s.messages);
+  useEffect(() => {
+      if (!recipeId || messages.length === 0) return;
+      localStorage.setItem(`chat_${recipeId}`, JSON.stringify(messages));
+  }, [recipeId, messages]);
+
   // Restore the layout mode from the saved graph on initial load.
   // This ensures that if the user last saved in swimlanes mode, we restore
   // to swimlanes mode on reload rather than defaulting to dagre.
@@ -357,12 +380,29 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       if (!recipeId) return;
 
       resetRecipeStore();
+      // Restore chat messages from localStorage after reset
+      try {
+          const stored = localStorage.getItem(`chat_${recipeId}`);
+          if (stored) {
+              const msgs = JSON.parse(stored);
+              if (Array.isArray(msgs) && msgs.length > 0) {
+                  msgs.forEach((m: any) => addMessage({ role: m.role, content: m.content }));
+              }
+          }
+      } catch {}
       debugLogAction('Setting up listener for recipe: ' + recipeId);
       setStatus('loading');
       setWarningDismissed(false);
 
       // Use Firestore Listener
       const unsubscribe = onSnapshot(doc(db, 'recipes', recipeId), (docSnapshot) => {
+          // Skip the immediate echo of our own write.  hasPendingWrites is true on
+          // the optimistic local snapshot Firestore fires right after we call set().
+          // The server-confirmed snapshot (hasPendingWrites === false) still arrives
+          // and is processed normally, so initial load and legitimate remote updates
+          // are unaffected.
+          if (docSnapshot.metadata.hasPendingWrites) return;
+
           if (docSnapshot.exists()) {
               const data = docSnapshot.data();
               const currentGraph = data.graph as RecipeGraph;
@@ -559,6 +599,17 @@ const handleVisualize = async () => {
         url.searchParams.set('id', res.id);
         
         autoFillIconsRef.current = true;
+        clearMessages();
+        const initMessages = [
+            { id: crypto.randomUUID(), role: 'user' as const, content: recipeText, timestamp: Date.now() },
+            { id: crypto.randomUUID(), role: 'assistant' as const, content: 'Recipe created! You can ask me to adjust ingredients, serving sizes, or cooking methods.', timestamp: Date.now() },
+        ];
+        initMessages.forEach(m => addMessage({ role: m.role, content: m.content }));
+        // Save before router.push — resetRecipeStore() fires on recipeId change and would wipe messages
+        localStorage.setItem(`chat_${res.id}`, JSON.stringify(initMessages));
+        // NOTE: saveChatHistoryAction is intentionally NOT called here. Calling a server action
+        // without await before router.push triggers a Next.js soft-refresh that can revert the
+        // navigation. Chat history is in localStorage and will sync to Firestore on the next save.
         router.push(url.pathname + url.search);
 
         setStatus('complete');
@@ -574,30 +625,41 @@ const handleVisualize = async () => {
 
   const handleAdjust = async () => {
       if (!graph || !chatInput.trim()) return;
-      
+
       const prompt = chatInput;
-      setChatInput(''); // Clear immediately
+      setChatInput('');
       setStatus('adjusting');
       setError(null);
+      addMessage({ role: 'user', content: prompt });
 
       try {
           const res = await adjustRecipeAction(graph, prompt);
           if (res.error || !res.graph) {
               throw new Error(res.error || 'Failed to adjust graph.');
           }
-          res.graph.title = recipeTitle; // Preserve title
-          setGraph(res.graph);
-          
+          res.graph.title = recipeTitle;
+          setGraphWithUndo(res.graph);
+          addMessage({ role: 'assistant', content: (res as any).message || 'Done! The recipe has been updated.' });
+          setShowChat(true);
+          setStatus('complete');
+
+          // Fire-and-forget — UI is already updated, don't block on the Firestore write
           const currentId = searchParams.get('id') || undefined;
           if (currentId) {
-              await saveRecipeAction(res.graph, currentId);
+              saveRecipeAction(res.graph, currentId).then(() => {
+                  const allMessages = useRecipeStore.getState().messages;
+                  localStorage.setItem(`chat_${currentId}`, JSON.stringify(allMessages));
+                  saveChatHistoryAction(currentId, allMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })));
+              }).catch(e => {
+                  console.error('[handleAdjust] save failed:', e);
+                  addMessage({ role: 'assistant', content: `Changes applied locally but failed to save: ${e.message}` });
+              });
           }
-          
-          setStatus('complete');
       } catch (e: any) {
           console.error('Adjustment failed:', e);
+          addMessage({ role: 'assistant', content: `Sorry, that didn't work: ${e.message}` });
           setError(e.message);
-          setStatus('error'); 
+          setStatus('error');
       }
   };
 
@@ -1100,10 +1162,22 @@ const handleVisualize = async () => {
                         <div className="flex items-center gap-1 opacity-50"><span className="text-xs font-bold">Shift+Drag</span> Rotate Branch</div>
                     </div>
 
-                    <div className="hidden md:flex absolute bottom-4 left-1/2 -translate-x-1/2 justify-center pointer-events-auto w-full max-w-lg">
+                    <div className="hidden md:flex absolute bottom-4 left-1/2 -translate-x-1/2 justify-center pointer-events-auto w-full max-w-lg flex-col items-center gap-0">
+                        {showChat && <ChatPanel onClose={() => setShowChat(false)} />}
                         <div className="w-full bg-white/95 backdrop-blur border border-zinc-200 rounded-full shadow-xl flex items-center p-1">
-                            <MessageSquare className="w-5 h-5 text-zinc-400 ml-2" />
-                            <input 
+                            <button
+                                onClick={() => setShowChat(v => !v)}
+                                className="relative ml-1 p-1.5 rounded-full hover:bg-zinc-100 transition-colors"
+                                title="Chat history"
+                            >
+                                <MessageSquare className="w-5 h-5 text-zinc-400" />
+                                {messageCount > 0 && (
+                                    <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-yellow-400 rounded-full text-[9px] font-bold text-zinc-900 flex items-center justify-center">
+                                        {messageCount > 9 ? '9+' : messageCount}
+                                    </span>
+                                )}
+                            </button>
+                            <input
                                 className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
                                 placeholder="Adjust recipe..."
                                 value={chatInput}
@@ -1131,7 +1205,7 @@ const handleVisualize = async () => {
                         
                         {/* Chat (Right Half) */}
                         <div className="w-1/2 p-2 flex items-center gap-1">
-                            <input 
+                            <input
                                 className="flex-1 bg-zinc-100 border border-zinc-200 rounded-md px-2 text-xs h-full text-zinc-800 outline-none"
                                 placeholder="Adjust..."
                                 value={chatInput}

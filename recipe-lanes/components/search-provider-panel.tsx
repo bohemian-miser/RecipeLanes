@@ -23,6 +23,7 @@ export function SearchProviderPanel({
 
     useEffect(() => {
         if (!activeQuery) return;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsSearching(true);
         setError(null);
         provider

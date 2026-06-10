@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry, SearchTerm, RecipeGraph, IconStyleId } from './types';
+import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry, SearchTerm, RecipeGraph, IconStyleId, RecipePatch } from './types';
 import { standardizeIngredientName } from '../utils';
 
 /**
@@ -742,5 +742,57 @@ export function preserveNodeShortlist<T extends RecipeNode>(target: T, source: R
         ...target,
         iconShortlist: newShortlist,
         shortlistIndex: source.shortlistIndex,
+    };
+}
+
+/**
+ * Applies a RecipePatch onto an existing graph, returning a new graph.
+ * Icon shortlists on surviving nodes are preserved unchanged.
+ */
+export function applyPatch(graph: RecipeGraph, patch: RecipePatch): RecipeGraph {
+    const removeSet = new Set(patch.removeNodeIds ?? []);
+    const removeLaneSet = new Set(patch.removeLaneIds ?? []);
+
+    // Keep surviving nodes, apply updates, clean up dangling inputs refs
+    let nodes = graph.nodes
+        .filter(n => !removeSet.has(n.id))
+        .map(n => {
+            const update = patch.updateNodes?.find(u => u.id === n.id);
+            const merged = update ? { ...n, ...update } : n;
+            // Remove any inputs that pointed to now-removed nodes
+            if (merged.inputs && removeSet.size > 0) {
+                const cleanInputs = merged.inputs.filter(id => !removeSet.has(id));
+                if (cleanInputs.length !== merged.inputs.length) {
+                    return { ...merged, inputs: cleanInputs };
+                }
+            }
+            return merged;
+        });
+
+    // Append new nodes (mark as pending so icons get resolved)
+    if (patch.addNodes) {
+        nodes = [...nodes, ...patch.addNodes.map(n => {
+            const newNode: RecipeNode = { ...n, status: 'pending' as const };
+            // Clean inputs that reference nodes removed in the same patch
+            // (e.g. a merged node whose source nodes are in removeNodeIds)
+            if (newNode.inputs && removeSet.size > 0) {
+                const cleanInputs = newNode.inputs.filter(id => !removeSet.has(id));
+                if (cleanInputs.length !== newNode.inputs.length) {
+                    return { ...newNode, inputs: cleanInputs };
+                }
+            }
+            return newNode;
+        })];
+    }
+
+    // Lanes
+    let lanes = graph.lanes.filter(l => !removeLaneSet.has(l.id));
+    if (patch.addLanes) lanes = [...lanes, ...patch.addLanes];
+
+    return {
+        ...graph,
+        nodes,
+        lanes,
+        ...(patch.updateTitle !== undefined && { title: patch.updateTitle }),
     };
 }

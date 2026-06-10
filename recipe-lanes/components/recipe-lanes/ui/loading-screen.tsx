@@ -31,7 +31,7 @@ export function LoadingScreen({ phase }: LoadingScreenProps) {
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none" data-testid="loading-screen">
         <div className="bg-white border border-zinc-200 px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
           <Loader2 className="w-4 h-4 text-yellow-500 animate-spin shrink-0" />
-          <span className="text-sm font-medium text-zinc-700">Finding icons...</span>
+          <span className="text-sm font-medium text-zinc-700">Finding Icons...</span>
         </div>
       </div>
     );

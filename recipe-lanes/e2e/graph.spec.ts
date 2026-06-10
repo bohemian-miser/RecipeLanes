@@ -1,7 +1,7 @@
 import { test, expect } from './utils/fixtures';
 import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
-import { get_node, delete_node, create_recipe, wait_for_graph, move_node, click_undo } from './utils/actions';
+import { get_node, delete_node, create_recipe, wait_for_graph, move_node, click_undo, pan_pane } from './utils/actions';
 
 test.describe('Graph UI & Interactions (Consolidated)', () => {
   const desktop = deviceConfigs.find(d => d.name === 'desktop')!;
@@ -20,16 +20,10 @@ test.describe('Graph UI & Interactions (Consolidated)', () => {
     // 1. Pan — wait for loading screen to clear so it doesn't intercept mouse events
     await expect(page.getByTestId('loading-screen')).not.toBeVisible({ timeout: 30000 });
     const viewport = page.locator('.react-flow__viewport');
-    const pane = page.locator('.react-flow__pane');
     const initialTransform = await viewport.getAttribute('style');
-    const box = await pane.boundingBox();
-    expect(box).toBeTruthy();
-    const cx = box!.x + box!.width / 2;
-    const cy = box!.y + box!.height / 2;
-    await page.mouse.move(cx, cy);
-    await page.mouse.down();
-    await page.mouse.move(cx + 200, cy + 200, { steps: 10 });
-    await page.mouse.up();
+    // Drag from a point that is verifiably the pane (not a node, the bottom-left
+    // Controls widget, or the top-right Panel) so the canvas actually pans.
+    await pan_pane(page, 200, -200);
     await page.waitForTimeout(500);
     expect(await viewport.getAttribute('style')).not.toBe(initialTransform);
 

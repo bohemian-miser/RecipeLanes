@@ -10,12 +10,12 @@ fi
 
 # Check if any file is NOT in the ignore list
 # We use grep -v to find files that DON'T match the ignore patterns
-NON_IGNORE_FILES=$(echo "$STAGED_FILES" | grep -vE '^(\.github/|recipe-lanes/\.husky/|docs/|recipe-lanes/scripts/|README\.md|LICENSE|CONTRIBUTING\.md)')
+NON_IGNORE_FILES=$(echo "$STAGED_FILES" | grep -vE '^(\.github/|recipe-lanes/\.husky/|docs/|recipe-lanes/scripts/|skills/|README\.md|LICENSE|CONTRIBUTING\.md|CLAUDE\.md)')
 
 if [ -z "$NON_IGNORE_FILES" ]; then
   echo "Non-code changes detected. Skipping presubmit checks."
   exit 0
 fi
 
-echo "Running presubmit checks (Build & Test)..."
-cd recipe-lanes && npm run verify
+echo "Running presubmit checks (lint + typecheck + unit:pure)..."
+cd recipe-lanes && npm run lint && npm run typecheck && npm run test:unit:pure

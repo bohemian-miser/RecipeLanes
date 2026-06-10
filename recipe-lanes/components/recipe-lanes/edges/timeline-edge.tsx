@@ -83,7 +83,7 @@ function useIconColor(iconUrl: string | undefined, nodeData: any): string {
   const base = nodeHashColor(nodeData);
   const [canvasColor, setCanvasColor] = useState<string | null>(null);
   useEffect(() => {
-    if (!iconUrl) { setCanvasColor(null); return; }
+    if (!iconUrl) return;
     let cancelled = false;
     extractColor(iconUrl).then(c => { if (!cancelled) setCanvasColor(c); });
     return () => { cancelled = true; };

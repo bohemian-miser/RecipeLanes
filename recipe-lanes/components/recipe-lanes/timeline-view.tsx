@@ -18,7 +18,7 @@
 'use client';
 
 import React, {
-  useMemo, useState, useRef, useCallback, useEffect,
+  useMemo, useState, useRef, useCallback, useEffect, useLayoutEffect, useTransition,
 } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Play, Pause, RotateCcw, ZoomIn, ZoomOut, Maximize2, Undo2 } from 'lucide-react';
@@ -278,8 +278,11 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
       if (prev !== undefined && prev !== newKey) toRemove.push(id);
       if (node) prevShortlistKeysRef.current.set(id, newKey);
     }
-    if (toRemove.length)
-      setForgingIds(p => { const n = new Set(p); toRemove.forEach(id => n.delete(id)); return n; });
+    if (toRemove.length) {
+      queueMicrotask(() => {
+        setForgingIds(p => { const n = new Set(p); toRemove.forEach(id => n.delete(id)); return n; });
+      });
+    }
   }, [graph.nodes]); // intentionally excludes forgingIds
 
   const handleForge = useCallback(async (nodeId: string, data: RecipeNode) => {
@@ -506,17 +509,22 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
   const gridTicks: number[] = [];
   for (let t = 0; t <= Math.ceil(totalMinutes) + TL.GRID_INTERVAL; t += TL.GRID_INTERVAL) gridTicks.push(t);
 
-  // Box select rect in content space
-  const boxContent = boxRect && svgRef.current ? (() => {
-    const r = svgRef.current!.getBoundingClientRect();
+  // Box select rect in content space — defer computation to avoid refs during render
+  const [boxContent, setBoxContent] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!boxRect || !svgRef.current) {
+      queueMicrotask(() => setBoxContent(null));
+      return;
+    }
+    const r = svgRef.current.getBoundingClientRect();
     const cv = vpRef.current;
     const toC = (sx: number, sy: number) => ({
       x: (sx - r.left - cv.x) / cv.scale, y: (sy - r.top - cv.y) / cv.scale,
     });
     const p1 = toC(Math.min(boxRect.sx, boxRect.ex), Math.min(boxRect.sy, boxRect.ey));
     const p2 = toC(Math.max(boxRect.sx, boxRect.ex), Math.max(boxRect.sy, boxRect.ey));
-    return { x: p1.x, y: p1.y, w: p2.x - p1.x, h: p2.y - p1.y };
-  })() : null;
+    queueMicrotask(() => setBoxContent({ x: p1.x, y: p1.y, w: p2.x - p1.x, h: p2.y - p1.y }));
+  }, [boxRect]);
 
   if (!nodes.length) {
     return <div className="flex items-center justify-center h-full text-zinc-400 text-sm">No nodes to display.</div>;

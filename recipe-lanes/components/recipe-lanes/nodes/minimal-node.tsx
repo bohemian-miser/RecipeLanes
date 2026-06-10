@@ -127,14 +127,17 @@ export const MinimalNode: React.FC<any> = ({
       e.stopPropagation();
       setIsForging(true);
       const ingredientName = getNodeIngredientName(data);
+      console.log(`[Forge] node="${data.text}" ingredientName="${ingredientName}" recipeId="${recipeId}"`);
       try {
           const result = await forgeIconAction(recipeId || '', ingredientName, getNodeIconId(data) || '');
           if (result && !result.success) {
               console.error("Forge failed:", result.error);
+              useRecipeStore.getState().addMessage({ role: 'assistant', content: `Forge failed: ${result.error}` });
               setIsForging(false);
           }
-      } catch (err) {
+      } catch (err: any) {
           console.error("Forge exception:", err);
+          useRecipeStore.getState().addMessage({ role: 'assistant', content: `Forge error: ${err?.message ?? err}` });
           setIsForging(false);
       }
   };

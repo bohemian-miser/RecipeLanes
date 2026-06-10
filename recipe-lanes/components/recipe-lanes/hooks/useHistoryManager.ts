@@ -28,6 +28,13 @@ interface UseHistoryManagerParams {
     edgeStyle: string;
     onEdit?: () => void;
     setIsDirty: (dirty: boolean) => void;
+    /**
+     * Optional callback invoked after undo/redo restores nodes.
+     * Receives the restored ReactFlow node objects (with full data) so the
+     * caller can reconcile any external state (e.g. Zustand graph) that
+     * diverged during a delete.
+     */
+    onRestoreNodes?: (nodes: any[]) => void;
 }
 
 export function useHistoryManager({
@@ -38,6 +45,7 @@ export function useHistoryManager({
     edgeStyle,
     onEdit,
     setIsDirty,
+    onRestoreNodes,
 }: UseHistoryManagerParams) {
     const [past, setPast] = useState<{ nodes: any[], edges: any[] }[]>([]);
     const [future, setFuture] = useState<{ nodes: any[], edges: any[] }[]>([]);
@@ -97,8 +105,11 @@ export function useHistoryManager({
             setNodes(restoredNodes);
             setEdges(previous.edges);
             setIsDirty(true);
+            // Notify caller with the full restored nodes so it can reconcile
+            // external state (e.g. Zustand graph / pendingDeletedIds).
+            onRestoreNodes?.(restoredNodes);
         }
-    }, [past, getNodes, getEdges, setNodes, setEdges, handleDeleteNode, setIsDirty]);
+    }, [past, getNodes, getEdges, setNodes, setEdges, handleDeleteNode, setIsDirty, onRestoreNodes]);
 
     const redo = useCallback(() => {
         if (future.length === 0) return;
@@ -122,8 +133,10 @@ export function useHistoryManager({
             setNodes(restoredNodes);
             setEdges(next.edges);
             setIsDirty(true);
+            // Reconcile external state with the new set of nodes (same as undo).
+            onRestoreNodes?.(restoredNodes);
         }
-    }, [future, getNodes, getEdges, setNodes, setEdges, handleDeleteNode, setIsDirty]);
+    }, [future, getNodes, getEdges, setNodes, setEdges, handleDeleteNode, setIsDirty, onRestoreNodes]);
 
     return { past, future, takeSnapshot, undo, redo, handleDeleteNode };
 }

@@ -99,6 +99,7 @@ export function useSaveAndFork({
     useEffect(() => {
         const pub = graph.visibility === 'public';
         if (propIsPublic === undefined) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setInternalIsPublic(pub);
         }
     }, [graph.visibility, propIsPublic]);

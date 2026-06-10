@@ -48,6 +48,7 @@ import { toPng } from 'html-to-image';
 import { Download, Share2, Undo, Redo, Check, Save } from 'lucide-react';
 import { useHistoryManager } from './hooks/useHistoryManager';
 import { useSaveAndFork } from './hooks/useSaveAndFork';
+import { useAutosave } from './hooks/useAutosave';
 import { useRecipeStore } from '../../lib/stores/recipe-store';
 
 interface ReactFlowDiagramProps {
@@ -132,6 +133,11 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         onNotify,
     });
 
+    const { scheduleAutosave, flushAutosave } = useAutosave({
+        onSave: handleSave,
+        enabled: !!isOwner && !!isLoggedIn,
+    });
+
     // Theme Effect
     useEffect(() => {
         setNodes(nds => nds.map(n => ({
@@ -194,8 +200,11 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         }
     }, [selectBranch]);
 
+    const markNodeDeleted = useRecipeStore(s => s.markNodeDeleted);
+    const restoreNodes = useRecipeStore(s => s.restoreNodes);
+
     // History
-    const { past, future, takeSnapshot, undo, redo, handleDeleteNode } = useHistoryManager({
+    const { past, future, takeSnapshot, undo, redo, handleDeleteNode: _handleDeleteNode } = useHistoryManager({
         getNodes,
         getEdges,
         setNodes,
@@ -203,7 +212,27 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         edgeStyle,
         onEdit,
         setIsDirty,
+        // When undo restores nodes, reconcile the Zustand store so that any
+        // node restored from the undo snapshot is removed from pendingDeletedIds
+        // and added back to the Zustand graph.  Without this, a pendingDeletedIds
+        // entry would suppress the restored node from Firestore snapshots and the
+        // layout effect would see a Zustand/ReactFlow mismatch and call runLayout
+        // to remove the node again.
+        onRestoreNodes: restoreNodes,
     });
+
+    // Wrap handleDeleteNode to immediately record the deletion in the Zustand store.
+    // markNodeDeleted does two things atomically:
+    //   1. Adds the nodeId to pendingDeletedIds so mergeSnapshot ignores any
+    //      incoming Firestore writes that still contain the node (e.g. an
+    //      icon-generation task that wrote back before the autosave propagated).
+    //   2. Removes the node from store.graph so the layout effect does not see
+    //      a mismatch between existing and incoming nodes (pendingLocal resurrection).
+    // The pending ID is cleared automatically once a snapshot arrives without it.
+    const handleDeleteNode = useCallback((nodeId: string) => {
+        _handleDeleteNode(nodeId);
+        markNodeDeleted(nodeId);
+    }, [_handleDeleteNode, markNodeDeleted]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -350,7 +379,10 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
         if (fit && !canPreserve) {
             setTimeout(() => {
-                fitView({ padding: 0.1 });
+                // Cap zoom at 1.5 so small recipes don't fill the entire viewport.
+                // If the view zooms in too far, the pane centre lands on a node and
+                // e2e pan drags register as node-drag instead of canvas-pan.
+                fitView({ padding: 0.1, maxZoom: 1.5 });
             }, 50);
         }
 
@@ -439,6 +471,18 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             if (!hasOverlap) {
                 hasInitialLayoutRef.current = false;
                 runLayout(false, true);
+                return;
+            }
+
+            // Detect nodes added or removed since the last layout (e.g. AI adjustment).
+            // New nodes from applyPatch are in graph.nodes but have no RF node yet;
+            // removed nodes are in RF but gone from graph. Either case requires a fresh
+            // layout pass so the new/removed nodes are actually rendered.
+            const graphNodeIds = new Set(graph.nodes.map(n => n.id));
+            const hasNewNodes = graph.nodes.some(n => !currentRFNodeIds.has(n.id));
+            const hasRemovedNodes = [...currentRFNodeIds].some(id => !graphNodeIds.has(id));
+            if (hasNewNodes || hasRemovedNodes) {
+                runLayout(true, false);
                 return;
             }
 
@@ -734,7 +778,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         dragRef.current = { active: false };
         updateLaneBounds();
         if (isOwner) {
-            handleSave();
+            scheduleAutosave();
         } else {
             onEdit?.();
         }
@@ -757,6 +801,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                 nodeTypes={INITIAL_NODE_TYPES}
                 edgeTypes={INITIAL_EDGE_TYPES}
                 fitView
+                fitViewOptions={{ padding: 0.1, maxZoom: 1.5 }}
                 minZoom={0.1}
                 maxZoom={4}
                 nodeDragThreshold={10} // Prevent accidental drags, allow long press jitter

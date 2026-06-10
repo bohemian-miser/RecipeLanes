@@ -127,6 +127,19 @@ export default function UmapPage() {
     useEffect(() => { pointsRef.current = points; }, [points]);
     useEffect(() => { cellGapRef.current = cellGap; draw(); }, [cellGap]);
 
+    function onWheel(e: WheelEvent) {
+        e.preventDefault();
+        const rect = canvasRef.current!.getBoundingClientRect();
+        const sx = e.clientX - rect.left;
+        const sy = e.clientY - rect.top;
+        const { wx, wy } = toWorld(sx, sy, camera.current);
+        const factor = e.deltaY < 0 ? 1.1 : 0.9;
+        camera.current.scale *= factor;
+        camera.current.x = sx - wx * camera.current.scale;
+        camera.current.y = sy - wy * camera.current.scale;
+        draw();
+    }
+
     // Size the canvas pixel buffer to match the container after mount.
     // Never read window in JSX — avoids SSR/client hydration mismatch.
     useEffect(() => {
@@ -230,19 +243,6 @@ export default function UmapPage() {
     }
 
     function onMouseUp() { dragging.current = null; }
-
-    function onWheel(e: WheelEvent) {
-        e.preventDefault();
-        const rect = canvasRef.current!.getBoundingClientRect();
-        const sx = e.clientX - rect.left;
-        const sy = e.clientY - rect.top;
-        const { wx, wy } = toWorld(sx, sy, camera.current);
-        const factor = e.deltaY < 0 ? 1.1 : 0.9;
-        camera.current.scale *= factor;
-        camera.current.x = sx - wx * camera.current.scale;
-        camera.current.y = sy - wy * camera.current.scale;
-        draw();
-    }
 
     return (
         <div className="w-screen h-screen bg-white flex flex-col">

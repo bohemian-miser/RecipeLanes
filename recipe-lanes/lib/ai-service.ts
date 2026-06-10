@@ -58,8 +58,9 @@ export class RealAIService implements AIService {
   async generateText(prompt: string): Promise<string> {
     try {
         const response = await ai.generate({
-        model: textModel,
-        prompt: prompt,
+            model: textModel,
+            prompt: prompt,
+            config: { thinkingConfig: { thinkingBudget: 0 } },
         });
         return response.text || '';
     } catch (e) {
@@ -317,6 +318,11 @@ const useNodeCF = process.env.NEXT_PUBLIC_ICON_SEARCH_MODE === 'node_cf';
 let currentService: AIService;
 if (isMockMode) {
     currentService = new MockAIService();
+    // Loud server-side warning so MOCK_AI can never be silently active.
+    // This fires at module load time (server startup / cold start).
+    if (typeof process !== 'undefined' && process.env.MOCK_AI === 'true') {
+        console.warn('[ai-service] WARNING: MOCK_AI=true — AI responses are MOCKED. Do NOT use in production.');
+    }
 } else if (useNodeCF) {
     currentService = new NodeCFAIService();
 } else {

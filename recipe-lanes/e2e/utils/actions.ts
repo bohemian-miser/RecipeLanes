@@ -112,6 +112,51 @@ export async function wait_for_graph(page: Page, dir?: string) {
     }
 }
 
+/**
+ * Pan the react-flow pane by left-dragging from a point that is verifiably the
+ * pane itself (not a node, the Controls widget at bottom-left, or the top-right
+ * Panel). Probes several candidate points and uses the first where the pane is
+ * the topmost element at that location, then drags by (dx, dy).
+ *
+ * Returns the start point used so callers can assert/report if needed.
+ */
+export async function pan_pane(page: Page, dx: number, dy: number): Promise<{ x: number; y: number }> {
+    const pane = page.locator('.react-flow__pane');
+    const box = await pane.boundingBox();
+    expect(box).toBeTruthy();
+    const b = box!;
+
+    // Candidate origins, ordered. Avoid the bottom-left Controls widget and the
+    // fitView-centred nodes near the middle. We still probe each to be robust to
+    // layout changes (overlays, node positions, etc.).
+    const candidates = [
+        { x: b.x + b.width * 0.5, y: b.y + 40 },          // top-centre, below top bar
+        { x: b.x + b.width * 0.75, y: b.y + b.height * 0.5 }, // right-middle
+        { x: b.x + b.width * 0.5, y: b.y + b.height - 40 },   // bottom-centre
+        { x: b.x + 60, y: b.y + b.height * 0.5 },          // left-middle (above Controls)
+        { x: b.x + b.width - 60, y: b.y + b.height - 60 }, // bottom-right (clear of Controls)
+    ];
+
+    let start: { x: number; y: number } | null = null;
+    for (const c of candidates) {
+        const isPane = await page.evaluate(({ x, y }) => {
+            const el = document.elementFromPoint(x, y);
+            return !!el && (el.classList.contains('react-flow__pane') || !!el.closest('.react-flow__pane'));
+        }, c);
+        if (isPane) {
+            start = c;
+            break;
+        }
+    }
+    expect(start, 'no candidate point resolved to the react-flow pane').toBeTruthy();
+
+    await page.mouse.move(start!.x, start!.y);
+    await page.mouse.down();
+    await page.mouse.move(start!.x + dx, start!.y + dy, { steps: 10 });
+    await page.mouse.up();
+    return start!;
+}
+
 export async function click_undo(page: Page, dir: string) {
     const undoBtn = page.locator('button[title="Undo (Ctrl+Z)"]');
     await expect(undoBtn).toBeEnabled();

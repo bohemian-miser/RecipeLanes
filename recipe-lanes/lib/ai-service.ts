@@ -308,26 +308,49 @@ export class MockAIService implements AIService {
 
 // Default to Real or Mock based on env.
 // Tests can swap this out using setAIService.
-const isMockMode = 
-  process.env.MOCK_AI === 'true' || 
-  process.env.FUNCTIONS_EMULATOR === 'true' || 
-  process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true';
+//
+// Selection is a pure function of env so it can be unit-tested directly
+// (the live `currentService` is resolved once at module-load time below).
+export function selectAIService(env: Record<string, string | undefined> = process.env): AIService {
+    const mockFlagSet =
+        env.MOCK_AI === 'true' ||
+        env.FUNCTIONS_EMULATOR === 'true' ||
+        env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true';
 
-const useNodeCF = process.env.NEXT_PUBLIC_ICON_SEARCH_MODE === 'node_cf';
+    // Fail-safe production guard: mock mode must NEVER be active on a real
+    // production server. NODE_ENV === 'production' is the prod signal used
+    // consistently across this codebase (firebase-admin, prebuild, auth) and
+    // is set by Next.js / Firebase App Hosting at runtime. Emulators and tests
+    // do not run with NODE_ENV=production, so dev/test behavior is unchanged.
+    const isProduction = env.NODE_ENV === 'production';
 
-let currentService: AIService;
-if (isMockMode) {
-    currentService = new MockAIService();
-    // Loud server-side warning so MOCK_AI can never be silently active.
-    // This fires at module load time (server startup / cold start).
-    if (typeof process !== 'undefined' && process.env.MOCK_AI === 'true') {
-        console.warn('[ai-service] WARNING: MOCK_AI=true — AI responses are MOCKED. Do NOT use in production.');
+    if (mockFlagSet && isProduction) {
+        // A mock flag leaked into a production runtime — this is a config bug.
+        // Log loudly and force the real service rather than serving placeholders.
+        console.error(
+            '[ai-service] FATAL CONFIG LEAK: a mock-AI flag (MOCK_AI / FUNCTIONS_EMULATOR / ' +
+            'NEXT_PUBLIC_USE_FIREBASE_EMULATOR) is set while NODE_ENV=production. ' +
+            'Forcing RealAIService so prod never serves placeholder icons. Fix the deploy config.'
+        );
+        return new RealAIService();
     }
-} else if (useNodeCF) {
-    currentService = new NodeCFAIService();
-} else {
-    currentService = new RealAIService();
+
+    if (mockFlagSet) {
+        // Loud server-side warning so MOCK_AI can never be silently active.
+        if (env.MOCK_AI === 'true') {
+            console.warn('[ai-service] WARNING: MOCK_AI=true — AI responses are MOCKED. Do NOT use in production.');
+        }
+        return new MockAIService();
+    }
+
+    if (env.NEXT_PUBLIC_ICON_SEARCH_MODE === 'node_cf') {
+        return new NodeCFAIService();
+    }
+
+    return new RealAIService();
 }
+
+let currentService: AIService = selectAIService();
 
 export function getAIService(): AIService {
   return currentService;

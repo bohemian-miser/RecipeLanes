@@ -36,6 +36,7 @@ import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
+import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
 import { LoadingScreen, LoadingPhase } from '@/components/recipe-lanes/ui/loading-screen';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -885,6 +886,11 @@ const handleVisualize = async () => {
                     </button>
                 )}
              </div>
+             {looksLikeUrl(recipeText) && (
+                <div className="px-2 pb-2 text-[10px] text-yellow-400">
+                    That looks like a link. Direct links aren&apos;t supported yet — please copy and paste the recipe text itself into the box.
+                </div>
+             )}
              {error && (
                 <div className="px-2 pb-2 text-[10px] text-red-400">
                     {error}

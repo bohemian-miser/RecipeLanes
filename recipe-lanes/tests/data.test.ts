@@ -6,6 +6,7 @@ import { setAIService, MockAIService } from '../lib/ai-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
 import { createVisualRecipeAction } from '../app/actions';
 import { getNodeIconUrl } from '../lib/recipe-lanes/model-utils';
+import { looksLikeUrl } from '../lib/recipe-lanes/input-utils';
 
 // Mock Graph
 const mockGraph: any = {
@@ -64,5 +65,22 @@ describe('Data Service & Actions', () => {
             const iconUrl = getNodeIconUrl(carrotNode);
             assert.ok(typeof iconUrl === 'string' && iconUrl.length > 0, 'carrot node should have a derived icon URL');
         });
+    });
+});
+
+describe('looksLikeUrl', () => {
+    it('flags bare URLs', () => {
+        assert.equal(looksLikeUrl('https://example.com/recipe'), true);
+        assert.equal(looksLikeUrl('http://foo.com'), true);
+        assert.equal(looksLikeUrl('  https://example.com/recipe  '), true);
+        assert.equal(looksLikeUrl('www.example.com/recipe'), true);
+    });
+
+    it('does not flag real recipe text', () => {
+        assert.equal(looksLikeUrl(''), false);
+        assert.equal(looksLikeUrl('   '), false);
+        assert.equal(looksLikeUrl('1 cup flour\n2 eggs'), false);
+        assert.equal(looksLikeUrl('See more at https://example.com for tips'), false);
+        assert.equal(looksLikeUrl('Carrot soup'), false);
     });
 });

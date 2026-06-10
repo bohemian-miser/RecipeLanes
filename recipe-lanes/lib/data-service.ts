@@ -25,7 +25,7 @@ import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/type
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined } from './utils';
 // import { calculateWilsonLCB } from './utils';
-import { applyIconToNode, buildShortlistEntry, clearNodeShortlist, computeShortlistDelta, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getPendingImpressionIds, getPendingRejectionIds, getPendingImpressionTargets, getPendingRejectionTargets, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, markEntryImpressedAtIndex, markSeenEntriesImpressed, markSeenEntriesRejected, mutateNodesByIngredient, prependToShortlist, rankIconsByEmbedding, toRecipeIcon, setNodeStatusByIngredient, extractBatchIngredients } from './recipe-lanes/model-utils';
+import { applyIconToNode, assignNodeShortlist, buildShortlistEntry, clearNodeShortlist, computeShortlistDelta, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getNodeShortlist, getNodeShortlistLength, getPendingImpressionIds, getPendingRejectionIds, getPendingImpressionTargets, getPendingRejectionTargets, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, markEntryImpressedAtIndex, markSeenEntriesImpressed, markSeenEntriesRejected, mutateNodesByIngredient, prependToShortlist, rankIconsByEmbedding, toRecipeIcon, setNodeStatusByIngredient, extractBatchIngredients } from './recipe-lanes/model-utils';
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -228,8 +228,7 @@ export class FirebaseDataService implements DataService {
 
       const generatedEntry: ShortlistEntry = buildShortlistEntry(icon, 'generated');
       recipeChanged = mutateNodesByIngredient(nodes, stdName, (n) => {
-          n.iconShortlist = prependToShortlist(n.iconShortlist || [], generatedEntry);
-          n.shortlistIndex = 0;
+          assignNodeShortlist(n, prependToShortlist(getNodeShortlist(n), generatedEntry), 0);
           delete n.status;
       });
 
@@ -269,7 +268,7 @@ export class FirebaseDataService implements DataService {
     private nodeNeedsProcessing(node: any): boolean {
         if (!node.visualDescription) return false;
         if (node.status === 'pending' || node.status === 'processing') return true;
-        if (!node.iconShortlist || node.iconShortlist.length === 0) return true;
+        if (getNodeShortlistLength(node) === 0) return true;
         return false;
     }
 
@@ -336,6 +335,7 @@ export class FirebaseDataService implements DataService {
                     recipeCount: 1
                 };
                 if (hydeQueries && hydeQueries.length > 0) {
+                    // eslint-disable-next-line no-restricted-syntax -- payload object, not a RecipeNode field access
                     newQueueDoc.hydeQueries = hydeQueries;
                 }
                 transaction.set(queueRef, newQueueDoc);
@@ -354,6 +354,7 @@ export class FirebaseDataService implements DataService {
                     console.log(`[Transaction] Added recipe ${recipeId} to existing queue for "${stdName}"`);
                 }
                 if (hydeQueries && hydeQueries.length > 0) {
+                    // eslint-disable-next-line no-restricted-syntax -- payload object, not a RecipeNode field access
                     updatePayload.hydeQueries = FieldValue.arrayUnion(...hydeQueries);
                 }
                 if (Object.keys(updatePayload).length > 0) {
@@ -494,8 +495,7 @@ export class FirebaseDataService implements DataService {
                         const nodes: any[] = snap.data()?.graph?.nodes || [];
                         for (const { name, entries } of shortlists) {
                             mutateNodesByIngredient(nodes, name, (n: any) => {
-                                n.iconShortlist = entries;
-                                n.shortlistIndex = 0;
+                                assignNodeShortlist(n, entries, 0);
                                 delete n.status;
                             });
                         }
@@ -556,6 +556,7 @@ export class FirebaseDataService implements DataService {
                 x: 0, y: 0
             };
             if (hydeQueries && hydeQueries.length > 0) {
+                // eslint-disable-next-line no-restricted-syntax -- payload object, not a RecipeNode field access
                 newNode.hydeQueries = hydeQueries;
             }
 
@@ -790,13 +791,13 @@ export class FirebaseDataService implements DataService {
           // shortlistCycled are trusted from the client.
           const tasks: Promise<void>[] = [];
           (graph.nodes || []).forEach((n: any) => {
-              if (!n.iconShortlist || !n.visualDescription) return;
+              if (getNodeShortlistLength(n) === 0 || !n.visualDescription) return;
               const oldNode = oldNodesById.get(n.id);
               const delta = computeShortlistDelta(oldNode, n);
               const hasDelta = delta.toImpres.length || delta.toReject.length || delta.toUnreject.length;
             //   console.log(`[saveRecipe] node=${n.id} ingredient="${n.visualDescription}" idx=${n.shortlistIndex} oldIdx=${oldNode?.shortlistIndex ?? 'none'} toImpres=${delta.toImpres.map(t=>t.id)} toReject=${delta.toReject.map(t=>t.id)} toUnreject=${delta.toUnreject.map(t=>t.id)}`);
               if (hasDelta) {
-                  n.iconShortlist = delta.updatedShortlist;
+                  assignNodeShortlist(n, delta.updatedShortlist);
                   delta.toImpres.forEach(({ id, ingredientId }) => tasks.push(this.recordImpression(id, ingredientId)));
                   delta.toReject.forEach(({ id, ingredientId }) => tasks.push(this.recordRejection(id, ingredientId)));
                   delta.toUnreject.forEach(({ id, ingredientId }) => tasks.push(this.decrementRejection(id, ingredientId)));
@@ -1365,8 +1366,7 @@ export class MemoryDataService implements DataService {
                     // todo don't use this broken 
                     applyIconToNode(n, bestIcon);
                     const entry = buildShortlistEntry(bestIcon, 'generated');
-                    n.iconShortlist = prependToShortlist(n.iconShortlist || [], entry);
-                    n.shortlistIndex = 0;
+                    assignNodeShortlist(n, prependToShortlist(getNodeShortlist(n), entry), 0);
                 }
             }
         });
@@ -1722,8 +1722,7 @@ export class MemoryDataService implements DataService {
         let changed = false;
         
         changed = mutateNodesByIngredient(nodes, stdName, (n) => {
-            n.iconShortlist = prependToShortlist((n.iconShortlist as any) || [], buildShortlistEntry(icon, 'generated'));
-            n.shortlistIndex = 0;
+            assignNodeShortlist(n, prependToShortlist(getNodeShortlist(n), buildShortlistEntry(icon, 'generated')), 0);
             delete n.status;
         });
 

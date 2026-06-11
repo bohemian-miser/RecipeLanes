@@ -1,7 +1,8 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { FirebaseDataService } from '../lib/data-service';
-import { setAIService, MockAIService } from '../lib/ai-service';
+import { setAIService } from '../lib/ai-service';
+import { MockAIService } from '../lib/ai-service.mock';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
 import { db } from '../lib/firebase-admin';
 

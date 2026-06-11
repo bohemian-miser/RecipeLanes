@@ -18,7 +18,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { createDebugRecipeAction, addIngredientNodeAction, forgeIconAction } from '../app/actions';
-import { setAIService, MockAIService } from '../lib/ai-service';
+import { setAIService } from '../lib/ai-service';
+import { MockAIService } from '../lib/ai-service.mock';
 import { getDataService } from '../lib/data-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
 import { getNodeIconId } from '../lib/recipe-lanes/model-utils';

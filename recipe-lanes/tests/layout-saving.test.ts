@@ -497,3 +497,82 @@ describe('End-to-end: drag → save → reload → positions restored', () => {
         );
     });
 });
+
+// ============================================================
+// TITLE PERSISTENCE — saveRecipeAction round-trip (folded in from
+// the former tests/title-persistence.test.ts; same saveRecipeAction layer)
+// ============================================================
+
+describe('Title persistence — saveRecipeAction round-trip', () => {
+    const baseGraph: any = {
+        title: 'Original Title',
+        lanes: [],
+        nodes: [{ id: '1', laneId: 'l1', text: 'Step 1', type: 'action', x: 0, y: 0 }],
+    };
+
+    it('saves a new recipe with a title', async () => {
+        const res = await saveRecipeAction({ ...baseGraph, title: 'My Recipe' });
+        assert.ok(res.id, 'should return an id');
+        const saved = await getDataService().getRecipe(res.id!);
+        assert.strictEqual(saved?.graph.title, 'My Recipe');
+    });
+
+    it('persists a title update when owner saves existing recipe', async () => {
+        const { id } = await saveRecipeAction({ ...baseGraph, title: 'Old Title' });
+        assert.ok(id);
+
+        const update = await saveRecipeAction({ ...baseGraph, title: 'New Title' }, id);
+        assert.ok(!update.error, `unexpected error: ${update.error}`);
+
+        const saved = await getDataService().getRecipe(id!);
+        assert.strictEqual(saved?.graph.title, 'New Title', 'title should be updated in DB');
+    });
+
+    it('returns an error (not throws) when non-owner tries to overwrite', async () => {
+        const { id } = await saveRecipeAction({ ...baseGraph });
+        assert.ok(id);
+
+        setAuthService(new MockAuthService({ uid: 'user-2', email: 'u2@test.com', name: 'User 2', isAdmin: false }));
+        const res = await saveRecipeAction({ ...baseGraph, title: 'Hijacked Title' }, id);
+
+        assert.ok(res.error, 'should return an error for non-owner save');
+        assert.ok(!res.id, 'should not return an id on failure');
+
+        const saved = await getDataService().getRecipe(id!);
+        assert.strictEqual(saved?.graph.title, 'Original Title');
+    });
+
+    it('returns an error when unauthenticated user tries to overwrite an owned recipe', async () => {
+        const { id } = await saveRecipeAction({ ...baseGraph });
+        assert.ok(id);
+
+        setAuthService(new MockAuthService(null));
+        const res = await saveRecipeAction({ ...baseGraph, title: 'Unauthenticated Title' }, id);
+
+        assert.ok(res.error, 'should return an error');
+
+        const saved = await getDataService().getRecipe(id!);
+        assert.strictEqual(saved?.graph.title, 'Original Title', 'title should not have changed');
+    });
+
+    it('title update does not clobber other graph data', async () => {
+        const graphWithNodes: any = {
+            title: 'Original',
+            lanes: [{ id: 'l1', title: 'Main' }],
+            nodes: [
+                { id: 'n1', laneId: 'l1', text: 'Chop onions', type: 'action', x: 0, y: 0 },
+                { id: 'n2', laneId: 'l1', text: 'Fry pan', type: 'action', x: 0, y: 100 },
+            ],
+        };
+        const { id } = await saveRecipeAction(graphWithNodes);
+        assert.ok(id);
+
+        const res = await saveRecipeAction({ ...graphWithNodes, title: 'Updated Title' }, id);
+        assert.ok(!res.error);
+
+        const saved = await getDataService().getRecipe(id!);
+        assert.strictEqual(saved?.graph.title, 'Updated Title');
+        assert.strictEqual(saved?.graph.nodes.length, 2, 'nodes should be preserved');
+        assert.strictEqual(saved?.graph.nodes[0].text, 'Chop onions');
+    });
+});

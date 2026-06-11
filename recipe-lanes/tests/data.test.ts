@@ -7,6 +7,19 @@ import { setAuthService, MockAuthService } from '../lib/auth-service';
 import { createVisualRecipeAction } from '../app/actions';
 import { getNodeIconUrl } from '../lib/recipe-lanes/model-utils';
 import { looksLikeUrl } from '../lib/recipe-lanes/input-utils';
+import { standardizeIngredientName } from '../lib/utils';
+
+describe('standardizeIngredientName', () => {
+    it('folds accents/diacritics to ASCII', () => {
+        assert.strictEqual(standardizeIngredientName('jalapeño'), 'Jalapeno');
+        assert.strictEqual(standardizeIngredientName('Sautéed Crème'), 'Sauteed Creme');
+        // Accented and unaccented forms produce the same key
+        assert.strictEqual(
+            standardizeIngredientName('purée'),
+            standardizeIngredientName('puree')
+        );
+    });
+});
 
 // Mock Graph
 const mockGraph: any = {

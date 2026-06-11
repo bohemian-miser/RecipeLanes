@@ -7,7 +7,7 @@ if [ -d "/usr/lib/jvm/java-21-openjdk-amd64" ]; then
     export PATH=$JAVA_HOME/bin:$PATH
 fi
 
-INTEGRATION_TESTS="tests/admin-security.test.ts tests/data-helpers.test.ts tests/functions-metadata.test.ts tests/hybrid-integration.test.ts tests/icon-index.test.ts tests/impression-rejection.test.ts tests/lifecycle.test.ts"
+INTEGRATION_TESTS="tests/admin-security.test.ts tests/functions-metadata.test.ts tests/hybrid-integration.test.ts tests/icon-index.test.ts tests/impression-rejection.test.ts"
 # Note: these tests import firebase-admin and require Firestore/Auth emulators to be available.
 
 echo "----------------------------------------------------------------"

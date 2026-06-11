@@ -25,5 +25,11 @@
   "include": [
     "src",
     // "../lib" Don't include this, path automatically brings in what's needed.
+    // EXCEPT ai-service.mock.ts: it is only referenced via a string-literal
+    // dynamic `require('./ai-service.mock')` in ai-service.ts (so the prod NEXT
+    // build can tree-shake it). tsc can't discover it through that string, so it
+    // is never emitted into functions/lib and the functions emulator crashes with
+    // "Cannot find module './ai-service.mock'". List it explicitly so it compiles.
+    "../lib/ai-service.mock.ts"
   ]
 }

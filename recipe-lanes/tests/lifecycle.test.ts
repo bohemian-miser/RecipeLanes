@@ -27,7 +27,8 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { createDebugRecipeAction, addIngredientNodeAction, forgeIconAction } from '../app/actions';
-import { setAIService, MockAIService } from '../lib/ai-service';
+import { setAIService } from '../lib/ai-service';
+import { MockAIService } from '../lib/ai-service.mock';
 import { getDataService, setDataService, MemoryDataService } from '../lib/data-service';
 import { memoryStore } from '../lib/store';
 import { setAuthService, MockAuthService } from '../lib/auth-service';

@@ -24,6 +24,8 @@ export function cn(...inputs: ClassValue[]) {
 
 export function standardizeIngredientName(name: string) {
     return name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
     .trim()
     .split(' ')
     .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())

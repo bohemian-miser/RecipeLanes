@@ -84,6 +84,27 @@ export async function promoteToAdmin(uid: string) {
 }
 
 /**
+ * Seeds a single icon document into the icon_index collection so the Shared
+ * Gallery renders it deterministically — without relying on the async icon
+ * generation pipeline. Returns the seeded icon id.
+ */
+export async function seedIcon(ingredientName: string): Promise<string> {
+    const db = admin.firestore();
+    const id = `seeded-${ingredientName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`;
+    await db.collection('icon_index').doc(id).set({
+        id,
+        ingredient_name: ingredientName,
+        ingredient: ingredientName,
+        visualDescription: ingredientName,
+        popularity_score: 1,
+        impressions: 0,
+        rejections: 0,
+        created_at: new Date(),
+    });
+    return id;
+}
+
+/**
  * Reads the graph field directly from Firestore.
  * Used in tests to verify that save operations wrote the expected data.
  */

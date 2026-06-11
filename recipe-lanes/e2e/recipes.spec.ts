@@ -113,6 +113,51 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
     cleanupScreenshots(dir);
   });
 
+  // Ported from icons.spec.ts / regressions.spec.ts (Issue 66/67). De-flaked by
+  // SEEDING the gallery icon directly into Firestore (admin SDK) instead of
+  // relying on the async icon-generation pipeline. All waits are web-first.
+  test('Shared Gallery: hover reveals label and delete removes icon (Issue 66/67)', async ({ page, login }) => {
+    const dir = screenshotDir('recipe-gallery-icon', desktop.name);
+    const uid = 'gallery-admin-user';
+    const ingredient = `Gallery Egg ${Date.now()}`;
+
+    // Seed an icon + become admin so the gallery renders it and delete is allowed.
+    const { promoteToAdmin, seedIcon } = await import('./utils/admin-utils');
+    await seedIcon(ingredient);
+
+    await page.goto('/icon_overview');
+    await login(uid);
+    await promoteToAdmin(uid);
+    // Reload so the auth/admin claim is reflected; the gallery fetches on mount.
+    await page.goto('/icon_overview');
+
+    // Narrow the gallery to exactly our seeded icon via search (deterministic).
+    const gallerySection = page.locator('div', { hasText: 'Community Collection' }).last().locator('..');
+    const searchInput = gallerySection.getByPlaceholder(/Search ingredients/i);
+    await expect(searchInput).toBeVisible({ timeout: 15000 });
+    await searchInput.fill(ingredient);
+
+    const item = gallerySection.locator(`[data-testid="gallery-item"][data-ingredient="${ingredient}"]`);
+    await expect(item).toBeVisible({ timeout: 15000 });
+    await expect(item).toHaveCount(1);
+
+    // Hover reveals the label (translate-y-0) and the delete control.
+    await item.hover();
+    const label = item.locator('div.absolute.bottom-0');
+    await expect(label).toHaveClass(/translate-y-0/);
+    const deleteBtn = item.locator('button[title="Delete Icon"]');
+    await expect(deleteBtn).toBeVisible();
+
+    // Delete — wait on the real server-action POST response, then the DOM removal.
+    await Promise.all([
+      page.waitForResponse(r => r.request().method() === 'POST' && r.url().includes('/icon_overview')),
+      deleteBtn.click(),
+    ]);
+    await expect(item).toHaveCount(0, { timeout: 15000 });
+
+    cleanupScreenshots(dir);
+  });
+
   test('UI Features: Feedback', async ({ page }) => {
     test.slow();
     const dir = screenshotDir('recipe-ui-features', desktop.name);

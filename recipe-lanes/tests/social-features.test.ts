@@ -43,6 +43,26 @@ describe('Social Features (Memory)', () => {
         assert.ok(!titles.includes('Private One'), "Should NOT find unlisted recipe");
     });
 
+    it('should hide unvetted recipes from public view', async () => {
+        await service.saveRecipe({ ...mockGraph, title: 'Public Unvetted' }, undefined, 'u1', 'public');
+        const publicRecipes = await service.getPublicRecipes(10);
+        const titles = publicRecipes.map((r: any) => r.title);
+        assert.ok(!titles.includes('Public Unvetted'));
+    });
+
+    it('should filter recipes by user', async () => {
+        await service.saveRecipe({ ...mockGraph, title: 'My Public' }, undefined, 'me', 'public');
+        await service.saveRecipe({ ...mockGraph, title: 'My Private' }, undefined, 'me', 'private');
+        await service.saveRecipe({ ...mockGraph, title: 'Other Public' }, undefined, 'other', 'public');
+
+        const myRecipes = await service.getUserRecipes('me');
+        const myTitles = myRecipes.map((r: any) => r.title);
+
+        assert.ok(myTitles.includes('My Public'));
+        assert.ok(myTitles.includes('My Private'));
+        assert.ok(!myTitles.includes('Other Public'));
+    });
+
     it('should search public recipes by title and content', async () => {
         const spagId = await service.saveRecipe({ ...mockGraph, title: 'Spaghetti Bolognese' }, undefined, 'u1', 'public');
         await service.vetRecipe(spagId, true);

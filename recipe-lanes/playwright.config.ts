@@ -28,11 +28,15 @@ export default defineConfig({
     timeout: 5 * 1000,
   },
   retries: 0,
+  // Tests share one dev server + one Firestore emulator and seed overlapping
+  // auth/recipe state, so they must run serially. workers:1 + fullyParallel:false
+  // is the coherent setting (the previous workers:1 / fullyParallel:true was
+  // contradictory). De-flaking is done via event-based waits, not parallelism.
   workers: 1,
-  fullyParallel: true,
+  fullyParallel: false,
   use: {
     baseURL: 'http://localhost:8002',
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
   },
   projects: [
     {

@@ -28,7 +28,7 @@ import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, saveCha
 import { ChatPanel } from '@/components/recipe-lanes/chat-panel';
 import { MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
 import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
-import { standardizeIngredientName } from '@/lib/utils';
+import { standardizeIngredientName, formatDisplayName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import { TimelineView } from '@/components/recipe-lanes/timeline-view';
 import type { RecipeGraph, LayoutModeId } from '@/lib/recipe-lanes/types';
@@ -743,7 +743,7 @@ const handleVisualize = async () => {
                     )}
                     {ownerId && (
                         <span className="text-[9px] text-zinc-600 font-mono ml-2">
-                           by {ownerName || 'Anon'}
+                           by {formatDisplayName(ownerId, ownerName)}
                         </span>
                     )}
                 </div>

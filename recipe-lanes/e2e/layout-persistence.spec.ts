@@ -254,4 +254,50 @@ test.describe('Layout persistence', () => {
 
         cleanupScreenshots(dir);
     });
+
+    /**
+     * Ported from layout-mode-persistence.spec.ts.
+     *
+     * Toggling to the "timeline2" (Classic Timeline) layout mode must persist
+     * across a hard reload: the layout select retains the value AND the timeline
+     * renders its nodes. De-flaked: waits on the auto-save server-action POST and
+     * on real DOM signals (rf-ready + the select value + a timeline node circle).
+     * No fixed sleeps.
+     */
+    test('timeline2 layout mode persists across reload (mode + node rendering)', async ({
+        page,
+        login,
+    }) => {
+        test.slow();
+        const dir = screenshotDir('layout-persistence-timeline2', 'desktop');
+        await page.setViewportSize({ width: 1280, height: 800 });
+
+        // ── create a recipe as owner so the layout-mode change auto-saves ─────
+        await page.goto('/lanes?new=true');
+        await login('timeline2-persist-user-' + Date.now());
+        await create_recipe(page, '2 eggs, 1 pan. fry eggs in pan for 5 min.', dir);
+        await wait_for_graph(page, dir);
+        await expect(page).toHaveURL(/id=/);
+        const recipeUrl = page.url();
+
+        const layoutSelect = page.locator('select[title="Layout Mode"]');
+        await expect(layoutSelect).not.toHaveValue('timeline2');
+
+        // ── switch to timeline2; wait on the auto-save POST (not a sleep) ──────
+        await Promise.all([
+            page.waitForResponse(
+                r => r.request().method() === 'POST' && r.url().includes('/lanes'),
+            ),
+            layoutSelect.selectOption('timeline2'),
+        ]);
+        await expect(layoutSelect).toHaveValue('timeline2');
+
+        // ── hard reload and assert the mode + timeline rendering persisted ────
+        await page.goto(recipeUrl);
+        await expect(layoutSelect).toHaveValue('timeline2', { timeout: 15000 });
+        const timelineNode = page.locator('g[data-testid^="node-"] circle').first();
+        await expect(timelineNode).toBeVisible({ timeout: 15000 });
+
+        cleanupScreenshots(dir);
+    });
 });

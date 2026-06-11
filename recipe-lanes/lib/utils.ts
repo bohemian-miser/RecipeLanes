@@ -51,6 +51,23 @@ export function removeUndefined(obj: any): any {
 }
 
 
+/**
+ * Resolves the human-facing author label for a byline.
+ *
+ * Never exposes a raw user ID: if the display name is missing/blank, or is just
+ * the uid (optionally wrapped, e.g. "User <uid>"), we fall back to "Anon".
+ *
+ * @param uid         the owner's user id (may be undefined for guests)
+ * @param displayName the cached/profile display name (may be empty/undefined)
+ */
+export function formatDisplayName(uid?: string | null, displayName?: string | null): string {
+    const name = (displayName ?? '').trim();
+    if (!name) return 'Anon';
+    const id = (uid ?? '').trim();
+    if (id && (name === id || name === `User ${id}`)) return 'Anon';
+    return name;
+}
+
 export function calculateWilsonLCB(n: number, r: number): number {
     if (n === 0) return 0;
     const k = n - r; const p = k / n; const z = 1.645;

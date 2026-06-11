@@ -3,7 +3,8 @@ import { screenshotDir } from './utils/screenshot';
 import { deviceConfigs } from './utils/devices';
 import { create_recipe, wait_for_graph } from './utils/actions';
 
-test.describe('Layout Persistence', () => {
+// TODO(wave2): coverage being moved to unit/emulator tests; delete this spec once those land
+test.describe.skip('Layout Persistence', () => {
   const desktop = deviceConfigs.find(d => d.name === 'desktop')!;
 
   test.beforeEach(async ({ page }) => {

@@ -57,7 +57,7 @@ export function IngredientsSidebar({ graph, onClose, onUpdateServes }: Ingredien
             </div>
             <div className="flex items-center gap-2">
                 <button onClick={() => handleServesChange(serves - 1)} className="w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-full hover:bg-zinc-200 text-zinc-600 font-bold transition-colors">-</button>
-                <span className="w-8 text-center font-mono font-bold text-zinc-800 text-lg">{serves}</span>
+                <span data-testid="sidebar-serves" className="w-8 text-center font-mono font-bold text-zinc-800 text-lg">{serves}</span>
                 <button onClick={() => handleServesChange(serves + 1)} className="w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-full hover:bg-zinc-200 text-zinc-600 font-bold transition-colors">+</button>
             </div>
         </div>

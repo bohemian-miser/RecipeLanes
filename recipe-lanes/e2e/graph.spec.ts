@@ -35,10 +35,25 @@ test.describe('Graph UI & Interactions (Consolidated)', () => {
 
     // 3. Scaling via Sidebar
     const node = get_node(page, 'Egg');
+    // Root cause of the historical flake: after create_recipe, the async icon
+    // hydration writes to Firestore, whose onSnapshot fires setGraph and remounts
+    // the sidebar's "+" button. A click queued during that remount lands on a
+    // detached node and is silently dropped. Wait for the hydration churn to
+    // settle (status leaves "running") BEFORE opening/clicking the sidebar so the
+    // button subtree is stable and the click can't be lost.
+    await expect(page.getByTestId('icon-search-status'))
+      .not.toHaveAttribute('data-status', 'running', { timeout: 30000 });
+
     await page.getByTitle('Toggle Ingredients').click();
     const sidebar = page.locator('div.absolute.left-0.top-14');
     await expect(sidebar).toBeVisible();
+    // Sidebar is rendered with data and stable (serves shows the base value of 1)
+    // before we click, confirming the "+" handler is wired and not mid-mount.
+    await expect(sidebar.getByTestId('sidebar-serves')).toHaveText('1');
     await sidebar.getByText('+', { exact: true }).click();
+    // The synchronous sidebar state reflects the click immediately; assert it as a
+    // remount-resilient signal, then confirm the scaled value reached the node text.
+    await expect(sidebar.getByTestId('sidebar-serves')).toHaveText('2');
     await expect(node).toContainText('2', { timeout: 10000 });
   });
 

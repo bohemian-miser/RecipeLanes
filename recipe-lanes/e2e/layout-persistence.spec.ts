@@ -42,6 +42,10 @@ import { test, expect } from './utils/fixtures';
 import { Locator } from '@playwright/test';
 import { create_recipe, wait_for_graph } from './utils/actions';
 import { setRecipeLayouts } from './utils/admin-utils';
+import { debugShot } from './utils/debug-shot';
+
+// Debug screenshots are opt-in only: run with `E2E_SCREENSHOTS=1 npm run test:e2e`
+// to capture them. With the flag unset (normal/CI runs) debugShot is a no-op.
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -119,6 +123,7 @@ test.describe('Layout persistence', () => {
         // complete layout data.
         const dagrePositions = await collectAllNodePositions(page);
         expect(dagrePositions.length).toBeGreaterThan(0);
+        await debugShot(page, 'after-dagre');
 
         // Pick the first content node as the one we'll "move".
         const targetNodeId = dagrePositions[0].id;
@@ -196,6 +201,9 @@ test.describe('Layout persistence', () => {
 
         const box = await targetEl.boundingBox();
         expect(box).toBeTruthy();
+        const transformBeforeDrag = await targetEl.evaluate(
+            (el: Element) => (el as HTMLElement).style.transform,
+        );
         await targetEl.hover();
         await page.mouse.down();
         await page.mouse.move(
@@ -205,11 +213,21 @@ test.describe('Layout persistence', () => {
         );
         await page.mouse.up();
 
+        // Confirm React Flow actually committed the drag (transform changed) BEFORE
+        // waiting on the save — otherwise a dropped drag yields no autosave and the
+        // "Saved changes" wait times out flakily.
+        await expect
+            .poll(async () => targetEl.evaluate((el: Element) => (el as HTMLElement).style.transform), {
+                timeout: 5000,
+            })
+            .not.toBe(transformBeforeDrag);
+
         // ── Step 4: wait for the autosave to land (owner drag → handleSave →
         // "Saved changes." notification). This is the real save signal.
         await expect(page.getByText('Saved changes', { exact: false })).toBeVisible({
-            timeout: 10000,
+            timeout: 15000,
         });
+        await debugShot(page, 'after-save');
 
         // Capture where the node is NOW (post-drag, post-save, pre-reload).
         const savedPos = await readGraphPos(targetEl);
@@ -224,6 +242,7 @@ test.describe('Layout persistence', () => {
         // wait_for_graph waits on data-testid="rf-ready" — the layout + fitView
         // settle signal — so no fixed sleep is needed.
         await wait_for_graph(page);
+        await debugShot(page, 'after-reload');
 
         // ── Step 6: verify position matches what was saved ────────────────────
         const targetAfterReload = page.locator(`.react-flow__node[data-id="${targetId}"]`);

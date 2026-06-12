@@ -83,6 +83,47 @@ export async function create_recipe(page: Page, text: string, _dir?: string) {
     await page.waitForURL(/id=/);
 }
 
+/**
+ * Robust navigation for a freshly-created browser context.
+ *
+ * A brand-new context opens a fresh socket to the Next.js dev server. The dev
+ * server compiles routes lazily and can momentarily refuse/drop a connection on
+ * that first hit, surfacing as ERR_CONNECTION_REFUSED — a socket-level failure
+ * that no in-page wait can recover from because the document never loads. We
+ * first confirm the server actually answers a request from this context, then
+ * retry the navigation on the transient connection-establishment errors. This is
+ * a connection-establishment guard, not an assertion/timing crutch.
+ */
+export async function goto_with_retry(page: Page, url: string, attempts = 6) {
+    // 1. Confirm the server is reachable from THIS context before navigating.
+    await expect
+        .poll(async () => {
+            try {
+                const res = await page.request.get(url, { timeout: 5000 });
+                return res.status();
+            } catch {
+                return 0; // connection refused / reset — not reachable yet
+            }
+        }, { timeout: 30000, message: `dev server not reachable at ${url}` })
+        .toBeLessThan(500);
+
+    // 2. Navigate, retrying only the transient connection-establishment errors.
+    let lastErr: unknown;
+    for (let i = 0; i < attempts; i++) {
+        try {
+            await page.goto(url, { waitUntil: 'domcontentloaded' });
+            return;
+        } catch (e) {
+            lastErr = e;
+            const msg = String((e as Error)?.message ?? e);
+            if (!/ERR_CONNECTION_REFUSED|ERR_CONNECTION_RESET|ERR_EMPTY_RESPONSE|NS_ERROR_CONNECTION_REFUSED/.test(msg)) {
+                throw e;
+            }
+        }
+    }
+    throw lastErr;
+}
+
 export async function wait_for_graph(page: Page, _dir?: string) {
     const viewport = page.locator('.react-flow__viewport');
     await expect(viewport).toBeVisible({ timeout: 30000 });

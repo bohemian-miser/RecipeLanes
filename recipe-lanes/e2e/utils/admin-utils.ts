@@ -130,6 +130,20 @@ export async function setRecipeLayouts(
 }
 
 /**
+ * Updates only the title field of a recipe document via the admin SDK.
+ * Used to simulate a background update landing in Firestore (and arriving on an
+ * already-open client via onSnapshot) without depending on a second browser
+ * context's auth/UI — the relevant thing under test is that the snapshot fires,
+ * not which client wrote it.
+ */
+export async function setRecipeTitle(recipeId: string, title: string) {
+    const db = admin.firestore();
+    // The client's onSnapshot reads the title from data.graph.title (see
+    // app/lanes/page.tsx), so the background write must target graph.title.
+    await db.collection('recipes').doc(recipeId).update({ 'graph.title': title });
+}
+
+/**
  * Clears the Firestore Emulator database.
  * Useful for tests that require a clean state (e.g. checking initial generation).
  */

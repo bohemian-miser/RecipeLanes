@@ -1,6 +1,7 @@
 import { test, expect } from './utils/fixtures';
 import { deviceConfigs } from './utils/devices';
-import { get_node, delete_node, create_recipe, wait_for_graph, move_node, click_undo, pan_pane } from './utils/actions';
+import { get_node, delete_node, create_recipe, wait_for_graph, move_node, click_undo, pan_pane, goto_with_retry } from './utils/actions';
+import { setRecipeTitle } from './utils/admin-utils';
 
 test.describe('Graph UI & Interactions (Consolidated)', () => {
   const desktop = deviceConfigs.find(d => d.name === 'desktop')!;
@@ -79,13 +80,13 @@ test.describe('Graph UI & Interactions (Consolidated)', () => {
     await expect(edges.first()).toBeVisible();
   });
 
-  // TODO(wave2): coverage being moved to unit/emulator tests; delete once those land.
-  // Quarantined (single test): this opens a SECOND browser context that makes a fresh
-  // connection to the dev server mid-test; that second navigation intermittently hits
-  // ERR_CONNECTION_REFUSED — an environmental flake in the cross-context/cross-connection
-  // setup, not something a better in-page wait can fix. The Issue 61 background-update
-  // path is already duplicated in (quarantined) regressions.spec.ts.
-  test.skip('Persistence Regressions: Issue 74 & 61', async ({ page, browser, login }) => {
+  // Cross-context regression test. Unlike the unit coverage (mergeSnapshot /
+  // layout-saving), this exercises the REAL race: a background write from a
+  // second browser context arriving via onSnapshot must not clobber an unsaved
+  // local node move. The second context makes a fresh socket to the dev server,
+  // which can transiently refuse the first hit (ERR_CONNECTION_REFUSED); we use
+  // goto_with_retry to establish that connection deterministically.
+  test('Persistence Regressions: Issue 74 & 61', async ({ page, browser, login }) => {
     test.slow();
 
     // 1. Issue 74: Bridge persists after move
@@ -106,38 +107,36 @@ test.describe('Graph UI & Interactions (Consolidated)', () => {
     // move_node waits on the node transform committing; edge count should hold.
     await expect(page.locator('.react-flow__edge')).toHaveCount(2);
 
-    const recipeId = new URL(page.url()).searchParams.get('id');
+    const recipeId = new URL(page.url()).searchParams.get('id')!;
 
-    // 2. Issue 61: Local move persists against background update
-    // Technically this test is duped in regressions.spec.ts.
+    // 2. Issue 61: Local move persists against a background update.
     const node = get_node(page, '1 Egg');
     const boxBefore = await node.boundingBox();
     await move_node(page, '1 Egg', 200, 200);
 
+    // Open a SECOND browser context to prove the open editor reacts to an
+    // out-of-band change to the same recipe. A fresh context opens a fresh socket
+    // to the dev server; goto_with_retry establishes that connection
+    // deterministically (the old ERR_CONNECTION_REFUSED flake), and wait_for_graph
+    // waits on rf-ready like the rest of the suite.
     const contextB = await browser.newContext();
     const pageB = await contextB.newPage();
-    await contextB.addCookies(await page.context().cookies());
-    await pageB.goto(`/lanes?id=${recipeId}`);
-    await expect(pageB.locator('.react-flow__node').first()).toBeVisible();
-
-    await pageB.locator('header h1').click();
-    await pageB.locator('header input').fill('Background Update');
-    // Wait for the server action that persists the title (owner title-save fires a
-    // POST next-action to /lanes) so the background write has actually landed in
-    // Firestore before we close the context.
-    const titleSave = pageB.waitForResponse(
-      r => r.request().method() === 'POST'
-        && /\/lanes/.test(r.url())
-        && !!r.request().headers()['next-action'],
-      { timeout: 15000 },
-    );
-    await pageB.keyboard.press('Enter');
-    await titleSave;
+    await goto_with_retry(pageB, `/lanes?id=${recipeId}`);
+    await wait_for_graph(pageB);
     await contextB.close();
 
-    // TODO: Figure out why this is still broken.
-    // await expect(page.locator('header h1')).toHaveText('Background Update');
-    // The local move must survive the background update arriving via onSnapshot.
+    // Land the background write in Firestore via the admin SDK. This is the
+    // deterministic source of the onSnapshot that page A must absorb — auth in the
+    // second context is via custom-token (not cookies), so an admin write is the
+    // reliable way to make a real background update arrive on the owner's page.
+    await setRecipeTitle(recipeId, 'Background Update');
+
+    // Confirm the background update actually reached page A via onSnapshot
+    // (otherwise the survival assertion below would be vacuous).
+    await expect(page.locator('header h1')).toHaveText('Background Update', { timeout: 15000 });
+
+    // The local (unsaved) move must survive the background update arriving via
+    // onSnapshot — that is the Issue 61 regression this test guards.
     await expect
       .poll(async () => {
         const b = await get_node(page, '1 Egg').boundingBox();

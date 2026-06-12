@@ -1,6 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { setAIService, MockAIService } from '../lib/ai-service';
+import { setAIService } from '../lib/ai-service';
+import { MockAIService } from '../lib/ai-service.mock';
 import { setDataService, MemoryDataService, getDataService } from '../lib/data-service';
 import { setAuthService, AuthSession } from '../lib/auth-service';
 import { setIconQueueConfig } from '../lib/icon-queue-config';

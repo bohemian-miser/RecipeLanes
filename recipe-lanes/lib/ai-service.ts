@@ -120,35 +120,15 @@ export class RealAIService implements AIService {
   }
 }
 
-// Default to Real or Mock based on env.
-// Tests can swap this out using setAIService.
-const isMockMode = 
-  process.env.MOCK_AI === 'true' || 
-  process.env.FUNCTIONS_EMULATOR === 'true' || 
-  process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true';
-
+// App/composition code ALWAYS constructs a real client. No environment flag
+// here selects a mock. Tests and the dev/e2e harness swap in MockAIService via
+// setAIService() (pure dependency injection) — the mock module is never
+// referenced from this file, so it is structurally absent from the prod bundle.
 const useNodeCF = process.env.NEXT_PUBLIC_ICON_SEARCH_MODE === 'node_cf';
 
-let currentService: AIService;
-// NODE_ENV is checked FIRST so that in a production build webpack/Terser can
-// statically prove this branch is dead and tree-shake the mock module (and its
-// dynamic `require('./ai-service.mock')`) entirely out of the prod bundle.
-// The mock is therefore structurally absent from production, not merely gated
-// by a runtime flag.
-if (process.env.NODE_ENV !== 'production' && isMockMode) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { MockAIService } = require('./ai-service.mock');
-    currentService = new MockAIService();
-    // Loud server-side warning so MOCK_AI can never be silently active.
-    // This fires at module load time (server startup / cold start).
-    if (typeof process !== 'undefined' && process.env.MOCK_AI === 'true') {
-        console.warn('[ai-service] WARNING: MOCK_AI=true — AI responses are MOCKED. Do NOT use in production.');
-    }
-} else if (useNodeCF) {
-    currentService = new NodeCFAIService();
-} else {
-    currentService = new RealAIService();
-}
+let currentService: AIService = useNodeCF
+    ? new NodeCFAIService()
+    : new RealAIService();
 
 export function getAIService(): AIService {
   return currentService;

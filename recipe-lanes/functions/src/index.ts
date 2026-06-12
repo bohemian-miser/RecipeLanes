@@ -32,6 +32,19 @@ import {  FieldValue } from "firebase-admin/firestore";
 
 // const db = getFirestore();
 
+// Emulator-only mock injection (DI). Firebase sets FUNCTIONS_EMULATOR
+// automatically ONLY when running under the local emulator; it is never set in
+// deployed functions, so this branch is dead in prod and the mock module is
+// never required there. The dynamic require keeps ai-service.mock out of any
+// code path that prod actually loads. Handlers call getAIService() at
+// invocation time (see icon-generator.ts), so this runs before first use.
+if (process.env.FUNCTIONS_EMULATOR) {
+    const { setAIService } = require('../../lib/ai-service');
+    const { MockAIService } = require('../../lib/ai-service.mock');
+    setAIService(new MockAIService());
+    console.log('[functions] emulator: injected MockAIService via FUNCTIONS_EMULATOR (no MOCK_AI flag)');
+}
+
 export * as vectorSearch from './vector-search';
 
 export const processIconTask = onTaskDispatched({

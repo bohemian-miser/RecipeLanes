@@ -84,6 +84,27 @@ export async function promoteToAdmin(uid: string) {
 }
 
 /**
+ * Seeds a single icon document into the icon_index collection so the Shared
+ * Gallery renders it deterministically — without relying on the async icon
+ * generation pipeline. Returns the seeded icon id.
+ */
+export async function seedIcon(ingredientName: string): Promise<string> {
+    const db = admin.firestore();
+    const id = `seeded-${ingredientName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`;
+    await db.collection('icon_index').doc(id).set({
+        id,
+        ingredient_name: ingredientName,
+        ingredient: ingredientName,
+        visualDescription: ingredientName,
+        popularity_score: 1,
+        impressions: 0,
+        rejections: 0,
+        created_at: new Date(),
+    });
+    return id;
+}
+
+/**
  * Reads the graph field directly from Firestore.
  * Used in tests to verify that save operations wrote the expected data.
  */
@@ -106,6 +127,20 @@ export async function setRecipeLayouts(
     const db = admin.firestore();
     // Dot-notation path: updates ONLY graph.layouts, leaves all other fields intact.
     await db.collection('recipes').doc(recipeId).update({ 'graph.layouts': layouts });
+}
+
+/**
+ * Updates only the title field of a recipe document via the admin SDK.
+ * Used to simulate a background update landing in Firestore (and arriving on an
+ * already-open client via onSnapshot) without depending on a second browser
+ * context's auth/UI — the relevant thing under test is that the snapshot fires,
+ * not which client wrote it.
+ */
+export async function setRecipeTitle(recipeId: string, title: string) {
+    const db = admin.firestore();
+    // The client's onSnapshot reads the title from data.graph.title (see
+    // app/lanes/page.tsx), so the background write must target graph.title.
+    await db.collection('recipes').doc(recipeId).update({ 'graph.title': title });
 }
 
 /**

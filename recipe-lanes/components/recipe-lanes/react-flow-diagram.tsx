@@ -108,6 +108,9 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
     const [timelineData, setTimelineData] = useState<TimelineData | null>(null);
+    // e2e signal: true once the initial layout (and any fitView) has settled.
+    // Tests wait on the data-testid="rf-ready" marker instead of arbitrary sleeps.
+    const [layoutReady, setLayoutReady] = useState(false);
     const {
         copied,
         saved,
@@ -378,12 +381,18 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         hasInitialLayoutRef.current = true;
 
         if (fit && !canPreserve) {
+            setLayoutReady(false);
             setTimeout(() => {
                 // Cap zoom at 1.5 so small recipes don't fill the entire viewport.
                 // If the view zooms in too far, the pane centre lands on a node and
                 // e2e pan drags register as node-drag instead of canvas-pan.
                 fitView({ padding: 0.1, maxZoom: 1.5 });
+                // fitView has settled — surface the e2e readiness signal.
+                setLayoutReady(true);
             }, 50);
+        } else {
+            // No fitView to wait on; nodes are positioned synchronously.
+            setLayoutReady(true);
         }
 
     }, [graph, mode, spacing, setNodes, setEdges, fitView, handleDeleteNode, edgeStyle]);
@@ -786,6 +795,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     return (
         <div className="w-full h-full touch-none" ref={flowWrapper}>
+            {layoutReady && <div data-testid="rf-ready" style={{ display: 'none' }} />}
             <ReactFlow
                 nodes={nodes}
                 edges={edges}

@@ -71,10 +71,15 @@ test.describe('Smoke Tests (Consolidated)', () => {
 
     // 2. Notification Banner (via Share)
     await expect(page.locator('.react-flow__viewport')).toBeVisible();
+    // Wait for the graph to fully settle (rf-ready) and the loading screen to
+    // clear before clicking Share — clicking while the diagram is still mounting
+    // can swallow the action so the "Link copied" notification never fires.
+    await expect(page.getByTestId('rf-ready')).toBeAttached({ timeout: 30000 });
+    await expect(page.getByTestId('loading-screen')).not.toBeVisible({ timeout: 30000 });
     await page.locator('button[title="Save & Copy Link"]').click();
 
     const notifyBanner = page.locator('div').filter({ hasText: 'Link copied to clipboard' }).last();
-    await expect(notifyBanner).toBeVisible();
+    await expect(notifyBanner).toBeVisible({ timeout: 15000 });
     await notifyBanner.click();
     await expect(notifyBanner).not.toBeVisible();
   });

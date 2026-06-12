@@ -1,6 +1,6 @@
 import { test, expect } from './utils/fixtures';
 import { deviceConfigs } from './utils/devices';
-import { create_recipe, wait_for_graph, move_node } from './utils/actions';
+import { create_recipe, wait_for_graph, move_node, goto_with_retry } from './utils/actions';
 
 test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
   const desktop = deviceConfigs.find(d => d.name === 'desktop')!;
@@ -74,7 +74,7 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
     const recipeId = new URL(page.url()).searchParams.get('id');
 
     // 2. Verify not in public gallery
-    await page.goto('/gallery');
+    await goto_with_retry(page, '/gallery');
     await page.getByPlaceholder('Search recipes...').fill(title);
     await page.getByPlaceholder('Search recipes...').press('Enter');
     await expect(page.locator(`a[href="/lanes?id=${recipeId}"]`)).not.toBeVisible();
@@ -88,7 +88,7 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
     // The unvetted-filter view only renders for admins; expect.toBeVisible below
     // auto-retries the gallery fetch until the card appears (no fixed sleep).
     await login('admin-user');
-    await page.goto('/gallery?filter=unvetted');
+    await goto_with_retry(page, '/gallery?filter=unvetted');
     const card = page.locator(`a[href="/lanes?id=${recipeId}"]`);
     await expect(card).toBeVisible({ timeout: 15000 });
 
@@ -97,7 +97,7 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
     await expect(card).not.toBeVisible({ timeout: 15000 });
 
     // 4. Verify in public gallery
-    await page.goto('/gallery');
+    await goto_with_retry(page, '/gallery');
     await page.getByPlaceholder('Search recipes...').fill(title);
     await page.getByPlaceholder('Search recipes...').press('Enter');
     await expect(card).toBeVisible();

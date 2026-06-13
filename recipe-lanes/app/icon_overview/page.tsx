@@ -39,7 +39,7 @@ import { iconSearchProviders } from '@/lib/icon-search-providers';
 import { SearchProviderPanel } from '@/components/search-provider-panel';
 
 export default function Home() {
-  const { user, loading: authLoading, signIn } = useAuth();
+  const { user, isAdmin, loading: authLoading, signIn } = useAuth();
   const [nodes, setNodes] = useState<RecipeNode[]>([]);
   const [recipeId, setRecipeId] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
@@ -125,6 +125,14 @@ export default function Home() {
     event.preventDefault();
     if (!recipeId) {
         setError("Session not initialized.");
+        return;
+    }
+
+    // Forging requires a login. Anonymous visitors can view the page but
+    // must sign in to forge; prompt them instead of attempting the action.
+    if (!user) {
+        setError("Please log in to forge icons.");
+        signIn();
         return;
     }
 
@@ -302,7 +310,7 @@ export default function Home() {
             </div>
           )}
 
-          {mode === 'forge' && <QueueMonitor />}
+          {mode === 'forge' && <QueueMonitor isAdmin={isAdmin} />}
 
           {mode === 'forge' && (
             <IconDisplay

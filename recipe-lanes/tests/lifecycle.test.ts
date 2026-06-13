@@ -15,12 +15,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { describe, it } from 'node:test';
+import { describe, it, before } from 'node:test';
 import assert from 'node:assert';
 import { createDebugRecipeAction, addIngredientNodeAction, forgeIconAction } from '../app/actions';
 import { setAIService, MockAIService } from '../lib/ai-service';
 import { getDataService } from '../lib/data-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
+import { setIconQueueConfig } from '../lib/icon-queue-config';
 import { getNodeIconId } from '../lib/recipe-lanes/model-utils';
 
 setAIService(new MockAIService());
@@ -45,6 +46,12 @@ async function pollForIcon(
 }
 
 describe('Recipe & Icon Lifecycle', () => {
+    // Ensure forging isn't blocked by config leaked from earlier integration
+    // files sharing the emulator (allowAnonForge / a low perUserDailyCap).
+    before(async () => {
+        await setIconQueueConfig({ paused: false, allowAnonForge: true, perUserDailyCap: 1000 });
+    });
+
     it('should follow the full creation and shortlist-cycle reroll flow', async () => {
         const ingredient = 'Integration-Egg-' + Date.now();
 

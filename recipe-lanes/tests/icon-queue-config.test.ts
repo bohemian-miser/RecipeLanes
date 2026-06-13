@@ -1,4 +1,4 @@
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { getIconQueueConfigAction, setIconQueueConfigAction, addIngredientNodeAction } from '../app/actions';
 import { setAuthService, AuthSession } from '../lib/auth-service';
@@ -20,6 +20,11 @@ const configRef = () => db.collection(DB_COLLECTION_CONFIG).doc(ICON_QUEUE_CONFI
 
 describe('Icon Queue Config — accessor', () => {
     beforeEach(async () => {
+        await configRef().delete().catch(() => {});
+    });
+    // Reset shared emulator config so leaked non-default values can't poison
+    // other integration test files (they share one Firestore config doc).
+    afterEach(async () => {
         await configRef().delete().catch(() => {});
     });
 
@@ -45,6 +50,10 @@ describe('Icon Queue Config — accessor', () => {
 });
 
 describe('Icon Queue Config — admin actions auth', () => {
+    afterEach(async () => {
+        await configRef().delete().catch(() => {});
+    });
+
     it('blocks guests and non-admins from reading config', async () => {
         setAuthService(new MockAuth(null));
         assert.strictEqual((await getIconQueueConfigAction()).error, 'Login required');
@@ -80,6 +89,9 @@ describe('Icon Queue Config — per-user daily counter', () => {
 
 describe('Icon Queue Config — enqueue gating', () => {
     beforeEach(async () => {
+        await configRef().delete().catch(() => {});
+    });
+    afterEach(async () => {
         await configRef().delete().catch(() => {});
     });
 

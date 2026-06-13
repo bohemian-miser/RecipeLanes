@@ -46,6 +46,21 @@ Stores the Recipe Graph and user preferences.
         *   `nodes`: Array of Nodes (containing `icon` object of type `IconStats`)
         *   `rejections`: Map<IngredientName, RejectedIconIDs[]> (Persistent User Rejections)
 
+### 5. `icon_index` (Collection)
+Per-icon embedding index that backs semantic icon search (find a visually/­semantically similar existing icon instead of generating a new one). One doc per icon.
+
+*   **Doc ID:** `IconID`
+*   **Fields:**
+    *   `id`: string (IconID, mirrors doc ID)
+    *   `ingredient_name`: string
+    *   `visualDescription`: string
+    *   `embedding`: Firestore `Vector` (`FieldValue.vector(number[])`)
+    *   `created_at`: Timestamp
+*   **Writer:** `DataService.writeIconToIndex(iconId, ingredientName, embedding)` (`lib/data-service.ts`), written alongside icon generation.
+*   **Readers:**
+    *   Firestore vector search in `functions/src/vector-search/`.
+    *   In-process search in `lib/server-vector-search.ts`, which loads a **bundled snapshot** (`lib/vector-search/icon_index.json`) and the embedding model into the container image rather than querying Firestore at request time. Treat the bundled JSON as a build-time export of this collection.
+
 ## Unified Icon Queue
 
 All icon generation requests flow through a single entry point:

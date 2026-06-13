@@ -70,3 +70,4 @@ Scoped single test: `npm run test:one -- tests/my.test.ts`
 - `docs/git_workflow.md` — disposable feature branch protocol
 - `recipe-lanes/TESTING.md` — full testing guide including Pi-specific pre-commit warm-up sequence and known flaky tests
 - `docs/architecture-review-2026-06.md` — prioritized technical roadmap (June 2026 review)
+- `docs/alerting-icon-forge.md` — pure-GCP alerting on icon-generation rate (Bug 171): the `icon_forged` log signal + Cloud Monitoring metric/policy runbook

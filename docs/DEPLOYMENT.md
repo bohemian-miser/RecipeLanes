@@ -77,3 +77,11 @@ npx firebase deploy --only firestore,storage,functions
 ## 7. Firestore Indexes
 
 Indexes are tracked in `firestore.indexes.json` and deployed with `firebase deploy --only firestore`. Do not create indexes manually in the console — they won't be tracked and will cause drift between environments.
+
+## 8. Monitoring & Alerting
+
+Icon-generation-rate alerting (Bug 171) is configured entirely in GCP Cloud
+Monitoring — the app only emits an `icon_forged` structured log on each successful
+generation. See `docs/alerting-icon-forge.md` for the exact `gcloud` commands to
+create the log-based metric and alert policy, and to tune thresholds with no app
+redeploy.

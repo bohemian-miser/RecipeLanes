@@ -4,21 +4,19 @@ This is my first open source project so I'm still working some things out. I'm a
 
 ## Workflow
 
-Staging -> Production.
+Feature branch → **PR against `main`**. `staging` is a side preview environment, not a step on the merge path. See `docs/git_workflow.md` for the exact commands.
 
-### 1. Development (Staging)
-*   **Target Branch:** All feature development should target the `staging` branch.
-*   **Pull Requests:** Open PRs against `staging`.
-*   **Automatic Deployment:** Merging a PR into `staging` triggers an automatic deployment of the Backend (Cloud Functions & Firestore Rules) to the **Staging Firebase Project** (`recipe-lanes-staging`) https://staging.recipelanes.com/.
-*   **Verification:** Verify changes in the Staging environment before proceeding.
+### 1. Develop on a short-lived branch
+*   Branch from the latest `origin/main` with a category prefix (`feat/`, `fix/`, `docs/`).
+*   Branches are disposable — don't reuse one after it merges.
 
-### 2. Production Release
-*   **Promotion:** To release to production, open a PR to merge your branch into `main`.
-*   **Production Deployment:** Merging into `main` triggers deployment to the **Production Firebase Project** (`recipe-lanes`) https://recipelanes.com/.
+### 2. Preview on staging (optional, owner-controlled)
+*   `staging` is a **disposable preview environment** — it is force-pushed to at will and its history is not precious. Pushing to it deploys the backend (Cloud Functions & Firestore Rules) to the **Staging Firebase Project** (`recipe-lanes-staging`, https://staging.recipelanes.com/).
+*   The repo owner pushes to staging whenever they want a preview. **Other contributors don't push to staging directly** — request a staging push and the owner will approve/run it.
 
-### 3. Frontend Changes
-*   Frontend changes (Next.js) are verified via CI on every PR.
-*   Deployment is handled via Firebase App Hosting automatically upon merge.
+### 3. Ship via PR to main
+*   **Open your PR against `main`** (`gh pr create --base main`). `main` is protected: it only ever changes through a reviewed, merged PR — nobody pushes to it directly.
+*   Frontend changes are verified by CI on every PR; merging to `main` deploys to the **Production Firebase Project** (`recipe-lanes`, https://recipelanes.com/) via Firebase App Hosting.
 
 ### 4. Firestore Indexes
 *   Indexes are tracked in `recipe-lanes/firestore.indexes.json`.

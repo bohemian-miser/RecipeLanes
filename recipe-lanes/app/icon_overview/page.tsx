@@ -22,6 +22,7 @@ import { IngredientForm } from '@/components/ingredient-form';
 import { IconDisplay } from '@/components/icon-display';
 import { SharedGallery } from '@/components/shared-gallery';
 import { QueueMonitor } from '@/components/queue-monitor';
+import { QueueConfigPanel } from '@/components/queue-config-panel';
 import { LogoutButton } from '@/components/logout-button';
 import { useAuth } from '@/components/auth-provider';
 import { createDebugRecipeAction, addIngredientNodeAction, rejectIcon, deleteRecipeAction } from '@/app/actions';
@@ -128,14 +129,6 @@ export default function Home() {
         return;
     }
 
-    // Forging requires a login. Anonymous visitors can view the page but
-    // must sign in to forge; prompt them instead of attempting the action.
-    if (!user) {
-        setError("Please log in to forge icons.");
-        signIn();
-        return;
-    }
-
     const formData = new FormData(event.currentTarget);
     const rawIngredient = formData.get('ingredient') as string;
     
@@ -151,7 +144,13 @@ export default function Home() {
     // and safer for consistency. But we can set a loading state if we want.
     
     try {
-        await addIngredientNodeAction(recipeId, newIngredient);
+        // Forging is gated server-side by config (allowAnonForge + per-user daily
+        // cap). Surface any rejection; if the server requires a login, prompt it.
+        const result = await addIngredientNodeAction(recipeId, newIngredient);
+        if (result && !result.success && result.error) {
+            setError(result.error);
+            if (!user) signIn();
+        }
     } catch (e: any) {
         console.error(e);
         setError("Failed to add item.");
@@ -311,6 +310,8 @@ export default function Home() {
           )}
 
           {mode === 'forge' && <QueueMonitor isAdmin={isAdmin} />}
+
+          {mode === 'forge' && <QueueConfigPanel isAdmin={isAdmin} />}
 
           {mode === 'forge' && (
             <IconDisplay

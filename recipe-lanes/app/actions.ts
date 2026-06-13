@@ -89,6 +89,12 @@ export async function createDebugRecipeAction() {
 }
 // icon_overview and tests only.
 export async function addIngredientNodeAction(recipeId: string, ingredientName: string) {
+    // Forging requires a logged-in session. Anonymous visitors can VIEW
+    // /icon_overview but must sign in to forge. (A future PR may add an
+    // `allowAnonForge` config flag; do not assume it here.)
+    const session = await getAuthService().verifyAuth();
+    if (!session) return { success: false, error: 'Login required' };
+
     // Generate HyDE queries so the icon_index entry gets rich search terms
     let hydeQueries: string[] = [];
     try {

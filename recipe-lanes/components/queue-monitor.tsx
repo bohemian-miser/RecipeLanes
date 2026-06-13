@@ -33,7 +33,7 @@ interface QueueItem {
   created_at?: any;
 }
 
-export function QueueMonitor() {
+export function QueueMonitor({ isAdmin = false }: { isAdmin?: boolean }) {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [page, setPage] = useState(1);
@@ -115,13 +115,15 @@ export function QueueMonitor() {
           <span className="text-[10px] font-mono text-zinc-600 bg-zinc-800 px-1.5 rounded">
             {items.length === totalCount ? `${items.length} ACTIVE` : `${items.length} / ${totalCount} ACTIVE`}
           </span>
-          <button
-            onClick={handleClearQueue}
-            className="p-1 hover:bg-zinc-800 rounded text-zinc-600 hover:text-red-400 transition-colors"
-            title="Clear entire queue"
-          >
-            <Trash2 className="w-3 h-3" />
-          </button>
+          {isAdmin && (
+            <button
+              onClick={handleClearQueue}
+              className="p-1 hover:bg-zinc-800 rounded text-zinc-600 hover:text-red-400 transition-colors"
+              title="Clear entire queue"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
         </div>
       </div>
       <div className="divide-y divide-zinc-900">
@@ -160,14 +162,16 @@ export function QueueMonitor() {
                       <XCircle className="w-3 h-3" />
                       <span className="text-[10px] font-bold uppercase">Failed</span>
                     </div>
-                    <button 
-                        onClick={() => handleRetry(item.ingredientName)}
-                        className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-colors"
-                        title="Retry"
-                        aria-label="Retry"
-                    >
-                        <RotateCw className="w-3 h-3" />
-                    </button>
+                    {isAdmin && (
+                      <button
+                          onClick={() => handleRetry(item.ingredientName)}
+                          className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-colors"
+                          title="Retry"
+                          aria-label="Retry"
+                      >
+                          <RotateCw className="w-3 h-3" />
+                      </button>
+                    )}
                 </div>
               )}
             </div>

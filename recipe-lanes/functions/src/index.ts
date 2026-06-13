@@ -17,7 +17,7 @@
 
 
 import { generateIconData } from './icon-generator';
-import { DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from "../../lib/config";
+import { DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES, DB_COLLECTION_CONFIG, ICON_QUEUE_CONFIG_DOC, withIconQueueConfigDefaults } from "../../lib/config";
 import { getDataService } from '../../lib/data-service';
 import { getAIService } from '../../lib/ai-service';
 import { db } from '../../lib/firebase-admin';
@@ -50,6 +50,24 @@ export const processIconTask = onTaskDispatched({
     await processIconTaskHandler(req.data, req.retryCount ?? 0);
 });
 
+// How long to wait before retrying a task that was deferred because the queue
+// is paused. Re-enqueue (rather than fail/drop) so work resumes automatically
+// once an admin un-pauses via the runtime config doc.
+const PAUSE_BACKOFF_SECONDS = 300;
+
+// Functions-side read of the runtime config doc. The functions package shares
+// lib/ with the app; we read the doc directly with the admin SDK here and reuse
+// the shared `withIconQueueConfigDefaults` so defaults live in one place.
+const readIconQueueConfig = async () => {
+    try {
+        const snap = await db.collection(DB_COLLECTION_CONFIG).doc(ICON_QUEUE_CONFIG_DOC).get();
+        return withIconQueueConfigDefaults(snap.exists ? snap.data() : null);
+    } catch (e) {
+        console.warn('[processIconTask] config read failed, using defaults:', e);
+        return withIconQueueConfigDefaults(null);
+    }
+};
+
 export const processIconTaskHandler = async (data: { ingredientName: string }, retryCount: number = 0) => {
     const { ingredientName } = data;
     console.log(`[Task-${ingredientName}] 🚀 Started`);
@@ -60,6 +78,25 @@ export const processIconTaskHandler = async (data: { ingredientName: string }, r
     }
 
     const docRef = db.collection(DB_COLLECTION_QUEUE).doc(ingredientName);
+
+    // HARD PAUSE: checked FIRST. When paused, do not generate — re-enqueue the
+    // task with a backoff delay so it resumes when an admin un-pauses, rather
+    // than dropping or failing it.
+    const cfg = await readIconQueueConfig();
+    if (cfg.paused) {
+        console.log(`[Task-${ingredientName}] ⏸ Queue paused — re-enqueueing in ${PAUSE_BACKOFF_SECONDS}s.`);
+        try {
+            const { getFunctions } = require('firebase-admin/functions');
+            const queue = getFunctions().taskQueue('processIconTask');
+            await queue.enqueue(
+                { ingredientName },
+                { scheduleDelaySeconds: PAUSE_BACKOFF_SECONDS },
+            );
+        } catch (e) {
+            console.error(`[Task-${ingredientName}] Failed to re-enqueue paused task:`, e);
+        }
+        return; // ACK this dispatch; the delayed copy will retry.
+    }
 
     try {
         // 1. Check doc exists (may have been cleared by admin) before proceeding

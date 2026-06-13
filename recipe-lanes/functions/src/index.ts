@@ -119,6 +119,7 @@ export const processIconTaskHandler = async (data: { ingredientName: string }, r
         console.log(`[Queue-${ingredientName}] Publishing to Firestore...`);
         let ingredientDocId;
         let rawHydeQueries: string[] = [];
+        let publishedRecipeCount = 0;
         const dataService = getDataService();
 
         // Find or Create Ingredient Group.
@@ -137,6 +138,7 @@ export const processIconTaskHandler = async (data: { ingredientName: string }, r
             }
             const queueDocData = queueDoc.data();
             const latestRecipeIds: string[] = queueDocData?.recipes || [];
+            publishedRecipeCount = latestRecipeIds.length;
             console.log(`[Queue-${ingredientName}] in transaction Publishing to Firestore...`);
 
             rawHydeQueries = queueDocData?.hydeQueries || [];
@@ -178,6 +180,19 @@ export const processIconTaskHandler = async (data: { ingredientName: string }, r
             transaction.delete(docRef);
             console.log(`[Queue-${ingredientName}] Successfully updated ${processedRecipeIds.length} of ${latestRecipeIds.length} recipes and deleted queue item.`);
         });
+
+        // Structured success marker for GCP log-based metrics / alerting (Bug 171).
+        // Pure-GCP design: the app only emits this signal; counting, thresholds and
+        // delivery live in Cloud Monitoring. See docs/alerting-icon-forge.md.
+        // Emitted ONLY here, after the publish transaction commits — i.e. genuine
+        // success, never on retry/failure paths.
+        console.log(JSON.stringify({
+            event: 'icon_forged',
+            ingredient: ingredientName,
+            queueDocId: docRef.id,
+            recipeCount: publishedRecipeCount,
+            ts: new Date().toISOString(),
+        }));
 
         // Record one impression per recipe this icon was shown in (non-fatal)
         dataService.recordImpression(icon.id, ingredientDocId).catch(e =>

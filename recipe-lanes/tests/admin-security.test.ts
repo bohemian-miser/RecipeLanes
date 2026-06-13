@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { deleteIconByIdAction } from '../app/actions';
+import { deleteIconByIdAction, addIngredientNodeAction } from '../app/actions';
 import { setAuthService, AuthSession } from '../lib/auth-service';
 import { db } from '../lib/firebase-admin';
 
@@ -34,6 +34,23 @@ describe('Admin Security', () => {
         const res = await deleteIconByIdAction('fake-id');
         // We expect it NOT to fail with auth error, though it might fail because ID is fake
         assert.notStrictEqual(res.error, 'Admin required');
+        assert.notStrictEqual(res.error, 'Login required');
+    });
+});
+
+describe('Forge Auth Scoping (Bug 172)', () => {
+    it('should block anonymous (logged-out) user from forging', async () => {
+        setAuthService(new MockAuth(null));
+        const res = await addIngredientNodeAction('any-recipe', 'Carrot');
+        assert.strictEqual(res.success, false);
+        assert.strictEqual(res.error, 'Login required');
+    });
+
+    it('should let a logged-in (non-admin) user past the forge auth gate', async () => {
+        setAuthService(new MockAuth({ uid: 'forger', isAdmin: false }));
+        const res = await addIngredientNodeAction('missing-recipe', 'Carrot');
+        // A logged-in user is NOT blocked by auth. The action may still fail for
+        // other reasons (e.g. the recipe does not exist) but never with 'Login required'.
         assert.notStrictEqual(res.error, 'Login required');
     });
 });

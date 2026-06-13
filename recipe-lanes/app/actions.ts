@@ -59,6 +59,11 @@ export async function forgeIconAction(recipeId: string, ingredientName: string, 
     try {
         const session = await getAuthService().verifyAuth();
         const userId = session?.uid;
+        const forgeBlock = await checkForgeAllowed(userId);
+        if (forgeBlock) return { success: false, error: forgeBlock };
+        if (userId) incrementUserForgeCount(userId).catch(e =>
+            console.warn('[forgeIconAction] forge count increment failed (non-fatal):', e)
+        );
         // Forge: reject current and queue brand-new generation (no index search — skip embedFn)
         return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId);
     } catch (e: any) {
@@ -283,15 +288,26 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
         // icon shortlists as resolveRecipeIcons writes them to Firestore.
         // Falls back to awaiting directly when outside a Next.js request context (tests).
         const embedFn = getAIService().embedTexts.bind(getAIService());
-        try {
-            if (process.env.NODE_ENV === 'test') {
+        // Gate AI icon forging (allowAnonForge / per-user daily cap). The recipe is
+        // still saved and existing-icon search pre-population above still runs; only
+        // the expensive new-icon generation is skipped when blocked.
+        const forgeBlock = await checkForgeAllowed(userId);
+        if (forgeBlock) {
+            console.log(`[createVisualRecipeAction] forge gated (${forgeBlock}); recipe ${id} saved without icon resolution.`);
+        } else {
+            if (userId) incrementUserForgeCount(userId).catch(e =>
+                console.warn('[createVisualRecipeAction] forge count increment failed (non-fatal):', e)
+            );
+            try {
+                if (process.env.NODE_ENV === 'test') {
+                    await getDataService().resolveRecipeIcons(id, serverBatchSearchAction);
+                } else {
+                    after(() => getDataService().resolveRecipeIcons(id, serverBatchSearchAction));
+                }
+            } catch (e) {
+                console.log("[createVisualRecipeAction] 'after' not supported or outside request scope, running sync", e);
                 await getDataService().resolveRecipeIcons(id, serverBatchSearchAction);
-            } else {
-                after(() => getDataService().resolveRecipeIcons(id, serverBatchSearchAction));
             }
-        } catch (e) {
-            console.log("[createVisualRecipeAction] 'after' not supported or outside request scope, running sync", e);
-            await getDataService().resolveRecipeIcons(id, serverBatchSearchAction);
         }
 
         console.log(`[createVisualRecipeAction] ✅ Saved. ID: ${id} (icons resolving in background)`);
@@ -463,7 +479,15 @@ export async function saveRecipeAction(graph: RecipeGraph, existingId?: string, 
     // Resolve icons for any pending nodes (e.g. added via AI adjustment)
     const hasPending = graph.nodes.some(n => n.status === 'pending');
     if (hasPending) {
-      after(() => dataService.resolveRecipeIcons(id, serverBatchSearchAction));
+      const forgeBlock = await checkForgeAllowed(userId);
+      if (forgeBlock) {
+        console.log(`[saveRecipeAction] forge gated (${forgeBlock}); recipe ${id} saved without icon resolution.`);
+      } else {
+        if (userId) incrementUserForgeCount(userId).catch(e =>
+          console.warn('[saveRecipeAction] forge count increment failed (non-fatal):', e)
+        );
+        after(() => dataService.resolveRecipeIcons(id, serverBatchSearchAction));
+      }
     }
     return { id };
   } catch (e: any) {

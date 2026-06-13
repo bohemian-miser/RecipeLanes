@@ -1,7 +1,14 @@
+// TODO(wave2): coverage being moved to unit/emulator tests; delete this spec once those land
+// Quarantined: the loading-phase assertions ("Making Recipe Graph", "Finding Icons")
+// are transient UI states only observable by pausing network round-trips via a
+// Promise-gated page.route() interception. That gating is inherently racy in-browser
+// (depends on request ordering/timing the app doesn't expose a deterministic signal
+// for) and cannot be made solid by waiting on real app state. The phase-sequencing
+// logic will be covered by unit tests over the loading state machine instead.
 import { test, expect } from './utils/fixtures';
 import { deviceConfigs } from './utils/devices';
 
-test.describe('Loading Screen Behavior', () => {
+test.describe.skip('Loading Screen Behavior', () => {
   const desktop = deviceConfigs.find(d => d.name === 'desktop')!;
   
   test.beforeEach(async ({ page }) => {

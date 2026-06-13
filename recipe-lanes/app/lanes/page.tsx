@@ -1073,8 +1073,14 @@ const handleVisualize = async () => {
                 </div>
             </div>
             
+            {/* Deterministic E2E signal: reflects whether the async icon-hydration
+                (which triggers a Firestore snapshot -> setGraph -> sidebar remount)
+                is still in flight. Tests wait for this to leave "running" before
+                interacting with the sidebar so a click can't land mid-remount. */}
+            <span data-testid="icon-search-status" data-status={iconSearchStatus} className="hidden" aria-hidden="true" />
+
             {showIngredients && graph && (
-                <IngredientsSidebar 
+                <IngredientsSidebar
                     graph={graph} 
                     onClose={() => setShowIngredients(false)} 
                     onUpdateServes={handleUpdateServes} 

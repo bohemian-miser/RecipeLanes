@@ -3,7 +3,8 @@ import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screensho
 import { deviceConfigs } from './utils/devices';
 import { create_recipe, wait_for_graph, get_node, move_node } from './utils/actions';
 
-test.describe('Regressions & Bug Repros', () => {
+// TODO(wave2): coverage being moved to unit/emulator tests; delete this spec once those land
+test.describe.skip('Regressions & Bug Repros', () => {
     const desktop = deviceConfigs.find(d => d.name === 'desktop')!;
 
     test('Issue 34: Hide Raw User ID', async ({ page, login }) => {

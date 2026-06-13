@@ -16,100 +16,80 @@
  */
 
 import { Page, expect, Locator } from '@playwright/test';
-import { screenshot } from './screenshot';
 
 export function get_node(page: Page, text: string): Locator {
     // getByText with exact:false is case-insensitive and handles special characters safely
     return page.locator('.react-flow__node').filter({ has: page.getByText(text, { exact: false }) }).first();
 }
 
-export async function click_on_node(page: Page, text: string, dir: string) {
+export async function click_on_node(page: Page, text: string, _dir?: string) {
     const node = get_node(page, text);
     await expect(node).toBeVisible({ timeout: 10000 });
-    
-    await screenshot(page, dir, `before-click-${text}`);
     await node.click();
-    await screenshot(page, dir, `after-click-${text}`);
     return node;
 }
 
-export async function move_node(page: Page, text: string, dx: number, dy: number, dir: string) {
+/**
+ * Drag a node by (dx, dy). Waits on the node's own transform changing rather than
+ * sleeping — React Flow commits the new position synchronously on mouse-up, so we
+ * poll the inline transform until it reflects the move.
+ */
+export async function move_node(page: Page, text: string, dx: number, dy: number, _dir?: string) {
     const node = get_node(page, text);
     await expect(node).toBeVisible({ timeout: 10000 });
     const box = await node.boundingBox();
     expect(box).toBeTruthy();
 
-    await screenshot(page, dir, `before-move-${text}`);
-    
+    const transformBefore = await node.evaluate((el: Element) => (el as HTMLElement).style.transform);
+
     await node.hover();
     await page.mouse.down();
     // Increase steps to ensure React Flow catches the drag
     await page.mouse.move(box!.x + box!.width / 2 + dx, box!.y + box!.height / 2 + dy, { steps: 20 });
     await page.mouse.up();
-    // Wait for state update
-    await page.waitForTimeout(500);
-    
-    await screenshot(page, dir, `after-move-${text}`);
+
+    // Wait for React Flow to commit the new position (transform changes).
+    await expect
+        .poll(async () => node.evaluate((el: Element) => (el as HTMLElement).style.transform), {
+            timeout: 5000,
+        })
+        .not.toBe(transformBefore);
+
     return node;
 }
 
-export async function delete_node(page: Page, text: string, dir: string) {
-    const node = await click_on_node(page, text, dir);
-    
+export async function delete_node(page: Page, text: string, _dir?: string) {
+    const node = await click_on_node(page, text);
+
     // Hover to reveal button
     await node.hover();
     const deleteBtn = node.getByRole('button', { name: /Delete Step/i });
-    
-    // Wait for button
+
     await expect(deleteBtn).toBeVisible();
-    await deleteBtn.waitFor({ state: 'visible' });
     await expect(deleteBtn).toBeEnabled();
 
-    await screenshot(page, dir, `before-delete-${text}`);
-    
-    // Robust click with retries
-    let deleted = false;
-    for (let attempt = 0; attempt < 3 && !deleted; attempt++) {
-        if (attempt > 0) {
-            console.log(`Retry delete attempt ${attempt + 1} for ${text}`);
-            await node.hover();
-            await page.waitForTimeout(200);
-        }
-        
-        await deleteBtn.click({ force: true });
-        
-        // Wait briefly for UI update
-        try {
-            await expect(node).not.toBeVisible({ timeout: 1000 });
-            deleted = true;
-        } catch (e) {
-            // Ignore timeout, retry
-        }
-    }
-    
-    await expect(node).not.toBeVisible();
-    await screenshot(page, dir, `after-delete-${text}`);
+    await deleteBtn.click({ force: true });
+
+    // Web-first assertion auto-retries until the node is gone.
+    await expect(node).not.toBeVisible({ timeout: 10000 });
 }
 
-export async function create_recipe(page: Page, text: string, dir: string) {
+export async function create_recipe(page: Page, text: string, _dir?: string) {
     await page.getByPlaceholder('Paste recipe here...').waitFor({ timeout: 30000 });
     await page.getByPlaceholder('Paste recipe here...').fill(text);
-    await screenshot(page, dir, 'recipe-entered');
     await page.locator('button:has(svg.lucide-arrow-right)').click();
-    await screenshot(page, dir, 'create-clicked');
-    
+
     // Wait for navigation
     await page.waitForURL(/id=/);
 }
 
-export async function wait_for_graph(page: Page, dir?: string) {
+export async function wait_for_graph(page: Page, _dir?: string) {
     const viewport = page.locator('.react-flow__viewport');
     await expect(viewport).toBeVisible({ timeout: 30000 });
     await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 10000 });
-    // await page.mouse.wheel(0, 500); Doesn't do it. Need to hover.
-    if (dir) {
-        await screenshot(page, dir, 'graph-visible');
-    }
+    // Deterministic settle signal: the diagram renders data-testid="rf-ready" once
+    // the initial layout + fitView has settled (see react-flow-diagram.tsx).
+    await expect(page.getByTestId('rf-ready')).toBeAttached({ timeout: 10000 });
 }
 
 /**
@@ -126,9 +106,6 @@ export async function pan_pane(page: Page, dx: number, dy: number): Promise<{ x:
     expect(box).toBeTruthy();
     const b = box!;
 
-    // Candidate origins, ordered. Avoid the bottom-left Controls widget and the
-    // fitView-centred nodes near the middle. We still probe each to be robust to
-    // layout changes (overlays, node positions, etc.).
     const candidates = [
         { x: b.x + b.width * 0.5, y: b.y + 40 },          // top-centre, below top bar
         { x: b.x + b.width * 0.75, y: b.y + b.height * 0.5 }, // right-middle
@@ -157,11 +134,8 @@ export async function pan_pane(page: Page, dx: number, dy: number): Promise<{ x:
     return start!;
 }
 
-export async function click_undo(page: Page, dir: string) {
+export async function click_undo(page: Page, _dir?: string) {
     const undoBtn = page.locator('button[title="Undo (Ctrl+Z)"]');
     await expect(undoBtn).toBeEnabled();
-    await screenshot(page, dir, `before-undo`);
     await undoBtn.click();
-    await page.waitForTimeout(500); // Wait for animation
-    await screenshot(page, dir, `after-undo`);
 }

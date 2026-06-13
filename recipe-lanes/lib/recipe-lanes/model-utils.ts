@@ -79,6 +79,15 @@ export function setNodeIcon(node: RecipeNode, _icon: IconStats) {
     return node;
 }
 
+/**
+ * Assigns a shortlist (and optionally its index) onto a node in place.
+ * When `index` is omitted the node's existing shortlistIndex is left untouched.
+ */
+export function assignNodeShortlist(node: RecipeNode, entries: ShortlistEntry[], index?: number): void {
+    node.iconShortlist = entries;
+    if (index !== undefined) node.shortlistIndex = index;
+}
+
 /** Clears all shortlist state from the node (shortlist, index, and cycled flag). */
 export function clearNodeShortlist(node: RecipeNode): void {
     node.iconShortlist = undefined;
@@ -360,6 +369,11 @@ export function computeShortlistDelta(
 export function getShortlistIconAt(node: RecipeNode, index: number): IconStats | undefined {
     const entry = node.iconShortlist?.[index];
     return entry ? getEntryIcon(entry) : undefined;
+}
+
+/** Returns the node's shortlist entries, or an empty array when none are present. */
+export function getNodeShortlist(node: RecipeNode): ShortlistEntry[] {
+    return node.iconShortlist ?? [];
 }
 
 /** Returns the number of entries in the node's shortlist. */

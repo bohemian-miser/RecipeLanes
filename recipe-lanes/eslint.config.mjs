@@ -78,7 +78,7 @@ const eslintConfig = defineConfig([
     ],
     rules: {
       "no-restricted-syntax": [
-        "warn",
+        "error",
         {
           selector: "MemberExpression[property.name='iconShortlist']",
           message: "Access RecipeNode.iconShortlist via model-utils (getNodeShortlistLength, getShortlistIconAt, getNodeShortlistKey, …).",

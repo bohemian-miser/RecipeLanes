@@ -330,3 +330,54 @@ describe('shortlist wrapping via advanceShortlistIndex', () => {
         assert.strictEqual(step.wrappedIdx, 0);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Batch icon processing — missing/deleted recipes must not crash the batch
+// (regression for issue #128). The cloud function processIconTaskHandler loops
+// over queued recipe IDs calling imagineRecipeWithIcon and must skip a single
+// missing recipe instead of failing the whole batch. We exercise the same
+// loop semantics against MemoryDataService here.
+// ---------------------------------------------------------------------------
+
+describe('batch icon processing skips missing recipes (issue #128)', () => {
+    let service: MemoryDataService;
+
+    beforeEach(() => {
+        memoryStore.clear();
+        setDataService(new MemoryDataService());
+        setAIService(new MockAIService());
+        setAuthService(new MockAuthService());
+        service = getDataService() as MemoryDataService;
+    });
+
+    it('imagineRecipeWithIcon throws for a missing recipe', async () => {
+        await assert.rejects(
+            () => service.imagineRecipeWithIcon('does-not-exist', 'Carrot', makeIcon('i1')),
+            /Recipe not found/,
+        );
+    });
+
+    it('processing a list with one missing recipe still processes the valid ones', async () => {
+        const validId = await makeRecipe(service);
+        await service.addNodeToRecipe(validId, 'Carrot');
+
+        const recipeIds = [validId, 'missing-recipe-id'];
+        const icon = makeIcon('icon-1');
+
+        // Mirror the handler loop: skip recipes that throw instead of aborting.
+        const processed: string[] = [];
+        const skipped: string[] = [];
+        for (const rId of recipeIds) {
+            try {
+                const data = await service.imagineRecipeWithIcon(rId, 'Carrot', icon);
+                await service.setRecipeWithIcon(data);
+                processed.push(rId);
+            } catch {
+                skipped.push(rId);
+            }
+        }
+
+        assert.deepStrictEqual(processed, [validId], 'valid recipe should be processed');
+        assert.deepStrictEqual(skipped, ['missing-recipe-id'], 'missing recipe should be skipped');
+    });
+});

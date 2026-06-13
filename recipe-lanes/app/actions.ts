@@ -26,7 +26,7 @@ import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQuer
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import type { RecipeGraph, IconStats, FastMatch, RecipePatch } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
-import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon, extractBatchIngredients, getNodeIngredientName, applyPatch } from '@/lib/recipe-lanes/model-utils';
+import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon, extractBatchIngredients, getNodeIngredientName, applyPatch, assignNodeShortlist } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
 import { unifiedIconSearch, serverBatchIconSearch } from '@/lib/search-orchestrator';
@@ -176,11 +176,10 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
                         const result = hydratedResults.find(r => r.name === stdName);
                         if (result && result.icons.length > 0) {
                             const icon = result.icons[0];
-                            node.iconShortlist = markEntryImpressedAtIndex(
+                            assignNodeShortlist(node, markEntryImpressedAtIndex(
                                 [buildShortlistEntry(icon, 'search', result.matchScores[icon.id] ?? 0)],
                                 0,
-                            );
-                            node.shortlistIndex = 0;
+                            ), 0);
                         }
                         const allMatches = allMatchesByName.get(stdName);
                         if (allMatches && allMatches.length > 0) node.fastMatches = allMatches;
@@ -584,8 +583,7 @@ export async function applyIconSearchResultsAction(
             const nodes: any[] = snap.data()?.graph?.nodes || [];
             for (const { name, entries } of shortlists) {
                 const changed = mutateNodesByIngredient(nodes, name, (n: any) => {
-                    n.iconShortlist = entries;
-                    n.shortlistIndex = 0;
+                    assignNodeShortlist(n, entries, 0);
                     delete n.status;
                 });
                 if (changed) applied++;

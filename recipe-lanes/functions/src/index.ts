@@ -108,9 +108,17 @@ export const processIconTaskHandler = async (data: { ingredientName: string }, r
             console.log(`[Queue-${ingredientName}] ✅ Success. Icon ID: ${icon.id}`);
 
             const recipeDataObj: Record<string, any> = {};
+            const processedRecipeIds: string[] = [];
             for (const rId of latestRecipeIds) {
-                const data = await dataService.imagineRecipeWithIcon(rId, ingredientName, iconWithTerms, transaction);
-                recipeDataObj[rId] = data;
+                try {
+                    const data = await dataService.imagineRecipeWithIcon(rId, ingredientName, iconWithTerms, transaction);
+                    recipeDataObj[rId] = data;
+                    processedRecipeIds.push(rId);
+                } catch (e) {
+                    // A single missing/deleted recipe must not crash the whole batch.
+                    // Skip it and continue processing the remaining recipes.
+                    console.warn(`[Queue-${ingredientName}] Skipping recipe ${rId} during icon processing (likely missing/deleted):`, e);
+                }
             }
 
             // End READS. Now commit all changes together.
@@ -124,14 +132,14 @@ export const processIconTaskHandler = async (data: { ingredientName: string }, r
             await dataService.setIngredientWithIcon(ingredientData, transaction);
 
             // Update all linked recipes using the atomic helper
-            console.log(`[Queue-${ingredientName}] Updating ${latestRecipeIds.length} recipes...`);
-            for (const rId of latestRecipeIds) {
+            console.log(`[Queue-${ingredientName}] Updating ${processedRecipeIds.length} recipes...`);
+            for (const rId of processedRecipeIds) {
                 await dataService.setRecipeWithIcon(recipeDataObj[rId], transaction);
             }
 
             // Delete the queue item
             transaction.delete(docRef);
-            console.log(`[Queue-${ingredientName}] Successfully updated ${latestRecipeIds.length} recipes and deleted queue item.`);
+            console.log(`[Queue-${ingredientName}] Successfully updated ${processedRecipeIds.length} of ${latestRecipeIds.length} recipes and deleted queue item.`);
         });
 
         // Record one impression per recipe this icon was shown in (non-fatal)

@@ -87,8 +87,13 @@ test.describe('Icon Systems (Consolidated)', () => {
     // 2. Backlog Management
     await page.goto('/icon_overview');
     await login('backlog-user');
+    // QueueMonitor's Retry/Clear controls are admin-only (Bug 172); promote this
+    // user so the admin controls render, then let the client auth pick up admin.
+    const { promoteToAdmin } = await import('./utils/admin-utils');
+    await promoteToAdmin('backlog-user');
+    await page.waitForTimeout(1000);
     const failItem = `Fail Egg ${Date.now()}`;
-    
+
     await page.waitForFunction(() => (window as any)._firebaseDb && (window as any)._firebaseFirestore);
     // Clear existing queue items so our test item sorts to page 1 of QueueMonitor
     await page.evaluate(async () => {

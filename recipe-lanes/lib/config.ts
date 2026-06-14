@@ -24,3 +24,48 @@ export const DB_COLLECTION_QUEUE = 'icon_queue';
 export const DB_COLLECTION_RECIPES = 'recipes';
 export const DB_COLLECTION_FEEDBACK = 'feedback';
 export const DB_COLLECTION_ICON_INDEX = 'icon_index';
+export const DB_COLLECTION_CONFIG = 'config';
+
+// Runtime config document for the icon-generation queue. Both the server actions
+// and the Cloud Function read this so abuse controls are adjustable without a redeploy.
+export const ICON_QUEUE_CONFIG_DOC = 'icon_queue';
+
+export interface IconQueueConfig {
+  /** Hard pause: when true the Cloud Task handler re-enqueues with backoff instead of generating. */
+  paused: boolean;
+  /** Whether logged-out/anonymous users may forge icons. */
+  allowAnonForge: boolean;
+  /** Max forges a single user may enqueue per calendar (UTC) day. */
+  perUserDailyCap: number;
+}
+
+export const DEFAULT_ICON_QUEUE_CONFIG: IconQueueConfig = {
+  paused: false,
+  allowAnonForge: true,
+  perUserDailyCap: 100,
+};
+
+/**
+ * Apply safe defaults to a (possibly partial / undefined) raw config doc.
+ * Defaults live in exactly one place so the typed accessor
+ * (lib/icon-queue-config.ts) and the functions-side reader agree.
+ */
+export function withIconQueueConfigDefaults(raw: any): IconQueueConfig {
+  const data = raw || {};
+  return {
+    paused: typeof data.paused === 'boolean' ? data.paused : DEFAULT_ICON_QUEUE_CONFIG.paused,
+    allowAnonForge:
+      typeof data.allowAnonForge === 'boolean'
+        ? data.allowAnonForge
+        : DEFAULT_ICON_QUEUE_CONFIG.allowAnonForge,
+    perUserDailyCap:
+      typeof data.perUserDailyCap === 'number' && Number.isFinite(data.perUserDailyCap)
+        ? data.perUserDailyCap
+        : DEFAULT_ICON_QUEUE_CONFIG.perUserDailyCap,
+  };
+}
+
+/** UTC day key (YYYY-MM-DD) used for per-user daily forge counting. */
+export function dayKey(d: Date = new Date()): string {
+  return d.toISOString().slice(0, 10);
+}

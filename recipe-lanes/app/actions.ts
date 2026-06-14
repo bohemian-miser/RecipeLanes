@@ -30,6 +30,8 @@ import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, 
 import { db } from '@/lib/firebase-admin';
 import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
 import { unifiedIconSearch, serverBatchIconSearch } from '@/lib/search-orchestrator';
+import { getIconQueueConfig, setIconQueueConfig, getUserForgeCountToday, incrementUserForgeCount } from '@/lib/icon-queue-config';
+import type { IconQueueConfig } from '@/lib/config';
 
 // Input Validation Schemas
 const IngredientSchema = z.string().min(1).max(100);
@@ -57,6 +59,11 @@ export async function forgeIconAction(recipeId: string, ingredientName: string, 
     try {
         const session = await getAuthService().verifyAuth();
         const userId = session?.uid;
+        const forgeBlock = await checkForgeAllowed(userId);
+        if (forgeBlock) return { success: false, error: forgeBlock };
+        if (userId) incrementUserForgeCount(userId).catch(e =>
+            console.warn('[forgeIconAction] forge count increment failed (non-fatal):', e)
+        );
         // Forge: reject current and queue brand-new generation (no index search — skip embedFn)
         return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId);
     } catch (e: any) {
@@ -87,8 +94,44 @@ export async function createDebugRecipeAction() {
         return { error: e.message };
     }
 }
+// --- icon-queue abuse controls (feat/icon-queue-abuse-controls) ---
+// Runtime-configurable gate consulted before any forge is enqueued. Reads the
+// single `config/icon_queue` doc via the typed accessor. Returns an error string
+// (suitable for the UI to turn into a login/limit prompt) when the forge should
+// be rejected, or null to allow.
+async function checkForgeAllowed(uid: string | undefined): Promise<string | null> {
+    const cfg = await getIconQueueConfig();
+
+    // Anonymous-forge gate.
+    if (!uid) {
+        if (!cfg.allowAnonForge) {
+            return 'Please log in to forge new icons.';
+        }
+        // No per-user counting possible for anonymous users; allow (subject to pause).
+        return null;
+    }
+
+    // Per-user daily cap.
+    const used = await getUserForgeCountToday(uid);
+    if (used >= cfg.perUserDailyCap) {
+        return `Daily forge limit reached (${cfg.perUserDailyCap}/day). Try again tomorrow.`;
+    }
+    return null;
+}
+
 // icon_overview and tests only.
 export async function addIngredientNodeAction(recipeId: string, ingredientName: string) {
+    // --- abuse controls: gate the forge before doing any work ---
+    // Anonymous visitors can VIEW /icon_overview; forging is gated by config:
+    // checkForgeAllowed enforces the allowAnonForge flag and the per-user daily cap.
+    const forgeSession = await getAuthService().verifyAuth();
+    const forgeUid = forgeSession?.uid;
+    const forgeBlock = await checkForgeAllowed(forgeUid);
+    if (forgeBlock) {
+        return { success: false, error: forgeBlock };
+    }
+    // --- end abuse controls ---
+
     // Generate HyDE queries so the icon_index entry gets rich search terms
     let hydeQueries: string[] = [];
     try {
@@ -99,6 +142,12 @@ export async function addIngredientNodeAction(recipeId: string, ingredientName: 
     }
     const result = await getDataService().addNodeToRecipe(recipeId, ingredientName, undefined, hydeQueries);
     if (result.success) {
+        // Count this forge against the user's daily quota (non-fatal).
+        if (forgeUid) {
+            incrementUserForgeCount(forgeUid).catch(e =>
+                console.warn('[addIngredientNodeAction] forge count increment failed (non-fatal):', e)
+            );
+        }
         // 5. Trigger icon resolution in background (or foreground if preferred)
         try {
             if (process.env.NODE_ENV === 'test') {
@@ -239,15 +288,26 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
         // icon shortlists as resolveRecipeIcons writes them to Firestore.
         // Falls back to awaiting directly when outside a Next.js request context (tests).
         const embedFn = getAIService().embedTexts.bind(getAIService());
-        try {
-            if (process.env.NODE_ENV === 'test') {
+        // Gate AI icon forging (allowAnonForge / per-user daily cap). The recipe is
+        // still saved and existing-icon search pre-population above still runs; only
+        // the expensive new-icon generation is skipped when blocked.
+        const forgeBlock = await checkForgeAllowed(userId);
+        if (forgeBlock) {
+            console.log(`[createVisualRecipeAction] forge gated (${forgeBlock}); recipe ${id} saved without icon resolution.`);
+        } else {
+            if (userId) incrementUserForgeCount(userId).catch(e =>
+                console.warn('[createVisualRecipeAction] forge count increment failed (non-fatal):', e)
+            );
+            try {
+                if (process.env.NODE_ENV === 'test') {
+                    await getDataService().resolveRecipeIcons(id, serverBatchSearchAction);
+                } else {
+                    after(() => getDataService().resolveRecipeIcons(id, serverBatchSearchAction));
+                }
+            } catch (e) {
+                console.log("[createVisualRecipeAction] 'after' not supported or outside request scope, running sync", e);
                 await getDataService().resolveRecipeIcons(id, serverBatchSearchAction);
-            } else {
-                after(() => getDataService().resolveRecipeIcons(id, serverBatchSearchAction));
             }
-        } catch (e) {
-            console.log("[createVisualRecipeAction] 'after' not supported or outside request scope, running sync", e);
-            await getDataService().resolveRecipeIcons(id, serverBatchSearchAction);
         }
 
         console.log(`[createVisualRecipeAction] ✅ Saved. ID: ${id} (icons resolving in background)`);
@@ -419,7 +479,15 @@ export async function saveRecipeAction(graph: RecipeGraph, existingId?: string, 
     // Resolve icons for any pending nodes (e.g. added via AI adjustment)
     const hasPending = graph.nodes.some(n => n.status === 'pending');
     if (hasPending) {
-      after(() => dataService.resolveRecipeIcons(id, serverBatchSearchAction));
+      const forgeBlock = await checkForgeAllowed(userId);
+      if (forgeBlock) {
+        console.log(`[saveRecipeAction] forge gated (${forgeBlock}); recipe ${id} saved without icon resolution.`);
+      } else {
+        if (userId) incrementUserForgeCount(userId).catch(e =>
+          console.warn('[saveRecipeAction] forge count increment failed (non-fatal):', e)
+        );
+        after(() => dataService.resolveRecipeIcons(id, serverBatchSearchAction));
+      }
     }
     return { id };
   } catch (e: any) {
@@ -617,6 +685,40 @@ export async function clearIconQueueAction(): Promise<{ success: boolean; delete
         return { success: true, deleted };
     } catch (e: any) {
         return { success: false, deleted: 0, error: e.message };
+    }
+}
+
+// --- icon-queue runtime config (admin only) ---
+
+// Read the current icon-queue config for the admin panel. Admin-gated server-side.
+export async function getIconQueueConfigAction(): Promise<{ config?: IconQueueConfig; error?: string }> {
+    const session = await getAuthService().verifyAuth();
+    if (!session) return { error: 'Login required' };
+    const userDoc = await db.collection('users').doc(session.uid).get();
+    if (!userDoc.data()?.isAdmin) return { error: 'Admin required' };
+
+    try {
+        const config = await getIconQueueConfig();
+        return { config };
+    } catch (e: any) {
+        return { error: e.message };
+    }
+}
+
+// Update the icon-queue config from the admin panel. Admin-gated server-side.
+export async function setIconQueueConfigAction(
+    patch: Partial<IconQueueConfig>,
+): Promise<{ config?: IconQueueConfig; error?: string }> {
+    const session = await getAuthService().verifyAuth();
+    if (!session) return { error: 'Login required' };
+    const userDoc = await db.collection('users').doc(session.uid).get();
+    if (!userDoc.data()?.isAdmin) return { error: 'Admin required' };
+
+    try {
+        const config = await setIconQueueConfig(patch);
+        return { config };
+    } catch (e: any) {
+        return { error: e.message };
     }
 }
 

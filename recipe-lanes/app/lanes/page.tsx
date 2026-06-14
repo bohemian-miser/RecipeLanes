@@ -416,6 +416,8 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
               setRecipeTitle(currentGraph.title || '');
               setStatus('complete');
           } else {
+              unsubscribe();
+              localStorage.removeItem('last_recipe_id');
               setError('Recipe not found');
               setStatus('error');
           }

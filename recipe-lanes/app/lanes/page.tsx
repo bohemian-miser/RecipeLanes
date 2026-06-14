@@ -26,6 +26,7 @@ import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-la
 import { ReactFlowProvider } from 'reactflow';
 import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, saveChatHistoryAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
 import { ChatPanel } from '@/components/recipe-lanes/chat-panel';
+import { MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
 import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
 import { standardizeIngredientName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
@@ -850,6 +851,7 @@ const handleVisualize = async () => {
                     ref={textareaRef}
                     className={`flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300 focus:ring-1 focus:ring-yellow-500/50 outline-none resize-y transition-all duration-300 ${inputExpanded ? 'h-[50vh]' : 'h-10'}`}
                     placeholder="Paste recipe here..."
+                    maxLength={MAX_RECIPE_INPUT_CHARS}
                     value={recipeText}
                     onChange={(e) => {
                         setRecipeText(e.target.value);
@@ -1188,6 +1190,7 @@ const handleVisualize = async () => {
                             <input
                                 className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
                                 placeholder="Adjust recipe..."
+                                maxLength={MAX_ADJUST_INSTRUCTION_CHARS}
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}
@@ -1216,6 +1219,7 @@ const handleVisualize = async () => {
                             <input
                                 className="flex-1 bg-zinc-100 border border-zinc-200 rounded-md px-2 text-xs h-full text-zinc-800 outline-none"
                                 placeholder="Adjust..."
+                                maxLength={MAX_ADJUST_INSTRUCTION_CHARS}
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}

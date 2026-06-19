@@ -56,7 +56,9 @@ export const test = base.extend<AuthFixtures>({
           } catch (e: any) {
               console.log(`Login attempt ${attempt + 1} failed: ${e.message}`);
               if (attempt === 2) throw e;
-              await page.waitForTimeout(1000); // Wait for page to settle
+              // Backoff before retrying a failed sign-in (execution context destroyed
+              // during hydration). Not a happy-path settle — a real retry delay.
+              await new Promise((resolve) => setTimeout(resolve, 1000));
           }
       }
     };

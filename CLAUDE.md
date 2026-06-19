@@ -41,12 +41,12 @@ npm run dev:emulators      # env-cmd -f .env.test next dev -p 8001
 
 | Tier | When to run | Command |
 |---|---|---|
-| **pre-commit** (lint + typecheck + pure unit) | Before every commit | `npm run lint` / typecheck — `test:unit:pure` on branch `chore/tier0-guardrails` (not yet merged) |
-| **emulator integration** | After any data-layer or Cloud Functions change | `npm run test:unit` (auto-starts emulators if none detected on port 8080) |
+| **pre-commit** (lint + typecheck + pure unit) | Before every commit | `npm run lint`, `npm run typecheck`, `npm run test:unit:pure` (fast, no emulators) |
+| **emulator integration** | After any data-layer or Cloud Functions change | `npm run test:unit` (runs `test:unit:pure` then `test:unit:integration`; integration auto-starts emulators if none detected on port 8080) |
 | **e2e** | Before PR / after significant UI changes | `npm run test:e2e` |
 | **full verify** | Mirrors the pre-commit hook | `npm run verify` (build + all tests) |
 
-> The `test:unit:pure` / `typecheck` split is being added on branch `chore/tier0-guardrails`. Until merged, `npm run test:unit` covers integration tests; see `TESTING.md` for full detail.
+> `test:unit:pure` (pure logic, no emulators) and `test:unit:integration` (emulator-backed) are both live on `staging`. `npm run test:unit` runs both; `npm run typecheck` is `tsc --noEmit`. See `recipe-lanes/TESTING.md` for full detail.
 
 Scoped single test: `npm run test:one -- tests/my.test.ts`
 
@@ -54,7 +54,7 @@ Scoped single test: `npm run test:one -- tests/my.test.ts`
 
 ## Hard rules
 
-1. **NEVER commit to `main`.** All work targets `staging`. PRs go `feature-branch → staging`. Main is team-managed for production releases only.
+1. **NEVER push directly to `main`.** `main` is PR-only — it advances solely through reviewed, merged PRs, and feature branches open their PR **against `main`** (`gh pr create --base main`). `staging` is a *disposable preview environment*, **not** a PR target: branches get force-pushed onto it to preview in the live env. The owner controls staging — agents/contributors do not push to staging without the owner's go-ahead. See `docs/git_workflow.md` (which is the authoritative version of this flow).
 2. **NEVER use `git commit --no-verify`.** The pre-commit hook runs `build + test`; fix failures before committing.
 3. **`MOCK_AI=true` must never reach production.** It is set by `.env.test` and `start-emulators.sh` for local/test use only. There was a production incident — treat this as a hard safety rule.
 4. **Do not resurrect `e2e/old_tests/`.** Those tests are retired; do not re-enable them.
@@ -70,3 +70,4 @@ Scoped single test: `npm run test:one -- tests/my.test.ts`
 - `docs/git_workflow.md` — disposable feature branch protocol
 - `recipe-lanes/TESTING.md` — full testing guide including Pi-specific pre-commit warm-up sequence and known flaky tests
 - `docs/architecture-review-2026-06.md` — prioritized technical roadmap (June 2026 review)
+- `docs/alerting-icon-forge.md` — pure-GCP alerting on icon-generation rate (Bug 171): the `icon_forged` log signal + Cloud Monitoring metric/policy runbook

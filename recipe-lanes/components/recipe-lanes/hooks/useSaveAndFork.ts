@@ -48,6 +48,37 @@ export function buildGraphForSave(
     return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
 }
 
+/**
+ * Pure helper: decides how the Save button should behave for the current
+ * viewer. A logged-in non-owner can always "Save a copy" of a shared recipe
+ * (issue #46) without first making an edit. Owners keep the original
+ * dirty/saved gating.
+ */
+export function getSaveButtonState(params: {
+    isLoggedIn: boolean;
+    isOwner: boolean;
+    isDirty: boolean;
+    saved: boolean;
+}): { enabled: boolean; label: string; isCopy: boolean } {
+    const { isLoggedIn, isOwner, isDirty, saved } = params;
+
+    // Logged-in viewer looking at someone else's recipe: explicit "Save a copy".
+    if (isLoggedIn && !isOwner) {
+        return {
+            enabled: true,
+            label: saved ? 'Saved a copy!' : 'Save a copy',
+            isCopy: true,
+        };
+    }
+
+    // Owner (or not-yet-saved new recipe): original behaviour.
+    return {
+        enabled: isDirty || saved,
+        label: saved ? 'Saved!' : isDirty ? 'Save Changes' : 'No Changes',
+        isCopy: false,
+    };
+}
+
 interface UseSaveAndForkParams {
     graph: RecipeGraph;
     mode: any;

@@ -27,7 +27,7 @@ import {
   type TLNode, type TLEdge, type TLLane,
 } from '@/lib/recipe-lanes/timeline-layout';
 import {
-  getNodeIconUrlAt, getNodeIngredientName, getNodeIconId, getNodeShortlistKey,
+  getNodeIconUrlAt, getNodeIngredientName, getNodeIconId, getNodeShortlistKey, currentShortlistIndex,
 } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { forgeIconAction } from '@/app/actions';
@@ -118,7 +118,7 @@ interface NodeProps {
 function ActionNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSelected, isForging,
   onMouseDown, onMouseEnter, onMouseLeave, onReroll, onForge, onDelete }: NodeProps) {
   const { data } = node;
-  const iconUrl = getNodeIconUrlAt(data, Math.max(0, data.shortlistIndex ?? 0));
+  const iconUrl = getNodeIconUrlAt(data, Math.max(0, currentShortlistIndex(data)));
   const clipId  = `tl-a-${node.id.replace(/\W/g, '')}`;
   const innerR  = TL.NODE_R - 3;
 
@@ -172,7 +172,7 @@ function ActionNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSelecte
 function IngredientNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSelected, isForging,
   onMouseDown, onMouseEnter, onMouseLeave, onReroll, onForge, onDelete }: NodeProps) {
   const { data } = node;
-  const iconUrl = getNodeIconUrlAt(data, Math.max(0, data.shortlistIndex ?? 0));
+  const iconUrl = getNodeIconUrlAt(data, Math.max(0, currentShortlistIndex(data)));
   const clipId  = `tl-i-${node.id.replace(/\W/g, '')}`;
   const innerR  = TL.NODE_R - 3;
   const ring = isSelected ? '#6366f1' : lineColor;

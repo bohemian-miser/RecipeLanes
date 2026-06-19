@@ -94,7 +94,7 @@ Update these instructions if it goes out of date or doesn't work. Feel free to f
 
 1.  Clone the repository:
     ```bash
-    git clone https://github.com/your-username/RecipeLanes.git
+    git clone https://github.com/bohemian-miser/RecipeLanes.git
     cd RecipeLanes/recipe-lanes
     ```
 2.  Install dependencies:

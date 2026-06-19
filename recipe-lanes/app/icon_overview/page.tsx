@@ -22,6 +22,7 @@ import { IngredientForm } from '@/components/ingredient-form';
 import { IconDisplay } from '@/components/icon-display';
 import { SharedGallery } from '@/components/shared-gallery';
 import { QueueMonitor } from '@/components/queue-monitor';
+import { QueueConfigPanel } from '@/components/queue-config-panel';
 import { LogoutButton } from '@/components/logout-button';
 import { useAuth } from '@/components/auth-provider';
 import { createDebugRecipeAction, addIngredientNodeAction, rejectIcon, deleteRecipeAction } from '@/app/actions';
@@ -39,7 +40,7 @@ import { iconSearchProviders } from '@/lib/icon-search-providers';
 import { SearchProviderPanel } from '@/components/search-provider-panel';
 
 export default function Home() {
-  const { user, loading: authLoading, signIn } = useAuth();
+  const { user, isAdmin, loading: authLoading, signIn } = useAuth();
   const [nodes, setNodes] = useState<RecipeNode[]>([]);
   const [recipeId, setRecipeId] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
@@ -143,7 +144,13 @@ export default function Home() {
     // and safer for consistency. But we can set a loading state if we want.
     
     try {
-        await addIngredientNodeAction(recipeId, newIngredient);
+        // Forging is gated server-side by config (allowAnonForge + per-user daily
+        // cap). Surface any rejection; if the server requires a login, prompt it.
+        const result = await addIngredientNodeAction(recipeId, newIngredient);
+        if (result && !result.success && result.error) {
+            setError(result.error);
+            if (!user) signIn();
+        }
     } catch (e: any) {
         console.error(e);
         setError("Failed to add item.");
@@ -302,7 +309,9 @@ export default function Home() {
             </div>
           )}
 
-          {mode === 'forge' && <QueueMonitor />}
+          {mode === 'forge' && <QueueMonitor isAdmin={isAdmin} />}
+
+          {mode === 'forge' && <QueueConfigPanel isAdmin={isAdmin} />}
 
           {mode === 'forge' && (
             <IconDisplay

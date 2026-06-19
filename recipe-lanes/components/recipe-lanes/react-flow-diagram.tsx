@@ -47,7 +47,7 @@ import TimelineBackground, { type TimelineData } from './timeline-background';
 import { toPng } from 'html-to-image';
 import { Download, Share2, Undo, Redo, Check, Save } from 'lucide-react';
 import { useHistoryManager } from './hooks/useHistoryManager';
-import { useSaveAndFork } from './hooks/useSaveAndFork';
+import { useSaveAndFork, getSaveButtonState } from './hooks/useSaveAndFork';
 import { useAutosave } from './hooks/useAutosave';
 import { useRecipeStore } from '../../lib/stores/recipe-store';
 
@@ -135,6 +135,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         onSave,
         onNotify,
     });
+
+    const saveButton = getSaveButtonState({ isLoggedIn, isOwner, isDirty, saved });
 
     const { scheduleAutosave, flushAutosave } = useAutosave({
         onSave: handleSave,
@@ -844,13 +846,14 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                         </button>
                     </div>
 
-                     <button 
-                        onClick={handleSave} 
-                        disabled={!isDirty && !saved}
-                        className={`p-2 rounded shadow-md border border-zinc-200 transition-colors ${saved ? 'bg-green-50 text-green-600 border-green-200' : isDirty ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
-                        title={saved ? "Saved!" : isDirty ? "Save Changes" : "No Changes"}
+                     <button
+                        onClick={handleSave}
+                        disabled={!saveButton.enabled}
+                        className={`flex items-center gap-1.5 p-2 rounded shadow-md border border-zinc-200 transition-colors ${saved ? 'bg-green-50 text-green-600 border-green-200' : saveButton.enabled ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
+                        title={saveButton.label}
                     >
                         {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                        {saveButton.isCopy && <span className="text-xs font-bold hidden sm:inline">{saveButton.label}</span>}
                     </button>
 
                      <button 

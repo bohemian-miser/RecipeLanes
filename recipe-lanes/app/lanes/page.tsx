@@ -26,6 +26,7 @@ import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-la
 import { ReactFlowProvider } from 'reactflow';
 import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, saveChatHistoryAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
 import { ChatPanel } from '@/components/recipe-lanes/chat-panel';
+import { MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
 import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
 import { standardizeIngredientName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
@@ -36,6 +37,7 @@ import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
+import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
 import { LoadingScreen, LoadingPhase } from '@/components/recipe-lanes/ui/loading-screen';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -415,6 +417,8 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
               setRecipeTitle(currentGraph.title || '');
               setStatus('complete');
           } else {
+              unsubscribe();
+              localStorage.removeItem('last_recipe_id');
               setError('Recipe not found');
               setStatus('error');
           }
@@ -847,6 +851,7 @@ const handleVisualize = async () => {
                     ref={textareaRef}
                     className={`flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300 focus:ring-1 focus:ring-yellow-500/50 outline-none resize-y transition-all duration-300 ${inputExpanded ? 'h-[50vh]' : 'h-10'}`}
                     placeholder="Paste recipe here..."
+                    maxLength={MAX_RECIPE_INPUT_CHARS}
                     value={recipeText}
                     onChange={(e) => {
                         setRecipeText(e.target.value);
@@ -885,6 +890,11 @@ const handleVisualize = async () => {
                     </button>
                 )}
              </div>
+             {looksLikeUrl(recipeText) && (
+                <div className="px-2 pb-2 text-[10px] text-yellow-400">
+                    That looks like a link. Direct links aren&apos;t supported yet — please copy and paste the recipe text itself into the box.
+                </div>
+             )}
              {error && (
                 <div className="px-2 pb-2 text-[10px] text-red-400">
                     {error}
@@ -1186,6 +1196,7 @@ const handleVisualize = async () => {
                             <input
                                 className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
                                 placeholder="Adjust recipe..."
+                                maxLength={MAX_ADJUST_INSTRUCTION_CHARS}
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}
@@ -1214,6 +1225,7 @@ const handleVisualize = async () => {
                             <input
                                 className="flex-1 bg-zinc-100 border border-zinc-200 rounded-md px-2 text-xs h-full text-zinc-800 outline-none"
                                 placeholder="Adjust..."
+                                maxLength={MAX_ADJUST_INSTRUCTION_CHARS}
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}

@@ -24,6 +24,7 @@ import { getAuthService } from '@/lib/auth-service';
 import { z } from 'zod';
 import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQueriesPrompt, parseHydeQueries } from '@/lib/recipe-lanes/parser';
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
+import { assertInputWithinLimit, assertGraphWithinLimit, MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
 import type { RecipeGraph, IconStats, FastMatch, RecipePatch } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
 import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon, extractBatchIngredients, getNodeIngredientName, applyPatch, assignNodeShortlist } from '@/lib/recipe-lanes/model-utils';
@@ -183,12 +184,17 @@ export async function addIngredientNodeAction(recipeId: string, ingredientName: 
 export async function createVisualRecipeAction(recipeText: string, currentId?: string): Promise<{ id?: string; error?: string }> {
     try {
         console.log('[createVisualRecipeAction] 🚀 Starting...');
-        
+
+        // Guardrail (issue #181): cap input size before spending tokens.
+        assertInputWithinLimit(recipeText, MAX_RECIPE_INPUT_CHARS, 'Recipe text');
+
         // 1. Parse Text
         const prompt = generateRecipePrompt(recipeText);
         // TODO move this to a cloud function.
         const text = await getAIService().generateText(prompt);
         const graph = parseRecipeGraph(text);
+        // Guardrail (issue #181): reject a runaway graph before it hits Firestore / the icon queue.
+        assertGraphWithinLimit(graph);
         graph.originalText = recipeText;
         
         const serves = extractServes(recipeText);
@@ -428,6 +434,8 @@ export async function getAllStorageFilesAction() {
 
 export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: string) {
   try {
+    // Guardrail (issue #181): cap the chatbot instruction length sent to the model.
+    assertInputWithinLimit(prompt, MAX_ADJUST_INSTRUCTION_CHARS, 'Instruction');
     const fullPrompt = generateAdjustmentPrompt(currentGraph, prompt);
     const text = await getAIService().generateText(fullPrompt);
 
@@ -460,6 +468,11 @@ export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: stri
       newGraph = applyPatch(currentGraph, patch);
       message = patch.message;
     }
+
+    // Guardrail (issue #181): stop the graph growing without bound (e.g. a chatbot
+    // coaxed into repeatedly adding nodes). Reject the adjustment, keeping the
+    // current graph intact.
+    assertGraphWithinLimit(newGraph);
 
     return { graph: newGraph, message };
   } catch (e: any) {

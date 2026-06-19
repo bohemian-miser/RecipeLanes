@@ -22,6 +22,15 @@ else
     echo "No emulators detected. Starting NEW emulators for tests."
     # Build Functions (Required for 'functions' emulator)
     npm install --prefix functions --quiet
+    # The functions vector-search loads Xenova/all-MiniLM-L6-v2 from a bundled,
+    # gitignored model-cache with allowRemoteModels=false. Provision it before the
+    # build's copy step — otherwise the copy silently no-ops (|| true) and the
+    # emulator fails at runtime with `local_files_only=true ... not found locally`.
+    # Skipped when already present (local dev) so it only pays the download in CI.
+    if [ ! -d functions/src/vector-search/model-cache ]; then
+        echo "Downloading functions embedding model (Xenova/all-MiniLM-L6-v2)..."
+        npm run download-model --prefix functions
+    fi
     npm run build --prefix functions
 
     npx env-cmd -f .env.test firebase emulators:exec --only auth,firestore,storage,functions,tasks --project local-project-id "node --import tsx --test --test-concurrency=1 $INTEGRATION_TESTS"

@@ -1,0 +1,13 @@
+# Email notification channel.
+#
+# Notification channels are PER-PROJECT, so this is created/looked-up per project
+# by apply.sh (matched by displayName, created if missing).
+#
+# Consumed by `gcloud beta monitoring channels create
+#   --channel-content-from-file=notification-channel.email.yaml`
+# The __ALERT_EMAIL__ placeholder is rendered by apply.sh from the ALERT_EMAIL var.
+type: email
+displayName: Icon-forge alerts (email)
+description: Email channel for icon-forge rate alerts (Bug 171)
+labels:
+  email_address: __ALERT_EMAIL__

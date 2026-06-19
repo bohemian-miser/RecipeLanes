@@ -2,6 +2,14 @@
 
 Alert when **more than N icons are generated in X minutes**.
 
+> **Source of truth: [`gcp/monitoring/`](../gcp/monitoring/).** The metric,
+> notification channel, and alert policy are committed there as gcloud-consumable
+> YAML, with `apply.sh` (idempotent create-or-update, per-project channel) and
+> `export.sh` (capture live config back into the repo). Apply with
+> `./gcp/monitoring/apply.sh recipe-lanes-staging you@example.com` (run with
+> `--dry-run` first). The prose below explains the design and the manual gcloud
+> equivalents; prefer the committed scripts for any real change.
+
 ## Design: why pure-GCP
 
 The app's only job is to emit a clean, structured log signal on each successful

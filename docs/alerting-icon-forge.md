@@ -81,9 +81,9 @@ First create (or reuse) a notification channel. Email example:
 ```bash
 gcloud beta monitoring channels create \
   --project=recipe-lanes \
-  --display-name="Icon-forge alerts (email)" \
+  --display-name="Icon-forge alerts" \
   --type=email \
-  --channel-labels=email_address=binghelpdesk@gmail.com
+  --channel-labels=email_address=you@example.com
 # Note the returned channel id: projects/recipe-lanes/notificationChannels/XXXX
 ```
 
@@ -94,17 +94,17 @@ Then create the policy from a YAML condition file:
 
 ```bash
 cat > /tmp/icon-forge-policy.yaml <<'YAML'
-displayName: "Icon forge rate too high (Bug 171)"
+displayName: "Icon forge rate too high"
 combiner: OR
 conditions:
-  - displayName: "icon_forged > 50 in 10 min"
+  - displayName: "too many icon_forged"
     conditionThreshold:
       filter: 'metric.type="logging.googleapis.com/user/icon_forged_count" resource.type="cloud_run_revision"'
       comparison: COMPARISON_GT
-      thresholdValue: 50          # <-- N
+      thresholdValue: 20            # <-- N
       duration: 0s
       aggregations:
-        - alignmentPeriod: 600s   # <-- X (10 min)
+        - alignmentPeriod: 86400s  # <-- X (1 day)
           perSeriesAligner: ALIGN_COUNT
       trigger:
         count: 1
@@ -117,9 +117,9 @@ gcloud alpha monitoring policies create \
   --policy-from-file=/tmp/icon-forge-policy.yaml
 ```
 
-How it reads: each `alignmentPeriod` (X = 600s) the aligner counts matching log
-entries; if that count is greater than `thresholdValue` (N = 50) the policy fires
-and notifies the attached channel(s).
+How it reads: each `alignmentPeriod` (X = 86400s / 1 day) the aligner counts
+matching log entries; if that count is greater than `thresholdValue` (N = 20) the
+policy fires and notifies the attached channel(s).
 
 ## 3. Tuning N and X — no app redeploy
 

@@ -45,8 +45,9 @@ Tune N (threshold) and X (window) via env vars — no app redeploy:
 ALERT_THRESHOLD=100 ALERT_ALIGNMENT_PERIOD=300s ./apply.sh recipe-lanes-staging you@example.com
 ```
 
-Defaults: `ALERT_THRESHOLD=50`, `ALERT_ALIGNMENT_PERIOD=600s`,
-`ALERT_EMAIL=binghelpdesk@gmail.com`.
+Defaults mirror the live prod policy: `ALERT_THRESHOLD=20`,
+`ALERT_ALIGNMENT_PERIOD=86400s` (1 day). `ALERT_EMAIL` has no default — pass the
+recipient explicitly (required only when the notification channel must be created).
 
 ### Idempotency (create-or-update)
 

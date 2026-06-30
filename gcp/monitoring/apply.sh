@@ -32,13 +32,15 @@ for arg in "$@"; do
 done
 
 PROJECT_ID="${POSITIONAL[0]:-${PROJECT_ID:-}}"
-ALERT_EMAIL="${POSITIONAL[1]:-${ALERT_EMAIL:-binghelpdesk@gmail.com}}"
-ALERT_THRESHOLD="${ALERT_THRESHOLD:-50}"
-ALERT_ALIGNMENT_PERIOD="${ALERT_ALIGNMENT_PERIOD:-600s}"
+# No committed default — pass the alert recipient explicitly (positional $2 or ALERT_EMAIL).
+# Only required when the notification channel must be created (it doesn't exist yet).
+ALERT_EMAIL="${POSITIONAL[1]:-${ALERT_EMAIL:-}}"
+ALERT_THRESHOLD="${ALERT_THRESHOLD:-20}"
+ALERT_ALIGNMENT_PERIOD="${ALERT_ALIGNMENT_PERIOD:-86400s}"
 
 METRIC_NAME="icon_forged_count"
-CHANNEL_DISPLAY_NAME="Icon-forge alerts (email)"
-POLICY_DISPLAY_NAME="Icon forge rate too high (Bug 171)"
+CHANNEL_DISPLAY_NAME="Icon-forge alerts"
+POLICY_DISPLAY_NAME="Icon forge rate too high"
 
 METRIC_FILE="${SCRIPT_DIR}/log-metric.icon_forged_count.yaml"
 CHANNEL_FILE="${SCRIPT_DIR}/notification-channel.email.yaml"
@@ -113,6 +115,11 @@ if [ -n "${CHANNEL_ID}" ]; then
   echo "      exists -> ${CHANNEL_ID}"
 else
   echo "      missing -> create"
+  if [ -z "${ALERT_EMAIL}" ]; then
+    echo "ERROR: notification channel '${CHANNEL_DISPLAY_NAME}' does not exist and no ALERT_EMAIL was given." >&2
+    echo "       Re-run with the recipient, e.g.: $0 ${PROJECT_ID} you@example.com" >&2
+    exit 1
+  fi
   RENDERED_CHANNEL="${TMP_DIR}/channel.yaml"
   sed "s|__ALERT_EMAIL__|${ALERT_EMAIL}|g" "${CHANNEL_FILE}" > "${RENDERED_CHANNEL}"
   CHANNEL_ID="$(capture gcloud beta monitoring channels create \

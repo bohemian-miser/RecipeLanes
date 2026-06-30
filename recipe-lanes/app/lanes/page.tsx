@@ -42,6 +42,7 @@ import { LoadingScreen, LoadingPhase } from '@/components/recipe-lanes/ui/loadin
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/lib/firebase-client';
+import { preheatIconSearch } from '@/lib/icon-search-strategy';
 import { FeedbackModal } from '@/components/feedback-modal';
 
 function RecipeLanesContent() {
@@ -589,7 +590,11 @@ const handleVisualize = async () => {
     setStatus('parsing');
     setError(null);
     setGuestBannerDismissed(false);
-    
+
+    // Warm the icon vector-search CF now so its model is loaded by the time the
+    // LLM finishes parsing and we run the real icon lookup. Fire-and-forget.
+    preheatIconSearch();
+
     try {
         // Use New Fast Path Action
         const currentId = searchParams.get('id');

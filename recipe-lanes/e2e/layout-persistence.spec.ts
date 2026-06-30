@@ -275,14 +275,13 @@ test.describe('Layout persistence', () => {
         login,
     }) => {
         test.slow();
-        const dir = screenshotDir('layout-persistence-timeline2', 'desktop');
         await page.setViewportSize({ width: 1280, height: 800 });
 
         // ── create a recipe as owner so the layout-mode change auto-saves ─────
         await page.goto('/lanes?new=true');
         await login('timeline2-persist-user-' + Date.now());
-        await create_recipe(page, '2 eggs, 1 pan. fry eggs in pan for 5 min.', dir);
-        await wait_for_graph(page, dir);
+        await create_recipe(page, '2 eggs, 1 pan. fry eggs in pan for 5 min.');
+        await wait_for_graph(page);
         await expect(page).toHaveURL(/id=/);
         const recipeUrl = page.url();
 
@@ -303,7 +302,5 @@ test.describe('Layout persistence', () => {
         await expect(layoutSelect).toHaveValue('timeline2', { timeout: 15000 });
         const timelineNode = page.locator('g[data-testid^="node-"] circle').first();
         await expect(timelineNode).toBeVisible({ timeout: 15000 });
-
-        cleanupScreenshots(dir);
     });
 });

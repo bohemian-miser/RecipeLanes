@@ -107,7 +107,6 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
   // SEEDING the gallery icon directly into Firestore (admin SDK) instead of
   // relying on the async icon-generation pipeline. All waits are web-first.
   test('Shared Gallery: hover reveals label and delete removes icon (Issue 66/67)', async ({ page, login }) => {
-    const dir = screenshotDir('recipe-gallery-icon', desktop.name);
     const uid = 'gallery-admin-user';
     const ingredient = `Gallery Egg ${Date.now()}`;
 
@@ -144,8 +143,6 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
       deleteBtn.click(),
     ]);
     await expect(item).toHaveCount(0, { timeout: 15000 });
-
-    cleanupScreenshots(dir);
   });
 
   test('UI Features: Feedback', async ({ page }) => {

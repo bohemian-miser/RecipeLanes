@@ -17,7 +17,8 @@
 
 import 'dotenv/config';
 import { getOrCreateIconAction, deleteIconByIdAction, getAllStorageFilesAction, recordRejectionAction } from '../app/actions';
-import { setAIService, MockAIService } from '../lib/ai-service';
+import { setAIService } from '../lib/ai-service';
+import { MockAIService } from '../lib/ai-service.mock';
 import { setDataService, MemoryDataService } from '../lib/data-service';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
 

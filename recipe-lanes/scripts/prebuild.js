@@ -5,38 +5,12 @@
 // Run manually: node scripts/prebuild.js
 // Runs automatically via: npm run build (via prebuild hook in package.json)
 
-// ---------------------------------------------------------------------------
-// MOCK_AI production guard
-// ---------------------------------------------------------------------------
-// Fail the build immediately if MOCK_AI=true is set during a production build.
-// This prevents accidentally shipping mock AI to real users.
-//
-// A build is considered "production" when NODE_ENV=production AND the app is
-// not running under Firebase emulators or an explicit CI test env.
-//
-// Bypass signals (allow MOCK_AI in these environments):
-//   NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true  — local emulator dev/test
-//   ALLOW_MOCK_AI=true                      — explicit override (e.g. staging smoke tests)
-const isMockAI = process.env.MOCK_AI === 'true';
-const isProduction = process.env.NODE_ENV === 'production';
-const isEmulatorEnv = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true';
-const isExplicitOverride = process.env.ALLOW_MOCK_AI === 'true';
-
-if (isMockAI && isProduction && !isEmulatorEnv && !isExplicitOverride) {
-    console.error('');
-    console.error('========================================================');
-    console.error('[prebuild] FATAL: MOCK_AI=true detected in a production');
-    console.error('[prebuild] build. This would ship mock AI responses to');
-    console.error('[prebuild] real users.');
-    console.error('[prebuild]');
-    console.error('[prebuild] To fix: unset MOCK_AI before running `npm run build`.');
-    console.error('[prebuild] To override intentionally (e.g. staging smoke test):');
-    console.error('[prebuild]   set ALLOW_MOCK_AI=true');
-    console.error('========================================================');
-    console.error('');
-    process.exit(1);
-}
-// ---------------------------------------------------------------------------
+// NOTE: The former MOCK_AI production guard has been removed. The mock AI client
+// is no longer selected by any environment flag — app/composition code always
+// constructs the real client, and the mock is injected purely via dependency
+// injection in tests and the dev/e2e harness (lib/ai-service.ts,
+// instrumentation.ts, tests/helpers/mock-ai.ts). There is no MOCK_AI flag that
+// could leak into a production build, so there is nothing to guard against.
 
 const { pipeline, env } = require('@huggingface/transformers');
 const fs = require('fs');

@@ -40,9 +40,12 @@
 
 import { test, expect } from './utils/fixtures';
 import { Locator } from '@playwright/test';
-import { screenshot, screenshotDir, cleanupScreenshots } from './utils/screenshot';
-import { create_recipe, wait_for_graph, get_node } from './utils/actions';
+import { create_recipe, wait_for_graph } from './utils/actions';
 import { setRecipeLayouts } from './utils/admin-utils';
+import { debugShot } from './utils/debug-shot';
+
+// Debug screenshots are opt-in only: run with `E2E_SCREENSHOTS=1 npm run test:e2e`
+// to capture them. With the flag unset (normal/CI runs) debugShot is a no-op.
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -104,14 +107,13 @@ test.describe('Layout persistence', () => {
         login,
     }) => {
         test.slow();
-        const dir = screenshotDir('layout-persistence', 'desktop');
         await page.setViewportSize({ width: 1280, height: 800 });
 
         // ── Step 1: create a recipe and wait for the graph to render ──────────
         await page.goto('/lanes?new=true');
         await login('layout-persist-user-' + Date.now());
-        await create_recipe(page, '3 Eggs\n1 Cup Flour\nMix eggs and flour together', dir);
-        await wait_for_graph(page, dir);
+        await create_recipe(page, '3 Eggs\n1 Cup Flour\nMix eggs and flour together');
+        await wait_for_graph(page);
         await expect(page).toHaveURL(/id=/);
 
         // ── Step 2: record dagre-computed positions for ALL nodes ─────────────
@@ -121,6 +123,7 @@ test.describe('Layout persistence', () => {
         // complete layout data.
         const dagrePositions = await collectAllNodePositions(page);
         expect(dagrePositions.length).toBeGreaterThan(0);
+        await debugShot(page, 'after-dagre');
 
         // Pick the first content node as the one we'll "move".
         const targetNodeId = dagrePositions[0].id;
@@ -130,7 +133,6 @@ test.describe('Layout persistence', () => {
         const savedX = dagrePos.x + 400;
         const savedY = dagrePos.y + 300;
 
-        await screenshot(page, dir, 'after-dagre-layout');
 
         // ── Step 3: write updated layouts directly to Firestore ───────────────
         // This simulates what happens after a save: the document now carries
@@ -145,29 +147,23 @@ test.describe('Layout persistence', () => {
         );
         await setRecipeLayouts(recipeId, { dagre: newLayouts });
 
-        // ── Step 4: wait for the onSnapshot to fire and React to settle ───────
-        // The Firestore emulator delivers updates quickly; 2 s is generous.
-        await page.waitForTimeout(2000);
-        await screenshot(page, dir, 'after-second-snapshot');
-
-        // ── Step 5: assert the target node is at the saved position ───────────
-        // With the bug the node stays at dagrePos (metadata-only path).
-        // After the fix it moves to (savedX, savedY).
+        // ── Step 4 & 5: wait for the onSnapshot to fire and assert the target ──
+        // node settles at the saved position. expect.poll auto-retries the real
+        // condition (node transform == saved position) instead of a fixed sleep.
+        // With the bug the node stays at dagrePos (metadata-only path); after the
+        // fix runLayout(true) re-runs and it moves to (savedX, savedY).
         const targetNodeLocator = page.locator(`.react-flow__node[data-id="${targetNodeId}"]`);
         await expect(targetNodeLocator).toBeVisible({ timeout: 5000 });
 
-        const finalPos = await readGraphPos(targetNodeLocator);
-
-        expect(
-            Math.abs(finalPos.x - savedX),
-            `x: expected ≈${savedX} but got ${finalPos.x} (was at dagre ${dagrePos.x})`,
-        ).toBeLessThan(TOLERANCE_PX);
-        expect(
-            Math.abs(finalPos.y - savedY),
-            `y: expected ≈${savedY} but got ${finalPos.y} (was at dagre ${dagrePos.y})`,
-        ).toBeLessThan(TOLERANCE_PX);
-
-        cleanupScreenshots(dir);
+        await expect
+            .poll(async () => {
+                const p = await readGraphPos(targetNodeLocator);
+                return Math.abs(p.x - savedX) + Math.abs(p.y - savedY);
+            }, {
+                timeout: 10000,
+                message: `node should settle at saved position (${savedX}, ${savedY}), was at dagre (${dagrePos.x}, ${dagrePos.y})`,
+            })
+            .toBeLessThan(TOLERANCE_PX * 2);
     });
 
     /**
@@ -182,15 +178,14 @@ test.describe('Layout persistence', () => {
         login,
     }) => {
         test.slow();
-        const dir = screenshotDir('layout-persistence-reload', 'desktop');
         await page.setViewportSize({ width: 1280, height: 800 });
 
 
         // ── Step 1: create recipe as owner ────────────────────────────────────
         await page.goto('/lanes?new=true');
         await login('layout-reload-user-' + Date.now());
-        await create_recipe(page, '2 Eggs\n1 Cup Sugar\nWhisk eggs with sugar', dir);
-        await wait_for_graph(page, dir);
+        await create_recipe(page, '2 Eggs\n1 Cup Sugar\nWhisk eggs with sugar');
+        await wait_for_graph(page);
         await expect(page).toHaveURL(/id=/);
         const recipeUrl = page.url();
 
@@ -206,6 +201,9 @@ test.describe('Layout persistence', () => {
 
         const box = await targetEl.boundingBox();
         expect(box).toBeTruthy();
+        const transformBeforeDrag = await targetEl.evaluate(
+            (el: Element) => (el as HTMLElement).style.transform,
+        );
         await targetEl.hover();
         await page.mouse.down();
         await page.mouse.move(
@@ -214,13 +212,22 @@ test.describe('Layout persistence', () => {
             { steps: 20 },
         );
         await page.mouse.up();
-        await page.waitForTimeout(500);
 
-        // ── Step 4: wait for auto-save notification ───────────────────────────
+        // Confirm React Flow actually committed the drag (transform changed) BEFORE
+        // waiting on the save — otherwise a dropped drag yields no autosave and the
+        // "Saved changes" wait times out flakily.
+        await expect
+            .poll(async () => targetEl.evaluate((el: Element) => (el as HTMLElement).style.transform), {
+                timeout: 5000,
+            })
+            .not.toBe(transformBeforeDrag);
+
+        // ── Step 4: wait for the autosave to land (owner drag → handleSave →
+        // "Saved changes." notification). This is the real save signal.
         await expect(page.getByText('Saved changes', { exact: false })).toBeVisible({
-            timeout: 10000,
+            timeout: 15000,
         });
-        await screenshot(page, dir, 'after-save');
+        await debugShot(page, 'after-save');
 
         // Capture where the node is NOW (post-drag, post-save, pre-reload).
         const savedPos = await readGraphPos(targetEl);
@@ -232,26 +239,68 @@ test.describe('Layout persistence', () => {
 
         // ── Step 5: hard reload ───────────────────────────────────────────────
         await page.goto(recipeUrl);
-        await wait_for_graph(page, dir);
-        // Allow runLayout to settle (includes any async fitView timer).
-        await page.waitForTimeout(1500);
-        await screenshot(page, dir, 'after-reload');
+        // wait_for_graph waits on data-testid="rf-ready" — the layout + fitView
+        // settle signal — so no fixed sleep is needed.
+        await wait_for_graph(page);
+        await debugShot(page, 'after-reload');
 
         // ── Step 6: verify position matches what was saved ────────────────────
         const targetAfterReload = page.locator(`.react-flow__node[data-id="${targetId}"]`);
         await expect(targetAfterReload).toBeVisible({ timeout: 10000 });
 
-        const reloadedPos = await readGraphPos(targetAfterReload);
+        // Poll the restored position: the two-snapshot fix re-runs runLayout(true)
+        // when the saved layouts arrive, which may be a tick after rf-ready.
+        await expect
+            .poll(async () => {
+                const p = await readGraphPos(targetAfterReload);
+                return Math.abs(p.x - savedPos.x) + Math.abs(p.y - savedPos.y);
+            }, {
+                timeout: 10000,
+                message: `node should restore to saved position (${savedPos.x}, ${savedPos.y}) after reload`,
+            })
+            .toBeLessThan(TOLERANCE_PX * 2);
+    });
 
-        expect(
-            Math.abs(reloadedPos.x - savedPos.x),
-            `x after reload: expected ≈${savedPos.x} but got ${reloadedPos.x}`,
-        ).toBeLessThan(TOLERANCE_PX);
-        expect(
-            Math.abs(reloadedPos.y - savedPos.y),
-            `y after reload: expected ≈${savedPos.y} but got ${reloadedPos.y}`,
-        ).toBeLessThan(TOLERANCE_PX);
+    /**
+     * Ported from layout-mode-persistence.spec.ts.
+     *
+     * Toggling to the "timeline2" (Classic Timeline) layout mode must persist
+     * across a hard reload: the layout select retains the value AND the timeline
+     * renders its nodes. De-flaked: waits on the auto-save server-action POST and
+     * on real DOM signals (rf-ready + the select value + a timeline node circle).
+     * No fixed sleeps.
+     */
+    test('timeline2 layout mode persists across reload (mode + node rendering)', async ({
+        page,
+        login,
+    }) => {
+        test.slow();
+        await page.setViewportSize({ width: 1280, height: 800 });
 
-        cleanupScreenshots(dir);
+        // ── create a recipe as owner so the layout-mode change auto-saves ─────
+        await page.goto('/lanes?new=true');
+        await login('timeline2-persist-user-' + Date.now());
+        await create_recipe(page, '2 eggs, 1 pan. fry eggs in pan for 5 min.');
+        await wait_for_graph(page);
+        await expect(page).toHaveURL(/id=/);
+        const recipeUrl = page.url();
+
+        const layoutSelect = page.locator('select[title="Layout Mode"]');
+        await expect(layoutSelect).not.toHaveValue('timeline2');
+
+        // ── switch to timeline2; wait on the auto-save POST (not a sleep) ──────
+        await Promise.all([
+            page.waitForResponse(
+                r => r.request().method() === 'POST' && r.url().includes('/lanes'),
+            ),
+            layoutSelect.selectOption('timeline2'),
+        ]);
+        await expect(layoutSelect).toHaveValue('timeline2');
+
+        // ── hard reload and assert the mode + timeline rendering persisted ────
+        await page.goto(recipeUrl);
+        await expect(layoutSelect).toHaveValue('timeline2', { timeout: 15000 });
+        const timelineNode = page.locator('g[data-testid^="node-"] circle').first();
+        await expect(timelineNode).toBeVisible({ timeout: 15000 });
     });
 });

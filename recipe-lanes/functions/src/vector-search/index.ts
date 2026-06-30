@@ -108,6 +108,14 @@ export const searchIconVector = onCall({
   const limit = request.data.limit || 12;
   await initialize();
 
+  // Preheat mode: a recipe parse has kicked off and wants this instance warm
+  // (model loaded) by the time the real lookup runs. initialize() above has
+  // already done the expensive work, so just acknowledge.
+  if (request.data.preheat) {
+    console.log("[VectorSearch] preheat");
+    return { preheated: true, snapshot_timestamp: snapshotTimestamp };
+  }
+
   // Batch mode: ingredients[{name, queries[]}] → results[{name, embedding, fast_matches}]
   if (Array.isArray(request.data.ingredients)) {
     const ingredients: { name: string; queries: string[] }[] = request.data.ingredients;

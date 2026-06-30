@@ -71,6 +71,31 @@ export async function getFastPass(queryInput: string | string[], limit: number =
 }
 
 /**
+ * Fire-and-forget warm-up for the icon vector-search cloud function.
+ *
+ * `vectorSearch-searchIconVector` loads an ONNX embedding model into a 2GiB
+ * instance on cold start, which can take several seconds. Calling this when a
+ * recipe parse kicks off spins the instance up in parallel with the LLM parse,
+ * so the model is warm by the time we run the real icon lookup. The call is
+ * intentionally not awaited and swallows errors — it is a best-effort hint.
+ */
+export function preheatIconSearch(): void {
+  if (getActiveSearchMode() !== 'node_cf') return;
+
+  try {
+    const searchIconVector = httpsCallable<{ preheat: boolean }, unknown>(
+      functions,
+      'vectorSearch-searchIconVector',
+    );
+    void searchIconVector({ preheat: true }).catch(() => {
+      // Best-effort only; the real lookup will cold-start if this fails.
+    });
+  } catch {
+    // Never let warm-up surface to the caller.
+  }
+}
+
+/**
  * Batch fast pass — one CF call for multiple ingredients.
  * Returns per-ingredient results in the same order as the input.
  */

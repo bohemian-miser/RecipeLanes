@@ -126,14 +126,28 @@ export class RealAIService implements AIService {
 // referenced from this file, so it is structurally absent from the prod bundle.
 const useNodeCF = process.env.NEXT_PUBLIC_ICON_SEARCH_MODE === 'node_cf';
 
-let currentService: AIService = useNodeCF
-    ? new NodeCFAIService()
-    : new RealAIService();
+// The active service is stored on globalThis, NOT a module-scoped `let`.
+// Next.js bundles instrumentation.ts and server actions / route handlers into
+// SEPARATE module graphs that each get their own instance of this module — a
+// plain module variable set by instrumentation's setAIService() would not be
+// visible to getAIService() inside a server action. globalThis is shared across
+// every module in the one Node server process, so the DI injection propagates.
+declare global {
+  // eslint-disable-next-line no-var
+  var __recipelanesAIService: AIService | undefined;
+}
+
+function defaultAIService(): AIService {
+  return useNodeCF ? new NodeCFAIService() : new RealAIService();
+}
 
 export function getAIService(): AIService {
-  return currentService;
+  if (!globalThis.__recipelanesAIService) {
+    globalThis.__recipelanesAIService = defaultAIService();
+  }
+  return globalThis.__recipelanesAIService;
 }
 
 export function setAIService(service: AIService) {
-  currentService = service;
+  globalThis.__recipelanesAIService = service;
 }

@@ -39,6 +39,7 @@ import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard,
 import { Banner } from '@/components/ui/banner';
 import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
 import { fileToRecipePhotoDataUrl } from '@/lib/recipe-lanes/image-client';
+import { loadDraft, saveDraft, commitDraftOnForge, clearBlankDraft } from '@/lib/recipe-lanes/draft-persistence';
 import { LoadingScreen, LoadingPhase } from '@/components/recipe-lanes/ui/loading-screen';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -175,19 +176,21 @@ function RecipeLanesContent() {
       }
   }, [graph]);
 
-  // Save Text Draft on Unload/Refresh (Persistence)
+  // Recipe-input draft persistence (issue #183). On mount, restore the draft
+  // for the current recipe (or the blank-page draft when there's no id) so a
+  // refresh keeps in-progress typing. See lib/recipe-lanes/draft-persistence.ts.
   useEffect(() => {
-      const savedText = localStorage.getItem('recipe_draft');
-      if (savedText && !recipeText && !searchParams.get('id')) {
-           setRecipeText(savedText);
+      const saved = loadDraft(localStorage, recipeId);
+      if (saved && !recipeText) {
+          setRecipeText(saved);
       }
-  }, []); // Only on mount
+  // Mount-only: restore once for the id present at load time.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-      if (recipeText) {
-          localStorage.setItem('recipe_draft', recipeText);
-      }
-  }, [recipeText]);
+      saveDraft(localStorage, recipeId, recipeText);
+  }, [recipeText, recipeId]);
 
   const showNotification = (msg: string) => {
       setNotification(msg);
@@ -471,7 +474,7 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
       setStatus('idle');
       setWarningDismissed(false);
       setGuestBannerDismissed(false);
-      localStorage.removeItem('recipe_draft'); 
+      clearBlankDraft(localStorage);
       router.push('/lanes?new=true');
   };
 
@@ -603,7 +606,6 @@ const handleVisualize = async () => {
         const res = await createVisualRecipeAction(recipeText, currentId || undefined);
         
         finalizeCreatedRecipe(res, recipeText);
-        localStorage.setItem('recipe_draft', recipeText);
     } catch (e: any) {
         console.error('Visualization failed:', e);
         setError(e.message);
@@ -621,6 +623,12 @@ const handleVisualize = async () => {
         const url = new URL(window.location.href);
         url.searchParams.delete('new');
         url.searchParams.set('id', res.id);
+
+        // Move the draft under the new recipe's key and clear the blank-page
+        // draft so a fresh /lanes tab starts blank (issue #183). Works for both
+        // the text and photo flows — an empty recipeText just clears the blank
+        // draft without writing a per-recipe entry.
+        commitDraftOnForge(localStorage, res.id, recipeText);
 
         autoFillIconsRef.current = true;
         clearMessages();

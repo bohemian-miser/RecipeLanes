@@ -25,9 +25,18 @@
  * mock module out of the production bundle. Production (`next start`) therefore
  * keeps the real client constructed in lib/ai-service.ts — no env flag selects
  * the mock anywhere in app/composition code.
+ *
+ * `register()` runs once per server runtime, INCLUDING the Edge runtime. The
+ * mock module pulls in Node-only APIs (`fs`, `path`, `process.cwd`), which the
+ * Edge runtime rejects ("A Node.js module is loaded ... not supported in the
+ * Edge Runtime"). The `NEXT_RUNTIME === 'nodejs'` guard keeps the Node-only
+ * import out of the Edge Instrumentation bundle entirely.
  */
 export async function register() {
-  if (process.env.NODE_ENV !== 'production') {
+  if (
+    process.env.NEXT_RUNTIME === 'nodejs' &&
+    process.env.NODE_ENV !== 'production'
+  ) {
     const { setAIService } = await import('./lib/ai-service');
     const { MockAIService } = await import('./lib/ai-service.mock');
     setAIService(new MockAIService());

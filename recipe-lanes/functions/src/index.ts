@@ -120,6 +120,7 @@ export const processIconTaskHandler = async (data: { ingredientName: string }, r
         let ingredientDocId;
         let rawHydeQueries: string[] = [];
         let publishedRecipeCount = 0;
+        let forgedRecipeIds: string[] = [];
         const dataService = getDataService();
 
         // Find or Create Ingredient Group.
@@ -138,6 +139,7 @@ export const processIconTaskHandler = async (data: { ingredientName: string }, r
             }
             const queueDocData = queueDoc.data();
             const latestRecipeIds: string[] = queueDocData?.recipes || [];
+            forgedRecipeIds = latestRecipeIds;
             publishedRecipeCount = latestRecipeIds.length;
             console.log(`[Queue-${ingredientName}] in transaction Publishing to Firestore...`);
 
@@ -186,11 +188,29 @@ export const processIconTaskHandler = async (data: { ingredientName: string }, r
         // delivery live in Cloud Monitoring. See docs/alerting-icon-forge.md.
         // Emitted ONLY here, after the publish transaction commits — i.e. genuine
         // success, never on retry/failure paths.
+
+        // Non-fatal owner lookup: read recipe docs in one batched call to get deduplicated
+        // owner UIDs for the forged icon. Anonymous recipes (no ownerId) are silently omitted.
+        // UID-only — no display names or emails (PII).
+        let forgedOwners: string[] = [];
+        try {
+            if (forgedRecipeIds.length > 0) {
+                const refs = forgedRecipeIds.map(id => db.collection(DB_COLLECTION_RECIPES).doc(id));
+                const snaps = await db.getAll(...refs);
+                const ownerIds: string[] = snaps.map((s: any) => s.data()?.ownerId).filter((x: any): x is string => typeof x === 'string');
+                forgedOwners = [...new Set(ownerIds)];
+            }
+        } catch (e) {
+            console.warn(`[icon_forged] owner lookup failed (non-fatal):`, e);
+        }
+
         console.log(JSON.stringify({
             event: 'icon_forged',
             ingredient: ingredientName,
             queueDocId: docRef.id,
             recipeCount: publishedRecipeCount,
+            recipes: forgedRecipeIds,
+            owners: forgedOwners,
             ts: new Date().toISOString(),
         }));
 

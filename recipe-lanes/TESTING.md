@@ -112,7 +112,7 @@ The test environment sets `MOCK_AI=true`.
 
 ## 5. Pre-commit Hook & Committing
 
-The pre-commit hook runs the full suite (`npm run build && npm test`) before every commit.
+The pre-commit hook (`recipe-lanes/.husky/pre-commit`) runs `npm run lint && npm run typecheck && npm run test:unit:pure` before every commit. Docs-only / config-only changes skip the checks. It is wired up via the `prepare` script on `npm install`, which sets `core.hooksPath` to `recipe-lanes/.husky`.
 On the Pi this can be flaky if the environment isn't warm. Follow this sequence to commit reliably:
 
 **1. Ensure emulators are fresh**

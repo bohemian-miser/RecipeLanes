@@ -55,7 +55,7 @@ Scoped single test: `npm run test:one -- tests/my.test.ts`
 ## Hard rules
 
 1. **NEVER push directly to `main`.** `main` is PR-only — it advances solely through reviewed, merged PRs, and feature branches open their PR **against `main`** (`gh pr create --base main`). `staging` is a *disposable preview environment*, **not** a PR target: branches get force-pushed onto it to preview in the live env. The owner controls staging — agents/contributors do not push to staging without the owner's go-ahead. See `docs/git_workflow.md` (which is the authoritative version of this flow).
-2. **NEVER use `git commit --no-verify`.** The pre-commit hook runs `build + test`; fix failures before committing.
+2. **NEVER use `git commit --no-verify`.** The pre-commit hook runs `lint + typecheck + test:unit:pure` (docs/config-only changes are skipped); fix failures before committing.
 3. **`MOCK_AI=true` must never reach production.** It is set by `.env.test` and `start-emulators.sh` for local/test use only. There was a production incident — treat this as a hard safety rule.
 4. **Do not resurrect `e2e/old_tests/`.** Those tests are retired; do not re-enable them.
 5. **Regression fixes discovered mid-feature belong in their own branch and PR** with a regression test — do not bolt them onto the in-progress feature branch.

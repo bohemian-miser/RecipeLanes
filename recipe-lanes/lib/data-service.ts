@@ -85,7 +85,7 @@ export interface DataService {
   imagineIngredientWithIcon(ingredientId: string, ingredientName: string, icon: IconStats, transaction?: any): Promise<any>;
   setIngredientWithIcon(data: any, transaction?: any): Promise<void>;
   
-  submitFeedback(data: { message: string, url: string, email?: string, graphJson?: string, userId?: string }): Promise<void>;
+  submitFeedback(data: { message: string, url: string, email?: string, userId?: string }): Promise<void>;
   
   vetRecipe(recipeId: string, isVetted: boolean): Promise<void>;
   getUnvettedRecipes(limit: number): Promise<any[]>;
@@ -189,7 +189,7 @@ export class FirebaseDataService implements DataService {
       return this.mapRecipes(snapshot);
   }
 
-  async submitFeedback(data: { message: string, url: string, email?: string, graphJson?: string, userId?: string }): Promise<void> {
+  async submitFeedback(data: { message: string, url: string, email?: string, userId?: string }): Promise<void> {
       try {
           // Use DB_COLLECTION_FEEDBACK if imported, else string literal 'feedback'
           // Since I updated config.ts but not the import in this file yet (wait, I should check imports)
@@ -1752,7 +1752,7 @@ export class MemoryDataService implements DataService {
         console.log(`[MemoryDataService] Fail icon requested for ${ingredientName}: ${errorMsg}`);
     }
 
-    async submitFeedback(data: { message: string, url: string, email?: string, graphJson?: string, userId?: string }): Promise<void> {
+    async submitFeedback(data: { message: string, url: string, email?: string, userId?: string }): Promise<void> {
         console.log('[MemoryDataService] Feedback submitted:', data);
     }
 

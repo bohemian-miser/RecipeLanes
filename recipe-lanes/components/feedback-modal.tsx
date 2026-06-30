@@ -24,10 +24,9 @@ import { submitFeedbackAction } from '@/app/actions';
 interface FeedbackModalProps {
     isOpen: boolean;
     onClose: () => void;
-    graphJson?: string;
 }
 
-export function FeedbackModal({ isOpen, onClose, graphJson }: FeedbackModalProps) {
+export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
     const [message, setMessage] = useState('');
     const [email, setEmail] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -47,8 +46,7 @@ export function FeedbackModal({ isOpen, onClose, graphJson }: FeedbackModalProps
             const result = await submitFeedbackAction({
                 message,
                 email,
-                url: window.location.href,
-                graphJson
+                url: window.location.href
             });
 
             if (result.error) {

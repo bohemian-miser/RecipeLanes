@@ -1,0 +1,30 @@
+# Alert policy: "Icon forge rate too high" (Bug 171).
+#
+# Fires when the icon_forged_count metric exceeds N (thresholdValue) within an
+# X-second alignment window (alignmentPeriod). Defaults mirror the live prod
+# policy: N=20 forges, X=86400s (1 day).
+#
+# This file is a TEMPLATE. apply.sh renders the placeholders before passing it
+# to `gcloud alpha monitoring policies create/update --policy-from-file=...`:
+#   __THRESHOLD__            -> N    (env ALERT_THRESHOLD, default 20)
+#   __ALIGNMENT_PERIOD__     -> Xs   (env ALERT_ALIGNMENT_PERIOD, default 86400s)
+#   __NOTIFICATION_CHANNEL__ -> projects/<PROJECT>/notificationChannels/<ID>
+displayName: Icon forge rate too high
+combiner: OR
+conditions:
+  - displayName: too many icon_forged
+    conditionThreshold:
+      filter: metric.type="logging.googleapis.com/user/icon_forged_count" resource.type="cloud_run_revision"
+      comparison: COMPARISON_GT
+      thresholdValue: __THRESHOLD__
+      duration: 0s
+      aggregations:
+        - alignmentPeriod: __ALIGNMENT_PERIOD__
+          perSeriesAligner: ALIGN_COUNT
+      trigger:
+        count: 1
+alertStrategy:
+  notificationPrompts:
+    - OPENED
+notificationChannels:
+  - __NOTIFICATION_CHANNEL__

@@ -20,6 +20,12 @@ import { processIcon } from '../functions/src/image-processing';
 
 export interface AIService {
   generateText(prompt: string): Promise<string>;
+  /**
+   * Multimodal generation: a text prompt plus one inline image (issue #182).
+   * `imageDataUrl` is a `data:<mime>;base64,<...>` URL. Used to parse a photo
+   * of a recipe into a structured graph.
+   */
+  generateTextFromImage(prompt: string, imageDataUrl: string): Promise<string>;
   generateImage(prompt: string): Promise<string>;
   /** Returns a single averaged embedding vector for the given texts. */
   embedTexts(texts: string[]): Promise<number[]>;
@@ -28,6 +34,9 @@ export interface AIService {
 export class NodeCFAIService implements AIService {
     async generateText(prompt: string): Promise<string> {
         return new RealAIService().generateText(prompt);
+    }
+    async generateTextFromImage(prompt: string, imageDataUrl: string): Promise<string> {
+        return new RealAIService().generateTextFromImage(prompt, imageDataUrl);
     }
     async generateImage(prompt: string): Promise<string> {
         return new RealAIService().generateImage(prompt);
@@ -63,6 +72,23 @@ export class RealAIService implements AIService {
         return response.text || '';
     } catch (e) {
         console.error("Real AI failed, NOT falling back to Mock:", e);
+        return "ai failed";
+    }
+  }
+
+  async generateTextFromImage(prompt: string, imageDataUrl: string): Promise<string> {
+    try {
+        const response = await ai.generate({
+            model: textModel,
+            prompt: [
+                { text: prompt },
+                { media: { url: imageDataUrl } },
+            ],
+            config: { thinkingConfig: { thinkingBudget: 0 } },
+        });
+        return response.text || '';
+    } catch (e) {
+        console.error("Real AI (image) failed, NOT falling back to Mock:", e);
         return "ai failed";
     }
   }

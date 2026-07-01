@@ -22,9 +22,9 @@ import { getAIService } from '@/lib/ai-service';
 import { getDataService } from '@/lib/data-service';
 import { getAuthService } from '@/lib/auth-service';
 import { z } from 'zod';
-import { generateRecipePrompt, parseRecipeGraph, extractServes, generateHydeQueriesPrompt, parseHydeQueries } from '@/lib/recipe-lanes/parser';
+import { generateRecipePrompt, generateRecipeImagePrompt, parseRecipeGraph, extractServes, generateHydeQueriesPrompt, parseHydeQueries } from '@/lib/recipe-lanes/parser';
 import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
-import { assertInputWithinLimit, assertGraphWithinLimit, MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
+import { assertInputWithinLimit, assertGraphWithinLimit, assertImageWithinLimit, RecipeLimitError, MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
 import type { RecipeGraph, IconStats, FastMatch, RecipePatch } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
 import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon, extractBatchIngredients, getNodeIngredientName, applyPatch, assignNodeShortlist } from '@/lib/recipe-lanes/model-utils';
@@ -206,6 +206,58 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
             graph.serves = 1;
         }
 
+        return await finalizeAndSaveRecipe(graph, currentId);
+    } catch (e: any) {
+        console.error('[createVisualRecipeAction] Failed:', e);
+        return { error: e.message || 'Failed to process recipe.' };
+    }
+}
+
+/**
+ * Photo-to-recipe action (issue #182). Accepts a `data:<mime>;base64,<...>`
+ * image URL, parses it into a graph via Gemini multimodal vision, then runs the
+ * exact same icon pre-population / save / forge pipeline as the text flow. The
+ * image is processed in-memory only — never persisted.
+ */
+export async function createVisualRecipeFromImageAction(imageDataUrl: string, currentId?: string): Promise<{ id?: string; error?: string }> {
+    try {
+        console.log('[createVisualRecipeFromImageAction] 📷 Starting...');
+
+        // Validate the payload shape and decode size before spending vision tokens.
+        const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/.exec(imageDataUrl ?? '');
+        if (!match) {
+            throw new RecipeLimitError('Unsupported image. Please upload a JPEG, PNG, or WebP photo.');
+        }
+        const byteLength = Buffer.byteLength(match[2], 'base64');
+        assertImageWithinLimit(byteLength);
+
+        // 1. Parse the photo into a graph.
+        const prompt = generateRecipeImagePrompt();
+        const text = await getAIService().generateTextFromImage(prompt, imageDataUrl);
+        const graph = parseRecipeGraph(text);
+        assertGraphWithinLimit(graph);
+
+        // No source text to record; seed serving size from the parsed graph (default 1).
+        const parsedServes = typeof graph.baseServes === 'number' && graph.baseServes > 0 ? graph.baseServes : 1;
+        graph.baseServes = parsedServes;
+        graph.serves = parsedServes;
+
+        return await finalizeAndSaveRecipe(graph, currentId);
+    } catch (e: any) {
+        console.error('[createVisualRecipeFromImageAction] Failed:', e);
+        return { error: e.message || 'Failed to process recipe photo.' };
+    }
+}
+
+/**
+ * Shared tail of the recipe-creation pipeline used by both the text
+ * (createVisualRecipeAction) and photo (createVisualRecipeFromImageAction)
+ * flows: synchronous top-icon hydration, ownership/fork resolution, save, and
+ * gated background icon forging. Expects `graph` to already have title /
+ * serves / originalText populated by the caller.
+ */
+async function finalizeAndSaveRecipe(graph: RecipeGraph, currentId?: string): Promise<{ id?: string; error?: string }> {
+    try {
         // 2. Synchronous icon pre-population — hydrate the top match per node before saving
         // so the UI renders with icons on first snapshot, then the client hydrates the rest.
         console.log('[createVisualRecipeAction] 🔍 Looking up icons from index...');

@@ -143,6 +143,27 @@ export class MockAIService implements AIService {
         });
   }
 
+  async generateTextFromImage(prompt: string, imageDataUrl: string): Promise<string> {
+    // Deterministic mock for the photo-to-recipe flow (issue #182). We can't
+    // "read" the image, so return a fixed, recognisable graph. Tests can force
+    // a failure by uploading an image whose bytes decode to "FAIL".
+    const b64 = imageDataUrl.split(',')[1] ?? '';
+    if (Buffer.from(b64, 'base64').toString('utf8') === 'FAIL') {
+        return 'ai failed';
+    }
+    return JSON.stringify({
+        title: 'Photo Mock Recipe',
+        baseServes: 2,
+        originalText: '2 Eggs\n100g Flour\n\n1. Mix eggs and flour.',
+        lanes: [{ id: 'l1', label: 'Prep', type: 'prep' }],
+        nodes: [
+            { id: '1', laneId: 'l1', text: '2 Eggs', type: 'ingredient', visualDescription: 'Egg' },
+            { id: '2', laneId: 'l1', text: '100g Flour', type: 'ingredient', visualDescription: 'Flour' },
+            { id: '3', laneId: 'l1', text: 'Mix', type: 'action', inputs: ['1', '2'], visualDescription: 'Mixing bowl' },
+        ],
+    });
+  }
+
   async generateImage(prompt: string): Promise<string> {
     console.log(`[MockAIService] generateImage called for: "${prompt.substring(0, 30)}"...`);
 

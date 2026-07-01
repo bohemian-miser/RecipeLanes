@@ -75,6 +75,7 @@ const SCHEMA_INTERFACE = `
 interface RecipeGraph {
   title: string; // A concise title for the recipe (e.g. "Spicy Ramen")
   baseServes?: number; // Estimated servings (e.g. 4)
+  originalText?: string; // Plain-text transcription of the source recipe (ingredients list + numbered steps). Only populate when transcribing from an image.
   lanes: {
     id: string;
     label: string; // e.g. "Skillet"
@@ -94,26 +95,28 @@ interface RecipeGraph {
 }
 `;
 
-export function generateRecipePrompt(recipeText: string): string {
+/**
+ * Shared prompt body (schema + rules + visual/hyde guidelines) used by both the
+ * text and photo (issue #182) parse flows. Everything up to — but not
+ * including — the source-specific input section.
+ */
+function recipeGraphInstructions(): string {
   const BLOCK_START = "```typescript";
   const BLOCK_END = "```";
 
   return `
-You are an expert recipe parser and creator. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
-If the instructions are brief or unclear, do your best to fill in the gaps with reasonable assumptions.
-
 ### Core Philosophy: The State-Flow Pattern
 1. **Ingredient Nodes (Input):** Represent *new* items being added. Visuals show the ingredient in its *prepared* state (e.g. "Chopped Onion").
 2. **Action Nodes (State):** Represent the *result* state of the vessel. Visuals show the *combined state* (e.g. "Onions frying in pan").
 3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
 
 ### Critical Rules
-1. **QUANTITY:** The 
+1. **QUANTITY:** The
 text\n field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
 2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
 3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
-4. **TITLE & SERVES:** Extract a concise 
-_title_\n and estimated 
+4. **TITLE & SERVES:** Extract a concise
+_title_\n and estimated
 _baseServes_\n (number) from the text.
 
 ### Schema
@@ -145,9 +148,36 @@ For every node, generate exactly 12 search terms that describe what its 64×64 i
 - 4 short tags (1–3 words, e.g. "oven mitt", "red glove")
 - 4 medium phrases (4–6 words, e.g. "red oven mitt icon", "cooking glove recipe")
 - 4 longer visual descriptions (7–12 words, e.g. "red oven mitt with white heart and flame, simple icon")
+`;
+}
 
+export function generateRecipePrompt(recipeText: string): string {
+  return `
+You are an expert recipe parser and creator. Your goal is to convert the following cooking instructions into a structured "Swimlane Graph" JSON.
+If the instructions are brief or unclear, do your best to fill in the gaps with reasonable assumptions.
+${recipeGraphInstructions()}
 ### Input Recipe
 "${recipeText}"
+`;
+}
+
+/**
+ * Photo variant of {@link generateRecipePrompt} (issue #182). The recipe is
+ * supplied as an attached image rather than text; this prompt tells the model
+ * to read the photo. Send it alongside the image via
+ * AIService.generateTextFromImage.
+ */
+export function generateRecipeImagePrompt(): string {
+  return `
+You are an expert recipe parser and creator. Your goal is to read the recipe in the ATTACHED PHOTO and convert it into a structured "Swimlane Graph" JSON.
+The photo may be a page from a cookbook, a handwritten card, or a screenshot. Transcribe the ingredients and steps you can see, then structure them.
+If parts are unclear or cut off, do your best to fill in the gaps with reasonable assumptions.
+${recipeGraphInstructions()}
+### Transcription (REQUIRED for photos)
+Set the \`originalText\` field to a faithful plain-text transcription of the recipe exactly as written in the photo — the ingredients list followed by the numbered method steps. This becomes the editable recipe text, so keep it clean and complete.
+
+### Input Recipe
+The recipe is in the attached photo. Read it and produce the JSON.
 `;
 }
 

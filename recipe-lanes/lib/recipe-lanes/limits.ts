@@ -36,6 +36,14 @@ export const MAX_RECIPE_INPUT_CHARS = 10_000;
 /** Max characters of a single chatbot adjustment instruction. */
 export const MAX_ADJUST_INSTRUCTION_CHARS = 2_000;
 
+/**
+ * Max size (bytes) of a recipe photo accepted for a single parse (issue #182).
+ * Measured on the decoded image bytes, not the base64 string. Vertex/Gemini
+ * caps inline image data at ~7MB per request; we sit conservatively under that
+ * to leave headroom for the prompt text.
+ */
+export const MAX_RECIPE_IMAGE_BYTES = 5 * 1024 * 1024;
+
 /** Max nodes allowed in a recipe graph after a parse or adjustment. */
 export const MAX_GRAPH_NODES = 150;
 
@@ -55,6 +63,16 @@ export function assertInputWithinLimit(text: string, max: number, label: string)
   if (len > max) {
     throw new RecipeLimitError(
       `${label} is too long (${len.toLocaleString()} characters; limit is ${max.toLocaleString()}). Please shorten it.`,
+    );
+  }
+}
+
+/** Throws RecipeLimitError if the decoded image exceeds the byte ceiling. */
+export function assertImageWithinLimit(byteLength: number, max: number = MAX_RECIPE_IMAGE_BYTES): void {
+  if (byteLength > max) {
+    const mb = (n: number) => `${(n / (1024 * 1024)).toFixed(1)}MB`;
+    throw new RecipeLimitError(
+      `That photo is too large (${mb(byteLength)}; limit is ${mb(max)}). Please use a smaller image.`,
     );
   }
 }

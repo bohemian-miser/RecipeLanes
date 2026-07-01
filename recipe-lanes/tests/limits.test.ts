@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import {
   assertInputWithinLimit,
   assertGraphWithinLimit,
+  assertImageWithinLimit,
   RecipeLimitError,
   MAX_RECIPE_INPUT_CHARS,
   MAX_ADJUST_INSTRUCTION_CHARS,
   MAX_GRAPH_NODES,
   MAX_GRAPH_LANES,
+  MAX_RECIPE_IMAGE_BYTES,
 } from '../lib/recipe-lanes/limits';
 
 describe('recipe limits (issue #181)', () => {
@@ -57,6 +59,16 @@ describe('recipe limits (issue #181)', () => {
 
     it('tolerates a graph missing nodes/lanes arrays', () => {
       assert.doesNotThrow(() => assertGraphWithinLimit({}));
+    });
+  });
+
+  describe('assertImageWithinLimit (issue #182)', () => {
+    it('accepts an image at the byte limit', () => {
+      assert.doesNotThrow(() => assertImageWithinLimit(MAX_RECIPE_IMAGE_BYTES));
+    });
+
+    it('rejects an image over the byte limit with a RecipeLimitError', () => {
+      assert.throws(() => assertImageWithinLimit(MAX_RECIPE_IMAGE_BYTES + 1), RecipeLimitError);
     });
   });
 });

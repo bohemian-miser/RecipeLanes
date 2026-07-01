@@ -24,7 +24,7 @@ import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
-import { createVisualRecipeAction, adjustRecipeAction, saveRecipeAction, saveChatHistoryAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
+import { createVisualRecipeAction, createVisualRecipeFromImageAction, adjustRecipeAction, saveRecipeAction, saveChatHistoryAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
 import { ChatPanel } from '@/components/recipe-lanes/chat-panel';
 import { MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
 import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
@@ -35,7 +35,7 @@ import type { RecipeGraph, LayoutModeId } from '@/lib/recipe-lanes/types';
 import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
 import { LoadingScreen, LoadingPhase } from '@/components/recipe-lanes/ui/loading-screen';
@@ -340,6 +340,7 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
   const [isLive, setIsLive] = useState(false);
   const [inputExpanded, setInputExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
       if (!inputExpanded && textareaRef.current) {
@@ -600,17 +601,30 @@ const handleVisualize = async () => {
         const currentId = searchParams.get('id');
         const res = await createVisualRecipeAction(recipeText, currentId || undefined);
         
+        finalizeCreatedRecipe(res, recipeText);
+        localStorage.setItem('recipe_draft', recipeText);
+    } catch (e: any) {
+        console.error('Visualization failed:', e);
+        setError(e.message);
+        setStatus('error');
+    }
+  };
+
+  // Shared post-creation handling for both the text and photo (issue #182)
+  // flows: seed the chat, persist it, and navigate to the new recipe. Throws on
+  // an errored/empty result so callers surface it through their catch.
+  const finalizeCreatedRecipe = (res: { id?: string; error?: string }, userMessage: string) => {
         if (res.error || !res.id) {
             throw new Error(res.error || 'Failed to parse recipe structure.');
         }
         const url = new URL(window.location.href);
         url.searchParams.delete('new');
         url.searchParams.set('id', res.id);
-        
+
         autoFillIconsRef.current = true;
         clearMessages();
         const initMessages = [
-            { id: crypto.randomUUID(), role: 'user' as const, content: recipeText, timestamp: Date.now() },
+            { id: crypto.randomUUID(), role: 'user' as const, content: userMessage, timestamp: Date.now() },
             { id: crypto.randomUUID(), role: 'assistant' as const, content: 'Recipe created! You can ask me to adjust ingredients, serving sizes, or cooking methods.', timestamp: Date.now() },
         ];
         initMessages.forEach(m => addMessage({ role: m.role, content: m.content }));
@@ -624,10 +638,36 @@ const handleVisualize = async () => {
         setStatus('complete');
         // autoFillIconsRef triggers client-side icon fill once the graph snapshot loads.
         setWarningDismissed(false);
-        localStorage.setItem('recipe_draft', recipeText);
-    } catch (e: any) {
-        console.error('Visualization failed:', e);
-        setError(e.message);
+  };
+
+  // Photo-to-recipe (issue #182): read the chosen image as a data URL and send
+  // it to the vision parser. The file is never uploaded/stored — only inlined
+  // into the one server-action request.
+  const handlePhotoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset the input so selecting the same file again re-triggers onChange.
+    e.target.value = '';
+    if (!file) return;
+
+    setStatus('parsing');
+    setError(null);
+    setGuestBannerDismissed(false);
+    setInputExpanded(false);
+
+    try {
+        const dataUrl: string = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => reject(new Error('Could not read that image file.'));
+            reader.readAsDataURL(file);
+        });
+
+        const currentId = searchParams.get('id');
+        const res = await createVisualRecipeFromImageAction(dataUrl, currentId || undefined);
+        finalizeCreatedRecipe(res, '📷 Recipe from photo');
+    } catch (err: any) {
+        console.error('Photo visualization failed:', err);
+        setError(err.message);
         setStatus('error');
     }
   };
@@ -870,6 +910,22 @@ const handleVisualize = async () => {
                         }
                     }}
                 />
+                <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={handlePhotoSelected}
+                />
+                <button
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={status === 'parsing' || status === 'forging'}
+                    className="shrink-0 w-10 h-10 flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors disabled:opacity-50"
+                    aria-label="Recipe from photo"
+                    title="Create a recipe from a photo"
+                >
+                    <Camera className="w-5 h-5" />
+                </button>
                 <button
                     onClick={() => { handleVisualize(); setInputExpanded(false); }}
                     disabled={status === 'parsing' || status === 'forging' || !recipeText}

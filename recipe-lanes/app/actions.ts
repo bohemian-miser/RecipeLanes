@@ -769,7 +769,7 @@ export async function deleteIconByIdAction(iconId: string, ingredientName?: stri
 //     }
 // }
 
-export async function submitFeedbackAction(data: { message: string, url: string, email?: string, graphJson?: string }) {
+export async function submitFeedbackAction(data: { message: string, url: string, email?: string }) {
     try {
         const session = await getAuthService().verifyAuth();
         const userId = session?.uid;

@@ -1245,8 +1245,7 @@ const handleVisualize = async () => {
         
         <FeedbackModal 
             isOpen={showFeedback} 
-            onClose={() => setShowFeedback(false)} 
-            graphJson={jsonText}
+            onClose={() => setShowFeedback(false)}
         />
     </div>
   );

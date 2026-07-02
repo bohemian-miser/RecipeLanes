@@ -1,41 +1,62 @@
 name: CI
 
+# No path filters on any trigger: fast-checks/integration/e2e are required status
+# checks on main, so they must always report. Docs-only changes short-circuit via
+# the `changes` job below — every expensive step is gated on `code == 'true'`, so
+# the jobs still run and pass quickly instead of never reporting.
 on:
   push:
     branches: [main, staging]
-    paths-ignore:
-      - '.github/**'
-      - 'recipe-lanes/.husky/**'
-      - 'docs/**'
-      - 'recipe-lanes/scripts/**'
-      - 'README.md'
-      - 'LICENSE'
-      - 'CONTRIBUTING.md'
   pull_request:
     branches: [main, staging]
-    paths-ignore:
-      - '.github/**'
-      - 'recipe-lanes/.husky/**'
-      - 'docs/**'
-      - 'recipe-lanes/scripts/**'
-      - 'README.md'
-      - 'LICENSE'
-      - 'CONTRIBUTING.md'
   # Required so CI runs on the GitHub merge queue's temporary ref. Without this the
   # required checks (fast-checks/integration/e2e) never report on queue entries and PRs
-  # hang in the queue forever. No path filters: merge_group doesn't support them, and we
-  # want the required checks to always report for queued PRs.
+  # hang in the queue forever.
   merge_group:
 
 jobs:
-  fast-checks:
+  changes:
     runs-on: ubuntu-latest
-
+    outputs:
+      # 'true' if anything outside the docs-ish paths changed. Non-PR events
+      # (push, merge_group) always run the full pipeline.
+      code: ${{ github.event_name != 'pull_request' && 'true' || steps.filter.outputs.code }}
     steps:
       - name: Checkout
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+
+      - name: Detect code changes
+        if: github.event_name == 'pull_request'
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '!.github/**'
+              - '!recipe-lanes/.husky/**'
+              - '!docs/**'
+              - '!recipe-lanes/scripts/**'
+              - '!README.md'
+              - '!LICENSE'
+              - '!CONTRIBUTING.md'
+
+  fast-checks:
+    runs-on: ubuntu-latest
+    needs: changes
+
+    steps:
+      - name: Skip notice (docs-only change)
+        if: needs.changes.outputs.code != 'true'
+        run: echo "No code paths changed; skipping fast-checks work."
+
+      - name: Checkout
+        if: needs.changes.outputs.code == 'true'
         uses: actions/checkout@v4
 
       - name: Set up Node
+        if: needs.changes.outputs.code == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -45,26 +66,36 @@ jobs:
             recipe-lanes/package-lock.json
 
       - name: Install dependencies
+        if: needs.changes.outputs.code == 'true'
         run: cd recipe-lanes && npm ci
 
       - name: Lint
+        if: needs.changes.outputs.code == 'true'
         run: cd recipe-lanes && npm run lint
 
       - name: Typecheck
+        if: needs.changes.outputs.code == 'true'
         run: cd recipe-lanes && npm run typecheck
 
       - name: Unit tests (pure)
+        if: needs.changes.outputs.code == 'true'
         run: cd recipe-lanes && npm run test:unit:pure
 
   integration:
     runs-on: ubuntu-latest
-    needs: fast-checks
+    needs: [changes, fast-checks]
 
     steps:
+      - name: Skip notice (docs-only change)
+        if: needs.changes.outputs.code != 'true'
+        run: echo "No code paths changed; skipping integration work."
+
       - name: Checkout
+        if: needs.changes.outputs.code == 'true'
         uses: actions/checkout@v4
 
       - name: Set up Node
+        if: needs.changes.outputs.code == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -75,20 +106,24 @@ jobs:
             recipe-lanes/functions/package-lock.json
 
       - name: Set up Java
+        if: needs.changes.outputs.code == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
       - name: Install dependencies
+        if: needs.changes.outputs.code == 'true'
         run: cd recipe-lanes && npm ci
 
       - name: Install Firebase Tools
+        if: needs.changes.outputs.code == 'true'
         run: |
           npm install -g firebase-tools
           firebase experiments:enable webframeworks
 
       - name: Build
+        if: needs.changes.outputs.code == 'true'
         run: cd recipe-lanes && npm run build
         env:
           NEXT_PUBLIC_FIREBASE_API_KEY: "demo-key"
@@ -99,6 +134,7 @@ jobs:
           NEXT_PUBLIC_FIREBASE_APP_ID: "1:123456789:web:abcdef"
 
       - name: Integration tests (emulator-dependent)
+        if: needs.changes.outputs.code == 'true'
         run: cd recipe-lanes && npm run test:unit:integration
         env:
           NEXT_PUBLIC_FIREBASE_API_KEY: "demo-key"
@@ -109,13 +145,19 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    needs: fast-checks
+    needs: [changes, fast-checks]
 
     steps:
+      - name: Skip notice (docs-only change)
+        if: needs.changes.outputs.code != 'true'
+        run: echo "No code paths changed; skipping e2e work."
+
       - name: Checkout
+        if: needs.changes.outputs.code == 'true'
         uses: actions/checkout@v4
 
       - name: Set up Node
+        if: needs.changes.outputs.code == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -125,20 +167,24 @@ jobs:
             recipe-lanes/package-lock.json
 
       - name: Set up Java
+        if: needs.changes.outputs.code == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
       - name: Install dependencies
+        if: needs.changes.outputs.code == 'true'
         run: cd recipe-lanes && npm ci
 
       - name: Install Firebase Tools
+        if: needs.changes.outputs.code == 'true'
         run: |
           npm install -g firebase-tools
           firebase experiments:enable webframeworks
 
       - name: Cache Playwright browsers
+        if: needs.changes.outputs.code == 'true'
         id: cache-playwright
         uses: actions/cache@v4
         with:
@@ -146,14 +192,15 @@ jobs:
           key: playwright-1.58.2
 
       - name: Install Playwright browsers
-        if: steps.cache-playwright.outputs.cache-hit != 'true'
+        if: needs.changes.outputs.code == 'true' && steps.cache-playwright.outputs.cache-hit != 'true'
         run: cd recipe-lanes && npx playwright install --with-deps
 
       - name: Install Playwright system deps (cached hit)
-        if: steps.cache-playwright.outputs.cache-hit == 'true'
+        if: needs.changes.outputs.code == 'true' && steps.cache-playwright.outputs.cache-hit == 'true'
         run: cd recipe-lanes && npx playwright install-deps
 
       - name: Build
+        if: needs.changes.outputs.code == 'true'
         run: cd recipe-lanes && npm run build
         env:
           NEXT_PUBLIC_FIREBASE_API_KEY: "demo-key"
@@ -164,6 +211,7 @@ jobs:
           NEXT_PUBLIC_FIREBASE_APP_ID: "1:123456789:web:abcdef"
 
       - name: E2E tests
+        if: needs.changes.outputs.code == 'true'
         run: cd recipe-lanes && npm run test:e2e
         env:
           NEXT_PUBLIC_FIREBASE_API_KEY: "demo-key"

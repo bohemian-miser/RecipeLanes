@@ -38,6 +38,7 @@ import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
+import { fileToRecipePhotoDataUrl } from '@/lib/recipe-lanes/image-client';
 import { LoadingScreen, LoadingPhase } from '@/components/recipe-lanes/ui/loading-screen';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -655,12 +656,11 @@ const handleVisualize = async () => {
     setInputExpanded(false);
 
     try {
-        const dataUrl: string = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = () => reject(new Error('Could not read that image file.'));
-            reader.readAsDataURL(file);
-        });
+        // Downscale + re-encode in the browser (issue #182): raw phone photos
+        // are 4-12MB (often HEIC) and blow past the server-action body limit
+        // before our own checks run. This normalizes everything to a ~few
+        // hundred KB JPEG the vision model can always read.
+        const dataUrl = await fileToRecipePhotoDataUrl(file);
 
         const currentId = searchParams.get('id');
         const res = await createVisualRecipeFromImageAction(dataUrl, currentId || undefined);

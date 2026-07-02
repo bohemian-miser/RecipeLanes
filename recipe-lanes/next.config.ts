@@ -40,7 +40,10 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      bodySizeLimit: '5mb',
+      // Recipe photos (issue #182) are sent inline as base64 data URLs, which
+      // inflate the payload ~1.37x. A 5MB image (MAX_RECIPE_IMAGE_BYTES) becomes
+      // ~6.7MB on the wire, so the transport ceiling must sit above it.
+      bodySizeLimit: '8mb',
     },
   },
 };

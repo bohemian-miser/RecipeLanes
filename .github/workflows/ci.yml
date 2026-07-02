@@ -21,6 +21,11 @@ on:
       - 'README.md'
       - 'LICENSE'
       - 'CONTRIBUTING.md'
+  # Required so CI runs on the GitHub merge queue's temporary ref. Without this the
+  # required checks (fast-checks/integration/e2e) never report on queue entries and PRs
+  # hang in the queue forever. No path filters: merge_group doesn't support them, and we
+  # want the required checks to always report for queued PRs.
+  merge_group:
 
 jobs:
   fast-checks:

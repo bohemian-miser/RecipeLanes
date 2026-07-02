@@ -947,7 +947,7 @@ const handleVisualize = async () => {
                             <div className="fixed inset-0 z-20" onClick={() => setShowPhotoMenu(false)} />
                             <div
                                 role="menu"
-                                className="absolute bottom-full right-0 mb-2 z-30 w-44 bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg overflow-hidden"
+                                className="absolute top-full right-0 mt-2 z-30 w-44 bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg overflow-hidden"
                             >
                                 <button
                                     role="menuitem"

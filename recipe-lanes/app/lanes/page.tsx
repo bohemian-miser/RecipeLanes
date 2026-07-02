@@ -35,7 +35,7 @@ import type { RecipeGraph, LayoutModeId } from '@/lib/recipe-lanes/types';
 import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera, Image as ImageIcon } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
 import { LoadingScreen, LoadingPhase } from '@/components/recipe-lanes/ui/loading-screen';
@@ -340,9 +340,7 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
   const [isLive, setIsLive] = useState(false);
   const [inputExpanded, setInputExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  const [showPhotoMenu, setShowPhotoMenu] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
       if (!inputExpanded && textareaRef.current) {
@@ -912,61 +910,25 @@ const handleVisualize = async () => {
                         }
                     }}
                 />
-                {/* Gallery picker: no `capture`, so mobile shows the photo library / file browser. */}
+                {/* `accept="image/*"` with no `capture` lets the OS present its own
+                    picker — on mobile that dialogue offers both "Take Photo" and
+                    the photo library, so we don't need a custom menu. */}
                 <input
-                    ref={galleryInputRef}
+                    ref={photoInputRef}
                     type="file"
-                    accept="image/png,image/jpeg,image/webp"
+                    accept="image/*"
                     className="hidden"
                     onChange={handlePhotoSelected}
                 />
-                {/* Camera capture: `capture="environment"` opens the rear camera on mobile (ignored on desktop). */}
-                <input
-                    ref={cameraInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    capture="environment"
-                    className="hidden"
-                    onChange={handlePhotoSelected}
-                />
-                <div className="relative shrink-0">
-                    <button
-                        onClick={() => setShowPhotoMenu(v => !v)}
-                        disabled={status === 'parsing' || status === 'forging'}
-                        className="w-10 h-10 flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors disabled:opacity-50"
-                        aria-label="Recipe from photo"
-                        aria-haspopup="menu"
-                        aria-expanded={showPhotoMenu}
-                        title="Create a recipe from a photo"
-                    >
-                        <Camera className="w-5 h-5" />
-                    </button>
-                    {showPhotoMenu && (
-                        <>
-                            {/* click-away backdrop */}
-                            <div className="fixed inset-0 z-20" onClick={() => setShowPhotoMenu(false)} />
-                            <div
-                                role="menu"
-                                className="absolute top-full right-0 mt-2 z-30 w-44 bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg overflow-hidden"
-                            >
-                                <button
-                                    role="menuitem"
-                                    onClick={() => { setShowPhotoMenu(false); cameraInputRef.current?.click(); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-700 text-left"
-                                >
-                                    <Camera className="w-4 h-4" /> Take photo
-                                </button>
-                                <button
-                                    role="menuitem"
-                                    onClick={() => { setShowPhotoMenu(false); galleryInputRef.current?.click(); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-700 text-left"
-                                >
-                                    <ImageIcon className="w-4 h-4" /> Choose from gallery
-                                </button>
-                            </div>
-                        </>
-                    )}
-                </div>
+                <button
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={status === 'parsing' || status === 'forging'}
+                    className="shrink-0 w-10 h-10 flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors disabled:opacity-50"
+                    aria-label="Recipe from photo"
+                    title="Create a recipe from a photo"
+                >
+                    <Camera className="w-5 h-5" />
+                </button>
                 <button
                     onClick={() => { handleVisualize(); setInputExpanded(false); }}
                     disabled={status === 'parsing' || status === 'forging' || !recipeText}

@@ -1,0 +1,235 @@
+name: PR Cloud Run Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+# One in-flight deploy per PR; cancel superseded builds.
+concurrency:
+  group: pr-preview-${{ github.event.number }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: write
+  issues: write
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT: recipe-lanes-staging
+  REGION: us-central1
+  SERVICE: recipe-lanes-preview
+  # Artifact Registry repo (must exist; see docs/agent-isolation-roadmap.md).
+  AR_REPO: preview
+
+jobs:
+  # Backend-touching PRs get NO shared-staging preview: they need an exclusive
+  # staging lease instead (deploying their functions/rules could break every
+  # other open preview that shares the staging backend).
+  detect-backend-changes:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.diff.outputs.backend }}
+    steps:
+      - name: Check PR diff for backend paths
+        id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FILES=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.number }}/files" \
+            --paginate --jq '.[].filename')
+          echo "$FILES"
+          if echo "$FILES" | grep -qE '^recipe-lanes/(functions/|firestore\.rules$|firestore\.indexes\.json$|storage\.rules$)'; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "Backend paths touched -> preview skipped, staging lease required."
+          else
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  needs-staging-lease:
+    needs: detect-backend-changes
+    if: github.event.action != 'closed' && needs.detect-backend-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label PR needs-staging-lease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create needs-staging-lease \
+            --repo "${{ github.repository }}" \
+            --color D93F0B \
+            --description "Touches backend (functions/rules/indexes); needs exclusive staging validation" \
+            2>/dev/null || true
+          gh pr edit "${{ github.event.number }}" \
+            --repo "${{ github.repository }}" \
+            --add-label needs-staging-lease
+
+      - name: Post sticky skip comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: cloud-run-preview
+          message: |
+            ### Cloud Run preview skipped — staging lease required
+
+            This PR changes backend resources (`recipe-lanes/functions/**`, Firestore/Storage
+            rules, or Firestore indexes). Per-PR previews all share the staging Firebase
+            backend, so backend changes cannot be previewed in parallel.
+
+            Instead, this PR needs **exclusive staging validation**: take the staging
+            lease, deploy the backend changes to `staging`, and verify there before merge.
+            The `needs-staging-lease` label has been added.
+
+            _Commit:_ `${{ github.sha }}`
+
+  deploy:
+    needs: detect-backend-changes
+    if: github.event.action != 'closed' && needs.detect-backend-changes.outputs.backend == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_STAGING }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # Single source of truth: read the plain NEXT_PUBLIC_* values straight from
+      # the committed apphosting.staging.yaml (same values prod/staging inline).
+      # setup-gcloud provides no yq; use a tiny node parser (no extra deps).
+      - name: Read NEXT_PUBLIC_* build args from apphosting.staging.yaml
+        id: cfg
+        working-directory: recipe-lanes
+        run: |
+          node -e '
+            const fs = require("fs");
+            const txt = fs.readFileSync("apphosting.staging.yaml", "utf8");
+            const want = [
+              "NEXT_PUBLIC_FIREBASE_API_KEY",
+              "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
+              "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
+              "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",
+              "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
+              "NEXT_PUBLIC_FIREBASE_APP_ID",
+            ];
+            const out = [];
+            let cur = null;
+            for (const raw of txt.split("\n")) {
+              const v = raw.match(/^\s*-\s*variable:\s*(\S+)/);
+              if (v) { cur = v[1]; continue; }
+              const val = raw.match(/^\s*value:\s*(.*)$/);
+              if (val && cur && want.includes(cur)) {
+                let s = val[1].trim().replace(/^["\x27]|["\x27]$/g, "");
+                out.push(`${cur}=${s}`);
+              }
+            }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, "args<<EOF\n" + out.join("\n") + "\nEOF\n");
+          '
+
+      # icon_index.json already lives under recipe-lanes/functions/... in the repo,
+      # so it is inside the build context. prebuild.js tolerates its absence anyway.
+
+      - name: Ensure Artifact Registry repo exists
+        run: |
+          gcloud artifacts repositories describe "$AR_REPO" \
+            --project "$GCP_PROJECT" --location "$REGION" >/dev/null 2>&1 || \
+          gcloud artifacts repositories create "$AR_REPO" \
+            --project "$GCP_PROJECT" --location "$REGION" \
+            --repository-format=docker
+
+      - name: Build and push image
+        id: build
+        working-directory: recipe-lanes
+        run: |
+          IMAGE="${REGION}-docker.pkg.dev/${GCP_PROJECT}/${AR_REPO}/${SERVICE}:pr-${{ github.event.number }}-${{ github.sha }}"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          # docker build (not `gcloud builds submit --tag`, which does NOT accept
+          # --build-arg). The NEXT_PUBLIC_* values must be build args so next build
+          # inlines them. Push to Artifact Registry via the gcloud cred helper.
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          BUILD_ARGS=()
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            BUILD_ARGS+=(--build-arg "$line")
+          done <<'ARGS'
+          ${{ steps.cfg.outputs.args }}
+          ARGS
+          BUILD_ARGS+=(--build-arg NEXT_PUBLIC_ENV_NAME=preview)
+          docker build "${BUILD_ARGS[@]}" -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Deploy to Cloud Run (tagged, no traffic)
+        id: deploy
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --project "$GCP_PROJECT" --region "$REGION" \
+            --image "${{ steps.build.outputs.image }}" \
+            --tag "pr-${{ github.event.number }}" \
+            --no-traffic \
+            --allow-unauthenticated \
+            --set-env-vars "NEXT_PUBLIC_ENV_NAME=preview,ADMIN_EMAILS=binghelpdesk@gmail.com"
+          URL=$(gcloud run services describe "$SERVICE" \
+            --project "$GCP_PROJECT" --region "$REGION" \
+            --format="value(status.traffic.url)" \
+            --filter="status.traffic.tag=pr-${{ github.event.number }}" | head -n1)
+          if [ -z "$URL" ]; then
+            URL=$(gcloud run services describe "$SERVICE" \
+              --project "$GCP_PROJECT" --region "$REGION" \
+              --format="json" | node -e '
+                const d=JSON.parse(require("fs").readFileSync(0,"utf8"));
+                const t=(d.status?.traffic||[]).find(x=>x.tag==="pr-${{ github.event.number }}");
+                if(t?.url)process.stdout.write(t.url);')
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Post sticky preview comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: cloud-run-preview
+          message: |
+            ### Cloud Run preview ready
+
+            **URL:** ${{ steps.deploy.outputs.url }}
+            **Commit:** `${{ github.sha }}`
+            **Service:** `recipe-lanes-preview` (tag `pr-${{ github.event.number }}`) on `recipe-lanes-staging`
+
+            > Preview shares staging Firestore / Auth / Storage — treat data as shared.
+
+  teardown:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_STAGING }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Remove preview tag
+        run: |
+          gcloud run services update-traffic "$SERVICE" \
+            --project "$GCP_PROJECT" --region "$REGION" \
+            --remove-tags "pr-${{ github.event.number }}" || \
+            echo "No tag pr-${{ github.event.number }} to remove; skipping."
+
+      - name: Delete pushed preview images
+        run: |
+          IMAGE_PATH="${REGION}-docker.pkg.dev/${GCP_PROJECT}/${AR_REPO}/${SERVICE}"
+          gcloud artifacts docker tags list "$IMAGE_PATH" \
+            --filter="tag.basename()~^pr-${{ github.event.number }}-" \
+            --format="value(tag.basename())" 2>/dev/null | while read -r TAG; do
+            [ -z "$TAG" ] && continue
+            gcloud artifacts docker images delete "${IMAGE_PATH}:${TAG}" \
+              --delete-tags --quiet || true
+          done
+
+      - name: Update sticky comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: cloud-run-preview
+          message: |
+            ### Cloud Run preview torn down
+
+            The `pr-${{ github.event.number }}` preview tag has been removed.

@@ -169,7 +169,7 @@ jobs:
             --tag "pr-${{ github.event.number }}" \
             --no-traffic \
             --allow-unauthenticated \
-            --set-env-vars "NEXT_PUBLIC_ENV_NAME=preview,ADMIN_EMAILS=binghelpdesk@gmail.com"
+            --set-env-vars "NEXT_PUBLIC_ENV_NAME=preview,ADMIN_EMAILS=${{ secrets.ADMIN_EMAILS }}"
           URL=$(gcloud run services describe "$SERVICE" \
             --project "$GCP_PROJECT" --region "$REGION" \
             --format="value(status.traffic.url)" \

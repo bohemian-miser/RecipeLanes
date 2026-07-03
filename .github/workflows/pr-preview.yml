@@ -163,11 +163,20 @@ jobs:
       - name: Deploy to Cloud Run (tagged, no traffic)
         id: deploy
         run: |
+          # --no-traffic is only valid when the service already exists. On the
+          # first-ever deploy of the shared preview service it must be omitted;
+          # the new revision then takes traffic on the main service URL (harmless
+          # — previews are accessed via the tagged pr-N URL). Every later deploy
+          # keeps --no-traffic.
+          NOTRAFFIC="--no-traffic"
+          if ! gcloud run services describe "$SERVICE" --project "$GCP_PROJECT" --region "$REGION" >/dev/null 2>&1; then
+            NOTRAFFIC=""
+          fi
           gcloud run deploy "$SERVICE" \
             --project "$GCP_PROJECT" --region "$REGION" \
             --image "${{ steps.build.outputs.image }}" \
             --tag "pr-${{ github.event.number }}" \
-            --no-traffic \
+            $NOTRAFFIC \
             --allow-unauthenticated \
             --set-env-vars "NEXT_PUBLIC_ENV_NAME=preview,ADMIN_EMAILS=${{ secrets.ADMIN_EMAILS }}"
           URL=$(gcloud run services describe "$SERVICE" \

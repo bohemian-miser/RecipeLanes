@@ -9,7 +9,7 @@
 # Env vars (all overridable):
 #   PROJECT_ID               GCP project (positional $1 wins). Required.
 #   ALERT_EMAIL              Email for the notification channel (positional $2 wins).
-#                            Default: binghelpdesk@gmail.com
+#                            Default: you@example.com
 #   ALERT_THRESHOLD          N — fire when count > N.       Default: 50
 #   ALERT_ALIGNMENT_PERIOD   X — alignment window seconds.  Default: 600s
 #   DRY_RUN=1 (or --dry-run) Print gcloud commands without executing.

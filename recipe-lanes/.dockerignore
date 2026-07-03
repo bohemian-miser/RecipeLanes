@@ -1,0 +1,12 @@
+node_modules
+.next
+model-cache
+.env
+.env.*
+tests
+e2e
+playwright-report
+test-results
+.git
+Dockerfile
+.dockerignore

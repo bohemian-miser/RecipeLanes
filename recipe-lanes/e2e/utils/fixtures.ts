@@ -18,6 +18,7 @@
 // e2e/utils/fixtures.ts
 import { test as base, expect } from '@playwright/test';
 import { getTestUserToken, clearFirestore, clearStorage } from './admin-utils';
+import { CONSENT_STORAGE_KEY, TERMS_VERSION } from '../../lib/consent';
 
 type AuthFixtures = {
   login: (uid?: string, options?: AuthOptions) => Promise<void>;
@@ -29,6 +30,21 @@ type AuthOptions = {
 };
 
 export const test = base.extend<AuthFixtures>({
+  // Auto-seed acceptance of the legal terms (Issue 147) before any navigation,
+  // so the one-time consent banner is pre-dismissed and never overlaps the
+  // bottom-of-viewport controls the specs interact with. addInitScript runs on
+  // every document before the app's first paint.
+  page: async ({ page }, use) => {
+    await page.addInitScript(([key, version]) => {
+      try {
+        window.localStorage.setItem(key, version);
+      } catch {
+        // Ignore storage failures in restricted contexts.
+      }
+    }, [CONSENT_STORAGE_KEY, TERMS_VERSION] as const);
+    await use(page);
+  },
+
   login: async ({ page }, use) => {
     // The Helper Function
     const loginFn = async (uid: string = 'test-user-default', options: AuthOptions = {}) => {

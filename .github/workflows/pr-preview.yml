@@ -193,6 +193,72 @@ jobs:
           fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
+      - name: Register preview host as authorized Firebase Auth domain
+        run: |
+          set -euo pipefail
+          URL="${{ steps.deploy.outputs.url }}"
+          if [ -z "$URL" ]; then
+            echo "::error::Cloud Run deploy produced no URL; cannot register authorized domain."
+            exit 1
+          fi
+          # Strip scheme and any trailing path to get just the hostname.
+          HOST="${URL#https://}"
+          HOST="${HOST#http://}"
+          HOST="${HOST%%/*}"
+          echo "Registering authorized domain: $HOST"
+
+          TOKEN=$(gcloud auth print-access-token)
+          CONFIG_URL="https://identitytoolkit.googleapis.com/admin/v2/projects/${GCP_PROJECT}/config"
+
+          ATTEMPTS=5
+          SUCCESS=false
+          for i in $(seq 1 "$ATTEMPTS"); do
+            GET_RESP=$(curl -sS -w '\n%{http_code}' -X GET "$CONFIG_URL" \
+              -H "Authorization: Bearer ${TOKEN}")
+            GET_BODY=$(echo "$GET_RESP" | sed '$d')
+            GET_CODE=$(echo "$GET_RESP" | tail -n1)
+
+            if [ "$GET_CODE" = "403" ]; then
+              echo "::error::Permission denied (403) reading Identity Toolkit config for project ${GCP_PROJECT}. The FIREBASE_SERVICE_ACCOUNT_STAGING service account needs a role with firebaseauth.configs.update (e.g. roles/firebaseauth.admin)."
+              exit 1
+            fi
+            if [ "$GET_CODE" -lt 200 ] || [ "$GET_CODE" -ge 300 ]; then
+              echo "GET failed with status $GET_CODE (attempt $i/$ATTEMPTS); retrying..."
+              sleep 3
+              continue
+            fi
+
+            NEW_DOMAINS=$(echo "$GET_BODY" | jq -c --arg host "$HOST" \
+              '((.authorizedDomains // []) + [$host]) | unique')
+
+            PATCH_RESP=$(curl -sS -w '\n%{http_code}' -X PATCH \
+              "${CONFIG_URL}?updateMask=authorizedDomains" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -nc --argjson domains "$NEW_DOMAINS" '{authorizedDomains: $domains}')")
+            PATCH_BODY=$(echo "$PATCH_RESP" | sed '$d')
+            PATCH_CODE=$(echo "$PATCH_RESP" | tail -n1)
+
+            if [ "$PATCH_CODE" = "403" ]; then
+              echo "::error::Permission denied (403) updating Identity Toolkit config for project ${GCP_PROJECT}. The FIREBASE_SERVICE_ACCOUNT_STAGING service account needs a role with firebaseauth.configs.update (e.g. roles/firebaseauth.admin)."
+              exit 1
+            fi
+            if [ "$PATCH_CODE" -ge 200 ] && [ "$PATCH_CODE" -lt 300 ]; then
+              echo "Authorized domain '$HOST' registered."
+              SUCCESS=true
+              break
+            fi
+
+            echo "PATCH failed with status $PATCH_CODE (attempt $i/$ATTEMPTS); response: $PATCH_BODY"
+            echo "Retrying (likely a concurrent-update race with another PR preview)..."
+            sleep 3
+          done
+
+          if [ "$SUCCESS" != "true" ]; then
+            echo "::error::Failed to register authorized domain '$HOST' after ${ATTEMPTS} attempts."
+            exit 1
+          fi
+
       - name: Post sticky preview comment
         uses: marocchino/sticky-pull-request-comment@v2
         with:
@@ -215,6 +281,82 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_STAGING }}
 
       - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deregister preview host from authorized Firebase Auth domains
+        run: |
+          set -euo pipefail
+          URL=$(gcloud run services describe "$SERVICE" \
+            --project "$GCP_PROJECT" --region "$REGION" \
+            --format="value(status.traffic.url)" \
+            --filter="status.traffic.tag=pr-${{ github.event.number }}" 2>/dev/null | head -n1)
+          if [ -z "$URL" ]; then
+            URL=$(gcloud run services describe "$SERVICE" \
+              --project "$GCP_PROJECT" --region "$REGION" \
+              --format="json" 2>/dev/null | node -e '
+                const d=JSON.parse(require("fs").readFileSync(0,"utf8"));
+                const t=(d.status?.traffic||[]).find(x=>x.tag==="pr-${{ github.event.number }}");
+                if(t?.url)process.stdout.write(t.url);' || true)
+          fi
+          if [ -z "$URL" ]; then
+            echo "No tagged URL found for pr-${{ github.event.number }}; nothing to deregister."
+            exit 0
+          fi
+          HOST="${URL#https://}"
+          HOST="${HOST#http://}"
+          HOST="${HOST%%/*}"
+          echo "Deregistering authorized domain: $HOST"
+
+          TOKEN=$(gcloud auth print-access-token)
+          CONFIG_URL="https://identitytoolkit.googleapis.com/admin/v2/projects/${GCP_PROJECT}/config"
+
+          ATTEMPTS=5
+          SUCCESS=false
+          for i in $(seq 1 "$ATTEMPTS"); do
+            GET_RESP=$(curl -sS -w '\n%{http_code}' -X GET "$CONFIG_URL" \
+              -H "Authorization: Bearer ${TOKEN}")
+            GET_BODY=$(echo "$GET_RESP" | sed '$d')
+            GET_CODE=$(echo "$GET_RESP" | tail -n1)
+
+            if [ "$GET_CODE" = "403" ]; then
+              echo "::error::Permission denied (403) reading Identity Toolkit config for project ${GCP_PROJECT}. The FIREBASE_SERVICE_ACCOUNT_STAGING service account needs a role with firebaseauth.configs.update (e.g. roles/firebaseauth.admin)."
+              exit 1
+            fi
+            if [ "$GET_CODE" -lt 200 ] || [ "$GET_CODE" -ge 300 ]; then
+              echo "GET failed with status $GET_CODE (attempt $i/$ATTEMPTS); retrying..."
+              sleep 3
+              continue
+            fi
+
+            NEW_DOMAINS=$(echo "$GET_BODY" | jq -c --arg host "$HOST" \
+              '[(.authorizedDomains // [])[] | select(. != $host)]')
+
+            PATCH_RESP=$(curl -sS -w '\n%{http_code}' -X PATCH \
+              "${CONFIG_URL}?updateMask=authorizedDomains" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -nc --argjson domains "$NEW_DOMAINS" '{authorizedDomains: $domains}')")
+            PATCH_BODY=$(echo "$PATCH_RESP" | sed '$d')
+            PATCH_CODE=$(echo "$PATCH_RESP" | tail -n1)
+
+            if [ "$PATCH_CODE" = "403" ]; then
+              echo "::error::Permission denied (403) updating Identity Toolkit config for project ${GCP_PROJECT}. The FIREBASE_SERVICE_ACCOUNT_STAGING service account needs a role with firebaseauth.configs.update (e.g. roles/firebaseauth.admin)."
+              exit 1
+            fi
+            if [ "$PATCH_CODE" -ge 200 ] && [ "$PATCH_CODE" -lt 300 ]; then
+              echo "Authorized domain '$HOST' removed."
+              SUCCESS=true
+              break
+            fi
+
+            echo "PATCH failed with status $PATCH_CODE (attempt $i/$ATTEMPTS); response: $PATCH_BODY"
+            echo "Retrying (likely a concurrent-update race with another PR preview)..."
+            sleep 3
+          done
+
+          if [ "$SUCCESS" != "true" ]; then
+            echo "::error::Failed to deregister authorized domain '$HOST' after ${ATTEMPTS} attempts."
+            exit 1
+          fi
 
       - name: Remove preview tag
         run: |

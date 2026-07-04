@@ -60,6 +60,10 @@ export default function Home() {
   useEffect(() => {
     async function init() {
       if (authLoading) return;
+      if (!user) {
+          setInitializing(false);
+          return;
+      }
       if (recipeId) {
           setInitializing(false);
           return;
@@ -91,7 +95,7 @@ export default function Home() {
             deleteRecipeAction(recipeId).catch(console.error);
         }
     };
-  }, [authLoading, recipeId]); // Run when auth ready or ID changes
+  }, [authLoading, recipeId, user]); // Run when auth ready or ID changes
 
   // 2. Listen for Updates
   useEffect(() => {
@@ -208,6 +212,24 @@ export default function Home() {
     return (
       <div className="flex min-h-screen w-full bg-zinc-900 text-zinc-100 font-mono items-center justify-center">
         <div className="animate-pulse text-yellow-500">INITIALIZING SESSION...</div>
+      </div>
+    );
+  }
+
+  // Icon Maker is an internal forging/debug tool, not a public-facing feature — gate it behind auth (Issue #172).
+  if (!user) {
+    return (
+      <div className="flex min-h-screen w-full bg-zinc-900 text-zinc-100 font-mono items-center justify-center p-4">
+        <div className="text-center space-y-4 max-w-sm">
+          <ChefHat className="w-10 h-10 text-yellow-500 mx-auto" />
+          <p className="text-zinc-400">Sign in to use the icon forge.</p>
+          <button
+            onClick={signIn}
+            className="px-4 py-2 rounded bg-yellow-500 text-zinc-900 font-bold uppercase tracking-wider text-sm hover:bg-yellow-400"
+          >
+            Login
+          </button>
+        </div>
       </div>
     );
   }

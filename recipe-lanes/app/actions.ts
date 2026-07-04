@@ -181,7 +181,7 @@ export async function addIngredientNodeAction(recipeId: string, ingredientName: 
 
 
 // New Action for "Optimistic Return + Background Trigger"
-export async function createVisualRecipeAction(recipeText: string, currentId?: string): Promise<{ id?: string; error?: string }> {
+export async function createVisualRecipeAction(recipeText: string, currentId?: string, claimToken?: string): Promise<{ id?: string; error?: string }> {
     try {
         console.log('[createVisualRecipeAction] 🚀 Starting...');
 
@@ -206,7 +206,7 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
             graph.serves = 1;
         }
 
-        return await finalizeAndSaveRecipe(graph, currentId);
+        return await finalizeAndSaveRecipe(graph, currentId, claimToken);
     } catch (e: any) {
         console.error('[createVisualRecipeAction] Failed:', e);
         return { error: e.message || 'Failed to process recipe.' };
@@ -219,7 +219,7 @@ export async function createVisualRecipeAction(recipeText: string, currentId?: s
  * exact same icon pre-population / save / forge pipeline as the text flow. The
  * image is processed in-memory only — never persisted.
  */
-export async function createVisualRecipeFromImageAction(imageDataUrl: string, currentId?: string): Promise<{ id?: string; error?: string }> {
+export async function createVisualRecipeFromImageAction(imageDataUrl: string, currentId?: string, claimToken?: string): Promise<{ id?: string; error?: string }> {
     try {
         console.log('[createVisualRecipeFromImageAction] 📷 Starting...');
 
@@ -242,7 +242,7 @@ export async function createVisualRecipeFromImageAction(imageDataUrl: string, cu
         graph.baseServes = parsedServes;
         graph.serves = parsedServes;
 
-        return await finalizeAndSaveRecipe(graph, currentId);
+        return await finalizeAndSaveRecipe(graph, currentId, claimToken);
     } catch (e: any) {
         console.error('[createVisualRecipeFromImageAction] Failed:', e);
         return { error: e.message || 'Failed to process recipe photo.' };
@@ -256,7 +256,7 @@ export async function createVisualRecipeFromImageAction(imageDataUrl: string, cu
  * gated background icon forging. Expects `graph` to already have title /
  * serves / originalText populated by the caller.
  */
-async function finalizeAndSaveRecipe(graph: RecipeGraph, currentId?: string): Promise<{ id?: string; error?: string }> {
+async function finalizeAndSaveRecipe(graph: RecipeGraph, currentId?: string, claimToken?: string): Promise<{ id?: string; error?: string }> {
     try {
         // 2. Synchronous icon pre-population — hydrate the top match per node before saving
         // so the UI renders with icons on first snapshot, then the client hydrates the rest.
@@ -342,7 +342,7 @@ async function finalizeAndSaveRecipe(graph: RecipeGraph, currentId?: string): Pr
         }
         
         console.log('[createVisualRecipeAction] 💾 Saving initial recipe...');
-        const id = await getDataService().saveRecipe(graph, targetId, userId, visibility);
+        const id = await getDataService().saveRecipe(graph, targetId, userId, visibility, undefined, claimToken);
 
         // Return the ID immediately — the client's snapshot listener will pick up
         // icon shortlists as resolveRecipeIcons writes them to Firestore.
@@ -535,14 +535,18 @@ export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: stri
   }
 }
 
-export async function saveRecipeAction(graph: RecipeGraph, existingId?: string, visibility?: 'private' | 'unlisted' | 'public') {
+// claimToken (#151 follow-up): if this browser minted the recipe anonymously,
+// the client attaches its claim token here. saveRecipe only honors it to
+// transfer ownership when the recipe still has no owner and the token
+// matches the hash stamped on it at creation — otherwise it's a no-op.
+export async function saveRecipeAction(graph: RecipeGraph, existingId?: string, visibility?: 'private' | 'unlisted' | 'public', claimToken?: string) {
   try {
     const session = await getAuthService().verifyAuth();
     const userId = session?.uid;
     const ownerName = session?.name;
 
     const dataService = getDataService();
-    const id = await dataService.saveRecipe(graph, existingId, userId, visibility, ownerName);
+    const id = await dataService.saveRecipe(graph, existingId, userId, visibility, ownerName, claimToken);
     // Resolve icons for any pending nodes (e.g. added via AI adjustment)
     const hasPending = graph.nodes.some(n => n.status === 'pending');
     if (hasPending) {

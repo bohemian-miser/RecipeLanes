@@ -754,16 +754,23 @@ export class FirebaseDataService implements DataService {
       return recipes;
   }
 
-  async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted', ownerName?: string): Promise<string> {
+  async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public', ownerName?: string): Promise<string> {
       const data: any = {
           graph, // TODO add last_updated to graph.
           updated_at: FieldValue.serverTimestamp()
       };
-      
+
       if (userId) data.ownerId = userId;
       if (ownerName) data.ownerName = ownerName;
-      if (visibility) data.visibility = visibility;
-      
+      // On update, only touch visibility if the caller explicitly asked to change
+      // it — otherwise leave the stored value alone so autosaves don't clobber it.
+      // On create, default anon saves to public and signed-in saves to unlisted.
+      if (existingId) {
+          if (visibility) data.visibility = visibility;
+      } else {
+          data.visibility = visibility || (userId ? 'unlisted' : 'public');
+      }
+
       // Ensure title is synced both at top level and inside graph
       if (graph.title) {
           data.title = graph.title;
@@ -1582,10 +1589,10 @@ export class MemoryDataService implements DataService {
         this.recipes.delete(recipeId);
     }
     
-    async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted', ownerName?: string): Promise<string> {
+    async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public', ownerName?: string): Promise<string> {
         const id = existingId || randomUUID();
         const existing = this.recipes.get(id);
-        
+
         if (existing && existing.ownerId && existing.ownerId !== userId) {
             throw new Error("You are not the owner of this recipe.");
         }
@@ -1594,19 +1601,25 @@ export class MemoryDataService implements DataService {
         const created_at = existing?.created_at || Date.now();
         const ownerId = existing?.ownerId || userId; // Keep original owner if update
         const finalOwnerName = existing?.ownerName || ownerName;
-        
+        // On update, preserve the stored visibility unless the caller explicitly
+        // changes it — don't let autosaves clobber it back to the default.
+        // On create, default anon saves to public and signed-in saves to unlisted.
+        const finalVisibility = existing
+            ? (visibility || existing.visibility)
+            : (visibility || (userId ? 'unlisted' : 'public'));
+
         this.recipes.set(id, {
             graph,
             ownerId,
             ownerName: finalOwnerName,
             sourceId: graph.sourceId,
-            visibility,
+            visibility: finalVisibility,
             stats,
             created_at
         });
         return id;
     }
-    
+
     async getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null> { 
         const r = this.recipes.get(id);
         if (!r) return null;

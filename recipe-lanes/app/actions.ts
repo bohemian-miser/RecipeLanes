@@ -27,6 +27,7 @@ import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import { assertInputWithinLimit, assertGraphWithinLimit, assertImageWithinLimit, RecipeLimitError, MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
 import type { RecipeGraph, IconStats, FastMatch, RecipePatch } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
+import { createFeedbackIssue } from '@/lib/feedback/feedback-issue';
 import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon, extractBatchIngredients, getNodeIngredientName, applyPatch, assignNodeShortlist } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
@@ -834,6 +835,31 @@ export async function submitFeedbackAction(data: { message: string, url: string,
             ...data,
             userId
         });
+
+        // Best-effort: mirror the feedback into a GitHub issue (#148). Runs after
+        // the response is sent and never affects the user's submit result — it is
+        // inert unless FEEDBACK_GITHUB_TOKEN/FEEDBACK_GITHUB_REPO are configured.
+        const fileFeedbackIssue = async () => {
+            try {
+                const issue = await createFeedbackIssue({ ...data, userId });
+                if (issue) {
+                    console.log(`Feedback filed as GitHub issue #${issue.number}: ${issue.url}`);
+                }
+            } catch (err) {
+                console.error('Failed to file feedback as a GitHub issue:', err);
+            }
+        };
+        try {
+            if (process.env.NODE_ENV === 'test') {
+                await fileFeedbackIssue();
+            } else {
+                after(fileFeedbackIssue);
+            }
+        } catch (e) {
+            console.log("submitFeedbackAction: 'after' not supported or outside request scope, running sync", e);
+            await fileFeedbackIssue();
+        }
+
         return { success: true };
     } catch (e: any) {
         console.error('submitFeedbackAction failed:', e);

@@ -4,6 +4,7 @@ import {
   parseDurationMins,
   topoSort,
   buildTimelineLayout,
+  truncateLaneLabel,
   TL,
 } from '../lib/recipe-lanes/timeline-layout';
 import type { RecipeGraph, RecipeNode } from '../lib/recipe-lanes/types';
@@ -75,6 +76,39 @@ describe('topoSort', () => {
   it('does not throw on a cycle — includes all nodes', () => {
     const sorted = topoSort([act({ id: 'A', inputs: ['B'] }), act({ id: 'B', inputs: ['A'] })]);
     assert.strictEqual(sorted.length, 2);
+  });
+});
+
+// ── truncateLaneLabel ─────────────────────────────────────────────────────────
+// Lane labels render rotated -90° in the timeline SVG, so their available space is
+// the lane band's height (see timeline-view.tsx), not TL.LANE_LABEL_W. An untruncated
+// long label bleeds vertically into neighboring lanes (issue #158).
+
+describe('truncateLaneLabel', () => {
+  it('returns short labels unchanged', () => {
+    assert.strictEqual(truncateLaneLabel('Prep', 72), 'Prep');
+  });
+
+  it('returns labels unchanged when they exactly fit', () => {
+    const label = 'Cook';
+    assert.strictEqual(truncateLaneLabel(label, 72), label);
+  });
+
+  it('truncates a label that would overflow a single-track band, with an ellipsis', () => {
+    const result = truncateLaneLabel('Marinate the Chicken Thighs', 72);
+    assert.ok(result.length < 'Marinate the Chicken Thighs'.length);
+    assert.ok(result.endsWith('…'));
+  });
+
+  it('allows longer labels in a taller (multi-track) band', () => {
+    const oneTrack = truncateLaneLabel('Reduce Sauce And Rest', 72);
+    const twoTrack = truncateLaneLabel('Reduce Sauce And Rest', 72 * 2);
+    assert.ok(twoTrack.length >= oneTrack.length);
+  });
+
+  it('never returns an empty string, even for a tiny band', () => {
+    const result = truncateLaneLabel('Reduce Sauce And Rest', 1);
+    assert.strictEqual(result, 'R');
   });
 });
 

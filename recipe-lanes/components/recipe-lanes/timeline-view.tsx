@@ -23,7 +23,7 @@ import React, {
 import { useSearchParams } from 'next/navigation';
 import { Play, Pause, RotateCcw, ZoomIn, ZoomOut, Maximize2, Undo2 } from 'lucide-react';
 import {
-  buildTimelineLayout, TL,
+  buildTimelineLayout, truncateLaneLabel, TL,
   type TLNode, type TLEdge, type TLLane,
 } from '@/lib/recipe-lanes/timeline-layout';
 import {
@@ -603,13 +603,15 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
             {/* Lane labels */}
             {lanes.map((lane: TLLane) => {
               const my = (lane.yMin + lane.yMax) / 2;
+              const label = truncateLaneLabel(lane.label, lane.yMax - lane.yMin);
               return (
                 <text key={`lbl-${lane.laneId}`}
                   x={TL.LANE_LABEL_W / 2} y={my}
                   textAnchor="middle" dominantBaseline="middle"
                   fontSize={10} fontWeight="600" fill="#71717a"
                   transform={`rotate(-90, ${TL.LANE_LABEL_W / 2}, ${my})`}>
-                  {lane.label}
+                  {label !== lane.label && <title>{lane.label}</title>}
+                  {label}
                 </text>
               );
             })}

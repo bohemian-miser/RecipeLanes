@@ -19,20 +19,14 @@ import { db, storage, isFirebaseEnabled } from './firebase-admin';
 import { setIngredientStatuses } from './data-helpers';
 import { memoryStore, IconData, IngredientData } from './store';
 import { FieldValue } from 'firebase-admin/firestore';
-import { randomUUID, createHash } from 'crypto';
+import { randomUUID } from 'crypto';
+import { claimHashForCreate, isValidClaim } from './recipe-lanes/claim-token';
 import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
 import { standardizeIngredientName, removeUndefined } from './utils';
 // import { calculateWilsonLCB } from './utils';
 import { applyIconToNode, assignNodeShortlist, buildShortlistEntry, clearNodeShortlist, computeShortlistDelta, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getNodeShortlist, getNodeShortlistLength, getPendingImpressionIds, getPendingRejectionIds, getPendingImpressionTargets, getPendingRejectionTargets, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, markEntryImpressedAtIndex, markSeenEntriesImpressed, markSeenEntriesRejected, mutateNodesByIngredient, prependToShortlist, rankIconsByEmbedding, toRecipeIcon, setNodeStatusByIngredient, extractBatchIngredients } from './recipe-lanes/model-utils';
-
-// One-way hash for anon recipe-claim tokens: the plaintext token lives only in
-// the creator's browser (localStorage); the server only ever stores this hash,
-// so a claim requires proving knowledge of the original token.
-export function hashClaimToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
-}
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -781,10 +775,10 @@ export class FirebaseDataService implements DataService {
           // Anon-created public recipes have no signed-in owner to credit —
           // give them a stable display name instead of leaving it unset.
           if (!userId && createVisibility === 'public') data.ownerName = 'Anon';
-          // Store only a hash of the caller-supplied claim token (never the
-          // token itself) so a later signed-in save can't touch it, but a
-          // holder of the original token (kept client-side) can claim it.
-          if (!userId && claimToken) data.claimTokenHash = hashClaimToken(claimToken);
+          // Anon creations stamp a hash of the browser-held claim token so the
+          // creator can claim ownership after signing in (see claim-token.ts).
+          const stampHash = claimHashForCreate(userId, claimToken);
+          if (stampHash) data.claimTokenHash = stampHash;
       }
 
       // Ensure title is synced both at top level and inside graph
@@ -806,14 +800,11 @@ export class FirebaseDataService implements DataService {
                   throw new Error("You are not the owner of this recipe.");
               }
               // Anon-owned recipes (no ownerId) can never be silently claimed
-              // by a later signed-in save — UNLESS the caller presents the
-              // token that hashes to the value stamped on it at creation
-              // (proof it was minted in their own browser). That's the only
-              // path ownership can move away from anon.
+              // by a later signed-in save — UNLESS the caller proves the claim
+              // token minted in their browser at creation (see claim-token.ts).
+              // That's the only path ownership can move away from anon.
               if (!existingData?.ownerId) {
-                  const canClaim = !!userId && !!claimToken && !!existingData?.claimTokenHash
-                      && hashClaimToken(claimToken) === existingData.claimTokenHash;
-                  if (canClaim) {
+                  if (isValidClaim(userId, claimToken, existingData?.claimTokenHash)) {
                       data.claimTokenHash = FieldValue.delete();
                   } else {
                       delete data.ownerId;
@@ -1639,13 +1630,12 @@ export class MemoryDataService implements DataService {
             ? (visibility || existing.visibility)
             : (visibility || (userId ? 'unlisted' : 'public'));
         // Anon-owned recipes (no ownerId) can never be silently claimed by a
-        // later signed-in save — UNLESS the caller presents the token that
-        // hashes to the value stamped on it at creation (proof it was minted
-        // in their own browser). That's the only path ownership can move
-        // away from anon.
+        // later signed-in save — UNLESS the caller proves the claim token
+        // minted in their browser at creation (see claim-token.ts). That's
+        // the only path ownership can move away from anon.
         const isAnonOwned = existing ? !existing.ownerId : !userId;
-        const canClaim = isAnonOwned && !!existing && !!userId && !!claimToken
-            && !!existing.claimTokenHash && hashClaimToken(claimToken) === existing.claimTokenHash;
+        const canClaim = isAnonOwned && !!existing
+            && isValidClaim(userId, claimToken, existing.claimTokenHash);
         const ownerId = canClaim
             ? userId
             : (isAnonOwned ? undefined : (existing?.ownerId || userId));
@@ -1659,7 +1649,7 @@ export class MemoryDataService implements DataService {
         // clearing it once successfully claimed.
         const claimTokenHash = canClaim
             ? undefined
-            : (existing ? existing.claimTokenHash : (!userId && claimToken ? hashClaimToken(claimToken) : undefined));
+            : (existing ? existing.claimTokenHash : claimHashForCreate(userId, claimToken));
 
         this.recipes.set(id, {
             graph,

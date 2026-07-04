@@ -40,6 +40,7 @@ import { Banner } from '@/components/ui/banner';
 import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
 import { fileToRecipePhotoDataUrl } from '@/lib/recipe-lanes/image-client';
 import { loadDraft, saveDraft, commitDraftOnForge, clearBlankDraft } from '@/lib/recipe-lanes/draft-persistence';
+import { mintClaimToken, storeClaimToken } from '@/lib/recipe-lanes/claim-token-client';
 import { LoadingScreen, LoadingPhase } from '@/components/recipe-lanes/ui/loading-screen';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -606,7 +607,7 @@ const handleVisualize = async () => {
         // Anon creation (#151 follow-up): mint a claim token so the creator can
         // later prove ownership from this browser and claim the recipe after
         // signing in. Only the hash is ever sent to/stored on the server.
-        const claimToken = !user ? crypto.randomUUID() : undefined;
+        const claimToken = mintClaimToken(!!user);
         const res = await createVisualRecipeAction(recipeText, currentId || undefined, claimToken);
 
         finalizeCreatedRecipe(res, recipeText, claimToken);
@@ -628,7 +629,7 @@ const handleVisualize = async () => {
         // save (useSaveAndFork.performSave) attaches it automatically once
         // this browser signs in, transferring ownership with no extra step.
         if (claimToken) {
-            localStorage.setItem(`claim_token_${res.id}`, claimToken);
+            storeClaimToken(localStorage, res.id, claimToken);
         }
         const url = new URL(window.location.href);
         url.searchParams.delete('new');
@@ -681,7 +682,7 @@ const handleVisualize = async () => {
         const dataUrl = await fileToRecipePhotoDataUrl(file);
 
         const currentId = searchParams.get('id');
-        const claimToken = !user ? crypto.randomUUID() : undefined;
+        const claimToken = mintClaimToken(!!user);
         const res = await createVisualRecipeFromImageAction(dataUrl, currentId || undefined, claimToken);
         finalizeCreatedRecipe(res, '📷 Recipe from photo', claimToken);
     } catch (err: any) {

@@ -1,6 +1,8 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { getDataService, setDataService, MemoryDataService } from '../lib/data-service';
+import { hashClaimToken, claimHashForCreate, isValidClaim } from '../lib/recipe-lanes/claim-token';
+import { mintClaimToken, storeClaimToken, getClaimToken, clearClaimToken } from '../lib/recipe-lanes/claim-token-client';
 import type { RecipeGraph } from '../lib/recipe-lanes/types';
 
 // Mock Graph
@@ -246,5 +248,40 @@ describe('Social Features (Memory)', () => {
         await service.saveRecipe({ ...mockGraph, title: 'Edited' }, id, 'user-1', undefined, undefined, 'some-token');
         const r = await service.getRecipe(id);
         assert.strictEqual(r?.ownerId, 'user-1');
+    });
+});
+
+describe('claim-token lib (#151)', () => {
+    it('server policy: stamps a hash only for anon creations, validates only exact tokens', () => {
+        assert.strictEqual(claimHashForCreate('user-1', 'tok'), undefined, 'signed-in creator gets no claim hash');
+        assert.strictEqual(claimHashForCreate(undefined, undefined), undefined, 'no token, no hash');
+        const hash = claimHashForCreate(undefined, 'tok');
+        assert.ok(hash && hash !== 'tok', 'anon creation gets a hash, never the raw token');
+        assert.strictEqual(hash, hashClaimToken('tok'), 'create-path hash matches the canonical hash');
+
+        assert.strictEqual(isValidClaim('user-1', 'tok', hash), true);
+        assert.strictEqual(isValidClaim('user-1', 'wrong', hash), false);
+        assert.strictEqual(isValidClaim(undefined, 'tok', hash), false, 'anon callers can never claim');
+        assert.strictEqual(isValidClaim('user-1', 'tok', undefined), false, 'no stored hash, no claim');
+    });
+
+    it('client helpers: mint/store/get/clear own the localStorage key', () => {
+        assert.strictEqual(mintClaimToken(true), undefined, 'signed-in creators mint nothing');
+        const token = mintClaimToken(false);
+        assert.ok(token && token.length > 0);
+
+        const backing = new Map<string, string>();
+        const storage = {
+            getItem: (k: string) => backing.get(k) ?? null,
+            setItem: (k: string, v: string) => { backing.set(k, v); },
+            removeItem: (k: string) => { backing.delete(k); },
+        } as unknown as Storage;
+
+        assert.strictEqual(getClaimToken(storage, 'r1'), undefined);
+        storeClaimToken(storage, 'r1', token!);
+        assert.strictEqual(getClaimToken(storage, 'r1'), token);
+        assert.strictEqual(getClaimToken(storage, 'r2'), undefined, 'keys are per-recipe');
+        clearClaimToken(storage, 'r1');
+        assert.strictEqual(getClaimToken(storage, 'r1'), undefined);
     });
 });

@@ -19,6 +19,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { RecipeGraph } from '../../../lib/recipe-lanes/types';
 import { saveRecipeAction } from '@/app/actions';
+import { getClaimToken, clearClaimToken } from '@/lib/recipe-lanes/claim-token-client';
 
 /**
  * Pure helper extracted from getGraph() so it can be tested without React.
@@ -150,7 +151,7 @@ export function useSaveAndFork({
         // token so this ordinary save (now that the user is signed in) also
         // transfers ownership — saveRecipe only honors it when the recipe
         // still has no owner (#151 follow-up).
-        const claimToken = currentId ? (localStorage.getItem(`claim_token_${currentId}`) ?? undefined) : undefined;
+        const claimToken = currentId ? getClaimToken(localStorage, currentId) : undefined;
 
         // Forking Logic for Non-Owners (Alice Copy)
         if (isLoggedIn && !isOwner && currentId) {
@@ -185,7 +186,7 @@ export function useSaveAndFork({
         const result = await saveRecipeAction(graphToSave, currentId, visibility, claimToken);
         // One attempt is enough — whether it succeeded or the token was
         // stale/invalid, there's nothing to gain by attaching it again.
-        if (claimToken && currentId) localStorage.removeItem(`claim_token_${currentId}`);
+        if (claimToken && currentId) clearClaimToken(localStorage, currentId);
 
         if (onSave) onSave(graphToSave);
         return result;

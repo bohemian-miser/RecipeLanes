@@ -765,10 +765,15 @@ export class FirebaseDataService implements DataService {
       // On update, only touch visibility if the caller explicitly asked to change
       // it — otherwise leave the stored value alone so autosaves don't clobber it.
       // On create, default anon saves to public and signed-in saves to unlisted.
+      let createVisibility: 'unlisted' | 'public' | 'private' | undefined;
       if (existingId) {
           if (visibility) data.visibility = visibility;
       } else {
-          data.visibility = visibility || (userId ? 'unlisted' : 'public');
+          createVisibility = visibility || (userId ? 'unlisted' : 'public');
+          data.visibility = createVisibility;
+          // Anon-created public recipes have no signed-in owner to credit —
+          // give them a stable display name instead of leaving it unset.
+          if (!userId && createVisibility === 'public') data.ownerName = 'Anon';
       }
 
       // Ensure title is synced both at top level and inside graph
@@ -788,6 +793,12 @@ export class FirebaseDataService implements DataService {
               // TODO: Consider just saving under a new ID if not owner?
               if (existingData?.ownerId && existingData.ownerId !== userId) {
                   throw new Error("You are not the owner of this recipe.");
+              }
+              // Anon-owned recipes (no ownerId) can never be claimed by a later
+              // signed-in save — ownership and display name stay anon permanently.
+              if (!existingData?.ownerId) {
+                  delete data.ownerId;
+                  delete data.ownerName;
               }
               for (const n of existingData?.graph?.nodes || []) {
                   oldNodesById.set(n.id, n);
@@ -1599,14 +1610,19 @@ export class MemoryDataService implements DataService {
 
         const stats = existing?.stats || { likes: 0, dislikes: 0 };
         const created_at = existing?.created_at || Date.now();
-        const ownerId = existing?.ownerId || userId; // Keep original owner if update
-        const finalOwnerName = existing?.ownerName || ownerName;
         // On update, preserve the stored visibility unless the caller explicitly
         // changes it — don't let autosaves clobber it back to the default.
         // On create, default anon saves to public and signed-in saves to unlisted.
         const finalVisibility = existing
             ? (visibility || existing.visibility)
             : (visibility || (userId ? 'unlisted' : 'public'));
+        // Anon-owned recipes (no ownerId) can never be claimed by a later
+        // signed-in save — ownership and display name stay anon permanently.
+        const isAnonOwned = existing ? !existing.ownerId : !userId;
+        const ownerId = isAnonOwned ? undefined : (existing?.ownerId || userId);
+        const finalOwnerName = isAnonOwned
+            ? (existing?.ownerName || (finalVisibility === 'public' ? 'Anon' : undefined))
+            : (existing?.ownerName || ownerName);
 
         this.recipes.set(id, {
             graph,
@@ -1620,23 +1636,20 @@ export class MemoryDataService implements DataService {
         return id;
     }
 
-    async getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null> { 
+    async getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null> {
         const r = this.recipes.get(id);
         if (!r) return null;
         const graph = r.graph;
         if (r.visibility) graph.visibility = r.visibility as any;
 
-        // Mock lookup if needed, but for now just use ownerId as fallback or assume name is not stored in memory recipes unless we expand schema
-        const ownerName = r.ownerId ? `User ${r.ownerId}` : undefined;
-
-        return { 
-            graph, 
-            ownerId: r.ownerId, 
-            ownerName,
-            visibility: r.visibility, 
-            stats: r.stats 
-        }; 
-    } 
+        return {
+            graph,
+            ownerId: r.ownerId,
+            ownerName: r.ownerName,
+            visibility: r.visibility,
+            stats: r.stats
+        };
+    }
 
     private mapMemoryRecipe(id: string, r: any) {
         let title = r.graph.title || 'Untitled Recipe';

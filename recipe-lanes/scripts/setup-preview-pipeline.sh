@@ -84,6 +84,13 @@ DEPLOY_ROLES=(
     "roles/iam.serviceAccountUser"
     "roles/artifactregistry.writer"
     "roles/artifactregistry.admin"
+    # Needed for pr-preview.yml's authorized-domains automation: it calls the
+    # Identity Toolkit Admin API (GET/PATCH .../admin/v2/projects/<id>/config)
+    # to register/deregister each PR's Cloud Run preview hostname in staging's
+    # Firebase Auth "Authorized domains" list, so preview sign-in doesn't fail
+    # with auth/unauthorized-domain. That call requires
+    # firebaseauth.configs.update, granted by roles/firebaseauth.admin.
+    "roles/firebaseauth.admin"
 )
 echo "Verifying deploy SA (${DEPLOY_SA}) roles..."
 for ROLE in "${DEPLOY_ROLES[@]}"; do

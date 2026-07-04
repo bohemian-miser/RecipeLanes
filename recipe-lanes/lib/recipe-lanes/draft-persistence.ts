@@ -25,10 +25,13 @@
  *  - While editing a NEW (unsaved) recipe there is no `id` in the URL, so the
  *    draft is stored under BLANK_DRAFT_KEY. Refreshing the blank page restores
  *    it.
- *  - Once you forge, the recipe gets an id/URL. `commitDraftOnForge` copies the
- *    text to a per-recipe key (keyed under the new URL) and CLEARS the blank
- *    draft, so opening a fresh `/lanes` tab starts blank.
- *  - Loading an existing recipe (`?id=`) restores/saves under that recipe's key.
+ *  - Once you forge, the pasted text has "moved" from the input box into the
+ *    recipe itself (the diagram). `commitDraftOnForge` therefore DROPS the input
+ *    draft entirely — both the new recipe's per-recipe key and the blank draft —
+ *    so opening a fresh `/lanes` tab starts blank AND reopening the forged
+ *    recipe shows an empty input box rather than the old pasted text (issue #156).
+ *  - Loading an existing recipe (`?id=`) restores/saves any in-progress typing
+ *    under that recipe's key (until it too is forged).
  *
  * These functions are pure over a minimal Storage-like interface so they can be
  * unit-tested without a browser.
@@ -69,13 +72,14 @@ export function saveDraft(storage: DraftStorage, id: string | null | undefined, 
 }
 
 /**
- * Called right after a successful forge yields `newId`: move the text under the
- * new recipe's key and clear the blank draft so a fresh `/lanes` tab is blank.
+ * Called right after a successful forge yields `newId`: the pasted text has
+ * moved into the recipe, so drop the input draft entirely. Clears both the new
+ * recipe's per-recipe draft (so reopening it shows an empty input box, not the
+ * old pasted text — issue #156) and the blank draft (so a fresh `/lanes` tab is
+ * blank — issue #183).
  */
-export function commitDraftOnForge(storage: DraftStorage, newId: string, text: string): void {
-  if (text) {
-    storage.setItem(draftKey(newId), text);
-  }
+export function commitDraftOnForge(storage: DraftStorage, newId: string): void {
+  storage.removeItem(draftKey(newId));
   storage.removeItem(BLANK_DRAFT_KEY);
 }
 

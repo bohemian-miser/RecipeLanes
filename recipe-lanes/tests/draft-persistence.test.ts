@@ -77,28 +77,38 @@ describe('forging a recipe', () => {
   let storage: ReturnType<typeof makeStorage>;
   beforeEach(() => { storage = makeStorage(); });
 
-  it('moves the text to the new url key and clears the blank draft', () => {
+  it('clears the input draft so the box is empty after forging (issue #156)', () => {
     // Typed on the blank page, then forged into recipe "r1".
     saveDraft(storage, null, 'two eggs, flour');
-    commitDraftOnForge(storage, 'r1', 'two eggs, flour');
+    commitDraftOnForge(storage, 'r1');
 
-    // Text now lives under the new recipe's key...
-    assert.equal(loadDraft(storage, 'r1'), 'two eggs, flour');
-    // ...and the blank draft is gone.
+    // The text has moved into the recipe: reopening r1 shows an empty input box...
+    assert.equal(loadDraft(storage, 'r1'), '');
+    // ...and the blank draft is gone too.
     assert.equal(storage.getItem(BLANK_DRAFT_KEY), null);
   });
 
   it('leaves a fresh tab (no id) blank after a forge', () => {
     saveDraft(storage, null, 'two eggs, flour');
-    commitDraftOnForge(storage, 'r1', 'two eggs, flour');
+    commitDraftOnForge(storage, 'r1');
 
     // Opening a brand new /lanes tab restores nothing.
     assert.equal(loadDraft(storage, null), '');
   });
 
-  it('still restores the forged recipe when you reopen its url', () => {
-    commitDraftOnForge(storage, 'r1', 'two eggs, flour');
-    assert.equal(loadDraft(storage, 'r1'), 'two eggs, flour');
+  it('clears a pre-existing per-recipe draft when re-forging the same recipe', () => {
+    // Editing an already-saved recipe r1, then re-forging it: the stale input
+    // text must not linger under the recipe key.
+    saveDraft(storage, 'r1', 'edited eggs, flour');
+    commitDraftOnForge(storage, 'r1');
+    assert.equal(loadDraft(storage, 'r1'), '');
+  });
+
+  it('does not touch OTHER recipes\' drafts when forging', () => {
+    // In-progress typing on another recipe r2 is unrelated and must survive.
+    saveDraft(storage, 'r2', 'other recipe wip');
+    commitDraftOnForge(storage, 'r1');
+    assert.equal(loadDraft(storage, 'r2'), 'other recipe wip');
   });
 });
 

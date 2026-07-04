@@ -624,11 +624,13 @@ const handleVisualize = async () => {
         url.searchParams.delete('new');
         url.searchParams.set('id', res.id);
 
-        // Move the draft under the new recipe's key and clear the blank-page
-        // draft so a fresh /lanes tab starts blank (issue #183). Works for both
-        // the text and photo flows — an empty recipeText just clears the blank
-        // draft without writing a per-recipe entry.
-        commitDraftOnForge(localStorage, res.id, recipeText);
+        // The pasted text has moved from the input box into the recipe (the
+        // diagram) — clear the input box (issue #156) and drop its draft so a
+        // fresh /lanes tab starts blank (issue #183) and reopening this recipe
+        // shows an empty input rather than the old text. Works for both the text
+        // and photo flows (photo flow just has an already-empty recipeText).
+        commitDraftOnForge(localStorage, res.id);
+        setRecipeText('');
 
         autoFillIconsRef.current = true;
         clearMessages();

@@ -46,5 +46,12 @@ service cloud.firestore {
     match /feedback/{feedbackId} {
       allow create: if true;
     }
+
+    // Bugs: auto-filed from bug-like feedback (issue #148). Written only by the
+    // server (Admin SDK, which bypasses these rules) and may contain reporter
+    // contact info, so no client read/write access is granted.
+    match /bugs/{bugId} {
+      allow read, write: if false;
+    }
   }
 }

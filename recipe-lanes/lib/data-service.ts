@@ -22,7 +22,8 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
-import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
+import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES, DB_COLLECTION_FEEDBACK, DB_COLLECTION_BUGS } from './config';
+import { looksLikeBug, buildBugFromFeedback } from './recipe-lanes/feedback-triage';
 import { standardizeIngredientName, removeUndefined } from './utils';
 // import { calculateWilsonLCB } from './utils';
 import { applyIconToNode, assignNodeShortlist, buildShortlistEntry, clearNodeShortlist, computeShortlistDelta, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getNodeShortlist, getNodeShortlistLength, getPendingImpressionIds, getPendingRejectionIds, getPendingImpressionTargets, getPendingRejectionTargets, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, markEntryImpressedAtIndex, markSeenEntriesImpressed, markSeenEntriesRejected, mutateNodesByIngredient, prependToShortlist, rankIconsByEmbedding, toRecipeIcon, setNodeStatusByIngredient, extractBatchIngredients } from './recipe-lanes/model-utils';
@@ -191,17 +192,19 @@ export class FirebaseDataService implements DataService {
 
   async submitFeedback(data: { message: string, url: string, email?: string, userId?: string }): Promise<void> {
       try {
-          // Use DB_COLLECTION_FEEDBACK if imported, else string literal 'feedback'
-          // Since I updated config.ts but not the import in this file yet (wait, I should check imports)
-          // I'll rely on the literal or add the import if needed.
-          // Let's use 'feedback' string literal here or assume config updated.
-          // Wait, I updated config.ts, but I need to import it.
-          // Actually, let's just use 'feedback' string to be safe/quick or update import.
-          // I'll update the import in a separate step or just use 'feedback'.
-          await db.collection('feedback').add({
+          const feedbackRef = await db.collection(DB_COLLECTION_FEEDBACK).add({
               ...data,
               created_at: FieldValue.serverTimestamp()
           });
+          // Issue #148: automatically file a bug record for feedback that reads
+          // like a bug report, linking back to the source feedback doc.
+          if (looksLikeBug(data.message)) {
+              const bug = buildBugFromFeedback({ ...data, feedbackId: feedbackRef.id });
+              await db.collection(DB_COLLECTION_BUGS).add({
+                  ...bug,
+                  created_at: FieldValue.serverTimestamp()
+              });
+          }
       } catch (e: any) {
           console.error("Failed to submit feedback:", e);
           throw new Error("Failed to save feedback");
@@ -1754,6 +1757,13 @@ export class MemoryDataService implements DataService {
 
     async submitFeedback(data: { message: string, url: string, email?: string, userId?: string }): Promise<void> {
         console.log('[MemoryDataService] Feedback submitted:', data);
+        // Mirror the FirebaseDataService behaviour (issue #148): bug-like
+        // feedback is triaged into a bug record. No persistence here (this impl
+        // is for pure/in-memory tests), but keep the derivation for parity.
+        if (looksLikeBug(data.message)) {
+            const bug = buildBugFromFeedback(data);
+            console.log('[MemoryDataService] Bug filed from feedback:', bug.title);
+        }
     }
 
     async imagineIngredientWithIcon(ingredientId: string, ingredientName: string, iconData: IconStats, transaction?: any): Promise<any> {

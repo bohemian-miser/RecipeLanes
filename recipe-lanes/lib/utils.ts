@@ -68,6 +68,24 @@ export function formatDisplayName(uid?: string | null, displayName?: string | nu
     return name;
 }
 
+/**
+ * Issue #146: decides the `ownerName` to persist for a recipe.
+ *
+ * - Anonymous publish → returns '' so the name is (a) actively cleared on a
+ *   merge write over a previously-named recipe and (b) rendered as "Anon" by
+ *   the existing display fallbacks.
+ * - Named publish with a name → returns the name unchanged.
+ * - Named publish with no name → returns undefined so the caller omits the
+ *   field entirely (preserving the prior behaviour).
+ */
+export function computeStoredOwnerName(
+    ownerName?: string | null,
+    anonymous?: boolean | null,
+): string | undefined {
+    if (anonymous) return '';
+    return ownerName ? ownerName : undefined;
+}
+
 export function calculateWilsonLCB(n: number, r: number): number {
     if (n === 0) return 0;
     const k = n - r; const p = k / n; const z = 1.645;

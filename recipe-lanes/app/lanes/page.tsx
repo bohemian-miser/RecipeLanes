@@ -35,7 +35,7 @@ import type { RecipeGraph, LayoutModeId } from '@/lib/recipe-lanes/types';
 import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera, VenetianMask } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
 import { fileToRecipePhotoDataUrl } from '@/lib/recipe-lanes/image-client';
@@ -762,6 +762,7 @@ const handleVisualize = async () => {
   
   const hasIcons = graph?.nodes.some(n => hasNodeIcon(n));
   const isPublic = graph?.visibility === 'public';
+  const isAnonymous = graph?.anonymous === true;
 
   // Common Nav Item Styles
   const navItemClass = "flex items-center gap-2 px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
@@ -1149,7 +1150,17 @@ const handleVisualize = async () => {
                                 <span className="hidden xl:inline">{isPublic ? 'Public' : 'Unlisted'}</span>
                             </button>
 
-                            <button 
+                            {/* Issue #146: publish anonymously (hide the author's name). */}
+                            <button
+                                onClick={() => diagramRef.current?.toggleAnonymous()}
+                                className={`flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded shadow-sm border transition-colors font-mono ${isAnonymous ? 'bg-yellow-500/10 border-yellow-500 text-yellow-600' : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'}`}
+                                title={isAnonymous ? 'Published anonymously — click to show your name' : 'Publish anonymously (hide your name)'}
+                            >
+                                {isAnonymous ? <VenetianMask className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                                <span className="hidden xl:inline">{isAnonymous ? 'Anonymous' : 'Named'}</span>
+                            </button>
+
+                            <button
                                 onClick={handleToggleJson}
                                 className={`p-1.5 rounded hover:bg-zinc-100 transition-colors ${showJson ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-400'}`}
                                 title="Toggle JSON View"

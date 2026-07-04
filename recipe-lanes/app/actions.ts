@@ -302,7 +302,9 @@ async function finalizeAndSaveRecipe(graph: RecipeGraph, currentId?: string): Pr
         const userId = session?.uid;
         
         let targetId = undefined;
-        let visibility: 'unlisted' | 'public' | 'private' = 'unlisted';
+        // Leave undefined for new/forked recipes so saveRecipe applies its
+        // auth-based default (anon -> public, signed-in -> unlisted).
+        let visibility: 'unlisted' | 'public' | 'private' | undefined = undefined;
 
         // If the user has updated the recipe, save over it or fork it if it's not theirs.
         if (currentId && userId) {
@@ -533,7 +535,7 @@ export async function adjustRecipeAction(currentGraph: RecipeGraph, prompt: stri
   }
 }
 
-export async function saveRecipeAction(graph: RecipeGraph, existingId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted') {
+export async function saveRecipeAction(graph: RecipeGraph, existingId?: string, visibility?: 'private' | 'unlisted' | 'public') {
   try {
     const session = await getAuthService().verifyAuth();
     const userId = session?.uid;

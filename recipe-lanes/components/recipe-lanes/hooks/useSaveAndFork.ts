@@ -146,6 +146,12 @@ export function useSaveAndFork({
         // Use ref for latest value (important for toggleVisibility which is async)
         const visibility = visibilityRef.current ? 'public' : 'unlisted';
 
+        // If this browser minted the recipe anonymously, attach its claim
+        // token so this ordinary save (now that the user is signed in) also
+        // transfers ownership — saveRecipe only honors it when the recipe
+        // still has no owner (#151 follow-up).
+        const claimToken = currentId ? (localStorage.getItem(`claim_token_${currentId}`) ?? undefined) : undefined;
+
         // Forking Logic for Non-Owners (Alice Copy)
         if (isLoggedIn && !isOwner && currentId) {
             console.log('[ReactFlow] Forking on Save (Non-Owner)');
@@ -176,7 +182,10 @@ export function useSaveAndFork({
         // Ensure visibility is part of the graph object passed back
         graphToSave.visibility = visibility;
 
-        const result = await saveRecipeAction(graphToSave, currentId, visibility);
+        const result = await saveRecipeAction(graphToSave, currentId, visibility, claimToken);
+        // One attempt is enough — whether it succeeded or the token was
+        // stale/invalid, there's nothing to gain by attaching it again.
+        if (claimToken && currentId) localStorage.removeItem(`claim_token_${currentId}`);
 
         if (onSave) onSave(graphToSave);
         return result;

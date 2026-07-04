@@ -603,9 +603,13 @@ const handleVisualize = async () => {
     try {
         // Use New Fast Path Action
         const currentId = searchParams.get('id');
-        const res = await createVisualRecipeAction(recipeText, currentId || undefined);
-        
-        finalizeCreatedRecipe(res, recipeText);
+        // Anon creation (#151 follow-up): mint a claim token so the creator can
+        // later prove ownership from this browser and claim the recipe after
+        // signing in. Only the hash is ever sent to/stored on the server.
+        const claimToken = !user ? crypto.randomUUID() : undefined;
+        const res = await createVisualRecipeAction(recipeText, currentId || undefined, claimToken);
+
+        finalizeCreatedRecipe(res, recipeText, claimToken);
     } catch (e: any) {
         console.error('Visualization failed:', e);
         setError(e.message);
@@ -616,9 +620,15 @@ const handleVisualize = async () => {
   // Shared post-creation handling for both the text and photo (issue #182)
   // flows: seed the chat, persist it, and navigate to the new recipe. Throws on
   // an errored/empty result so callers surface it through their catch.
-  const finalizeCreatedRecipe = (res: { id?: string; error?: string }, userMessage: string) => {
+  const finalizeCreatedRecipe = (res: { id?: string; error?: string }, userMessage: string, claimToken?: string) => {
         if (res.error || !res.id) {
             throw new Error(res.error || 'Failed to parse recipe structure.');
+        }
+        // Stash the claim token under the real recipe id — the next ordinary
+        // save (useSaveAndFork.performSave) attaches it automatically once
+        // this browser signs in, transferring ownership with no extra step.
+        if (claimToken) {
+            localStorage.setItem(`claim_token_${res.id}`, claimToken);
         }
         const url = new URL(window.location.href);
         url.searchParams.delete('new');
@@ -671,8 +681,9 @@ const handleVisualize = async () => {
         const dataUrl = await fileToRecipePhotoDataUrl(file);
 
         const currentId = searchParams.get('id');
-        const res = await createVisualRecipeFromImageAction(dataUrl, currentId || undefined);
-        finalizeCreatedRecipe(res, '📷 Recipe from photo');
+        const claimToken = !user ? crypto.randomUUID() : undefined;
+        const res = await createVisualRecipeFromImageAction(dataUrl, currentId || undefined, claimToken);
+        finalizeCreatedRecipe(res, '📷 Recipe from photo', claimToken);
     } catch (err: any) {
         console.error('Photo visualization failed:', err);
         setError(err.message);
@@ -801,7 +812,7 @@ const handleVisualize = async () => {
                     )}
                 </div>
             </div>
-            
+
             {/* Right Side Actions */}
             <div className="flex items-center gap-2">
                 {/* Navigation Tabs */}

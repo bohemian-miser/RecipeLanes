@@ -118,9 +118,85 @@ describe('Social Features (Memory)', () => {
         const id1 = await service.saveRecipe(mockGraph, undefined, 'u1', 'public');
         const newId = await service.copyRecipe(id1, 'copier');
         const copy = await service.getRecipe(newId);
-        
+
         assert.strictEqual(copy?.ownerId, 'copier');
         assert.ok(copy?.graph.title?.includes('(Copy)'));
         assert.strictEqual(copy?.visibility, 'unlisted');
+    });
+
+    it('should support a copy of a copy, each owned by its own copier', async () => {
+        const originalId = await service.saveRecipe(mockGraph, undefined, 'author', 'public');
+
+        const copyId = await service.copyRecipe(originalId, 'copier-1');
+        const copy = await service.getRecipe(copyId);
+        assert.strictEqual(copy?.ownerId, 'copier-1');
+        assert.ok(copy?.graph.title?.includes('(Copy)'));
+
+        const copyOfCopyId = await service.copyRecipe(copyId, 'copier-2');
+        const copyOfCopy = await service.getRecipe(copyOfCopyId);
+        assert.strictEqual(copyOfCopy?.ownerId, 'copier-2');
+        assert.ok(copyOfCopy?.graph.title?.includes('(Copy) (Copy)'));
+
+        // Copying the copy must not mutate the original or the first copy.
+        const originalAfter = await service.getRecipe(originalId);
+        assert.strictEqual(originalAfter?.ownerId, 'author');
+        const copyAfter = await service.getRecipe(copyId);
+        assert.strictEqual(copyAfter?.ownerId, 'copier-1');
+    });
+
+    it('should let a signed-in user copy an anon-owned public recipe and become its owner', async () => {
+        const anonId = await service.saveRecipe(mockGraph, undefined, undefined);
+        const anonRecipe = await service.getRecipe(anonId);
+        assert.strictEqual(anonRecipe?.ownerId, undefined);
+        assert.strictEqual(anonRecipe?.visibility, 'public');
+
+        const copyId = await service.copyRecipe(anonId, 'copier-1');
+        const copy = await service.getRecipe(copyId);
+        assert.strictEqual(copy?.ownerId, 'copier-1');
+        assert.strictEqual(copy?.visibility, 'unlisted');
+
+        // The anon original is untouched by the copy.
+        const originalAfter = await service.getRecipe(anonId);
+        assert.strictEqual(originalAfter?.ownerId, undefined);
+    });
+
+    it('should default an anonymous create to public with ownerName "Anon" (#151)', async () => {
+        const id = await service.saveRecipe(mockGraph, undefined, undefined);
+        const r = await service.getRecipe(id);
+        assert.strictEqual(r?.visibility, 'public');
+        assert.strictEqual(r?.ownerId, undefined);
+        assert.strictEqual(r?.ownerName, 'Anon');
+    });
+
+    it('should default a signed-in create to unlisted with no Anon ownerName (#151)', async () => {
+        const id = await service.saveRecipe(mockGraph, undefined, 'user-1');
+        const r = await service.getRecipe(id);
+        assert.strictEqual(r?.visibility, 'unlisted');
+        assert.notStrictEqual(r?.ownerName, 'Anon');
+    });
+
+    it('should preserve stored visibility across an autosave that omits it (#151)', async () => {
+        const id = await service.saveRecipe(mockGraph, undefined, 'user-1', 'public');
+        // Most autosave call sites (e.g. app/lanes/page.tsx) don't pass visibility explicitly.
+        await service.saveRecipe({ ...mockGraph, title: 'Edited' }, id, 'user-1');
+        const r = await service.getRecipe(id);
+        assert.strictEqual(r?.visibility, 'public');
+    });
+
+    it('should not let a signed-in save claim ownership of an anon-owned recipe (#151)', async () => {
+        const id = await service.saveRecipe(mockGraph, undefined, undefined); // anon create -> public
+        await service.saveRecipe({ ...mockGraph, title: 'Edited by a visitor' }, id, 'user-1');
+        const r = await service.getRecipe(id);
+        assert.strictEqual(r?.ownerId, undefined, 'anon-owned recipe must stay unowned');
+        assert.strictEqual(r?.ownerName, 'Anon', 'display name must stay Anon');
+        assert.strictEqual(r?.graph.title, 'Edited by a visitor', 'the edit itself should still be saved');
+    });
+
+    it('should reject an anonymous save attempt on someone else\'s recipe (#151)', async () => {
+        const id = await service.saveRecipe(mockGraph, undefined, 'user-1', 'public');
+        await assert.rejects(() => service.saveRecipe({ ...mockGraph, title: 'Hijack attempt' }, id, undefined));
+        const r = await service.getRecipe(id);
+        assert.strictEqual(r?.ownerId, 'user-1');
+        assert.strictEqual(r?.graph.title, 'Test Recipe');
     });
 });

@@ -80,6 +80,79 @@ describe('Data Service & Actions', () => {
             assert.ok(typeof iconUrl === 'string' && iconUrl.length > 0, 'carrot node should have a derived icon URL');
         });
     });
+
+    describe('Anon visibility & fork ownership (#151)', () => {
+        it('defaults an anonymous createVisualRecipeAction to public', async () => {
+            setAuthService(new MockAuthService(null));
+            const result = await createVisualRecipeAction('1 Onion');
+            assert.ok(result.id);
+            const saved = await service.getRecipe(result.id);
+            assert.strictEqual(saved.visibility, 'public');
+            assert.strictEqual(saved.ownerId, undefined);
+        });
+
+        it('defaults a signed-in createVisualRecipeAction to unlisted', async () => {
+            setAuthService(new MockAuthService({ uid: 'author-1', isAdmin: false }));
+            const result = await createVisualRecipeAction('1 Onion');
+            const saved = await service.getRecipe(result.id);
+            assert.strictEqual(saved.visibility, 'unlisted');
+            assert.strictEqual(saved.ownerId, 'author-1');
+        });
+
+        it('forking someone else\'s recipe creates a new doc and does not touch the original', async () => {
+            setAuthService(new MockAuthService({ uid: 'author-1', isAdmin: false }));
+            const original = await createVisualRecipeAction('1 Onion');
+
+            setAuthService(new MockAuthService({ uid: 'forker-1', isAdmin: false }));
+            const fork = await createVisualRecipeAction('1 Onion', original.id);
+
+            assert.notStrictEqual(fork.id, original.id);
+            const forkedRecipe = await service.getRecipe(fork.id);
+            assert.strictEqual(forkedRecipe.ownerId, 'forker-1');
+            assert.strictEqual(forkedRecipe.graph.sourceId, original.id);
+            assert.ok(forkedRecipe.graph.title?.startsWith('Copy of '));
+
+            const originalAfter = await service.getRecipe(original.id);
+            assert.strictEqual(originalAfter.ownerId, 'author-1');
+        });
+
+        it('forking a fork chains sourceId (copy of a copy)', async () => {
+            setAuthService(new MockAuthService({ uid: 'author-1', isAdmin: false }));
+            const original = await createVisualRecipeAction('1 Onion');
+
+            setAuthService(new MockAuthService({ uid: 'forker-1', isAdmin: false }));
+            const fork1 = await createVisualRecipeAction('1 Onion', original.id);
+
+            setAuthService(new MockAuthService({ uid: 'forker-2', isAdmin: false }));
+            const fork2 = await createVisualRecipeAction('1 Onion', fork1.id);
+
+            const fork2Recipe = await service.getRecipe(fork2.id);
+            assert.strictEqual(fork2Recipe.ownerId, 'forker-2');
+            assert.strictEqual(fork2Recipe.graph.sourceId, fork1.id);
+
+            // The first fork must remain owned by forker-1, untouched by the second fork.
+            const fork1Recipe = await service.getRecipe(fork1.id);
+            assert.strictEqual(fork1Recipe.ownerId, 'forker-1');
+        });
+
+        it('forking an anon-owned public recipe does not grant ownership of the original', async () => {
+            setAuthService(new MockAuthService(null));
+            const original = await createVisualRecipeAction('1 Onion');
+            const originalRecipe = await service.getRecipe(original.id);
+            assert.strictEqual(originalRecipe.ownerId, undefined);
+            assert.strictEqual(originalRecipe.visibility, 'public');
+
+            setAuthService(new MockAuthService({ uid: 'forker-1', isAdmin: false }));
+            const fork = await createVisualRecipeAction('1 Onion', original.id);
+
+            const forkedRecipe = await service.getRecipe(fork.id);
+            assert.strictEqual(forkedRecipe.ownerId, 'forker-1');
+
+            const originalAfter = await service.getRecipe(original.id);
+            assert.strictEqual(originalAfter.ownerId, undefined, 'anon original must remain unowned');
+            assert.strictEqual(originalAfter.ownerName, 'Anon');
+        });
+    });
 });
 
 describe('looksLikeUrl', () => {

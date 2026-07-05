@@ -31,6 +31,10 @@ import {
     currentShortlistIndex,
 } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
+import { isLeafNode } from '@/lib/recipe-lanes/graph-logic';
+
+// Scale factor applied to leaf nodes when the "smaller leaf nodes" setting is on.
+const LEAF_SCALE = 0.7;
 
 export const MinimalNode: React.FC<any> = ({
     data, selected, isConnectable, id, dragging
@@ -59,6 +63,13 @@ export const MinimalNode: React.FC<any> = ({
   // selector re-renders only when this specific node changes.
   const storeNode = useRecipeStore(s => s.graph?.nodes.find(n => n.id === id));
   const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
+
+  // Global "smaller leaf nodes" setting: shrink nodes with out-degree 0.
+  // Both selectors return stable primitives, so this node only re-renders when
+  // its own leaf-ness or the global toggle actually changes.
+  const smallerLeafNodes = useRecipeStore(s => s.smallerLeafNodes);
+  const isLeaf = useRecipeStore(s => isLeafNode(s.graph?.nodes, id));
+  const isSmall = smallerLeafNodes && isLeaf;
 
   // Use storeNode when available (it has up-to-date shortlistIndex after cycling).
   // Fall back to data prop for nodes not yet in the store.
@@ -152,11 +163,23 @@ export const MinimalNode: React.FC<any> = ({
       onPointerCancelCapture: handlePointerUpOrCancel
   };
 
-  if (iconTheme === 'modern' || iconTheme === 'modern_clean') {
-      return <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
-  }
+  const inner = (iconTheme === 'modern' || iconTheme === 'modern_clean')
+      ? <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />
+      : <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
 
-  return <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
+  if (!isSmall) return inner;
+
+  // Scale the whole node (icon + label) uniformly around its centre. This is a
+  // pure visual shrink — the ReactFlow layout slot keeps its size, so nodes stay
+  // in place with a little extra breathing room. Theme-agnostic (classic/modern).
+  return (
+      <div
+          className="transition-transform duration-300"
+          style={{ transform: `scale(${LEAF_SCALE})`, transformOrigin: 'center center' }}
+      >
+          {inner}
+      </div>
+  );
 };
 
 export default memo(MinimalNode);

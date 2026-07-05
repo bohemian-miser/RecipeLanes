@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { calculateBridgeEdges, MinimalEdge } from '../lib/recipe-lanes/graph-logic';
+import { calculateBridgeEdges, MinimalEdge, getLeafNodeIds, isLeafNode } from '../lib/recipe-lanes/graph-logic';
 
 describe('Graph Logic', () => {
     it('should bridge edges when a middle node is deleted', () => {
@@ -66,5 +66,47 @@ describe('Graph Logic', () => {
         const result = calculateBridgeEdges('2', edges, factory);
 
         assert.strictEqual(result.length, 0);
+    });
+});
+
+describe('Leaf detection (out-degree 0)', () => {
+    // Edge direction is inputId -> node.id, so a node whose id appears in no
+    // other node's `inputs` has out-degree 0 and is a leaf.
+    // ingredients (a, b) -> mix (c) -> plate (d).  d is the sole leaf.
+    const chain = [
+        { id: 'a' },
+        { id: 'b' },
+        { id: 'c', inputs: ['a', 'b'] },
+        { id: 'd', inputs: ['c'] },
+    ];
+
+    it('getLeafNodeIds returns only terminal nodes', () => {
+        const leaves = getLeafNodeIds(chain);
+        assert.deepStrictEqual([...leaves].sort(), ['d']);
+    });
+
+    it('getLeafNodeIds finds multiple independent terminals', () => {
+        // c and d are both consumed by nothing -> both leaves.
+        const graph = [
+            { id: 'a' },
+            { id: 'c', inputs: ['a'] },
+            { id: 'd', inputs: ['a'] },
+        ];
+        assert.deepStrictEqual([...getLeafNodeIds(graph)].sort(), ['c', 'd']);
+    });
+
+    it('getLeafNodeIds treats an isolated node as a leaf', () => {
+        const leaves = getLeafNodeIds([{ id: 'lonely' }]);
+        assert.deepStrictEqual([...leaves], ['lonely']);
+    });
+
+    it('isLeafNode agrees with getLeafNodeIds', () => {
+        assert.strictEqual(isLeafNode(chain, 'd'), true);
+        assert.strictEqual(isLeafNode(chain, 'a'), false); // consumed by c
+        assert.strictEqual(isLeafNode(chain, 'c'), false); // consumed by d
+    });
+
+    it('isLeafNode returns false when nodes is undefined', () => {
+        assert.strictEqual(isLeafNode(undefined, 'x'), false);
     });
 });

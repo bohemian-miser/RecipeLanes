@@ -248,4 +248,23 @@ describe('useRecipeStore', () => {
             assert.equal(s.status, 'idle');
         });
     });
+
+    describe('smallerLeafNodes setting', () => {
+        it('defaults to false', () => {
+            assert.equal(useRecipeStore.getState().smallerLeafNodes, false);
+        });
+
+        it('setSmallerLeafNodes toggles the flag', () => {
+            useRecipeStore.getState().setSmallerLeafNodes(true);
+            assert.equal(useRecipeStore.getState().smallerLeafNodes, true);
+            useRecipeStore.getState().setSmallerLeafNodes(false);
+            assert.equal(useRecipeStore.getState().smallerLeafNodes, false);
+        });
+
+        it('reset restores smallerLeafNodes to false', () => {
+            useRecipeStore.getState().setSmallerLeafNodes(true);
+            useRecipeStore.getState().reset();
+            assert.equal(useRecipeStore.getState().smallerLeafNodes, false);
+        });
+    });
 });

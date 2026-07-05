@@ -83,7 +83,8 @@ function RecipeLanesContent() {
   const layoutMode = useRecipeStore(s => s.nodeLayout);
   const layoutModeRestoredRef = useRef(false);
   const iconTheme = useRecipeStore(s => s.iconStyle) as 'classic' | 'modern' | 'modern_clean';
-  const { setNodeLayout, setIconStyle, setLineStyle } = useRecipeStore.getState();
+  const smallerLeafNodes = useRecipeStore(s => s.smallerLeafNodes);
+  const { setNodeLayout, setIconStyle, setLineStyle, setSmallerLeafNodes } = useRecipeStore.getState();
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
@@ -1119,6 +1120,19 @@ const handleVisualize = async () => {
                              <option value="step">Step</option>
                              <option value="bezier">Curve</option>
                          </select>
+                    </div>
+
+                    {/* Smaller Leaf Nodes */}
+                    <div className="flex items-center gap-2 border-r border-zinc-200 pr-4">
+                         <span className="text-xs font-mono text-zinc-400">Leaves</span>
+                         <button
+                             onClick={() => setSmallerLeafNodes(!smallerLeafNodes)}
+                             className={`text-xs px-2 py-1 rounded font-medium transition-colors ${smallerLeafNodes ? 'bg-yellow-100 text-yellow-700' : 'bg-zinc-50 border border-zinc-200 text-zinc-500'}`}
+                             title="Render leaf nodes (final steps nothing else uses) smaller"
+                             aria-pressed={smallerLeafNodes}
+                         >
+                             {smallerLeafNodes ? 'Small' : 'Normal'}
+                         </button>
                     </div>
 
                     {/* Spacing Slider */}

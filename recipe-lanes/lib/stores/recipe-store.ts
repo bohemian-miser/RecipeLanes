@@ -63,6 +63,8 @@ interface RecipeState {
     iconStyle: IconStyleId;
     lineStyle: LineStyleId;
     nodeLayout: LayoutModeId;
+    /** When true, leaf nodes (out-degree 0, e.g. the finished dish) render smaller. Global view setting. */
+    smallerLeafNodes: boolean;
     backgrounds: BackgroundElementId[];
     activePresetId: string;
     undoStack: RecipeGraph[];
@@ -146,6 +148,7 @@ interface RecipeActions {
     setIconStyle: (style: IconStyleId) => void;
     setLineStyle: (style: LineStyleId) => void;
     setNodeLayout: (layout: LayoutModeId) => void;
+    setSmallerLeafNodes: (smaller: boolean) => void;
     toggleBackground: (bg: BackgroundElementId) => void;
 }
 
@@ -241,6 +244,7 @@ const initialState: RecipeState = {
     iconStyle: 'classic',
     lineStyle: 'straight',
     nodeLayout: 'dagre',
+    smallerLeafNodes: false,
     backgrounds: [],
     activePresetId: 'classic',
     undoStack: [],
@@ -386,5 +390,6 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
     setIconStyle: (iconStyle) => set({ iconStyle, activePresetId: 'custom' }),
     setLineStyle: (lineStyle) => set({ lineStyle, activePresetId: 'custom' }),
     setNodeLayout: (nodeLayout) => set({ nodeLayout, activePresetId: 'custom' }),
+    setSmallerLeafNodes: (smallerLeafNodes) => set({ smallerLeafNodes }),
     toggleBackground: (bg) => set((state) => { const backgrounds = state.backgrounds.includes(bg) ? state.backgrounds.filter(b => b !== bg) : [...state.backgrounds, bg]; return { backgrounds, activePresetId: 'custom' }; }),
 }));

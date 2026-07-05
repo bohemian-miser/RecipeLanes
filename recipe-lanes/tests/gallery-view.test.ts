@@ -53,6 +53,37 @@ describe('Gallery View (Memory)', () => {
         assert.ok(!myTitles.includes('Other Public'));
     });
 
+    // Backs the gallery `?filter=source&sourceId=...` view (issue #11): the
+    // "Existing Copies" banner links here, and the gallery delegates to
+    // checkExistingCopies to show only the current user's copies of a source.
+    it('should filter my copies of a given source recipe (issue #11)', async () => {
+        const sourceId = 'src-1';
+        await service.saveRecipe({ ...mockGraph, title: 'My Copy A', sourceId }, undefined, 'me', 'private');
+        await service.saveRecipe({ ...mockGraph, title: 'My Copy B', sourceId }, undefined, 'me', 'private');
+        // A copy of a different source — must not appear.
+        await service.saveRecipe({ ...mockGraph, title: 'Copy Of Other Source', sourceId: 'src-2' }, undefined, 'me', 'private');
+        // Another user's copy of the same source — must not appear.
+        await service.saveRecipe({ ...mockGraph, title: 'Their Copy', sourceId }, undefined, 'someone-else', 'private');
+        // An unrelated recipe with no sourceId — must not appear.
+        await service.saveRecipe({ ...mockGraph, title: 'Not A Copy' }, undefined, 'me', 'private');
+
+        const copies = await service.checkExistingCopies(sourceId, 'me');
+        const titles = copies.map((r: any) => r.title);
+
+        assert.strictEqual(copies.length, 2);
+        assert.ok(titles.includes('My Copy A'));
+        assert.ok(titles.includes('My Copy B'));
+        assert.ok(!titles.includes('Copy Of Other Source'));
+        assert.ok(!titles.includes('Their Copy'));
+        assert.ok(!titles.includes('Not A Copy'));
+    });
+
+    it('should return no copies for a source that has none (issue #11)', async () => {
+        await service.saveRecipe({ ...mockGraph, title: 'Solo', sourceId: 'src-9' }, undefined, 'me', 'private');
+        const copies = await service.checkExistingCopies('src-does-not-exist', 'me');
+        assert.strictEqual(copies.length, 0);
+    });
+
     it('should handle starred recipes', async () => {
         const id1 = await service.saveRecipe({ ...mockGraph, title: 'Starred One' }, undefined, 'other', 'public');
         await service.toggleStar(id1, 'me');

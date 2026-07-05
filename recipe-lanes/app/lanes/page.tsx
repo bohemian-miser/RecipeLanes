@@ -871,8 +871,7 @@ const handleVisualize = async () => {
                 {/* Existing Copies Banner - Hide if Fork Prompt is active */}
                 {existingCopies && existingCopies.length > 0 && !showForkPrompt && !existingCopiesDismissed && (
                     <Banner color="blue" onDismiss={() => setExistingCopiesDismissed(true)}>
-                        {/* TODO: Filter by sourceId when implemented */}
-                        <span>You have <Link href="/gallery?filter=mine" className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length > 1 ? 'copies' : 'copy'}</Link> of this recipe. <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">Go to latest?</Link></span>
+                        <span>You have <Link href={`/gallery?filter=source&sourceId=${recipeId}`} className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length > 1 ? 'copies' : 'copy'}</Link> of this recipe. <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">Go to latest?</Link></span>
                         <div className="flex flex-wrap justify-center gap-2">
                             <button onClick={handleFork} className="underline font-bold hover:text-white">
                                 Save another copy?
@@ -891,8 +890,7 @@ const handleVisualize = async () => {
                 {/* Fork Prompt Banner (Destructive Action Intercept) */}
                 {showForkPrompt && existingCopies && existingCopies.length > 0 && (
                     <Banner color="blue" onDismiss={() => setShowForkPrompt(false)}>
-                        {/* TODO: Filter by sourceId when implemented */}
-                        <span>You have <Link href="/gallery?filter=mine" className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length === 1 ? 'copy' : 'copies'}</Link> of this recipe, to make changes, open one of these. Any further changes won&apos;t be saved.</span>
+                        <span>You have <Link href={`/gallery?filter=source&sourceId=${recipeId}`} className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length === 1 ? 'copy' : 'copies'}</Link> of this recipe, to make changes, open one of these. Any further changes won&apos;t be saved.</span>
                         <div className="flex gap-2">
                             <button onClick={handleFork} className="underline font-bold hover:text-white">
                                 Save another copy

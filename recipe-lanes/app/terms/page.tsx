@@ -72,11 +72,13 @@ export default function TermsPage() {
                         2. Your content
                     </h2>
                     <p>
-                        You retain ownership of the recipe text and images you submit. By
-                        submitting content you grant us the limited rights needed to
-                        store, process, and display it back to you and — where you choose
-                        to publish a recipe — to other users. Do not submit content you do
-                        not have the right to share.
+                        You retain ownership of the recipe text you submit. Images you
+                        upload (for example a photo of a recipe) are processed only to
+                        extract the recipe text and are not stored. By submitting content
+                        you grant us the limited rights needed to store, process, and
+                        display your recipes back to you and to make them available to
+                        others as described in the Privacy Policy below. Do not submit
+                        content you do not have the right to share.
                     </p>
                 </section>
 
@@ -123,8 +125,10 @@ export default function TermsPage() {
                         <strong className="text-zinc-100">What we collect.</strong> When
                         you sign in with Google we receive your account&rsquo;s basic
                         profile (name, email, and identifier) to create your account. We
-                        store the recipes and images you create, and basic usage/diagnostic
-                        data needed to operate the Service.
+                        store the recipes you create and basic usage/diagnostic data
+                        needed to operate the Service. Images you upload are processed to
+                        extract recipe text and are not stored. Recipes are not currently
+                        encrypted at rest.
                     </p>
                     <p>
                         <strong className="text-zinc-100">Cookies &amp; local
@@ -135,13 +139,38 @@ export default function TermsPage() {
                     <p>
                         <strong className="text-zinc-100">Sharing.</strong> We do not sell
                         your personal information. We share data with infrastructure and AI
-                        providers only as needed to run the Service. Recipes are private
-                        unless you choose to publish them.
+                        providers only as needed to run the Service.
+                    </p>
+                    <p>
+                        <strong className="text-zinc-100">Recipe visibility.</strong> If
+                        you are not signed in, recipes you create are submitted for review
+                        and may be published publicly by our team if they are suitable. If
+                        you are signed in, your recipes are unlisted by default and are not
+                        shown publicly, though they remain visible to our staff to operate
+                        and moderate the Service.
                     </p>
                     <p>
                         <strong className="text-zinc-100">Your choices.</strong> You may
                         request deletion of your account and associated recipes by
                         contacting us.
+                    </p>
+                </section>
+
+                <section className="space-y-3">
+                    <h2 className="text-lg font-semibold text-zinc-100">
+                        Open source &amp; license
+                    </h2>
+                    <p>
+                        Recipe Lanes is free software, licensed under the GNU Affero
+                        General Public License, version 3. You can review or obtain the
+                        source code at{' '}
+                        <a
+                            href="https://github.com/Bohemian-Miser/RecipeLanes"
+                            className="text-yellow-500 underline underline-offset-2 hover:text-yellow-400"
+                        >
+                            github.com/Bohemian-Miser/RecipeLanes
+                        </a>
+                        .
                     </p>
                 </section>
 

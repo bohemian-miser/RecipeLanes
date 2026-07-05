@@ -5,7 +5,7 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { RecipeGraph, RecipeNode } from '../lib/recipe-lanes/types';
-import { getNodeStatus, setNodeStatus, prependToShortlist, buildShortlistEntry, toRecipeIcon } from '../lib/recipe-lanes/model-utils';
+import { getNodeStatus, setNodeStatus, prependToShortlist, buildShortlistEntry, toRecipeIcon, getThemeCanvas } from '../lib/recipe-lanes/model-utils';
 
 function makeNode(id: string, overrides: Partial<RecipeNode> = {}): RecipeNode {
     return {
@@ -88,5 +88,28 @@ describe('prependToShortlist', () => {
         const res = prependToShortlist([e1, e2], makeEntry('new'));
         assert.equal(res.length, 3);
         assert.equal(res[0].icon.id, 'new');
+    });
+});
+
+describe('getThemeCanvas (butcher-paper theme, issue #111)', () => {
+    const DEFAULT = { background: 'transparent', patternColor: '#f4f4f5' };
+
+    it('returns a warm kraft-paper pane for butcher_paper', () => {
+        const canvas = getThemeCanvas('butcher_paper');
+        assert.equal(canvas.background, '#e9dcc3');
+        // The dots must stay a distinct colour so they remain visible on paper.
+        assert.notEqual(canvas.patternColor, DEFAULT.patternColor);
+        assert.equal(canvas.patternColor, '#cbb892');
+    });
+
+    it('leaves the classic/modern themes on the original transparent pane', () => {
+        for (const theme of ['classic', 'modern', 'modern_clean'] as const) {
+            assert.deepEqual(getThemeCanvas(theme), DEFAULT);
+        }
+    });
+
+    it('falls back to the default canvas for unknown or missing themes', () => {
+        assert.deepEqual(getThemeCanvas(undefined), DEFAULT);
+        assert.deepEqual(getThemeCanvas('nonsense' as any), DEFAULT);
     });
 });

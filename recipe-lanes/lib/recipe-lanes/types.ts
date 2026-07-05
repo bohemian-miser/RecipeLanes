@@ -139,7 +139,7 @@ export interface RecipeNode {
   y?: number;
   rotation?: number;
   textPos?: 'bottom' | 'top' | 'left' | 'right';
-  iconTheme?: 'classic' | 'modern' | 'modern_clean';
+  iconTheme?: 'classic' | 'modern' | 'modern_clean' | 'butcher_paper';
 }
 
 export interface NodeLayout {
@@ -222,7 +222,7 @@ export interface LayoutGraph {
 
 // --- Visual Config & Presets ---
 
-export type IconStyleId = 'classic' | 'modern' | 'modern_clean' | 'timeline-circle';
+export type IconStyleId = 'classic' | 'modern' | 'modern_clean' | 'butcher_paper' | 'timeline-circle';
 export type LineStyleId = 'straight' | 'floating' | 'step' | 'bezier' | 'timeline-path';
 export type LayoutModeId = 'dagre' | 'dagre-lr' | 'timeline' | 'swimlanes' | 'repulsive' | 'timeline2';
 export type BackgroundElementId = 'timeline-grid' | 'lane-bands-horizontal' | 'lane-bands-vertical';

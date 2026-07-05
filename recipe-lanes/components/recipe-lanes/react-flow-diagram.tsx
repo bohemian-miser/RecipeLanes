@@ -36,7 +36,7 @@ import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
-import { getNodeIconUrl, getNodeIconId, preserveNodeShortlist, getNodeShortlistLength } from '../../lib/recipe-lanes/model-utils';
+import { getNodeIconUrl, getNodeIconId, preserveNodeShortlist, getNodeShortlistLength, getThemeCanvas } from '../../lib/recipe-lanes/model-utils';
 import MinimalNode from './nodes/minimal-node';
 import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
@@ -66,7 +66,7 @@ interface ReactFlowDiagramProps {
   isLoggedIn?: boolean;
   onNotify?: (msg: string) => void;
   isOwner?: boolean; // YOLO: Added to support auto-save on move logic
-  iconTheme?: 'classic' | 'modern' | 'modern_clean';
+  iconTheme?: 'classic' | 'modern' | 'modern_clean' | 'butcher_paper';
 }
 
 export interface ReactFlowDiagramHandle {
@@ -94,6 +94,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const mode = useRecipeStore(s => s.nodeLayout);
     const backgrounds = useRecipeStore(s => s.backgrounds);
     const iconTheme = iconStyle;
+    const themeCanvas = getThemeCanvas(iconTheme);
 
     // Cast hooks to avoid implicit any in callbacks
     const [nodes, setNodesRaw, onNodesChange] = useNodesState([]);
@@ -796,7 +797,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     };
 
     return (
-        <div className="w-full h-full touch-none" ref={flowWrapper}>
+        <div className="w-full h-full touch-none" ref={flowWrapper} style={{ backgroundColor: themeCanvas.background }}>
             {layoutReady && <div data-testid="rf-ready" style={{ display: 'none' }} />}
             <ReactFlow
                 nodes={nodes}
@@ -823,7 +824,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             >
                 {timelineData
                     ? <TimelineBackground data={timelineData} />
-                    : <Background color="#f4f4f5" gap={20} />
+                    : <Background color={themeCanvas.patternColor} gap={20} />
                 }
                 <Controls showInteractive={false} />
                 <Panel position="top-right" className="flex gap-2">

@@ -82,7 +82,7 @@ function RecipeLanesContent() {
   const [jsonText, setJsonText] = useState('');
   const layoutMode = useRecipeStore(s => s.nodeLayout);
   const layoutModeRestoredRef = useRef(false);
-  const iconTheme = useRecipeStore(s => s.iconStyle) as 'classic' | 'modern' | 'modern_clean';
+  const iconTheme = useRecipeStore(s => s.iconStyle) as 'classic' | 'modern' | 'modern_clean' | 'butcher_paper';
   const { setNodeLayout, setIconStyle, setLineStyle } = useRecipeStore.getState();
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
@@ -1076,6 +1076,7 @@ const handleVisualize = async () => {
                             <option value="classic">Classic</option>
                             <option value="modern">Modern</option>
                             <option value="modern_clean">Clean</option>
+                            <option value="butcher_paper">Butcher&apos;s Paper</option>
                         </select>
                     </div>
                     

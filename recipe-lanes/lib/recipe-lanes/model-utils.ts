@@ -32,6 +32,34 @@ export function getNodeTheme(node: RecipeNode): IconStyleId {
 }
 
 /**
+ * Visual tokens for the diagram canvas, keyed by the selected display theme.
+ * `background` is applied to the diagram pane wrapper and `patternColor` is the
+ * ReactFlow dot-grid colour.
+ */
+export interface ThemeCanvas {
+    /** CSS colour for the diagram pane background. */
+    background: string;
+    /** CSS colour for the ReactFlow dot-grid pattern. */
+    patternColor: string;
+}
+
+/** The original canvas: a transparent pane with light-grey dots. */
+const DEFAULT_THEME_CANVAS: ThemeCanvas = { background: 'transparent', patternColor: '#f4f4f5' };
+
+/** Butcher's-paper theme (issue #111): a warm kraft-paper pane with subtle darker dots. */
+const BUTCHER_PAPER_CANVAS: ThemeCanvas = { background: '#e9dcc3', patternColor: '#cbb892' };
+
+/**
+ * Returns the canvas tokens for a display theme. Only `butcher_paper` overrides
+ * the defaults — every other theme (classic/modern/modern_clean and any unknown
+ * or missing value) keeps the original transparent pane + light-grey dots, so
+ * existing themes render exactly as before.
+ */
+export function getThemeCanvas(theme?: IconStyleId | string): ThemeCanvas {
+    return theme === 'butcher_paper' ? BUTCHER_PAPER_CANVAS : DEFAULT_THEME_CANVAS;
+}
+
+/**
  * Returns the HyDE queries for a node, or an empty array when none are present.
  */
 export function getNodeHydeQueries(node: RecipeNode): string[] {

@@ -3,6 +3,8 @@ debug/
 # gemini-cli settings
 .gemini/
 !.gemini/skills/
+!.gemini/agents/
+!.gemini/commands/
 *.log
 # GitHub App credentials
 gha-creds-*.json

@@ -1,0 +1,22 @@
+# Invoked via: /resolve-issue or /resolve-issue <issue-number>
+description = "Autonomous issue-solving routine matching the RecipeLanes issue-solving workflow."
+
+prompt = """
+You are the ORCHESTRATOR for an autonomous run on the RecipeLanes repo.
+Please run the issue solver routine. If an issue number is provided in {{args}}, focus on solving that specific issue or override the default issue priority. Otherwise, follow the default issue order: #151, #158, #156, #147, #146.
+
+Your instructions:
+1. FIRST, read and follow GEMINI.md and CLAUDE.md.
+2. Delegate aggressively using subagents (like codebase_investigator or generalist) for mechanical lookup, test runs, and boilerplate edits.
+3. Dedup robustly to ensure no duplicate PRs or branch conflicts exist.
+4. If an issue is already resolved on main, comment with evidence and close it.
+5. Implement the smallest change that closes the issue, adhering to god-file constraints.
+6. Tests are mandatory. Pure logic goes to test:unit:pure; data-layer/Firestore goes to emulator integration.
+7. Perform local pre-checks (lint, typecheck, test:unit:pure) before committing. Never commit with --no-verify.
+8. Push the branch (fix/issue-<n>-slug or feat/issue-<n>-slug) and open a PR with "Closes #<n>".
+9. Post a comment on the issue.
+10. Block and watch the PR CI check runs. Verify that fast-checks, integration, and e2e executed.
+11. Output a final report containing the PR URL and CI outcome.
+
+Issue number or override parameters: {{args}}
+"""

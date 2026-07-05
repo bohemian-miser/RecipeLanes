@@ -26,8 +26,8 @@ import { LogoutButton } from '@/components/logout-button';
 
 export const dynamic = 'force-dynamic';
 
-export default async function GalleryPage({ searchParams }: { searchParams: Promise<{ q?: string; filter?: string }> }) {
-  const { q: query, filter: rawFilter } = await searchParams;
+export default async function GalleryPage({ searchParams }: { searchParams: Promise<{ q?: string; filter?: string; sourceId?: string }> }) {
+  const { q: query, filter: rawFilter, sourceId } = await searchParams;
   const filter = rawFilter || 'public';
   const session = await getAuthService().verifyAuth();
   
@@ -38,6 +38,11 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
       if (filter === 'mine') {
           if (!session) return <Login />;
           recipes = await getDataService().getUserRecipes(session.uid);
+      } else if (filter === 'source') {
+          if (!session) return <Login />;
+          // My copies of a specific source recipe (issue #11). Without a
+          // sourceId there is nothing to filter on, so show an empty result.
+          recipes = sourceId ? await getDataService().checkExistingCopies(sourceId, session.uid) : [];
       } else if (filter === 'starred') {
           if (!session) return <Login />;
           recipes = await getDataService().getStarredRecipes(session.uid);
@@ -136,10 +141,10 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-zinc-800 pb-6">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight text-zinc-100 flex items-center gap-3">
-                    {filter === 'mine' ? 'My Recipes' : filter === 'starred' ? 'Starred Recipes' : 'Community Gallery'}
+                    {filter === 'mine' ? 'My Recipes' : filter === 'source' ? 'My Copies' : filter === 'starred' ? 'Starred Recipes' : 'Community Gallery'}
                 </h1>
                 <p className="text-zinc-500 text-sm mt-1">
-                    {filter === 'mine' ? 'Recipes you created' : filter === 'starred' ? 'Your favorites' : 'Explore recipes visualized by the community'}
+                    {filter === 'mine' ? 'Recipes you created' : filter === 'source' ? 'Your copies of this recipe' : filter === 'starred' ? 'Your favorites' : 'Explore recipes visualized by the community'}
                 </p>
             </div>
 

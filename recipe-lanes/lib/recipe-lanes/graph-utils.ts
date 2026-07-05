@@ -18,6 +18,21 @@
 import { Position, Node } from 'reactflow';
 import { getNodeIconMetadata, getNodeTheme } from './model-utils';
 
+/**
+ * A handle position handed to us by React Flow is only usable when both
+ * coordinates are finite numbers. During hydration (after a save/reload, before
+ * React Flow has measured each node's handle bounds) RF can pass non-finite
+ * coordinates — most commonly `NaN` from `undefined` bounds arithmetic. Because
+ * `typeof NaN === 'number'`, a plain `typeof` guard lets those through, and they
+ * poison the intersection math below into `NaN` edge endpoints. That renders as
+ * arrows "detached" from their nodes or pointing at (0,0)-ish garbage — the
+ * intermittent-after-reload symptom in issue #30. Treat a non-finite handle
+ * position as "no handle position" and fall back to node-geometry-derived centers.
+ */
+export function isFiniteHandlePos(pos?: { x: number; y: number } | null): pos is { x: number; y: number } {
+    return !!pos && Number.isFinite(pos.x) && Number.isFinite(pos.y);
+}
+
 // Helper to get center
 function getCenter(node: Node, handlePos?: { x: number, y: number }) {
     // For MinimalNode, we know exact geometry relative to node position
@@ -208,24 +223,31 @@ export function getEdgeParams(
     sourceHandlePos?: { x: number, y: number },
     targetHandlePos?: { x: number, y: number }
 ) {
-    const c1 = getCenter(source, sourceHandlePos);
-    const c2 = getCenter(target, targetHandlePos);
+    // Discard non-finite handle positions (see isFiniteHandlePos) so a single
+    // hydration-time NaN can't propagate into every derived coordinate below.
+    // Sanitizing here — the sole public entry point — covers getCenter, getBBox
+    // and getRadius in one place.
+    const sHandle = isFiniteHandlePos(sourceHandlePos) ? sourceHandlePos : undefined;
+    const tHandle = isFiniteHandlePos(targetHandlePos) ? targetHandlePos : undefined;
+
+    const c1 = getCenter(source, sHandle);
+    const c2 = getCenter(target, tHandle);
 
     let sInter, tInter;
 
-    const bbox1 = getBBox(source, sourceHandlePos);
+    const bbox1 = getBBox(source, sHandle);
     if (bbox1) {
         sInter = getRectIntersection(c1, c2, bbox1);
     } else {
-        const r1 = getRadius(source, !!sourceHandlePos);
+        const r1 = getRadius(source, !!sHandle);
         sInter = getNodeIntersection(c1, c2, r1);
     }
 
-    const bbox2 = getBBox(target, targetHandlePos);
+    const bbox2 = getBBox(target, tHandle);
     if (bbox2) {
         tInter = getRectIntersection(c2, c1, bbox2);
     } else {
-        const r2 = getRadius(target, !!targetHandlePos);
+        const r2 = getRadius(target, !!tHandle);
         tInter = getNodeIntersection(c2, c1, r2);
     }
 

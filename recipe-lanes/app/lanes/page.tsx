@@ -809,7 +809,7 @@ const handleVisualize = async () => {
                     )}
                     {ownerId && (
                         <span className="text-[9px] text-zinc-600 font-mono ml-2">
-                           by {formatDisplayName(ownerId, ownerName)}
+                           by {isAnonymous ? 'Anon' : formatDisplayName(ownerId, ownerName)}
                         </span>
                     )}
                 </div>
@@ -1152,7 +1152,13 @@ const handleVisualize = async () => {
 
                             {/* Issue #146: publish anonymously (hide the author's name). */}
                             <button
-                                onClick={() => diagramRef.current?.toggleAnonymous()}
+                                onClick={() => {
+                                    // Issue #146: optimistically flip the flag so both this button
+                                    // and the "by …" byline update instantly; the save (triggered
+                                    // below) persists it and stays correct via anonymousRef.
+                                    if (graph) setGraph({ ...graph, anonymous: !isAnonymous });
+                                    diagramRef.current?.toggleAnonymous();
+                                }}
                                 className={`flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded shadow-sm border transition-colors font-mono ${isAnonymous ? 'bg-yellow-500/10 border-yellow-500 text-yellow-600' : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'}`}
                                 title={isAnonymous ? 'Published anonymously — click to show your name' : 'Publish anonymously (hide your name)'}
                             >

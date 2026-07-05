@@ -604,14 +604,19 @@ const handleVisualize = async () => {
 
     const currentId = searchParams.get('id');
 
-    // Issue #156: when the recipe ALREADY EXISTS, editing its source text and
-    // pressing Forge should be an INCREMENTAL AI adjust (existing graph + node
+    // Issue #156: when the user re-forges their OWN existing recipe, editing its
+    // source text should be an INCREMENTAL AI adjust (existing graph + node
     // positions preserved via the patch branch) rather than a full re-parse.
     // We translate the text edit into a short instruction for the same
     // adjustRecipeAction that handleAdjust uses. Big rewrites that can't be
     // summarized within the instruction cap fall through to the full parse
     // below (a positions reset is acceptable for a major rewrite).
-    if (currentId && graph) {
+    //
+    // Gate on OWNERSHIP: a non-owner pressing Forge is forking someone else's
+    // recipe (and an anon re-forge mints a fresh recipe) — both must keep the
+    // full-parse path below, which handles the fork/create.
+    const isOwnedByUser = !!user && !!ownerId && user.uid === ownerId;
+    if (currentId && graph && isOwnedByUser) {
         const instruction = buildRecipeEditInstruction(graph.originalText || '', recipeText);
         if (instruction === null) {
             // No line-level change — nothing to re-forge. Leave the graph and

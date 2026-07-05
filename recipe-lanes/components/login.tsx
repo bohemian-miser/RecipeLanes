@@ -17,11 +17,23 @@
 
 'use client';
 
+import { useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
 import { LogIn } from 'lucide-react';
+import { canProceedToSignIn } from '@/lib/legal/consent';
 
 export function Login() {
   const { signIn, error } = useAuth();
+  const [agreed, setAgreed] = useState(false);
+
+  // New users have no prior consent record, so signing in requires ticking the box.
+  const canSignIn = canProceedToSignIn(agreed);
+
+  const handleSignIn = () => {
+    if (!canSignIn) return;
+    signIn();
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
@@ -29,16 +41,38 @@ export function Login() {
         <p className="mb-4">AUTHENTICATION REQUIRED</p>
         <p>You must be logged in to forge new icons.</p>
       </div>
-      
+
       {error && (
         <div className="text-red-400 text-xs font-mono max-w-xs text-center border border-red-900 bg-red-900/10 p-2 rounded">
           {error}
         </div>
       )}
 
+      <label className="flex items-start gap-2 text-xs font-mono text-zinc-400 max-w-xs text-left cursor-pointer">
+        <input
+          type="checkbox"
+          checked={agreed}
+          onChange={(e) => setAgreed(e.target.checked)}
+          className="mt-0.5 accent-yellow-500"
+          aria-label="I agree to the Terms of Service"
+        />
+        <span>
+          I have read and agree to the{' '}
+          <Link
+            href="/terms"
+            target="_blank"
+            className="text-yellow-500 hover:text-yellow-400 underline"
+          >
+            Terms of Service &amp; Privacy
+          </Link>
+          .
+        </span>
+      </label>
+
       <button
-        onClick={signIn}
-        className="flex items-center gap-2 px-6 py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold uppercase tracking-wider rounded transition-all hover:scale-105"
+        onClick={handleSignIn}
+        disabled={!canSignIn}
+        className="flex items-center gap-2 px-6 py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold uppercase tracking-wider rounded transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:bg-yellow-500"
       >
         <LogIn className="w-5 h-5" />
         <span>Sign in with Google</span>

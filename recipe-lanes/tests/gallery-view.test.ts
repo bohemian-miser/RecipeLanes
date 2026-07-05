@@ -53,6 +53,35 @@ describe('Gallery View (Memory)', () => {
         assert.ok(!myTitles.includes('Other Public'));
     });
 
+    it('filters to a user\'s copies of a specific source recipe (issue #11)', async () => {
+        // The source recipe being viewed.
+        const sourceId = await service.saveRecipe({ ...mockGraph, title: 'Original' }, undefined, 'me', 'public');
+
+        // Two of MY copies of that source.
+        await service.saveRecipe({ ...mockGraph, title: 'My Copy 1', sourceId }, undefined, 'me', 'private');
+        await service.saveRecipe({ ...mockGraph, title: 'My Copy 2', sourceId }, undefined, 'me', 'private');
+
+        // Another user's copy of the SAME source — must not leak into my view.
+        await service.saveRecipe({ ...mockGraph, title: 'Their Copy', sourceId }, undefined, 'other', 'private');
+
+        // My copy of a DIFFERENT source — must not appear either.
+        await service.saveRecipe({ ...mockGraph, title: 'Unrelated Copy', sourceId: 'other-source' }, undefined, 'me', 'private');
+
+        const copies = await service.checkExistingCopies(sourceId, 'me');
+        const titles = copies.map((r: any) => r.title).sort();
+
+        assert.deepStrictEqual(titles, ['My Copy 1', 'My Copy 2']);
+        assert.ok(!titles.includes('Their Copy'));
+        assert.ok(!titles.includes('Unrelated Copy'));
+        assert.ok(!titles.includes('Original'));
+    });
+
+    it('returns no copies for a source that has none', async () => {
+        const sourceId = await service.saveRecipe({ ...mockGraph, title: 'Lonely Original' }, undefined, 'me', 'public');
+        const copies = await service.checkExistingCopies(sourceId, 'me');
+        assert.strictEqual(copies.length, 0);
+    });
+
     it('should handle starred recipes', async () => {
         const id1 = await service.saveRecipe({ ...mockGraph, title: 'Starred One' }, undefined, 'other', 'public');
         await service.toggleStar(id1, 'me');

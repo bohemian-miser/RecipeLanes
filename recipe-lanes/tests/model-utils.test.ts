@@ -5,7 +5,15 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { RecipeGraph, RecipeNode } from '../lib/recipe-lanes/types';
-import { getNodeStatus, setNodeStatus, prependToShortlist, buildShortlistEntry, toRecipeIcon } from '../lib/recipe-lanes/model-utils';
+import { getNodeStatus, setNodeStatus, prependToShortlist, buildShortlistEntry, toRecipeIcon, hasNodeIcon, hasPendingIcons } from '../lib/recipe-lanes/model-utils';
+
+/** A node whose current shortlist entry resolves to a real icon (id set). */
+function withIcon(id: string): RecipeNode {
+    return makeNode(id, {
+        iconShortlist: [buildShortlistEntry({ id: `icon-${id}`, visualDescription: `v-${id}` }, 'generated')],
+        shortlistIndex: 0,
+    });
+}
 
 function makeNode(id: string, overrides: Partial<RecipeNode> = {}): RecipeNode {
     return {
@@ -54,6 +62,31 @@ describe('model-utils setNodeStatus/getNodeStatus', () => {
         const changed = setNodeStatus(g, 'c', 'failed');
         assert.equal(changed, false);
         assert.equal(getNodeStatus(g, 'c'), 'failed');
+    });
+});
+
+describe('hasPendingIcons (issue #60 — carrot/pan legend visibility)', () => {
+    it('returns false for a null or empty graph', () => {
+        assert.equal(hasPendingIcons(null), false);
+        assert.equal(hasPendingIcons(makeGraph([])), false);
+    });
+
+    it('returns true when NO node has an icon yet (all placeholders)', () => {
+        const g = makeGraph([makeNode('a'), makeNode('b')]);
+        assert.equal(hasPendingIcons(g), true);
+    });
+
+    it('stays true while SOME icons are still unloaded (the bug: legend vanished once the first icon loaded)', () => {
+        // One node resolved, one still a placeholder → legend must remain visible.
+        const g = makeGraph([withIcon('a'), makeNode('b')]);
+        assert.equal(hasNodeIcon(g.nodes[0]), true);
+        assert.equal(hasNodeIcon(g.nodes[1]), false);
+        assert.equal(hasPendingIcons(g), true);
+    });
+
+    it('returns false only once EVERY node has a resolved icon', () => {
+        const g = makeGraph([withIcon('a'), withIcon('b')]);
+        assert.equal(hasPendingIcons(g), false);
     });
 });
 

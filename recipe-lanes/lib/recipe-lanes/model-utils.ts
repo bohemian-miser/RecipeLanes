@@ -436,6 +436,18 @@ export function hasNodeIcon(node: RecipeNode): boolean {
 }
 
 /**
+ * True when at least one node in the graph is still awaiting its icon — i.e.
+ * rendering a placeholder carrot/pan rather than a resolved icon. Drives the
+ * "🥕 Ingredients / 🍳 Actions" legend: it should stay visible as long as any
+ * icon hasn't loaded, and disappear only once every node has one. Returns
+ * false for a null/empty graph (no placeholders to explain). See issue #60.
+ */
+export function hasPendingIcons(graph: RecipeGraph | null): boolean {
+    if (!graph) return false;
+    return graph.nodes.some(n => !hasNodeIcon(n));
+}
+
+/**
  * Reconstructs the public Firebase Storage URL from a path.
  * In emulator environments (local-project-id), points to the Storage emulator.
  * Format: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{encoded-path}?alt=media

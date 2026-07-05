@@ -32,7 +32,7 @@ import { standardizeIngredientName, formatDisplayName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import { TimelineView } from '@/components/recipe-lanes/timeline-view';
 import type { RecipeGraph, LayoutModeId } from '@/lib/recipe-lanes/types';
-import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients } from '@/lib/recipe-lanes/model-utils';
+import { hasPendingIcons, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera } from 'lucide-react';
@@ -760,7 +760,10 @@ const handleVisualize = async () => {
 
     if (authLoading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 font-mono">Loading...</div>;
   
-  const hasIcons = graph?.nodes.some(n => hasNodeIcon(n));
+  // Show the carrot/pan legend while ANY icon is still unloaded (issue #60):
+  // it must stay up as long as a placeholder is visible, not vanish once the
+  // first icon resolves.
+  const iconsPending = hasPendingIcons(graph ?? null);
   const isPublic = graph?.visibility === 'public';
 
   // Common Nav Item Styles
@@ -1246,7 +1249,7 @@ const handleVisualize = async () => {
                     {/* Desktop Layout (Floating) */}
                     <div className="hidden md:block absolute bottom-4 left-4 p-3 bg-white/90 backdrop-blur rounded-lg shadow-lg border border-zinc-200 text-xs text-zinc-700 pointer-events-auto">
                         <div className="font-bold text-zinc-400 uppercase tracking-widest text-[10px]">Legend</div>
-                        {!hasIcons && (
+                        {iconsPending && (
                             <>
                                 <div className="flex items-center gap-2"><span className="text-xl">🥕</span> Ingredients</div>
                                 <div className="flex items-center gap-2"><span className="text-xl">🍳</span> Actions</div>
@@ -1294,7 +1297,7 @@ const handleVisualize = async () => {
                     <div className="md:hidden flex h-16 bg-white/95 backdrop-blur border-t border-zinc-200 pointer-events-auto">
                         {/* Legend (Left Half) */}
                         <div className="w-1/2 p-2 text-[10px] text-zinc-600 border-r border-zinc-100 flex flex-col justify-center gap-1">
-                            {!hasIcons && <div className="truncate">🥕 Ingredients  🍳 Actions</div>}
+                            {iconsPending && <div className="truncate">🥕 Ingredients  🍳 Actions</div>}
                             <div className="font-bold text-zinc-800">Tap & Hold: Select Branch</div>
                         </div>
                         

@@ -38,6 +38,7 @@ import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
+import { resolveForgeAction } from '@/lib/recipe-lanes/forge-routing';
 import { fileToRecipePhotoDataUrl } from '@/lib/recipe-lanes/image-client';
 import { loadDraft, saveDraft, commitDraftOnForge, clearBlankDraft } from '@/lib/recipe-lanes/draft-persistence';
 import { mintClaimToken, storeClaimToken } from '@/lib/recipe-lanes/claim-token-client';
@@ -593,8 +594,20 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
 const handleVisualize = async () => {
     console.log('Starting visualization...');
     await debugLogAction('Starting visualization...');
-    if (!recipeText.trim()) return;
-    
+
+    // Issue #156: the Forge button "creates" only for a brand-new recipe. Once
+    // the OWNER's recipe already exists, re-forging must UPDATE it through the
+    // same incremental adjust path chat uses (diff-based) — feeding the edited
+    // text as the adjustment prompt — instead of a full re-parse that spawns a
+    // whole new recipe. The input text is left untouched (the onSnapshot listener
+    // owns it). A non-owner viewing a shared recipe still forks/creates a copy.
+    const action = resolveForgeAction({ recipeText, hasExistingRecipe: !!graph, isOwner });
+    if (action === 'noop') return;
+    if (action === 'adjust' && graph) {
+        await applyAdjustment(graph, recipeText);
+        return;
+    }
+
     setStatus('parsing');
     setError(null);
     setGuestBannerDismissed(false);
@@ -694,17 +707,17 @@ const handleVisualize = async () => {
     }
   };
 
-  const handleAdjust = async () => {
-      if (!graph || !chatInput.trim()) return;
-
-      const prompt = chatInput;
-      setChatInput('');
+  // Core incremental-adjustment path, shared by the chat box and — since issue
+  // #156 — the Forge button when a recipe already exists: send the prompt plus
+  // the current graph to the adjuster, apply the diffed graph, and persist. This
+  // deliberately does NOT touch the recipe input text; the caller owns it.
+  const applyAdjustment = async (currentGraph: RecipeGraph, prompt: string) => {
       setStatus('adjusting');
       setError(null);
       addMessage({ role: 'user', content: prompt });
 
       try {
-          const res = await adjustRecipeAction(graph, prompt);
+          const res = await adjustRecipeAction(currentGraph, prompt);
           if (res.error || !res.graph) {
               throw new Error(res.error || 'Failed to adjust graph.');
           }
@@ -722,7 +735,7 @@ const handleVisualize = async () => {
                   localStorage.setItem(`chat_${currentId}`, JSON.stringify(allMessages));
                   saveChatHistoryAction(currentId, allMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })));
               }).catch(e => {
-                  console.error('[handleAdjust] save failed:', e);
+                  console.error('[applyAdjustment] save failed:', e);
                   addMessage({ role: 'assistant', content: `Changes applied locally but failed to save: ${e.message}` });
               });
           }
@@ -732,6 +745,13 @@ const handleVisualize = async () => {
           setError(e.message);
           setStatus('error');
       }
+  };
+
+  const handleAdjust = async () => {
+      if (!graph || !chatInput.trim()) return;
+      const prompt = chatInput;
+      setChatInput('');
+      await applyAdjustment(graph, prompt);
   };
 
     const handleLayoutClick = async (mode: LayoutMode | 'repulsive' | 'timeline2') => {

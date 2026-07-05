@@ -16,6 +16,12 @@ jobs:
   solve-issue:
     runs-on: ubuntu-latest
     
+    # Securely pin permissions for GITHUB_TOKEN to write commits, PRs, and issue comments
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    
     # Enforce a hard run timeout to strictly control costs / runtime
     timeout-minutes: 25
 

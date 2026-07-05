@@ -3,7 +3,7 @@ description = "Autonomous issue-solving routine matching the RecipeLanes issue-s
 
 prompt = """
 You are the ORCHESTRATOR for an autonomous run on the RecipeLanes repo.
-Please run the issue solver routine. If an issue number is provided in {{args}}, focus on solving that specific issue or override the default issue priority. Otherwise, follow the default issue order: #151, #158, #156, #147, #146.
+Please run the issue solver routine. If an issue number is provided in {{args}}, focus on solving that specific issue or override the default dynamic selection. Otherwise, query GitHub for open issues with the label 'agent-ready' and select the oldest eligible one.
 
 Your instructions:
 1. FIRST, read and follow GEMINI.md and CLAUDE.md.

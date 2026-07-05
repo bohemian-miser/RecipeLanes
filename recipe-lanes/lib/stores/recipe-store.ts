@@ -122,10 +122,17 @@ interface RecipeActions {
     undo: () => void;
 
     /**
+     * Applies a partial field patch to a single node, pushing the change onto
+     * the undo stack so it is undoable. No-op when the graph is missing, the
+     * node is absent, or the patch changes nothing. Every other node keeps its
+     * existing object reference (so per-node selectors don't re-render).
+     */
+    updateNode: (nodeId: string, patch: Partial<RecipeNode>) => void;
+
+    /**
      * Sets a single node's visualDescription (the text describing what the
-     * node's icon should depict), pushing the change onto the undo stack so it
-     * is undoable. No-op when the graph is missing, the node is absent, or the
-     * value is unchanged. Every other node keeps its existing object reference.
+     * node's icon should depict). Thin wrapper over updateNode; see it for the
+     * undo / no-op / reference-preservation semantics.
      */
     updateNodeVisualDescription: (nodeId: string, visualDescription: string) => void;
 
@@ -334,18 +341,25 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
         return { graph, undoStack, isDirty: true };
     }),
 
-    updateNodeVisualDescription: (nodeId, visualDescription) => {
+    updateNode: (nodeId, patch) => {
         const { graph, setGraphWithUndo } = get();
         if (!graph) return;
         const idx = graph.nodes.findIndex(n => n.id === nodeId);
         if (idx === -1) return;
         const node = graph.nodes[idx];
-        if (node.visualDescription === visualDescription) return;
+        // No-op if the patch changes nothing (avoids a spurious undo entry).
+        const changed = (Object.keys(patch) as (keyof RecipeNode)[])
+            .some(k => node[k] !== patch[k]);
+        if (!changed) return;
         // Replace only the edited node; all other nodes keep their reference so
         // the per-node selector subscriptions do not needlessly re-render.
         const nodes = graph.nodes.slice();
-        nodes[idx] = { ...node, visualDescription };
+        nodes[idx] = { ...node, ...patch };
         setGraphWithUndo({ ...graph, nodes });
+    },
+
+    updateNodeVisualDescription: (nodeId, visualDescription) => {
+        get().updateNode(nodeId, { visualDescription });
     },
 
     cycleShortlist: (nodeId) => {

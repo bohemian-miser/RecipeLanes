@@ -26,6 +26,20 @@ export function getNodeIngredientName(node: RecipeNode): string {
     return node.visualDescription || node.text;
 }
 
+/**
+ * Builds an ingredient node's display `text` from its structured parts, e.g.
+ * `(2, 'cup', 'Flour') -> '2 cup Flour'`. Collapses the gaps left by a missing
+ * unit. Single source of truth for the label used by serves-scaling and the
+ * ingredient quantity editor.
+ */
+export function buildIngredientText(
+    quantity: number,
+    unit: string | undefined,
+    canonicalName: string,
+): string {
+    return `${quantity} ${unit || ''} ${canonicalName}`.trim().replace(/\s+/g, ' ');
+}
+
 /** Returns the display theme for a node's icon. */
 export function getNodeTheme(node: RecipeNode): IconStyleId {
     return (node.iconTheme as IconStyleId) || 'classic';

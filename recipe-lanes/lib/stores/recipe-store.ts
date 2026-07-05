@@ -121,6 +121,14 @@ interface RecipeActions {
     /** Pops the last snapshot from the undo stack and restores it. */
     undo: () => void;
 
+    /**
+     * Sets a single node's visualDescription (the text describing what the
+     * node's icon should depict), pushing the change onto the undo stack so it
+     * is undoable. No-op when the graph is missing, the node is absent, or the
+     * value is unchanged. Every other node keeps its existing object reference.
+     */
+    updateNodeVisualDescription: (nodeId: string, visualDescription: string) => void;
+
     addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
     clearMessages: () => void;
 
@@ -325,6 +333,20 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
         const graph = undoStack.pop()!;
         return { graph, undoStack, isDirty: true };
     }),
+
+    updateNodeVisualDescription: (nodeId, visualDescription) => {
+        const { graph, setGraphWithUndo } = get();
+        if (!graph) return;
+        const idx = graph.nodes.findIndex(n => n.id === nodeId);
+        if (idx === -1) return;
+        const node = graph.nodes[idx];
+        if (node.visualDescription === visualDescription) return;
+        // Replace only the edited node; all other nodes keep their reference so
+        // the per-node selector subscriptions do not needlessly re-render.
+        const nodes = graph.nodes.slice();
+        nodes[idx] = { ...node, visualDescription };
+        setGraphWithUndo({ ...graph, nodes });
+    },
 
     cycleShortlist: (nodeId) => {
         const state = get();

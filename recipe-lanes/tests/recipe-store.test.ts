@@ -273,4 +273,68 @@ describe('useRecipeStore', () => {
             assert.equal(useRecipeStore.getState().canvasBackground, 'butcher');
         });
     });
+
+    describe('updateNodeVisualDescription (issue #62)', () => {
+        it('updates the target node visualDescription, leaving others untouched', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a'), makeNode('b')]));
+
+            store.updateNodeVisualDescription('a', 'a carrot on a grater');
+
+            const nodes = useRecipeStore.getState().graph!.nodes;
+            assert.equal(nodes.find(n => n.id === 'a')!.visualDescription, 'a carrot on a grater');
+            assert.equal(nodes.find(n => n.id === 'b')!.visualDescription, 'visual-b');
+        });
+
+        it('preserves the object reference of unedited nodes', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a'), makeNode('b')]));
+            const beforeB = useRecipeStore.getState().graph!.nodes.find(n => n.id === 'b')!;
+
+            store.updateNodeVisualDescription('a', 'changed');
+
+            const afterB = useRecipeStore.getState().graph!.nodes.find(n => n.id === 'b')!;
+            assert.equal(afterB, beforeB, 'unedited node keeps its object reference');
+        });
+
+        it('is undoable — pushes the prior graph and undo restores it', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a')]));
+            assert.equal(useRecipeStore.getState().undoStack.length, 0);
+
+            store.updateNodeVisualDescription('a', 'new desc');
+            assert.equal(useRecipeStore.getState().undoStack.length, 1);
+            assert.equal(useRecipeStore.getState().graph!.nodes[0].visualDescription, 'new desc');
+
+            useRecipeStore.getState().undo();
+            assert.equal(useRecipeStore.getState().graph!.nodes[0].visualDescription, 'visual-a');
+        });
+
+        it('is a no-op when the value is unchanged (no undo entry)', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a')]));
+            const before = useRecipeStore.getState().graph!;
+
+            store.updateNodeVisualDescription('a', 'visual-a'); // identical to the default
+
+            assert.equal(useRecipeStore.getState().graph, before, 'graph reference unchanged');
+            assert.equal(useRecipeStore.getState().undoStack.length, 0);
+        });
+
+        it('is a no-op when the node id is not found', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a')]));
+            const before = useRecipeStore.getState().graph!;
+
+            store.updateNodeVisualDescription('missing', 'x');
+
+            assert.equal(useRecipeStore.getState().graph, before);
+            assert.equal(useRecipeStore.getState().undoStack.length, 0);
+        });
+
+        it('does not throw when there is no graph', () => {
+            assert.equal(useRecipeStore.getState().graph, null);
+            assert.doesNotThrow(() => useRecipeStore.getState().updateNodeVisualDescription('a', 'x'));
+        });
+    });
 });

@@ -31,6 +31,7 @@ import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@
 import { standardizeIngredientName, formatDisplayName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import { TimelineView } from '@/components/recipe-lanes/timeline-view';
+import { VisualDescriptionEditor } from '@/components/recipe-lanes/visual-description-editor';
 import type { RecipeGraph, LayoutModeId } from '@/lib/recipe-lanes/types';
 import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
@@ -62,7 +63,7 @@ function RecipeLanesContent() {
   const graph = useRecipeStore(s => s.graph);
   const ownerId = useRecipeStore(s => s.ownerId);
   const ownerName = useRecipeStore(s => s.ownerName);
-  const { mergeSnapshot, setGraph, setGraphWithUndo, undo, reset: resetRecipeStore, addMessage, clearMessages } = useRecipeStore.getState();
+  const { mergeSnapshot, setGraph, setGraphWithUndo, undo, updateNodeVisualDescription, reset: resetRecipeStore, addMessage, clearMessages } = useRecipeStore.getState();
   const canUndo = useRecipeStore(s => s.undoStack.length > 0);
   const messageCount = useRecipeStore(s => s.messages.length);
   
@@ -74,6 +75,7 @@ function RecipeLanesContent() {
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
+  const [showVisualDesc, setShowVisualDesc] = useState(false);
   const [showIngredients, setShowIngredients] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [iconSearchStatus, setIconSearchStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
@@ -323,6 +325,18 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
           }
       } catch (e) {
           showNotification("Invalid JSON");
+      }
+  };
+
+  const handleVisualDescSave = async () => {
+      // Edits are already committed to the store (undoable) via onEdit; persist
+      // the current graph, mirroring handleJsonSave's save/fork behaviour.
+      const currentGraph = useRecipeStore.getState().graph;
+      if (user && currentGraph) {
+          const res = await saveAndHandleFork({ ...currentGraph });
+          if (res.id) {
+              showNotification("Visual descriptions saved.");
+          }
       }
   };
 
@@ -1162,7 +1176,15 @@ const handleVisualize = async () => {
                                 <span className="hidden xl:inline">{isPublic ? 'Public' : 'Unlisted'}</span>
                             </button>
 
-                            <button 
+                            <button
+                                onClick={() => setShowVisualDesc(v => !v)}
+                                className={`p-1.5 rounded hover:bg-zinc-100 transition-colors ${showVisualDesc ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-400'}`}
+                                title="Edit Visual Descriptions"
+                            >
+                                <Pencil className="w-4 h-4" />
+                            </button>
+
+                            <button
                                 onClick={handleToggleJson}
                                 className={`p-1.5 rounded hover:bg-zinc-100 transition-colors ${showJson ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-400'}`}
                                 title="Toggle JSON View"
@@ -1251,6 +1273,16 @@ const handleVisualize = async () => {
                         placeholder="Graph JSON..."
                     />
                 </div>
+            )}
+
+            {/* Visual Description Editor Overlay */}
+            {showVisualDesc && graph && (
+                <VisualDescriptionEditor
+                    nodes={graph.nodes}
+                    onEdit={updateNodeVisualDescription}
+                    onSave={handleVisualDescSave}
+                    onClose={() => setShowVisualDesc(false)}
+                />
             )}
 
             {/* Bottom Area: Legend (Left) & Chat (Right) */}

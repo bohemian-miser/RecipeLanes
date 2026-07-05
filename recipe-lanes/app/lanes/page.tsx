@@ -83,7 +83,8 @@ function RecipeLanesContent() {
   const layoutMode = useRecipeStore(s => s.nodeLayout);
   const layoutModeRestoredRef = useRef(false);
   const iconTheme = useRecipeStore(s => s.iconStyle) as 'classic' | 'modern' | 'modern_clean';
-  const { setNodeLayout, setIconStyle, setLineStyle } = useRecipeStore.getState();
+  const smallLeafNodes = useRecipeStore(s => s.smallLeafNodes);
+  const { setNodeLayout, setIconStyle, setLineStyle, setSmallLeafNodes } = useRecipeStore.getState();
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
@@ -1078,7 +1079,16 @@ const handleVisualize = async () => {
                             <option value="modern_clean">Clean</option>
                         </select>
                     </div>
-                    
+
+                    {/* Smaller leaf nodes — global toggle (issue #155) */}
+                    <button
+                        onClick={() => setSmallLeafNodes(!smallLeafNodes)}
+                        aria-pressed={smallLeafNodes}
+                        className={`text-xs font-medium px-2 py-1.5 rounded border transition-colors ${smallLeafNodes ? 'bg-yellow-100 border-yellow-300 text-yellow-700' : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:text-zinc-700'}`}
+                        title="Render leaf (end) nodes smaller"
+                    >
+                        Small leaves
+                    </button>
 
                 </div>
 

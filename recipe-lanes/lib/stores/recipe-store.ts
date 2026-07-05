@@ -65,6 +65,8 @@ interface RecipeState {
     nodeLayout: LayoutModeId;
     backgrounds: BackgroundElementId[];
     activePresetId: string;
+    /** Global toggle: render leaf nodes (out-degree 0) smaller. Issue #155. */
+    smallLeafNodes: boolean;
     undoStack: RecipeGraph[];
     messages: ChatMessage[];
     /**
@@ -147,6 +149,7 @@ interface RecipeActions {
     setLineStyle: (style: LineStyleId) => void;
     setNodeLayout: (layout: LayoutModeId) => void;
     toggleBackground: (bg: BackgroundElementId) => void;
+    setSmallLeafNodes: (small: boolean) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -243,6 +246,7 @@ const initialState: RecipeState = {
     nodeLayout: 'dagre',
     backgrounds: [],
     activePresetId: 'classic',
+    smallLeafNodes: false,
     undoStack: [],
     messages: [],
     pendingDeletedIds: [],
@@ -387,4 +391,5 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
     setLineStyle: (lineStyle) => set({ lineStyle, activePresetId: 'custom' }),
     setNodeLayout: (nodeLayout) => set({ nodeLayout, activePresetId: 'custom' }),
     toggleBackground: (bg) => set((state) => { const backgrounds = state.backgrounds.includes(bg) ? state.backgrounds.filter(b => b !== bg) : [...state.backgrounds, bg]; return { backgrounds, activePresetId: 'custom' }; }),
+    setSmallLeafNodes: (small) => set({ smallLeafNodes: small }),
 }));

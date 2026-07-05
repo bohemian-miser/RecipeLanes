@@ -32,6 +32,9 @@ import {
 } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 
+/** Shrink factor for leaf nodes when the "smaller leaf nodes" setting is on. */
+const LEAF_SCALE = 0.7;
+
 export const MinimalNode: React.FC<any> = ({
     data, selected, isConnectable, id, dragging
 }) => {
@@ -59,6 +62,9 @@ export const MinimalNode: React.FC<any> = ({
   // selector re-renders only when this specific node changes.
   const storeNode = useRecipeStore(s => s.graph?.nodes.find(n => n.id === id));
   const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
+  // Global "smaller leaf nodes" setting (#155): shrink terminal (out-degree 0)
+  // nodes. `data.isLeaf` is computed once during layout in react-flow-diagram.
+  const smallLeafNodes = useRecipeStore(s => s.smallLeafNodes);
 
   // Use storeNode when available (it has up-to-date shortlistIndex after cycling).
   // Fall back to data prop for nodes not yet in the store.
@@ -152,11 +158,16 @@ export const MinimalNode: React.FC<any> = ({
       onPointerCancelCapture: handlePointerUpOrCancel
   };
 
-  if (iconTheme === 'modern' || iconTheme === 'modern_clean') {
-      return <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
-  }
+  const inner = (iconTheme === 'modern' || iconTheme === 'modern_clean')
+      ? <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />
+      : <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
 
-  return <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
+  // When the global setting is on, render leaf nodes smaller. A uniform scale
+  // keeps handles proportional so edges still meet the node cleanly.
+  if (smallLeafNodes && data.isLeaf) {
+      return <div style={{ transform: `scale(${LEAF_SCALE})`, transformOrigin: 'center center' }}>{inner}</div>;
+  }
+  return inner;
 };
 
 export default memo(MinimalNode);

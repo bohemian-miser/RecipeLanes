@@ -35,6 +35,7 @@ import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX
 
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
+import { getLeafNodeIds } from '../../lib/recipe-lanes/leaf-nodes';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import { getNodeIconUrl, getNodeIconId, preserveNodeShortlist, getNodeShortlistLength } from '../../lib/recipe-lanes/model-utils';
 import MinimalNode from './nodes/minimal-node';
@@ -319,6 +320,9 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
              });
         });
 
+        // Leaf = out-degree 0 (nothing consumes it). Threaded into node data so
+        // the node view can render smaller when the global setting is on (#155).
+        const leafIds = getLeafNodeIds(graph);
         layout.nodes.forEach(n => {
              const originalNode = graph.nodes.find(gn => gn.id === n.id);
              const nodeType = isTimeline ? 'timeline-node' : 'minimal';
@@ -330,6 +334,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                      ...originalNode, ...n.data,
                      ...(isTimeline ? { lineColor: n.lineColor } : {}),
                      textPos, depth: n.depth,
+                     isLeaf: leafIds.has(n.id),
                      onDelete: () => handleDeleteNode(n.id),
                      onSetLongPress: setLongPress,
                      iconTheme,

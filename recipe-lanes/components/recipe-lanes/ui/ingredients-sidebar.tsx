@@ -15,8 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { useState, useEffect } from 'react';
-import { RecipeGraph } from '@/lib/recipe-lanes/types';
+import React, { useState, useEffect, useRef } from 'react';
+import { RecipeGraph, RecipeNode } from '@/lib/recipe-lanes/types';
 import { ChefHat, X, Users } from 'lucide-react';
 import { getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
 
@@ -24,9 +24,11 @@ interface IngredientsSidebarProps {
   graph: RecipeGraph;
   onClose: () => void;
   onUpdateServes: (newServes: number) => void;
+  /** Commit an ingredient's edited visual description (undoable store write). */
+  onEditVisualDescription?: (nodeId: string, visualDescription: string) => void;
 }
 
-export function IngredientsSidebar({ graph, onClose, onUpdateServes }: IngredientsSidebarProps) {
+export function IngredientsSidebar({ graph, onClose, onUpdateServes, onEditVisualDescription }: IngredientsSidebarProps) {
   const serves = graph.serves || graph.baseServes || 1;
   const baseServes = graph.baseServes || 1;
   const scale = serves / baseServes;
@@ -37,6 +39,35 @@ export function IngredientsSidebar({ graph, onClose, onUpdateServes }: Ingredien
   };
 
   const ingredientNodes = graph.nodes.filter(n => n.type === 'ingredient');
+
+  // Local drafts for the inline visual-description editor. Kept in sync with the
+  // graph for fields the user isn't actively editing (e.g. after undo/merge), so
+  // an external change is reflected without clobbering in-progress typing.
+  const [descDrafts, setDescDrafts] = useState<Record<string, string>>(
+    () => Object.fromEntries(ingredientNodes.map(n => [n.id, n.visualDescription ?? ''])),
+  );
+  const editingIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setDescDrafts(prev => {
+      const next = { ...prev };
+      let changed = false;
+      for (const n of ingredientNodes) {
+        if (n.id === editingIdRef.current) continue;
+        const val = n.visualDescription ?? '';
+        if (next[n.id] !== val) { next[n.id] = val; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph]);
+
+  const commitDesc = (node: RecipeNode) => {
+    const draft = descDrafts[node.id] ?? '';
+    if (draft !== (node.visualDescription ?? '')) {
+      onEditVisualDescription?.(node.id, draft);
+    }
+  };
 
   return (
     <div className="absolute left-0 top-14 bottom-0 w-72 bg-white border-r border-zinc-200 shadow-2xl z-40 flex flex-col animate-in slide-in-from-left duration-200">
@@ -93,6 +124,18 @@ export function IngredientsSidebar({ graph, onClose, onUpdateServes }: Ingredien
                              {/* Debug/Fallback if text doesn't match */}
                              {(!node.canonicalName && node.text !== displayQty + ' ' + (node.unit||'') + ' ' + (node.canonicalName||'')) && (
                                  <div className="text-[10px] text-zinc-400 truncate hidden">{node.text}</div>
+                             )}
+                             {onEditVisualDescription && (
+                                 <textarea
+                                     className="mt-1.5 w-full bg-zinc-50 border border-zinc-200 rounded px-2 py-1 text-[11px] text-zinc-600 resize-none focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200 leading-snug"
+                                     rows={2}
+                                     value={descDrafts[node.id] ?? ''}
+                                     onChange={(e) => setDescDrafts(d => ({ ...d, [node.id]: e.target.value }))}
+                                     onFocus={() => { editingIdRef.current = node.id; }}
+                                     onBlur={() => { editingIdRef.current = null; commitDesc(node); }}
+                                     placeholder="Visual description (what the icon shows)…"
+                                     aria-label={`Visual description for ${node.canonicalName || node.text}`}
+                                 />
                              )}
                         </div>
                     </div>

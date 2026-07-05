@@ -24,6 +24,27 @@ export class MockAIService implements AIService {
     const lower = prompt.toLowerCase();
     // TODO only log the interesting bit. Disable for now.
     // console.log("[MockAIService] generateText received prompt:", prompt);
+
+    // Issue #156 — Forge-on-existing routes through the AI *adjust* path. This
+    // branch recognises the adjuster prompt (generateAdjustmentPrompt) and
+    // returns a surgical RecipePatch so tests can assert that existing nodes
+    // (and their positions) survive: we ADD one node per "Added lines:" entry
+    // and touch nothing else. Must precede the parse branches below.
+    if (prompt.includes('expert recipe graph editor')) {
+        const addedBlock = prompt.match(/Added lines:\n([\s\S]*?)(?:\n\n|$)/);
+        const addNodes: object[] = [];
+        if (addedBlock) {
+            const lines = addedBlock[1]
+                .split('\n')
+                .map(l => l.replace(/^-\s*/, '').trim())
+                .filter(Boolean);
+            lines.forEach((text, i) => {
+                addNodes.push({ id: `added-${i + 1}`, laneId: 'l1', text, type: 'ingredient', visualDescription: text });
+            });
+        }
+        return JSON.stringify({ message: 'Applied your recipe edits.', addNodes });
+    }
+
     if (lower.includes("test eggs")) {
         let extraIngredient = lower.includes("test eggs with ") ? lower.split("test eggs with ")[1].trim() : null;
 

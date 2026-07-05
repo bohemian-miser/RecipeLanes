@@ -27,6 +27,7 @@ import { ReactFlowProvider } from 'reactflow';
 import { createVisualRecipeAction, createVisualRecipeFromImageAction, adjustRecipeAction, saveRecipeAction, saveChatHistoryAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
 import { ChatPanel } from '@/components/recipe-lanes/chat-panel';
 import { MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
+import { buildRecipeEditInstruction } from '@/lib/recipe-lanes/recipe-edit-diff';
 import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
 import { standardizeIngredientName, formatDisplayName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
@@ -601,9 +602,64 @@ const handleVisualize = async () => {
     // LLM finishes parsing and we run the real icon lookup. Fire-and-forget.
     preheatIconSearch();
 
+    const currentId = searchParams.get('id');
+
+    // Issue #156: when the recipe ALREADY EXISTS, editing its source text and
+    // pressing Forge should be an INCREMENTAL AI adjust (existing graph + node
+    // positions preserved via the patch branch) rather than a full re-parse.
+    // We translate the text edit into a short instruction for the same
+    // adjustRecipeAction that handleAdjust uses. Big rewrites that can't be
+    // summarized within the instruction cap fall through to the full parse
+    // below (a positions reset is acceptable for a major rewrite).
+    if (currentId && graph) {
+        const instruction = buildRecipeEditInstruction(graph.originalText || '', recipeText);
+        if (instruction === null) {
+            // No line-level change — nothing to re-forge. Leave the graph and
+            // the input box exactly as they are.
+            setStatus('complete');
+            return;
+        }
+        if (instruction.length <= MAX_ADJUST_INSTRUCTION_CHARS) {
+            try {
+                setStatus('adjusting');
+                const res = await adjustRecipeAction(graph, instruction);
+                if (res.error || !res.graph) {
+                    throw new Error(res.error || 'Failed to adjust graph.');
+                }
+                res.graph.title = recipeTitle;
+                // Advance the baseline so the next edit diffs against what the
+                // user just forged — and so the post-save snapshot repopulates
+                // the input with the SAME text (leaving the input box untouched).
+                res.graph.originalText = recipeText;
+                setGraphWithUndo(res.graph);
+                addMessage({ role: 'user', content: 'Applied recipe text edits.' });
+                addMessage({ role: 'assistant', content: (res as any).message || 'Recipe updated from your edits.' });
+                setShowChat(true);
+                setStatus('complete');
+                setWarningDismissed(false);
+
+                // Fire-and-forget save — mirrors handleAdjust.
+                saveRecipeAction(res.graph, currentId).then(() => {
+                    const allMessages = useRecipeStore.getState().messages;
+                    localStorage.setItem(`chat_${currentId}`, JSON.stringify(allMessages));
+                    saveChatHistoryAction(currentId, allMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })));
+                }).catch(e => {
+                    console.error('[handleVisualize incremental] save failed:', e);
+                    addMessage({ role: 'assistant', content: `Changes applied locally but failed to save: ${e.message}` });
+                });
+            } catch (e: any) {
+                console.error('Incremental adjust failed:', e);
+                setError(e.message);
+                setStatus('error');
+            }
+            return;
+        }
+        // else: large rewrite — fall through to the full re-parse below.
+        setStatus('parsing');
+    }
+
     try {
-        // Use New Fast Path Action
-        const currentId = searchParams.get('id');
+        // Use New Fast Path Action (new recipe, or large-rewrite fallback).
         // Anon creation (#151 follow-up): mint a claim token so the creator can
         // later prove ownership from this browser and claim the recipe after
         // signing in. Only the hash is ever sent to/stored on the server.

@@ -764,7 +764,7 @@ const handleVisualize = async () => {
   const isPublic = graph?.visibility === 'public';
 
   // Common Nav Item Styles
-  const navItemClass = "flex items-center gap-2 px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
+  const navItemClass = "flex items-center gap-2 px-2 md:px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
 
   let loadingPhase: LoadingPhase = null;
   if (status === 'parsing' || status === 'loading') {
@@ -777,7 +777,7 @@ const handleVisualize = async () => {
     <div className="fixed inset-0 flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden overscroll-none">
         {/* Utility Bar */}
         <header className="h-14 shrink-0 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-950 z-20">
-            <div className="flex items-center gap-4 overflow-hidden">
+            <div className="flex-1 min-w-0 flex items-center gap-4 overflow-hidden">
                 {/* Logo */}
                 <div className="flex items-center gap-2 shrink-0">
                     <ChefHat className="w-6 h-6 text-yellow-500" />
@@ -814,12 +814,13 @@ const handleVisualize = async () => {
                 </div>
             </div>
 
-            {/* Right Side Actions */}
-            <div className="flex items-center gap-2">
+            {/* Right Side Actions — must not squeeze the title on mobile (issue #139),
+                so it never shrinks and drops secondary items / labels on small screens. */}
+            <div className="flex items-center gap-1 md:gap-2 shrink-0">
                 {/* Navigation Tabs */}
                 <Link href="/gallery" className={navItemClass} title="Public Gallery">
                     <Globe className="w-4 h-4" />
-                    <span>Gallery</span>
+                    <span className="hidden md:inline">Gallery</span>
                 </Link>
                 {user && (
                     <>
@@ -838,11 +839,11 @@ const handleVisualize = async () => {
                     <span className="hidden md:inline">New</span>
                 </button>
                 
-                <button onClick={() => setShowFeedback(true)} className={navItemClass} title="Feedback & Contribute">
+                <button onClick={() => setShowFeedback(true)} className={`${navItemClass} hidden md:flex`} title="Feedback & Contribute">
                     <MessageSquare className="w-4 h-4" />
                 </button>
 
-                <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={navItemClass} title="Find me on GitHub">
+                <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={`${navItemClass} hidden md:flex`} title="Find me on GitHub">
                     <Github className="w-4 h-4" />
                 </a>
 

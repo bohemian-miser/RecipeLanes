@@ -31,7 +31,7 @@ interface EdgeProps {
   style?: React.CSSProperties;
   data?: any;
 }
-import { getEdgeParams } from '../../../lib/recipe-lanes/graph-utils';
+import { getEdgeParams, isFiniteHandlePos } from '../../../lib/recipe-lanes/graph-utils';
 
 function FloatingEdge({ id, source, target, markerEnd, style, data, sourceX, sourceY, targetX, targetY }: EdgeProps) {
   const sourceNode = useStore(useCallback((store: any) => store.nodeInternals.get(source), [source]));
@@ -41,11 +41,16 @@ function FloatingEdge({ id, source, target, markerEnd, style, data, sourceX, sou
     return null;
   }
 
+  // Only forward handle positions once RF has actually measured them. Before
+  // then RF can supply NaN coords, and typeof NaN === 'number' would sneak them
+  // past a plain typeof check into the edge geometry (issue #30).
+  const sourceHandle = { x: sourceX, y: sourceY };
+  const targetHandle = { x: targetX, y: targetY };
   const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(
-      sourceNode, 
+      sourceNode,
       targetNode,
-      (typeof sourceX === 'number' && typeof sourceY === 'number') ? { x: sourceX, y: sourceY } : undefined,
-      (typeof targetX === 'number' && typeof targetY === 'number') ? { x: targetX, y: targetY } : undefined
+      isFiniteHandlePos(sourceHandle) ? sourceHandle : undefined,
+      isFiniteHandlePos(targetHandle) ? targetHandle : undefined
   );
 
   const variant = data?.variant || 'straight';

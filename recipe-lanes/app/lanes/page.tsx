@@ -1076,6 +1076,7 @@ const handleVisualize = async () => {
                             <option value="classic">Classic</option>
                             <option value="modern">Modern</option>
                             <option value="modern_clean">Clean</option>
+                            <option value="butcher">Butcher&apos;s Paper</option>
                         </select>
                     </div>
                     

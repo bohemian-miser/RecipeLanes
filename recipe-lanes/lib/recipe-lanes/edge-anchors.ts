@@ -89,12 +89,13 @@ export function getModernFrame(
     scale = 1,
 ): AnchorFrame {
     const container = isIngredient ? MODERN_CONTAINER.ingredient : MODERN_CONTAINER.action;
-    const image = (isIngredient ? MODERN_IMAGE.ingredient : MODERN_IMAGE.action) * scale;
-    const pad = (container - (isIngredient ? MODERN_IMAGE.ingredient : MODERN_IMAGE.action)) / 2;
+    const image = isIngredient ? MODERN_IMAGE.ingredient : MODERN_IMAGE.action;
+    const size = image * scale;
+    const pad = (container - image) / 2;
     return {
-        x: nodePos.x + container / 2 - image / 2,
+        x: nodePos.x + container / 2 - size / 2,
         y: nodePos.y + pad * scale,
-        size: image,
+        size,
     };
 }
 
@@ -128,9 +129,13 @@ export function anchorBBox(
 /**
  * Fallback circle radius (no bbox metadata): half the visible image, scaled.
  * Classic images render at 48px (ingredient) / 72px (action).
+ * Modern keeps the pre-existing +10px arrowhead standoff (the old flat radius
+ * was 58 = 96/2 + 10); ingredients now get their real 64px image (42) instead
+ * of sharing the action radius.
  */
 export function fallbackRadius(theme: 'classic' | 'modern', isIngredient: boolean, scale = 1): number {
-    if (theme === 'modern') return (MODERN_IMAGE[isIngredient ? 'ingredient' : 'action'] / 2 + 10) * scale;
+    const MODERN_STANDOFF = 10;
+    if (theme === 'modern') return (MODERN_IMAGE[isIngredient ? 'ingredient' : 'action'] / 2 + MODERN_STANDOFF) * scale;
     return (isIngredient ? 24 : 36) * scale;
 }
 

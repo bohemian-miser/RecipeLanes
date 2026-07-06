@@ -73,6 +73,7 @@ interface ReactFlowDiagramProps {
 export interface ReactFlowDiagramHandle {
     resetLayout: () => void;
     toggleVisibility: () => Promise<void>;
+    toggleAnonymous: () => Promise<void>;
     getGraph: () => RecipeGraph;
 }
 
@@ -126,6 +127,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         handleSave,
         handleShare,
         toggleVisibility,
+        toggleAnonymous,
     } = useSaveAndFork({
         graph,
         mode,
@@ -657,6 +659,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     useImperativeHandle(ref, () => ({
         resetLayout: handleReset,
         toggleVisibility: toggleVisibility,
+        toggleAnonymous: toggleAnonymous,
         getGraph: getGraph
     }));
 

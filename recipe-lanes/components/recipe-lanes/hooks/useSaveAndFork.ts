@@ -122,6 +122,14 @@ export function useSaveAndFork({
         visibilityRef.current = isPublic;
     }, [isPublic]);
 
+    // Issue #146: anonymous-publish toggle. Kept in a ref (mirroring
+    // visibilityRef) so the async save reads the latest value, and re-synced
+    // from the graph whenever a fresh snapshot loads.
+    const anonymousRef = useRef(graph.anonymous === true);
+    useEffect(() => {
+        anonymousRef.current = graph.anonymous === true;
+    }, [graph.anonymous]);
+
     const [isDirty, setIsDirty] = useState(false);
 
     const [copied, setCopied] = useState(false);
@@ -182,6 +190,9 @@ export function useSaveAndFork({
 
         // Ensure visibility is part of the graph object passed back
         graphToSave.visibility = visibility;
+        // Issue #146: persist the anonymous-publish choice on the graph so the
+        // data service can drop the owner's name at save time.
+        graphToSave.anonymous = anonymousRef.current;
 
         const result = await saveRecipeAction(graphToSave, currentId, visibility, claimToken);
         // One attempt is enough — whether it succeeded or the token was
@@ -241,6 +252,14 @@ export function useSaveAndFork({
         await handleSave();
     };
 
+    // Issue #146: flip the anonymous-publish flag and persist immediately,
+    // mirroring toggleVisibility.
+    const toggleAnonymous = async () => {
+        anonymousRef.current = !anonymousRef.current;
+        setIsDirty(true);
+        await handleSave();
+    };
+
     return {
         copied,
         saved,
@@ -253,5 +272,6 @@ export function useSaveAndFork({
         handleSave,
         handleShare,
         toggleVisibility,
+        toggleAnonymous,
     };
 }

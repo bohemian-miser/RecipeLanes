@@ -21,10 +21,12 @@ import {
     currentShortlistIndex,
 } from '@/lib/recipe-lanes/model-utils';
 import { forgeIconAction } from '@/app/actions';
+import { isLeafNode } from '@/lib/recipe-lanes/graph-logic';
 
 const NODE_R   = 20;              // must match TL.NODE_R
 const DIAMETER = NODE_R * 2;     // 40px
 const INNER_R  = NODE_R - 3;     // 17px — image clip
+const LEAF_SCALE = 0.7;          // shrink factor for leaf nodes when the setting is on
 
 const BTN: React.CSSProperties = {
     position: 'absolute',
@@ -50,6 +52,13 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
     const storeNode      = useRecipeStore(s => s.graph?.nodes.find(n => n.id === id));
     const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
     const node           = storeNode ?? data;
+
+    // Global "smaller leaf nodes" setting: shrink source nodes (in-degree 0).
+    // Both selectors return stable primitives, so this node only re-renders when
+    // its own leaf-ness or the global toggle actually changes.
+    const smallerLeafNodes = useRecipeStore(s => s.smallerLeafNodes);
+    const isLeaf           = useRecipeStore(s => isLeafNode(s.graph?.nodes, id));
+    const isSmall          = smallerLeafNodes && isLeaf;
 
     const currentIndex = Math.max(0, currentShortlistIndex(node));
     const iconUrl      = getNodeIconUrlAt(node, currentIndex);
@@ -107,7 +116,13 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
     return (
         <div
             className="group"
-            style={{ position: 'relative', width: DIAMETER, height: DIAMETER }}
+            style={{
+                position: 'relative',
+                width: DIAMETER,
+                height: DIAMETER,
+                transition: 'transform 300ms',
+                ...(isSmall ? { transform: `scale(${LEAF_SCALE})`, transformOrigin: 'center center' } : {}),
+            }}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
         >

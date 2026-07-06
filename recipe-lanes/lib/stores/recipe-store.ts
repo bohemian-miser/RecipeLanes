@@ -63,7 +63,7 @@ interface RecipeState {
     iconStyle: IconStyleId;
     lineStyle: LineStyleId;
     nodeLayout: LayoutModeId;
-    /** When true, leaf nodes (out-degree 0, e.g. the finished dish) render smaller. Global view setting. */
+    /** When true, leaf nodes (in-degree 0 — source nodes with no incoming edges, e.g. raw ingredients) render smaller. Global view setting. */
     smallerLeafNodes: boolean;
     backgrounds: BackgroundElementId[];
     activePresetId: string;

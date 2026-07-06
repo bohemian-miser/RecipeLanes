@@ -26,9 +26,10 @@ export interface MinimalEdge {
 }
 
 /**
- * Minimal shape needed to reason about a node's out-degree. Edges are encoded
+ * Minimal shape needed to reason about a node's in-degree. Edges are encoded
  * implicitly on each node via `inputs` (the ids of nodes that flow into it), so
- * an edge is `inputId -> node.id`.
+ * an edge is `inputId -> node.id` and a node's incoming edges are exactly its
+ * own `inputs`.
  */
 export interface DegreeNode {
     id: string;
@@ -36,32 +37,36 @@ export interface DegreeNode {
 }
 
 /**
- * Returns the set of leaf node ids — nodes with out-degree 0, i.e. whose id is
- * not listed in any other node's `inputs`. In recipe terms these are terminal
- * steps that nothing else consumes (e.g. the finished dish).
+ * True when the node has no incoming edges (in-degree 0), i.e. an empty/absent
+ * `inputs` list. These are the source nodes of the recipe graph — typically the
+ * raw ingredients that nothing flows into.
+ */
+function hasNoIncomingEdges(node: DegreeNode): boolean {
+    return !node.inputs || node.inputs.length === 0;
+}
+
+/**
+ * Returns the set of leaf node ids — nodes with in-degree 0, i.e. no incoming
+ * edges. In recipe terms these are the source nodes (e.g. raw ingredients) that
+ * nothing flows into.
  */
 export function getLeafNodeIds(nodes: DegreeNode[]): Set<string> {
-    const consumed = new Set<string>();
-    for (const node of nodes) {
-        for (const inputId of node.inputs ?? []) {
-            consumed.add(inputId);
-        }
-    }
     const leaves = new Set<string>();
     for (const node of nodes) {
-        if (!consumed.has(node.id)) leaves.add(node.id);
+        if (hasNoIncomingEdges(node)) leaves.add(node.id);
     }
     return leaves;
 }
 
 /**
- * True when `id` is a leaf (out-degree 0) within `nodes`: no other node lists it
- * as an input. Returns false when `nodes` is undefined. Suitable for use as a
- * Zustand selector since it returns a stable primitive.
+ * True when `id` is a leaf (in-degree 0) within `nodes`: it exists and has no
+ * incoming edges. Returns false when `nodes` is undefined or `id` is unknown.
+ * Suitable for use as a Zustand selector since it returns a stable primitive.
  */
 export function isLeafNode(nodes: DegreeNode[] | undefined, id: string): boolean {
     if (!nodes) return false;
-    return !nodes.some(node => node.inputs?.includes(id));
+    const node = nodes.find(n => n.id === id);
+    return !!node && hasNoIncomingEdges(node);
 }
 
 /**

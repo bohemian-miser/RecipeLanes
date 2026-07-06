@@ -64,7 +64,7 @@ export const MinimalNode: React.FC<any> = ({
   const storeNode = useRecipeStore(s => s.graph?.nodes.find(n => n.id === id));
   const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
 
-  // Global "smaller leaf nodes" setting: shrink nodes with out-degree 0.
+  // Global "smaller leaf nodes" setting: shrink source nodes (in-degree 0).
   // Both selectors return stable primitives, so this node only re-renders when
   // its own leaf-ness or the global toggle actually changes.
   const smallerLeafNodes = useRecipeStore(s => s.smallerLeafNodes);

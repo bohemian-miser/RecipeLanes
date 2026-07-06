@@ -1128,7 +1128,7 @@ const handleVisualize = async () => {
                          <button
                              onClick={() => setSmallerLeafNodes(!smallerLeafNodes)}
                              className={`text-xs px-2 py-1 rounded font-medium transition-colors ${smallerLeafNodes ? 'bg-yellow-100 text-yellow-700' : 'bg-zinc-50 border border-zinc-200 text-zinc-500'}`}
-                             title="Render leaf nodes (final steps nothing else uses) smaller"
+                             title="Render leaf nodes (source ingredients with no incoming edges) smaller"
                              aria-pressed={smallerLeafNodes}
                          >
                              {smallerLeafNodes ? 'Small' : 'Normal'}

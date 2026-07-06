@@ -69,10 +69,10 @@ describe('Graph Logic', () => {
     });
 });
 
-describe('Leaf detection (out-degree 0)', () => {
-    // Edge direction is inputId -> node.id, so a node whose id appears in no
-    // other node's `inputs` has out-degree 0 and is a leaf.
-    // ingredients (a, b) -> mix (c) -> plate (d).  d is the sole leaf.
+describe('Leaf detection (in-degree 0 / source nodes)', () => {
+    // Edge direction is inputId -> node.id, so a node's incoming edges are its
+    // own `inputs`. A node with no inputs has in-degree 0 and is a leaf (source).
+    // ingredients (a, b) -> mix (c) -> plate (d).  a and b are the leaves.
     const chain = [
         { id: 'a' },
         { id: 'b' },
@@ -80,19 +80,17 @@ describe('Leaf detection (out-degree 0)', () => {
         { id: 'd', inputs: ['c'] },
     ];
 
-    it('getLeafNodeIds returns only terminal nodes', () => {
+    it('getLeafNodeIds returns only source nodes (no incoming edges)', () => {
         const leaves = getLeafNodeIds(chain);
-        assert.deepStrictEqual([...leaves].sort(), ['d']);
+        assert.deepStrictEqual([...leaves].sort(), ['a', 'b']);
     });
 
-    it('getLeafNodeIds finds multiple independent terminals', () => {
-        // c and d are both consumed by nothing -> both leaves.
+    it('getLeafNodeIds treats an empty inputs array as a leaf', () => {
         const graph = [
-            { id: 'a' },
-            { id: 'c', inputs: ['a'] },
-            { id: 'd', inputs: ['a'] },
+            { id: 'x', inputs: [] },
+            { id: 'y', inputs: ['x'] },
         ];
-        assert.deepStrictEqual([...getLeafNodeIds(graph)].sort(), ['c', 'd']);
+        assert.deepStrictEqual([...getLeafNodeIds(graph)], ['x']);
     });
 
     it('getLeafNodeIds treats an isolated node as a leaf', () => {
@@ -101,12 +99,16 @@ describe('Leaf detection (out-degree 0)', () => {
     });
 
     it('isLeafNode agrees with getLeafNodeIds', () => {
-        assert.strictEqual(isLeafNode(chain, 'd'), true);
-        assert.strictEqual(isLeafNode(chain, 'a'), false); // consumed by c
-        assert.strictEqual(isLeafNode(chain, 'c'), false); // consumed by d
+        assert.strictEqual(isLeafNode(chain, 'a'), true);  // no inputs (source)
+        assert.strictEqual(isLeafNode(chain, 'c'), false); // has inputs
+        assert.strictEqual(isLeafNode(chain, 'd'), false); // has inputs
     });
 
     it('isLeafNode returns false when nodes is undefined', () => {
         assert.strictEqual(isLeafNode(undefined, 'x'), false);
+    });
+
+    it('isLeafNode returns false for an unknown id', () => {
+        assert.strictEqual(isLeafNode(chain, 'zzz'), false);
     });
 });

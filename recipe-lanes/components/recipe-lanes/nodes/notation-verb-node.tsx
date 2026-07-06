@@ -72,12 +72,14 @@ const NotationVerbNode: React.FC<any> = ({ data, selected }) => {
                     top: SIZE + 3,
                     left: '50%',
                     transform: 'translateX(-50%)',
+                    width: 130,
                     fontSize: 9,
-                    lineHeight: 1.2,
+                    lineHeight: 1.25,
                     fontFamily: 'ui-sans-serif, system-ui, sans-serif',
                     color: '#2a2724',
                     textAlign: 'center',
-                    whiteSpace: 'nowrap',
+                    whiteSpace: 'normal',
+                    wordBreak: 'break-word',
                     pointerEvents: 'none',
                     textShadow: '0 0 3px rgba(255,255,255,0.9), 0 0 3px rgba(255,255,255,0.9)',
                 }}
@@ -90,7 +92,7 @@ const NotationVerbNode: React.FC<any> = ({ data, selected }) => {
                 <div
                     style={{
                         position: 'absolute',
-                        top: SIZE + 16,
+                        top: SIZE + 38,
                         left: '50%',
                         transform: 'translateX(-50%)',
                         background: CHIP_BG,

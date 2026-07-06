@@ -34,19 +34,22 @@ import { classifyVerb } from './verbs';
 
 export const NOTATION = {
   /** Vertical gap between station rows. */
-  ROW_GAP: 140,
+  ROW_GAP: 180,
   /** Horizontal spacing between consecutive actions along a row. */
-  ACTION_SPACING: 110,
+  ACTION_SPACING: 165,
   /** How far above its row a leaf floats. */
-  LEAF_OFFSET_Y: 90,
-  /** Horizontal spread between sibling leaves that feed the same action. */
-  LEAF_SIBLING_SPACING: 40,
+  LEAF_OFFSET_Y: 95,
+  /** Horizontal spread between sibling leaves that feed the same action.
+   *  MinimalNode's default ingredient container is ~100px wide (see
+   *  minimal-node-classic.tsx verticalMinWidth) — keep this at least that
+   *  large so sibling leaf labels don't overlap. */
+  LEAF_SIBLING_SPACING: 115,
   /** x of the station badge (row anchor). */
   STATION_X: 70,
   /** x of the first action in a row. */
-  ROW_START_X: 180,
+  ROW_START_X: 200,
   /** Top margin before the first row. */
-  MARGIN_TOP: 110,
+  MARGIN_TOP: 120,
   /** Layout margin around the computed bounds. */
   MARGIN: 80,
 
@@ -188,7 +191,15 @@ export function calculateNotationLayout(graph: RecipeGraph): NotationLayoutGraph
     });
   }
 
-  // ── Actions, placed left→right in per-lane topological order ────────────
+  // ── Actions, placed left→right in topological order ─────────────────────
+  // x comes from GLOBAL depth (not a per-lane rank): a lane with only one
+  // "convergence" action (e.g. a final combine/serve step fed by several
+  // other lanes) would otherwise always sit at ROW_START_X since it's index 0
+  // within its own lane — which puts it at the exact same x as every other
+  // row's first action, making incoming cross-lane edges visually collide
+  // with the column of per-row leaf drop-lines. Using depth keeps actions
+  // that depend on more upstream work further to the right, which both
+  // reads as "topological order" and keeps cross edges visually distinct.
   const actionXById = new Map<string, number>();
   for (const lane of laneOrder) {
     const laneActions = graph.nodes
@@ -201,8 +212,14 @@ export function calculateNotationLayout(graph: RecipeGraph): NotationLayoutGraph
       });
 
     const y = rowY(lane.id);
-    laneActions.forEach((action, i) => {
-      const x = NOTATION.ROW_START_X + i * NOTATION.ACTION_SPACING;
+    // Nudge same-depth same-lane actions apart so they don't land on the
+    // exact same x (rare: independent branches within one lane).
+    const seenDepths = new Map<number, number>();
+    laneActions.forEach((action) => {
+      const depth = depths.get(action.id) ?? 0;
+      const tieIndex = seenDepths.get(depth) ?? 0;
+      seenDepths.set(depth, tieIndex + 1);
+      const x = NOTATION.ROW_START_X + depth * NOTATION.ACTION_SPACING + tieIndex * (NOTATION.ACTION_SPACING / 2);
       actionXById.set(action.id, x);
       const verb = classifyVerb(action.text);
       const role: NotationNodeRole = verb ? 'verb' : 'state';

@@ -98,4 +98,29 @@ describe('calculateNotationLayout', () => {
         assert.strictEqual(empty.nodes.length, 0);
         assert.strictEqual(empty.edges.length, 0);
     });
+
+    // Regression: a no-input ACTION (e.g. "Preheat the oven") is a "leaf" by
+    // getLeafNodeIds's in-degree-0 definition. It must be placed exactly once
+    // (on its lane's spine, by the actions loop) — not duplicated as a
+    // floating leaf when another action consumes it, and not re-added by the
+    // orphan-leaf fallback when nothing consumes it.
+    it('never emits duplicate node ids for zero-input actions', () => {
+        const g: RecipeGraph = {
+            lanes: [{ id: 'oven', label: 'Oven', type: 'cook' }],
+            nodes: [
+                { id: 'preheat', laneId: 'oven', type: 'action', text: 'Preheat the oven', visualDescription: '' },
+                { id: 'lonely', laneId: 'oven', type: 'action', text: 'Grease the tray', visualDescription: '' },
+                { id: 'bake1', laneId: 'oven', type: 'action', text: 'Bake the cake', visualDescription: '', inputs: ['preheat'] },
+            ],
+        };
+        const l = calculateNotationLayout(g);
+        const ids = l.nodes.map(n => n.id);
+        assert.strictEqual(new Set(ids).size, ids.length, `duplicate ids in ${JSON.stringify(ids)}`);
+        // Consumed zero-input action keeps its action role (verb/state), not 'leaf'.
+        const preheat = l.nodes.find(n => n.id === 'preheat')!;
+        assert.notStrictEqual(preheat.role, 'leaf');
+        // Unconsumed zero-input action also keeps its action role.
+        const lonely = l.nodes.find(n => n.id === 'lonely')!;
+        assert.notStrictEqual(lonely.role, 'leaf');
+    });
 });

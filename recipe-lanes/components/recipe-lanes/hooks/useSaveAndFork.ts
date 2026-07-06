@@ -32,7 +32,11 @@ export function buildGraphForSave(
     rfNodes: any[],
     rfEdges: any[],
 ): RecipeGraph {
-    const currentNodes = rfNodes.filter((n: any) => n.type !== 'lane');
+    // Exclude synthetic canvas-only nodes: lane bands and notation station
+    // badges (row anchors that exist only in the layout, not in graph.nodes).
+    // Without this, saving in notation mode writes phantom
+    // `notation-station-<laneId>` rows into layouts[mode] forever.
+    const currentNodes = rfNodes.filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station');
     const layouts = { ...(graph.layouts || {}) };
     layouts[mode] = currentNodes.map((n: any) => ({ id: n.id, x: n.position.x, y: n.position.y }));
 

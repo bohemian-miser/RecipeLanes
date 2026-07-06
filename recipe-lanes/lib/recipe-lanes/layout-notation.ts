@@ -239,11 +239,22 @@ export function calculateNotationLayout(graph: RecipeGraph): NotationLayoutGraph
 
   // ── Leaves float above the row of the first action that consumes them ───
   // Group leaves by their consumer so siblings can be spread horizontally.
+  //
+  // Only INGREDIENT leaves are placed here. getLeafNodeIds is purely
+  // in-degree-0, so a no-input ACTION (e.g. "Preheat the oven") is also a
+  // "leaf" by that definition — but it was already placed on its lane's spine
+  // by the actions loop above. Re-adding it here would produce two visual
+  // nodes with the same id (ReactFlow key collision, node flickers between
+  // positions).
   const consumerOfLeaf = new Map<string, string>(); // leafId -> consuming action id
   for (const node of graph.nodes) {
     if (node.type !== 'action') continue;
     for (const inputId of node.inputs ?? []) {
-      if (leafIds.has(inputId) && !consumerOfLeaf.has(inputId)) {
+      if (
+        leafIds.has(inputId) &&
+        byId.get(inputId)?.type === 'ingredient' &&
+        !consumerOfLeaf.has(inputId)
+      ) {
         consumerOfLeaf.set(inputId, node.id);
       }
     }
@@ -283,11 +294,14 @@ export function calculateNotationLayout(graph: RecipeGraph): NotationLayoutGraph
 
   // Leaves that nothing consumes (orphaned / dangling inputs) still need a
   // position so they aren't silently dropped — place them at the top-left of
-  // their own lane's row.
+  // their own lane's row. (No-input ACTIONS are excluded here for the same
+  // reason as above: the actions loop already placed them; the placed-id
+  // check would skip them anyway, the type check just makes that explicit.)
+  const placedIds = new Set(nodes.map(n => n.id));
   for (const leafId of leafIds) {
-    if (nodes.some(n => n.id === leafId)) continue;
+    if (placedIds.has(leafId)) continue;
     const leaf = byId.get(leafId);
-    if (!leaf) continue;
+    if (!leaf || leaf.type !== 'ingredient') continue;
     const y = rowY(leaf.laneId);
     nodes.push({
       id: leaf.id,

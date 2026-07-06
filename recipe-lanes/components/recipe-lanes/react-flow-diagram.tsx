@@ -364,8 +364,15 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                  },
                  width: n.width,
                  height: n.height,
-                 // Station badges are fixed row anchors, not draggable.
+                 // Station badges are synthetic row anchors (not in graph.nodes):
+                 // not draggable, not selectable, and not Backspace-deletable —
+                 // otherwise ReactFlow's default delete handling removes them
+                 // from local canvas state (looks like data loss) without going
+                 // through handleDeleteNode.
                  draggable: !(isNotation && role === 'station'),
+                 ...(isNotation && role === 'station'
+                     ? { selectable: false, deletable: false, focusable: false }
+                     : {}),
              });
         });
 

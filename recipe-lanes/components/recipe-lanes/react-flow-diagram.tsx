@@ -851,21 +851,25 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                     </div>
 
                     <div className="relative group">
+                        {/* Save sits on top of the stack (relative z-10, opaque bg) so the
+                            Copy button can tuck directly behind it when at rest. */}
                         <button
                             onClick={handleSave}
                             disabled={!saveButton.enabled}
-                            className={`flex items-center gap-1.5 p-2 rounded shadow-md border border-zinc-200 transition-colors ${saved ? 'bg-green-50 text-green-600 border-green-200' : saveButton.enabled ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
+                            className={`relative z-10 flex items-center gap-1.5 p-2 rounded shadow-md border border-zinc-200 transition-colors ${saved ? 'bg-green-50 text-green-600 border-green-200' : saveButton.enabled ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
                             title={saveButton.label}
                         >
                             {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
                             {saveButton.isCopy && <span className="text-xs font-bold hidden sm:inline">{saveButton.label}</span>}
                         </button>
-                        {/* Save-a-copy (issue #239): a same-sized square icon that drops
-                            down from the Save button on hover, revealing "Save a copy". */}
+                        {/* Save-a-copy (issue #239): a same-sized square Copy icon stacked
+                            *behind* the Save button (top-0, z-0) — fully hidden at rest, it
+                            slides straight down out from behind Save on hover/focus. The
+                            ::before strip bridges the reveal gap so the hover stays live. */}
                         {isLoggedIn && (
                             <button
                                 onClick={handleSaveCopy}
-                                className="absolute left-0 top-full mt-1 p-2 rounded shadow-md border border-zinc-200 bg-white text-zinc-600 opacity-0 -translate-y-2 pointer-events-none transition-all duration-150 hover:bg-zinc-50 group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto focus:opacity-100 focus:translate-y-0 focus:pointer-events-auto before:absolute before:-top-1 before:left-0 before:h-1 before:w-full before:content-['']"
+                                className="absolute left-0 top-0 z-0 p-2 rounded shadow-md border border-zinc-200 bg-white text-zinc-600 pointer-events-none transition-all duration-200 ease-out hover:bg-zinc-50 group-hover:translate-y-[calc(100%+0.25rem)] group-hover:pointer-events-auto focus-visible:translate-y-[calc(100%+0.25rem)] focus-visible:pointer-events-auto before:absolute before:-top-1 before:left-0 before:h-1 before:w-full before:content-['']"
                                 title="Save a copy"
                                 aria-label="Save a copy"
                             >

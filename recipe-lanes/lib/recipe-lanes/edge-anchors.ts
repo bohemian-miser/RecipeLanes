@@ -59,6 +59,16 @@ export interface NormalizedBBox { x: number; y: number; w: number; h: number }
 
 /** Icon container sides for the classic theme. */
 export const CLASSIC_CONTAINER = { ingredient: 56, action: 80 } as const;
+
+/**
+ * RF reports a Position.Top handle's TOP edge, and the classic handle overhangs
+ * the container top (RF css `top:-4px` on a 4px-tall handle → top edge ≈ -6px,
+ * DOM-measured). Frames must shift down by this to sit on the real container.
+ * Unscaled on purpose: RF measures handle bounds at mount, when leafNodeScale
+ * is at its default of 1 (the store is not persisted), so the reported offset
+ * stays -6 flow-px regardless of the current slider value.
+ */
+export const CLASSIC_HANDLE_TOP_OVERHANG = 6;
 /** Modern theme container / inner-image sides. */
 export const MODERN_CONTAINER = { ingredient: 80, action: 120 } as const;
 export const MODERN_IMAGE = { ingredient: 64, action: 96 } as const;
@@ -73,7 +83,7 @@ export function getClassicFrame(
     scale = 1,
 ): AnchorFrame {
     const size = (isIngredient ? CLASSIC_CONTAINER.ingredient : CLASSIC_CONTAINER.action) * scale;
-    return { x: handlePos.x - size / 2, y: handlePos.y, size };
+    return { x: handlePos.x - size / 2, y: handlePos.y + CLASSIC_HANDLE_TOP_OVERHANG, size };
 }
 
 /**

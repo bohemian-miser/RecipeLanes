@@ -42,17 +42,17 @@ const HANDLE = { x: 200, y: 100 }; // RF-reported: top-center of the icon contai
 describe('getClassicFrame', () => {
     it('maps the ingredient frame over the 56px container, handle at top-center', () => {
         const f = getClassicFrame(HANDLE, true);
-        assert.deepStrictEqual(f, { x: 200 - 28, y: 100, size: 56 });
+        assert.deepStrictEqual(f, { x: 200 - 28, y: 106, size: 56 });
     });
 
     it('maps the action frame over the 80px container', () => {
         const f = getClassicFrame(HANDLE, false);
-        assert.deepStrictEqual(f, { x: 200 - 40, y: 100, size: 80 });
+        assert.deepStrictEqual(f, { x: 200 - 40, y: 106, size: 80 });
     });
 
     it('centered metadata lands at the container center (the arrow-too-low fix: 28px below handle for ingredients, not 40)', () => {
         const p = anchorPoint(getClassicFrame(HANDLE, true), { x: 0.5, y: 0.5 });
-        assert.deepStrictEqual(p, { x: 200, y: 128 });
+        assert.deepStrictEqual(p, { x: 200, y: 134 });
     });
 
     it('off-center (squished) metadata scales by the 56px frame, not 80', () => {
@@ -64,12 +64,12 @@ describe('getClassicFrame', () => {
 
     it('leaf scale shrinks the frame around the fixed handle point', () => {
         const f = getClassicFrame(HANDLE, true, 0.5);
-        assert.deepStrictEqual(f, { x: 200 - 14, y: 100, size: 28 });
+        assert.deepStrictEqual(f, { x: 200 - 14, y: 106, size: 28 });
         // handle point is invariant: frame top-center == handle at every scale
         for (const s of [0.4, 0.7, 1]) {
             const fs = getClassicFrame(HANDLE, true, s);
             assert.strictEqual(fs.x + fs.size / 2, HANDLE.x);
-            assert.strictEqual(fs.y, HANDLE.y);
+            assert.strictEqual(fs.y, HANDLE.y + 6); // overhang is constant, unscaled
         }
     });
 });
@@ -146,11 +146,11 @@ describe('getEdgeParams (integration of the anchor math)', () => {
         const tgtHandle = { x: 60, y: 300 };  // top-center of ingredient container
         const p = getEdgeParams(src, tgt, srcHandle, tgtHandle);
 
-        // target center = handle.y + 0.5*56 = 328; bbox top = 300 + 0.25*56 - 2 = 312
+        // target center = handle.y + 6 + 0.5*56 = 334; bbox top = 306 + 0.25*56 - 2 = 318
         assert.strictEqual(p.tx, 60);
-        assert.strictEqual(p.ty, 312);
-        // source center = 0 + 0.5*80 = 40; bbox bottom = 0.75*80 + 5 = 65
-        assert.strictEqual(p.sy, 65);
+        assert.strictEqual(p.ty, 318);
+        // source center = 6 + 0.5*80 = 46; bbox bottom = 6 + 0.75*80 + 5 = 71
+        assert.strictEqual(p.sy, 71);
     });
 
     it('leaf scale moves the target intersection with the shrunken frame', () => {
@@ -158,8 +158,8 @@ describe('getEdgeParams (integration of the anchor math)', () => {
         const tgt = mkNode('b', 0, 300, 'ingredient', CENTERED, true);
         const p1 = getEdgeParams(src, tgt, { x: 60, y: 0 }, { x: 60, y: 300 });
         const pHalf = getEdgeParams(src, tgt, { x: 60, y: 0 }, { x: 60, y: 300 }, { target: 0.5 });
-        // half-scale frame: size 28, bbox top = 300 + 0.25*28 - 2 = 305
-        assert.strictEqual(pHalf.ty, 305);
+        // half-scale frame: size 28, bbox top = 306 + 0.25*28 - 2 = 311
+        assert.strictEqual(pHalf.ty, 311);
         assert.ok(pHalf.ty < p1.ty, 'smaller leaf → arrow ends closer to the (fixed) handle');
     });
 
@@ -167,7 +167,7 @@ describe('getEdgeParams (integration of the anchor math)', () => {
         const src = mkNode('a', 0, 0, 'action');
         const tgt = mkNode('b', 0, 300, 'ingredient', undefined, true);
         const p = getEdgeParams(src, tgt, { x: 60, y: 0 }, { x: 60, y: 300 }, { target: 0.5 });
-        // target frame center = 300 + 14; radius = 24*0.5 = 12 → ty = 314 - 12 = 302
-        assert.strictEqual(p.ty, 302);
+        // target frame center = 306 + 14; radius = 24*0.5 = 12 → ty = 320 - 12 = 308
+        assert.strictEqual(p.ty, 308);
     });
 });

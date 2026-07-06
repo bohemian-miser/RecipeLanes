@@ -303,6 +303,7 @@ export function calculateNotationLayout(graph: RecipeGraph): NotationLayoutGraph
     const leaf = byId.get(leafId);
     if (!leaf || leaf.type !== 'ingredient') continue;
     const y = rowY(leaf.laneId);
+    placedIds.add(leaf.id);
     nodes.push({
       id: leaf.id,
       role: 'leaf',
@@ -312,6 +313,33 @@ export function calculateNotationLayout(graph: RecipeGraph): NotationLayoutGraph
       height: NOTATION.LEAF_SIZE,
       laneId: leaf.laneId,
       data: leaf,
+    });
+  }
+
+  // ── Catch-all sweep: EVERY graph node must be placed exactly once ────────
+  // The passes above cover actions and ingredient leaves, but an ingredient
+  // node with in-degree > 0 (possible via applyPatch / hand-edited JSON) is
+  // neither — and a node missing from the layout doesn't just fail to render:
+  // buildGraphForSave intersects graph.nodes with the rendered RF nodes, so
+  // saving in Notation mode would PERMANENTLY DELETE it from the recipe.
+  // This sweep makes "every node appears exactly once" unconditional, no
+  // matter how the placement passes above evolve.
+  for (const node of graph.nodes) {
+    if (placedIds.has(node.id)) continue;
+    placedIds.add(node.id);
+    const depth = depths.get(node.id) ?? 0;
+    const y = rowY(node.laneId);
+    nodes.push({
+      id: node.id,
+      role: 'state',
+      x: NOTATION.ROW_START_X + depth * NOTATION.ACTION_SPACING - NOTATION.LEAF_SIZE / 2,
+      // Sit slightly above the spine so it reads as "on this station, mid-flow"
+      // without pretending to be a spine step.
+      y: y - 40 - NOTATION.LEAF_SIZE / 2,
+      width: NOTATION.LEAF_SIZE,
+      height: NOTATION.LEAF_SIZE,
+      laneId: node.laneId,
+      data: node,
     });
   }
 

@@ -124,3 +124,53 @@ describe('calculateNotationLayout', () => {
         assert.notStrictEqual(lonely.role, 'leaf');
     });
 });
+
+// ── Placement invariant ──────────────────────────────────────────────────────
+// Every node in graph.nodes must appear EXACTLY ONCE in layout.nodes. A node
+// missing from the layout doesn't just fail to render: buildGraphForSave
+// intersects graph.nodes with the rendered RF nodes, so saving in Notation
+// mode would permanently delete it from the recipe.
+function assertEveryNodePlacedOnce(graph: RecipeGraph) {
+    const layout = calculateNotationLayout(graph);
+    const counts = new Map<string, number>();
+    for (const n of layout.nodes) counts.set(n.id, (counts.get(n.id) ?? 0) + 1);
+    for (const gn of graph.nodes) {
+        assert.strictEqual(counts.get(gn.id), 1, `node ${gn.id} must appear exactly once in the layout`);
+    }
+}
+
+describe('calculateNotationLayout placement invariant', () => {
+    it('places every node of the standard fixture exactly once', () => {
+        assertEveryNodePlacedOnce(buildGraph());
+    });
+
+    it('places an ingredient node WITH inputs (not a leaf, not an action) instead of dropping it', () => {
+        const graph = buildGraph();
+        // e.g. an applyPatch-produced "derived ingredient": consumed nowhere,
+        // but fed by an action — in-degree > 0 so it is not in getLeafNodeIds,
+        // and it is not an action, so no primary placement pass covers it.
+        graph.nodes.push({
+            id: 'i-mid',
+            laneId: 'lane1',
+            type: 'ingredient',
+            text: 'reserved garlic oil',
+            visualDescription: 'garlic oil',
+            inputs: ['action2'],
+        });
+        assertEveryNodePlacedOnce(graph);
+
+        const layout = calculateNotationLayout(graph);
+        const placed = layout.nodes.find(n => n.id === 'i-mid')!;
+        assert.strictEqual(placed.role, 'state');
+        assert.strictEqual(placed.laneId, 'lane1');
+    });
+
+    it('holds for a graph with a no-input action and an orphan ingredient', () => {
+        const graph = buildGraph();
+        graph.nodes.push(
+            { id: 'a-noinput', laneId: 'lane2', type: 'action', text: 'Preheat the oven', visualDescription: '' },
+            { id: 'i-orphan', laneId: 'lane2', type: 'ingredient', text: 'parsley', visualDescription: 'parsley' },
+        );
+        assertEveryNodePlacedOnce(graph);
+    });
+});

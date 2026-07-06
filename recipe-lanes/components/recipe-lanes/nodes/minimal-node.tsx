@@ -59,6 +59,9 @@ export const MinimalNode: React.FC<any> = ({
   // selector re-renders only when this specific node changes.
   const storeNode = useRecipeStore(s => s.graph?.nodes.find(n => n.id === id));
   const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
+  // Global "leaf node size" setting (#155): scale leaf nodes (no incoming edge).
+  // `data.isLeaf` is computed once during layout in react-flow-diagram.
+  const leafNodeScale = useRecipeStore(s => s.leafNodeScale);
 
   // Use storeNode when available (it has up-to-date shortlistIndex after cycling).
   // Fall back to data prop for nodes not yet in the store.
@@ -152,11 +155,16 @@ export const MinimalNode: React.FC<any> = ({
       onPointerCancelCapture: handlePointerUpOrCancel
   };
 
-  if (iconTheme === 'modern' || iconTheme === 'modern_clean') {
-      return <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
-  }
+  const inner = (iconTheme === 'modern' || iconTheme === 'modern_clean')
+      ? <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />
+      : <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
 
-  return <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
+  // Scale leaf nodes down when the global slider is below 100%. A uniform scale
+  // keeps handles proportional so edges still meet the node cleanly.
+  if (data.isLeaf && leafNodeScale < 1) {
+      return <div style={{ transform: `scale(${leafNodeScale})`, transformOrigin: 'center center' }}>{inner}</div>;
+  }
+  return inner;
 };
 
 export default memo(MinimalNode);

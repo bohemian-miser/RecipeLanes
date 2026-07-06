@@ -83,8 +83,9 @@ function RecipeLanesContent() {
   const layoutMode = useRecipeStore(s => s.nodeLayout);
   const layoutModeRestoredRef = useRef(false);
   const iconTheme = useRecipeStore(s => s.iconStyle) as 'classic' | 'modern' | 'modern_clean';
+  const leafNodeScale = useRecipeStore(s => s.leafNodeScale);
   const canvasBackground = useRecipeStore(s => s.canvasBackground);
-  const { setNodeLayout, setIconStyle, setLineStyle, setCanvasBackground } = useRecipeStore.getState();
+  const { setNodeLayout, setIconStyle, setLineStyle, setLeafNodeScale, setCanvasBackground } = useRecipeStore.getState();
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
@@ -1094,6 +1095,21 @@ const handleVisualize = async () => {
                         </select>
                     </div>
 
+                    {/* Leaf node size — global slider (issue #155) */}
+                    <div className="flex items-center gap-2" title="Size of leaf nodes (raw ingredients)">
+                        <span className="text-xs font-mono text-zinc-400 whitespace-nowrap">Leaf size</span>
+                        <input
+                            type="range"
+                            min={0.4}
+                            max={1}
+                            step={0.05}
+                            value={leafNodeScale}
+                            onChange={(e) => setLeafNodeScale(parseFloat(e.target.value))}
+                            className="w-20 accent-yellow-500 cursor-pointer"
+                            aria-label="Leaf node size"
+                        />
+                        <span className="text-xs font-mono text-zinc-400 w-8 tabular-nums">{Math.round(leafNodeScale * 100)}%</span>
+                    </div>
 
                 </div>
 

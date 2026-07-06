@@ -43,7 +43,7 @@
  */
 
 import { create } from 'zustand';
-import { RecipeGraph, RecipeNode, IconStyleId, LineStyleId, LayoutModeId, BackgroundElementId, ChatMessage } from '../recipe-lanes/types';
+import { RecipeGraph, RecipeNode, IconStyleId, LineStyleId, LayoutModeId, BackgroundElementId, CanvasBackgroundId, ChatMessage } from '../recipe-lanes/types';
 import { getNodeShortlistKey, cycleShortlistNodes } from '../recipe-lanes/model-utils';
 
 // ---------------------------------------------------------------------------
@@ -64,6 +64,8 @@ interface RecipeState {
     lineStyle: LineStyleId;
     nodeLayout: LayoutModeId;
     backgrounds: BackgroundElementId[];
+    /** The paper/surface the canvas is drawn on — independent of iconStyle. */
+    canvasBackground: CanvasBackgroundId;
     activePresetId: string;
     /**
      * Global setting: scale factor for leaf nodes (nodes with no incoming edge).
@@ -153,6 +155,7 @@ interface RecipeActions {
     setNodeLayout: (layout: LayoutModeId) => void;
     toggleBackground: (bg: BackgroundElementId) => void;
     setLeafNodeScale: (scale: number) => void;
+    setCanvasBackground: (bg: CanvasBackgroundId) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +251,7 @@ const initialState: RecipeState = {
     lineStyle: 'straight',
     nodeLayout: 'dagre',
     backgrounds: [],
+    canvasBackground: 'default',
     activePresetId: 'classic',
     leafNodeScale: 1,
     undoStack: [],
@@ -395,4 +399,5 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
     setNodeLayout: (nodeLayout) => set({ nodeLayout, activePresetId: 'custom' }),
     toggleBackground: (bg) => set((state) => { const backgrounds = state.backgrounds.includes(bg) ? state.backgrounds.filter(b => b !== bg) : [...state.backgrounds, bg]; return { backgrounds, activePresetId: 'custom' }; }),
     setLeafNodeScale: (scale) => set({ leafNodeScale: scale }),
+    setCanvasBackground: (canvasBackground) => set({ canvasBackground }),
 }));

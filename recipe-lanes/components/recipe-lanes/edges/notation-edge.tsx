@@ -17,6 +17,8 @@
 
 import React, { memo, useCallback } from 'react';
 import { useStore } from 'reactflow';
+import { CLASSIC_CONTAINER, MODERN_CONTAINER } from '../../../lib/recipe-lanes/edge-anchors';
+import { getNodeTheme } from '../../../lib/recipe-lanes/model-utils';
 
 const SPINE_INK = '#3a362f';
 const LEAF_LINE = '#a39a88';
@@ -31,10 +33,22 @@ interface NotationEdgeProps {
   data?: { kind?: 'spine' | 'drop' | 'cross' };
 }
 
+// Anchor point for a notation edge endpoint. Verb circles and station badges
+// are symmetric, so their geometric center is right. MinimalNode-rendered
+// leaves/states are icon-container-on-top + label-below: their geometric
+// center lands on the LABEL, so aim at the icon container's center instead
+// (container height by theme/type, same constants as edge-anchors.ts).
 function center(node: any): { x: number; y: number } {
   const p = node.positionAbsolute ?? node.position;
   const w = node.width ?? 0;
   const h = node.height ?? 0;
+  if (node.type === 'minimal') {
+    const theme = getNodeTheme(node.data);
+    const modern = theme === 'modern' || theme === 'modern_clean';
+    const isIngredient = node.data?.type === 'ingredient';
+    const container = (modern ? MODERN_CONTAINER : CLASSIC_CONTAINER)[isIngredient ? 'ingredient' : 'action'];
+    return { x: p.x + w / 2, y: p.y + container / 2 };
+  }
   return { x: p.x + w / 2, y: p.y + h / 2 };
 }
 

@@ -461,30 +461,50 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     // second snapshot has them, but by then hasInitialLayoutRef is already true.
     const prevLayoutsKeyRef = useRef<string | null | undefined>(undefined);
 
+    // True while a mode/spacing switch is scheduled but its 5ms layout timer
+    // hasn't fired yet (re-renders can cancel + reschedule it repeatedly).
+    const pendingLayoutSwitchRef = useRef(false);
+
     // Layout Effect
     useEffect(() => {
         if (isLive) return; // Skip static layout if physics is running
 
+        const isNotationMode = mode === 'notation';
         const modeChanged = prevMode.current !== mode;
         const spacingChanged = prevSpacing.current !== spacing;
 
         if (modeChanged || spacingChanged) {
-            prevMode.current = mode;
-            prevSpacing.current = spacing;
             setIsDirty(true);
 
-            // Throttle snapshot for spacing to prevent history spam and lag
-            const now = Date.now();
-            if (modeChanged || now - lastSnapshotRef.current > 500) {
-                takeSnapshot();
-                lastSnapshotRef.current = now;
+            // Throttle snapshot for spacing to prevent history spam and lag.
+            // pendingLayoutSwitchRef also guards against duplicate snapshots
+            // while the switch below is being rescheduled by re-renders.
+            if (!pendingLayoutSwitchRef.current) {
+                const now = Date.now();
+                if (modeChanged || now - lastSnapshotRef.current > 500) {
+                    takeSnapshot();
+                    lastSnapshotRef.current = now;
+                }
             }
+            pendingLayoutSwitchRef.current = true;
 
             // Yield to main thread for UI updates.
             // On mode change: restore saved positions if available. On spacing-only change: always re-run fresh layout.
+            //
+            // prevMode/prevSpacing are committed INSIDE the timeout, when the
+            // layout actually runs. They used to be set eagerly before it —
+            // so when an unrelated re-render (icon snapshot, text sync…)
+            // cancelled this timer during the 5ms window, the next effect run
+            // saw modeChanged === false and the layout switch was silently
+            // lost forever (the "select says Timeline but canvas didn't
+            // change until you hit reset" bug). Committing them on fire means
+            // a cancelled switch simply reschedules on the next run.
             const hasSavedPositions = modeChanged && !!(graph.layouts?.[mode]);
+            const shouldFit = modeChanged;
             const timer = setTimeout(() => {
-                const shouldFit = modeChanged;
+                pendingLayoutSwitchRef.current = false;
+                prevMode.current = mode;
+                prevSpacing.current = spacing;
                 runLayout(hasSavedPositions, shouldFit);
             }, 5);
             return () => clearTimeout(timer);
@@ -498,7 +518,12 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         // Fires once when saved layout data arrives after the initial dagre render ran
         // without it (two-snapshot scenario). The key comparison already prevents
         // re-firing on unchanged data, so we don't need an !isDirty guard here.
+        // Notation is excluded: calculateNotationLayout ignores saved positions
+        // (always from-scratch), so "layouts arrived" would just recompute the
+        // layout and snap any user drags back — the first autosave in notation
+        // mode writes layouts['notation'], which used to trip this on the echo.
         const layoutsJustArrived =
+            !isNotationMode &&
             hasInitialLayoutRef.current &&
             currentLayoutsKey !== null &&
             prevLayoutsKeyRef.current === null;
@@ -514,8 +539,14 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             // Detect full regeneration: if none of the incoming graph node IDs match
             // current ReactFlow nodes, the recipe was re-parsed with all-new IDs.
             // In that case, do a fresh layout rather than a no-op metadata patch.
+            // Synthetic notation station badges are RF-only (never in graph.nodes):
+            // they must be excluded here or hasRemovedNodes is permanently true in
+            // notation mode, re-running the from-scratch layout on EVERY graph tick
+            // (autosave echoes, icon writes …) and snapping user drags back.
             const currentRFNodeIds = new Set(
-                getNodes().filter((n: any) => n.type !== 'lane').map((n: any) => n.id)
+                getNodes()
+                    .filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station')
+                    .map((n: any) => n.id)
             );
             const incomingIds = graph.nodes.map(n => n.id);
             // Guard: if rfNodes is empty but hasInitialLayoutRef is true, runLayout

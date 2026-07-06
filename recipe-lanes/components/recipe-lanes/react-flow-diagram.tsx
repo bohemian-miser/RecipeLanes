@@ -45,7 +45,7 @@ import FloatingEdge from './edges/floating-edge';
 import TimelineEdge from './edges/timeline-edge';
 import TimelineBackground, { type TimelineData } from './timeline-background';
 import { toPng } from 'html-to-image';
-import { Download, Share2, Undo, Redo, Check, Save } from 'lucide-react';
+import { Download, Share2, Undo, Redo, Check, Save, Copy } from 'lucide-react';
 import { useHistoryManager } from './hooks/useHistoryManager';
 import { useSaveAndFork, getSaveButtonState } from './hooks/useSaveAndFork';
 import { useAutosave } from './hooks/useAutosave';
@@ -121,6 +121,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         getGraph,
         performSave,
         handleSave,
+        handleSaveCopy,
         handleShare,
         toggleVisibility,
     } = useSaveAndFork({
@@ -846,17 +847,31 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                         </button>
                     </div>
 
-                     <button
-                        onClick={handleSave}
-                        disabled={!saveButton.enabled}
-                        className={`flex items-center gap-1.5 p-2 rounded shadow-md border border-zinc-200 transition-colors ${saved ? 'bg-green-50 text-green-600 border-green-200' : saveButton.enabled ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
-                        title={saveButton.label}
-                    >
-                        {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                        {saveButton.isCopy && <span className="text-xs font-bold hidden sm:inline">{saveButton.label}</span>}
-                    </button>
+                    <div className="relative group">
+                        <button
+                            onClick={handleSave}
+                            disabled={!saveButton.enabled}
+                            className={`flex items-center gap-1.5 p-2 rounded shadow-md border border-zinc-200 transition-colors ${saved ? 'bg-green-50 text-green-600 border-green-200' : saveButton.enabled ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
+                            title={saveButton.label}
+                        >
+                            {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                            {saveButton.isCopy && <span className="text-xs font-bold hidden sm:inline">{saveButton.label}</span>}
+                        </button>
+                        {/* Save-a-copy (issue #239): a same-sized square icon that drops
+                            down from the Save button on hover, revealing "Save a copy". */}
+                        {isLoggedIn && (
+                            <button
+                                onClick={handleSaveCopy}
+                                className="absolute left-0 top-full mt-1 p-2 rounded shadow-md border border-zinc-200 bg-white text-zinc-600 opacity-0 -translate-y-2 pointer-events-none transition-all duration-150 hover:bg-zinc-50 group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto focus:opacity-100 focus:translate-y-0 focus:pointer-events-auto before:absolute before:-top-1 before:left-0 before:h-1 before:w-full before:content-['']"
+                                title="Save a copy"
+                                aria-label="Save a copy"
+                            >
+                                <Copy className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
 
-                     <button 
+                     <button
                         onClick={handleShare} 
                         className={`p-2 rounded shadow-md border border-zinc-200 transition-colors ${copied ? 'bg-green-50 text-green-600 border-green-200' : 'bg-white text-zinc-600 hover:bg-zinc-50'}`}
                         title={copied ? "Copied!" : "Save & Copy Link"}

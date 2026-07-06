@@ -59,6 +59,30 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
     await expect(page.getByText(/You have \d+ existing cop/)).toBeVisible();
   });
 
+  test('Save a copy: owner forks their own recipe from the toolbar (issue #239)', async ({ page, login }) => {
+    // Owner creates and saves a recipe.
+    await page.goto('/lanes?new=true');
+    await login('carol-user');
+    await create_recipe(page, 'Carol Original');
+    await wait_for_graph(page);
+    await expect(page).toHaveURL(/id=/);
+    const originalId = new URL(page.url()).searchParams.get('id');
+
+    // The Save-a-copy button is a square icon that drops down from Save on hover
+    // (pointer-events-none until the group is hovered). Hover the group first so
+    // the button becomes interactive, then click it.
+    const saveGroup = page.locator('div.group', { has: page.getByTitle('Save a copy') });
+    await saveGroup.hover();
+    const copyBtn = page.getByTitle('Save a copy');
+    await expect(copyBtn).toBeVisible();
+    await copyBtn.click();
+
+    // A brand-new recipe is created (new id, "Copy of ..." title) — the original
+    // is never overwritten.
+    await expect(page).toHaveURL(new RegExp(`id=(?!${originalId})`));
+    await expect(page.locator('h1').first()).toHaveText(/Copy of/);
+  });
+
   test('Gallery: Search & Vetting (Admin)', async ({ page, login }) => {
     test.slow();
 

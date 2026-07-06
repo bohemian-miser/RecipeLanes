@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry, SearchTerm, RecipeGraph, IconStyleId, RecipePatch } from './types';
+import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry, SearchTerm, RecipeGraph, IconStyleId, CanvasThemeId, RecipePatch } from './types';
 import { standardizeIngredientName } from '../utils';
 
 /**
@@ -50,12 +50,13 @@ const DEFAULT_THEME_CANVAS: ThemeCanvas = { background: 'transparent', patternCo
 const BUTCHER_PAPER_CANVAS: ThemeCanvas = { background: '#e9dcc3', patternColor: '#cbb892' };
 
 /**
- * Returns the canvas tokens for a display theme. Only `butcher_paper` overrides
- * the defaults — every other theme (classic/modern/modern_clean and any unknown
- * or missing value) keeps the original transparent pane + light-grey dots, so
- * existing themes render exactly as before.
+ * Returns the canvas tokens for a background theme. Only `butcher_paper`
+ * overrides the defaults — `default` and any unknown/missing value keep the
+ * original transparent pane + light-grey dots, so the canvas renders exactly as
+ * before unless the paper theme is explicitly selected. This is independent of
+ * the icon style.
  */
-export function getThemeCanvas(theme?: IconStyleId | string): ThemeCanvas {
+export function getThemeCanvas(theme?: CanvasThemeId | string): ThemeCanvas {
     return theme === 'butcher_paper' ? BUTCHER_PAPER_CANVAS : DEFAULT_THEME_CANVAS;
 }
 

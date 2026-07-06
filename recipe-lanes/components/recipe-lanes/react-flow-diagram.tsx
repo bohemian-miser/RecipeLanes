@@ -66,7 +66,7 @@ interface ReactFlowDiagramProps {
   isLoggedIn?: boolean;
   onNotify?: (msg: string) => void;
   isOwner?: boolean; // YOLO: Added to support auto-save on move logic
-  iconTheme?: 'classic' | 'modern' | 'modern_clean' | 'butcher_paper';
+  iconTheme?: 'classic' | 'modern' | 'modern_clean';
 }
 
 export interface ReactFlowDiagramHandle {
@@ -94,7 +94,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const mode = useRecipeStore(s => s.nodeLayout);
     const backgrounds = useRecipeStore(s => s.backgrounds);
     const iconTheme = iconStyle;
-    const themeCanvas = getThemeCanvas(iconTheme);
+    const canvasTheme = useRecipeStore(s => s.canvasTheme);
+    const themeCanvas = getThemeCanvas(canvasTheme);
 
     // Cast hooks to avoid implicit any in callbacks
     const [nodes, setNodesRaw, onNodesChange] = useNodesState([]);

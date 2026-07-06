@@ -91,7 +91,7 @@ describe('prependToShortlist', () => {
     });
 });
 
-describe('getThemeCanvas (butcher-paper theme, issue #111)', () => {
+describe('getThemeCanvas (butcher-paper background theme, issue #111)', () => {
     const DEFAULT = { background: 'transparent', patternColor: '#f4f4f5' };
 
     it('returns a warm kraft-paper pane for butcher_paper', () => {
@@ -102,10 +102,8 @@ describe('getThemeCanvas (butcher-paper theme, issue #111)', () => {
         assert.equal(canvas.patternColor, '#cbb892');
     });
 
-    it('leaves the classic/modern themes on the original transparent pane', () => {
-        for (const theme of ['classic', 'modern', 'modern_clean'] as const) {
-            assert.deepEqual(getThemeCanvas(theme), DEFAULT);
-        }
+    it('leaves the default background on the original transparent pane', () => {
+        assert.deepEqual(getThemeCanvas('default'), DEFAULT);
     });
 
     it('falls back to the default canvas for unknown or missing themes', () => {

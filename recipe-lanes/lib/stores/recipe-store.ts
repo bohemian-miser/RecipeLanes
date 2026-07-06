@@ -43,7 +43,7 @@
  */
 
 import { create } from 'zustand';
-import { RecipeGraph, RecipeNode, IconStyleId, LineStyleId, LayoutModeId, BackgroundElementId, ChatMessage } from '../recipe-lanes/types';
+import { RecipeGraph, RecipeNode, IconStyleId, CanvasThemeId, LineStyleId, LayoutModeId, BackgroundElementId, ChatMessage } from '../recipe-lanes/types';
 import { getNodeShortlistKey, cycleShortlistNodes } from '../recipe-lanes/model-utils';
 
 // ---------------------------------------------------------------------------
@@ -61,6 +61,8 @@ interface RecipeState {
     ownerName: string | null;
     isDirty: boolean;
     iconStyle: IconStyleId;
+    /** Diagram canvas background theme — independent of iconStyle. */
+    canvasTheme: CanvasThemeId;
     lineStyle: LineStyleId;
     nodeLayout: LayoutModeId;
     backgrounds: BackgroundElementId[];
@@ -144,6 +146,7 @@ interface RecipeActions {
     reset: () => void;
     setVisualPreset: (presetId: string) => void;
     setIconStyle: (style: IconStyleId) => void;
+    setCanvasTheme: (theme: CanvasThemeId) => void;
     setLineStyle: (style: LineStyleId) => void;
     setNodeLayout: (layout: LayoutModeId) => void;
     toggleBackground: (bg: BackgroundElementId) => void;
@@ -239,6 +242,7 @@ const initialState: RecipeState = {
     ownerName: null,
     isDirty: false,
     iconStyle: 'classic',
+    canvasTheme: 'default',
     lineStyle: 'straight',
     nodeLayout: 'dagre',
     backgrounds: [],
@@ -384,6 +388,7 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
     reset: () => set(initialState),
     setVisualPreset: (presetId) => set({ activePresetId: presetId }),
     setIconStyle: (iconStyle) => set({ iconStyle, activePresetId: 'custom' }),
+    setCanvasTheme: (canvasTheme) => set({ canvasTheme }),
     setLineStyle: (lineStyle) => set({ lineStyle, activePresetId: 'custom' }),
     setNodeLayout: (nodeLayout) => set({ nodeLayout, activePresetId: 'custom' }),
     toggleBackground: (bg) => set((state) => { const backgrounds = state.backgrounds.includes(bg) ? state.backgrounds.filter(b => b !== bg) : [...state.backgrounds, bg]; return { backgrounds, activePresetId: 'custom' }; }),

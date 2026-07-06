@@ -8,33 +8,35 @@ const n = (id: string, inputs?: string[]) => ({ id, inputs });
 const leaves = (nodes: ReturnType<typeof n>[]) =>
     [...getLeafNodeIds({ nodes } as any)].sort();
 
+// A LEAF is a node with no incoming edge (in-degree 0): its `inputs` is
+// empty/absent. These are the entry-point nodes (raw ingredients).
 describe('getLeafNodeIds', () => {
-    it('treats the terminal node of a chain as the only leaf', () => {
-        // a -> b -> c  (c consumes b, b consumes a). Only c is a leaf.
+    it('treats the source node of a chain as the only leaf', () => {
+        // a -> b -> c  (b.inputs=[a], c.inputs=[b]). Only a has no incoming edge.
         const nodes = [n('a'), n('b', ['a']), n('c', ['b'])];
-        assert.deepStrictEqual(leaves(nodes), ['c']);
+        assert.deepStrictEqual(leaves(nodes), ['a']);
     });
 
-    it('marks every node with no consumer as a leaf (multiple outputs)', () => {
-        // a -> b, a -> c. Both b and c are leaves; a is consumed by both.
-        const nodes = [n('a'), n('b', ['a']), n('c', ['a'])];
-        assert.deepStrictEqual(leaves(nodes), ['b', 'c']);
-    });
-
-    it('a node feeding two consumers is not a leaf', () => {
-        // shared: a -> c, b -> c, c -> d. Only d is a leaf.
+    it('marks all no-input sources as leaves when they fan out', () => {
+        // a -> c, b -> c, c -> d. a and b have no incoming edge.
         const nodes = [n('a'), n('b'), n('c', ['a', 'b']), n('d', ['c'])];
-        assert.deepStrictEqual(leaves(nodes), ['d']);
+        assert.deepStrictEqual(leaves(nodes), ['a', 'b']);
+    });
+
+    it('a node with any incoming edge is not a leaf', () => {
+        // a -> b, a -> c. Only a is a leaf; b and c each have an incoming edge.
+        const nodes = [n('a'), n('b', ['a']), n('c', ['a'])];
+        assert.deepStrictEqual(leaves(nodes), ['a']);
     });
 
     it('an isolated node (no inputs, no consumers) is a leaf', () => {
         const nodes = [n('lonely'), n('a'), n('b', ['a'])];
-        assert.deepStrictEqual(leaves(nodes), ['b', 'lonely']);
+        assert.deepStrictEqual(leaves(nodes), ['a', 'lonely']);
     });
 
-    it('handles nodes with undefined inputs', () => {
-        const nodes = [n('a', undefined), n('b', ['a'])];
-        assert.deepStrictEqual(leaves(nodes), ['b']);
+    it('treats undefined and empty inputs the same', () => {
+        const nodes = [n('a', undefined), n('b', []), n('c', ['a'])];
+        assert.deepStrictEqual(leaves(nodes), ['a', 'b']);
     });
 
     it('returns an empty set for an empty or missing graph', () => {

@@ -15,26 +15,20 @@ type NodesOnly = { nodes: Pick<RecipeNode, 'id' | 'inputs'>[] };
  * Returns the set of LEAF node ids in a recipe graph.
  *
  * Edges are implicit: `RecipeNode.inputs` holds the ids of nodes that flow INTO
- * a node (an edge `inputId -> node.id`). A node is a leaf (out-degree 0) when
- * nothing consumes it — i.e. its id never appears in any node's `inputs`.
+ * a node (an edge `inputId -> node.id`). A node is a leaf when it has **no
+ * incoming edge** (in-degree 0) — i.e. its `inputs` is empty/absent. These are
+ * the entry-point nodes (raw ingredients that nothing flows into).
  *
- * Powers the "smaller leaf nodes" global setting (issue #155): terminal nodes
- * (final dishes / unused ingredients) are rendered smaller when the toggle is on.
+ * Powers the "smaller leaf nodes" global setting (issue #155): leaf nodes are
+ * rendered smaller when the toggle is on.
  */
 export function getLeafNodeIds(graph: RecipeGraph | NodesOnly | null | undefined): Set<string> {
     const nodes = graph?.nodes;
     if (!nodes || nodes.length === 0) return new Set();
 
-    const referenced = new Set<string>();
-    for (const node of nodes) {
-        const inputs = node.inputs;
-        if (!inputs) continue;
-        for (const inputId of inputs) referenced.add(inputId);
-    }
-
     const leaves = new Set<string>();
     for (const node of nodes) {
-        if (!referenced.has(node.id)) leaves.add(node.id);
+        if (!node.inputs || node.inputs.length === 0) leaves.add(node.id);
     }
     return leaves;
 }

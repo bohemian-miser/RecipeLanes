@@ -83,8 +83,8 @@ function RecipeLanesContent() {
   const layoutMode = useRecipeStore(s => s.nodeLayout);
   const layoutModeRestoredRef = useRef(false);
   const iconTheme = useRecipeStore(s => s.iconStyle) as 'classic' | 'modern' | 'modern_clean';
-  const smallLeafNodes = useRecipeStore(s => s.smallLeafNodes);
-  const { setNodeLayout, setIconStyle, setLineStyle, setSmallLeafNodes } = useRecipeStore.getState();
+  const leafNodeScale = useRecipeStore(s => s.leafNodeScale);
+  const { setNodeLayout, setIconStyle, setLineStyle, setLeafNodeScale } = useRecipeStore.getState();
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
@@ -1080,15 +1080,21 @@ const handleVisualize = async () => {
                         </select>
                     </div>
 
-                    {/* Smaller leaf nodes — global toggle (issue #155) */}
-                    <button
-                        onClick={() => setSmallLeafNodes(!smallLeafNodes)}
-                        aria-pressed={smallLeafNodes}
-                        className={`text-xs font-medium px-2 py-1.5 rounded border transition-colors ${smallLeafNodes ? 'bg-yellow-100 border-yellow-300 text-yellow-700' : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:text-zinc-700'}`}
-                        title="Render leaf (end) nodes smaller"
-                    >
-                        Small leaves
-                    </button>
+                    {/* Leaf node size — global slider (issue #155) */}
+                    <div className="flex items-center gap-2" title="Size of leaf nodes (raw ingredients)">
+                        <span className="text-xs font-mono text-zinc-400 whitespace-nowrap">Leaf size</span>
+                        <input
+                            type="range"
+                            min={0.4}
+                            max={1}
+                            step={0.05}
+                            value={leafNodeScale}
+                            onChange={(e) => setLeafNodeScale(parseFloat(e.target.value))}
+                            className="w-20 accent-yellow-500 cursor-pointer"
+                            aria-label="Leaf node size"
+                        />
+                        <span className="text-xs font-mono text-zinc-400 w-8 tabular-nums">{Math.round(leafNodeScale * 100)}%</span>
+                    </div>
 
                 </div>
 

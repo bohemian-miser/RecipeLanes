@@ -320,8 +320,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
              });
         });
 
-        // Leaf = out-degree 0 (nothing consumes it). Threaded into node data so
-        // the node view can render smaller when the global setting is on (#155).
+        // Leaf = no incoming edge (in-degree 0: raw ingredients). Threaded into
+        // node data so the node view can render it smaller via the slider (#155).
         const leafIds = getLeafNodeIds(graph);
         layout.nodes.forEach(n => {
              const originalNode = graph.nodes.find(gn => gn.id === n.id);

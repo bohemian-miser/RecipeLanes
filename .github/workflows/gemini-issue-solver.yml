@@ -1,9 +1,8 @@
 name: Gemini Autonomous Issue Solver
 
 on:
-  schedule:
-    # Run hourly at the start of every hour
-    - cron: '0 * * * *'
+  issues:
+    types: [opened, labeled]
   workflow_dispatch:
     # Allows manual triggering from the GitHub UI with an optional issue override
     inputs:
@@ -14,6 +13,8 @@ on:
 
 jobs:
   solve-issue:
+    # Only run for workflow_dispatch or when the agent-ready-gemini label is present
+    if: github.event_name == 'workflow_dispatch' || (github.event.action == 'opened' && contains(github.event.issue.labels.*.name, 'agent-ready-gemini')) || (github.event.action == 'labeled' && github.event.label.name == 'agent-ready-gemini')
     runs-on: ubuntu-latest
     
     # Securely pin permissions for GITHUB_TOKEN to write commits, PRs, and issue comments
@@ -64,6 +65,8 @@ jobs:
           # Formulate the prompt based on whether an issue number was supplied manually
           if [ -n "${{ github.event.inputs.issue_number }}" ]; then
             PROMPT="/resolve-issue ${{ github.event.inputs.issue_number }}"
+          elif [ -n "${{ github.event.issue.number }}" ]; then
+            PROMPT="/resolve-issue ${{ github.event.issue.number }}"
           else
             PROMPT="/resolve-issue"
           fi

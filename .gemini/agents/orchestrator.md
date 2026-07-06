@@ -17,8 +17,8 @@ Complete EXACTLY ONE GitHub issue this run, WITH TESTS, get its CI green, then s
 TOOLING NOTE: `gh` may NOT be installed. Prefer `gh`; if missing, fall back to the GitHub REST API via `curl` using $GH_TOKEN or $GITHUB_TOKEN, or GitHub MCP tools. `git` push over origin works regardless. If you cannot open a PR by ANY method, still push the branch and clearly report that a PR must be opened manually — never silently stop.
 
 1. PICK THE ISSUE:
-   Query GitHub for open issues labeled with `agent-ready` (e.g. `gh issue list --state open --label "agent-ready" --json number,title`). 
-   If an issue number is supplied directly in your run context or argument, use that. Otherwise, pick the oldest open issue labeled `agent-ready`.
+   Query GitHub for open issues labeled with `agent-ready-gemini` (e.g. `gh issue list --state open --label "agent-ready-gemini" --json number,title`). 
+   If an issue number is supplied directly in your run context or argument, use that. Otherwise, pick the oldest open issue labeled `agent-ready-gemini`.
    *** ROBUST DEDUP — this is critical; we already had a duplicate-PR incident (#207 AND #208 were both filed for issue #148 because a weak check missed the first PR). An issue is ELIGIBLE only if it is OPEN and has NO open PR and NO remote branch already targeting it. Do NOT rely on GitHub's formal 'linked PR' relationship — that only exists when a PR body literally says 'Closes #N', so a PR that merely mentions the issue will be MISSED. Instead check ALL of: `gh pr list --state open --search "<n>"`; `gh pr list --state open --json number,title,body,headRefName` then grep title/body/branch for the issue number; and `git ls-remote --heads origin '*issue-<n>*'`. If ANY of these shows existing work for the issue, treat it as INELIGIBLE and move to the next. (Farm these lookups to a subagent.) ***
    Pick the first eligible issue.
 2. If none are eligible, do nothing and report 'no eligible work'. Do not invent work.

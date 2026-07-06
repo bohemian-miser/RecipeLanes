@@ -83,7 +83,8 @@ function RecipeLanesContent() {
   const layoutMode = useRecipeStore(s => s.nodeLayout);
   const layoutModeRestoredRef = useRef(false);
   const iconTheme = useRecipeStore(s => s.iconStyle) as 'classic' | 'modern' | 'modern_clean';
-  const { setNodeLayout, setIconStyle, setLineStyle } = useRecipeStore.getState();
+  const canvasBackground = useRecipeStore(s => s.canvasBackground);
+  const { setNodeLayout, setIconStyle, setLineStyle, setCanvasBackground } = useRecipeStore.getState();
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
@@ -1076,10 +1077,23 @@ const handleVisualize = async () => {
                             <option value="classic">Classic</option>
                             <option value="modern">Modern</option>
                             <option value="modern_clean">Clean</option>
+                        </select>
+                    </div>
+
+                    {/* Background (Paper) Dropdown — independent of icon style */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-zinc-400">Paper</span>
+                        <select
+                            value={canvasBackground}
+                            onChange={(e) => setCanvasBackground(e.target.value as any)}
+                            className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1.5 text-zinc-700 font-medium focus:ring-1 focus:ring-yellow-500/50 outline-none"
+                            title="Canvas Background"
+                        >
+                            <option value="default">Default</option>
                             <option value="butcher">Butcher&apos;s Paper</option>
                         </select>
                     </div>
-                    
+
 
                 </div>
 

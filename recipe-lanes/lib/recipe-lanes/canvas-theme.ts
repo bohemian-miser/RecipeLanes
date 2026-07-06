@@ -15,13 +15,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { IconStyleId } from './types';
+import type { CanvasBackgroundId } from './types';
 
 /**
  * Visual theme for the diagram canvas (the "paper" the recipe sits on).
  * The diagram surface colour, the ReactFlow dot-pattern colour, and the
- * PNG-export background are all derived from the selected style, so that
- * on-screen and downloaded diagrams stay in sync.
+ * PNG-export background are all derived from the selected background, so that
+ * on-screen and downloaded diagrams stay in sync. The background is chosen
+ * independently of the icon style.
  */
 export interface CanvasTheme {
     /** Background colour of the diagram surface. */
@@ -32,7 +33,7 @@ export interface CanvasTheme {
     exportBackground: string;
 }
 
-/** The default white canvas used by every existing style. */
+/** The default white canvas. */
 export const DEFAULT_CANVAS_THEME: CanvasTheme = {
     surface: '#ffffff',
     pattern: '#f4f4f5',
@@ -47,10 +48,10 @@ export const BUTCHER_PAPER_THEME: CanvasTheme = {
 };
 
 /**
- * Resolves the canvas theme for a given icon style. Only the `butcher` style
- * changes the paper; every other (or unknown/undefined) style keeps the
- * default white canvas, so existing themes render exactly as before.
+ * Resolves the canvas theme for a given background selection. Only the
+ * `butcher` background changes the paper; every other (or unknown/undefined)
+ * value keeps the default white canvas.
  */
-export function getCanvasTheme(iconStyle: IconStyleId | string | undefined | null): CanvasTheme {
-    return iconStyle === 'butcher' ? BUTCHER_PAPER_THEME : DEFAULT_CANVAS_THEME;
+export function getCanvasTheme(background: CanvasBackgroundId | string | undefined | null): CanvasTheme {
+    return background === 'butcher' ? BUTCHER_PAPER_THEME : DEFAULT_CANVAS_THEME;
 }

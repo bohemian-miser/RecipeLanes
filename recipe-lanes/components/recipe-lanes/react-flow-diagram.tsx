@@ -94,8 +94,9 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const edgeStyle = useRecipeStore(s => s.lineStyle);
     const mode = useRecipeStore(s => s.nodeLayout);
     const backgrounds = useRecipeStore(s => s.backgrounds);
+    const canvasBackground = useRecipeStore(s => s.canvasBackground);
     const iconTheme = iconStyle;
-    const canvasTheme = getCanvasTheme(iconStyle);
+    const canvasTheme = getCanvasTheme(canvasBackground);
 
     // Cast hooks to avoid implicit any in callbacks
     const [nodes, setNodesRaw, onNodesChange] = useNodesState([]);

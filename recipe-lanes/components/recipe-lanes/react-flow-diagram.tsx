@@ -44,6 +44,7 @@ import TimelineNode from './nodes/timeline-node';
 import FloatingEdge from './edges/floating-edge';
 import TimelineEdge from './edges/timeline-edge';
 import TimelineBackground, { type TimelineData } from './timeline-background';
+import { getCanvasTheme } from '@/lib/recipe-lanes/canvas-theme';
 import { toPng } from 'html-to-image';
 import { Download, Share2, Undo, Redo, Check, Save, Copy } from 'lucide-react';
 import { useHistoryManager } from './hooks/useHistoryManager';
@@ -93,7 +94,9 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const edgeStyle = useRecipeStore(s => s.lineStyle);
     const mode = useRecipeStore(s => s.nodeLayout);
     const backgrounds = useRecipeStore(s => s.backgrounds);
+    const canvasBackground = useRecipeStore(s => s.canvasBackground);
     const iconTheme = iconStyle;
+    const canvasTheme = getCanvasTheme(canvasBackground);
 
     // Cast hooks to avoid implicit any in callbacks
     const [nodes, setNodesRaw, onNodesChange] = useNodesState([]);
@@ -621,7 +624,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
         try {
             const dataUrl = await toPng(flowWrapper.current, {
-                backgroundColor: '#ffffff',
+                backgroundColor: canvasTheme.exportBackground,
                 style: { width: 'auto', height: 'auto', transform: 'none' },
                 cacheBust: true,
                 skipFonts: true,
@@ -632,7 +635,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             console.warn("Download failed, retrying with minimal options...", err);
             try {
                 const dataUrl = await toPng(flowWrapper.current, {
-                    backgroundColor: '#ffffff',
+                    backgroundColor: canvasTheme.exportBackground,
                     style: { width: 'auto', height: 'auto', transform: 'none' },
                     pixelRatio: 2,
                     skipFonts: true,
@@ -797,7 +800,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     };
 
     return (
-        <div className="w-full h-full touch-none" ref={flowWrapper}>
+        <div className="w-full h-full touch-none" ref={flowWrapper} style={{ backgroundColor: canvasTheme.surface }}>
             {layoutReady && <div data-testid="rf-ready" style={{ display: 'none' }} />}
             <ReactFlow
                 nodes={nodes}
@@ -824,7 +827,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             >
                 {timelineData
                     ? <TimelineBackground data={timelineData} />
-                    : <Background color="#f4f4f5" gap={20} />
+                    : <Background color={canvasTheme.pattern} gap={20} />
                 }
                 <Controls showInteractive={false} />
                 <Panel position="top-right" className="flex gap-2">

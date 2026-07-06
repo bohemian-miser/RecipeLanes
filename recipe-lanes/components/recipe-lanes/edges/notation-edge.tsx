@@ -19,6 +19,7 @@ import React, { memo, useCallback } from 'react';
 import { useStore } from 'reactflow';
 import { CLASSIC_CONTAINER, MODERN_CONTAINER } from '../../../lib/recipe-lanes/edge-anchors';
 import { getNodeTheme } from '../../../lib/recipe-lanes/model-utils';
+import { useRecipeStore } from '../../../lib/stores/recipe-store';
 
 const SPINE_INK = '#3a362f';
 const LEAF_LINE = '#a39a88';
@@ -38,7 +39,12 @@ interface NotationEdgeProps {
 // leaves/states are icon-container-on-top + label-below: their geometric
 // center lands on the LABEL, so aim at the icon container's center instead
 // (container height by theme/type, same constants as edge-anchors.ts).
-function center(node: any): { x: number; y: number } {
+//
+// `scale` is the leaf-size slider (#155). MinimalNode shrinks leaves with a
+// CSS transform whose origin is pinned to the wrapper's top-center (see
+// getLeafScaleOrigin), so under scaling the icon center x is invariant and
+// its y moves to container/2 * scale from the node top.
+function center(node: any, scale = 1): { x: number; y: number } {
   const p = node.positionAbsolute ?? node.position;
   const w = node.width ?? 0;
   const h = node.height ?? 0;
@@ -47,7 +53,7 @@ function center(node: any): { x: number; y: number } {
     const modern = theme === 'modern' || theme === 'modern_clean';
     const isIngredient = node.data?.type === 'ingredient';
     const container = (modern ? MODERN_CONTAINER : CLASSIC_CONTAINER)[isIngredient ? 'ingredient' : 'action'];
-    return { x: p.x + w / 2, y: p.y + container / 2 };
+    return { x: p.x + w / 2, y: p.y + (container / 2) * scale };
   }
   return { x: p.x + w / 2, y: p.y + h / 2 };
 }
@@ -77,11 +83,14 @@ function straightPath(sx: number, sy: number, ex: number, ey: number): string {
 function NotationEdge({ id, source, target, data }: NotationEdgeProps) {
   const sourceNode = useStore(useCallback((s: any) => s.nodeInternals.get(source), [source]));
   const targetNode = useStore(useCallback((s: any) => s.nodeInternals.get(target), [target]));
+  // Leaf-size slider (#155): scaled leaves need scaled anchors, same as
+  // FloatingEdge does for the other layout modes.
+  const leafNodeScale = useRecipeStore(st => st.leafNodeScale);
 
   if (!sourceNode || !targetNode) return null;
 
-  const s = center(sourceNode);
-  const t = center(targetNode);
+  const s = center(sourceNode, sourceNode.data?.isLeaf ? leafNodeScale : 1);
+  const t = center(targetNode, targetNode.data?.isLeaf ? leafNodeScale : 1);
   const kind = data?.kind ?? 'spine';
 
   if (kind === 'drop') {

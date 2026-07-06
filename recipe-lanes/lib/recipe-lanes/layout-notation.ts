@@ -56,6 +56,16 @@ export const NOTATION = {
   STATION_SIZE: 52,
   VERB_SIZE: 30,
   LEAF_SIZE: 56,
+
+  /**
+   * Rendered wrapper widths of MinimalNode (see verticalMinWidth in
+   * minimal-node-classic.tsx): the icon container is horizontally CENTERED in
+   * a wrapper this wide. Layout node width must match the rendered width, or
+   * everything derived from node.x + width/2 (edge anchors, leaf/consumer
+   * alignment) lands (wrapper - LEAF_SIZE)/2 px left of the visible icon.
+   */
+  MINIMAL_WRAPPER_INGREDIENT: 100,
+  MINIMAL_WRAPPER_ACTION: 120,
 } as const;
 
 export type NotationNodeRole = 'leaf' | 'verb' | 'state' | 'station';
@@ -223,13 +233,16 @@ export function calculateNotationLayout(graph: RecipeGraph): NotationLayoutGraph
       actionXById.set(action.id, x);
       const verb = classifyVerb(action.text);
       const role: NotationNodeRole = verb ? 'verb' : 'state';
+      // 'state' renders as MinimalNode: width must be its real wrapper width
+      // so node.x + width/2 is the visible icon's center (see MINIMAL_WRAPPER_*).
       const size = role === 'verb' ? NOTATION.VERB_SIZE : NOTATION.LEAF_SIZE;
+      const width = role === 'verb' ? NOTATION.VERB_SIZE : NOTATION.MINIMAL_WRAPPER_ACTION;
       nodes.push({
         id: action.id,
         role,
-        x: x - size / 2,
+        x: x - width / 2,
         y: y - size / 2,
-        width: size,
+        width,
         height: size,
         laneId: lane.id,
         data: action,
@@ -282,9 +295,9 @@ export function calculateNotationLayout(graph: RecipeGraph): NotationLayoutGraph
       nodes.push({
         id: leaf.id,
         role: 'leaf',
-        x: x - NOTATION.LEAF_SIZE / 2,
+        x: x - NOTATION.MINIMAL_WRAPPER_INGREDIENT / 2,
         y: y - NOTATION.LEAF_SIZE / 2,
-        width: NOTATION.LEAF_SIZE,
+        width: NOTATION.MINIMAL_WRAPPER_INGREDIENT,
         height: NOTATION.LEAF_SIZE,
         laneId: leaf.laneId,
         data: leaf,
@@ -307,9 +320,9 @@ export function calculateNotationLayout(graph: RecipeGraph): NotationLayoutGraph
     nodes.push({
       id: leaf.id,
       role: 'leaf',
-      x: NOTATION.ROW_START_X - NOTATION.LEAF_SIZE / 2,
+      x: NOTATION.ROW_START_X - NOTATION.MINIMAL_WRAPPER_INGREDIENT / 2,
       y: y - NOTATION.LEAF_OFFSET_Y - NOTATION.LEAF_SIZE / 2,
-      width: NOTATION.LEAF_SIZE,
+      width: NOTATION.MINIMAL_WRAPPER_INGREDIENT,
       height: NOTATION.LEAF_SIZE,
       laneId: leaf.laneId,
       data: leaf,
@@ -332,11 +345,11 @@ export function calculateNotationLayout(graph: RecipeGraph): NotationLayoutGraph
     nodes.push({
       id: node.id,
       role: 'state',
-      x: NOTATION.ROW_START_X + depth * NOTATION.ACTION_SPACING - NOTATION.LEAF_SIZE / 2,
+      x: NOTATION.ROW_START_X + depth * NOTATION.ACTION_SPACING - NOTATION.MINIMAL_WRAPPER_ACTION / 2,
       // Sit slightly above the spine so it reads as "on this station, mid-flow"
       // without pretending to be a spine step.
       y: y - 40 - NOTATION.LEAF_SIZE / 2,
-      width: NOTATION.LEAF_SIZE,
+      width: NOTATION.MINIMAL_WRAPPER_ACTION,
       height: NOTATION.LEAF_SIZE,
       laneId: node.laneId,
       data: node,

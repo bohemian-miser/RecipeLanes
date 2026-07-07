@@ -1,0 +1,66 @@
+name: Gemini PR Comment Responder
+
+# When a maintainer comments on a PR labeled `agent:gemini` (a PR the Gemini
+# issue solver opened), wake the agent to address the feedback, push fixes,
+# and re-watch CI.
+#
+# Loop guard: the agent ends every comment it posts with the marker
+# `<!-- gemini-agent -->`; such comments are ignored here. Only comments from
+# OWNER/MEMBER/COLLABORATOR trigger a run, so strangers can't burn quota.
+#
+# Secrets required: GEMINI_API_KEY, AGENT_GH_PAT (see gemini-issue-solver.yml).
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: gemini-agent
+  cancel-in-progress: false
+
+jobs:
+  respond:
+    # Only: comments on PRs (not plain issues), on agent:gemini-labeled PRs,
+    # from maintainers, and not the agent's own marker-tagged comments.
+    if: >-
+      github.event.issue.pull_request != null &&
+      contains(github.event.issue.labels.*.name, 'agent:gemini') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+      !contains(github.event.comment.body, '<!-- gemini-agent -->')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.AGENT_GH_PAT || github.token }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: recipe-lanes/package-lock.json
+
+      - name: Install Gemini CLI
+        run: npm install -g @google/gemini-cli --silent
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "gemini-bot"
+          git config --global user.email "gemini-bot@users.noreply.github.com"
+
+      - name: Address PR feedback
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          GH_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+          GITHUB_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+        run: |
+          gemini --approval-mode=yolo -p "/address-comment ${{ github.event.issue.number }}"

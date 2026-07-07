@@ -1,9 +1,9 @@
 name: Gemini Issue Solver
 
-# Autonomous Gemini worker: picks ONE open issue labeled `agent-ready-gemini`
-# per run, fixes it with tests, opens a PR, and watches CI. Mirrors the Claude
-# cloud routine (which owns the `agent-ready` label). Runs at :37 to stay off
-# the Claude routine's :17 cadence.
+# Autonomous Gemini worker, triggered by labeling an issue
+# `agent-ready-gemini` (the Claude routine owns the `agent-ready` label the
+# same way). Fixes the issue with tests, opens a PR, and watches CI. No cron:
+# runs only in response to the label or a manual dispatch.
 #
 # Secrets required:
 #   GEMINI_API_KEY  — Gemini API key for the CLI.
@@ -14,8 +14,8 @@ name: Gemini Issue Solver
 #                     "wait for CI" gate.
 
 on:
-  schedule:
-    - cron: '37 * * * *'
+  issues:
+    types: [labeled]
   workflow_dispatch:
     inputs:
       issue_number:
@@ -24,13 +24,20 @@ on:
         type: string
 
 # Never run two Gemini agent jobs at once (solver or comment responder) —
-# they share branches and the dedup logic assumes serial runs.
+# they share branches and the dedup logic assumes serial runs. Note GitHub
+# keeps at most ONE queued run per group: if several issues are labeled while
+# a run is active, a superseded queued run is dropped — re-apply the label or
+# dispatch manually to pick the stragglers up (the label + dedup make that
+# safe).
 concurrency:
   group: gemini-agent
   cancel-in-progress: false
 
 jobs:
   solve-issue:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.label.name == 'agent-ready-gemini'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -67,9 +74,10 @@ jobs:
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
           GH_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
           GITHUB_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+          TARGET_ISSUE: ${{ github.event_name == 'issues' && github.event.issue.number || github.event.inputs.issue_number }}
         run: |
-          if [ -n "${{ github.event.inputs.issue_number }}" ]; then
-            PROMPT="/resolve-issue ${{ github.event.inputs.issue_number }}"
+          if [ -n "$TARGET_ISSUE" ]; then
+            PROMPT="/resolve-issue $TARGET_ISSUE"
           else
             PROMPT="/resolve-issue"
           fi

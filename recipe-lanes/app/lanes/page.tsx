@@ -734,7 +734,7 @@ const handleVisualize = async () => {
       }
   };
 
-    const handleLayoutClick = async (mode: LayoutMode | 'repulsive' | 'timeline2') => {
+    const handleLayoutClick = async (mode: LayoutMode | 'repulsive' | 'timeline2' | 'notation') => {
         if (layoutMode === mode) {
             diagramRef.current?.resetLayout();
         } else {
@@ -1017,6 +1017,7 @@ const handleVisualize = async () => {
                             <option value="repulsive">Repulsive</option>
                             <option value="timeline">Timeline</option>
                             <option value="timeline2">Timeline (Classic)</option>
+                            <option value="notation">Notation</option>
                         </select>
                         {/* Reset Layout Button */}
                         <button 
@@ -1223,7 +1224,7 @@ const handleVisualize = async () => {
                     <ReactFlowDiagram
                         ref={diagramRef}
                         graph={graph}
-                        mode={layoutMode as LayoutMode | 'repulsive'}
+                        mode={layoutMode as LayoutMode | 'repulsive' | 'notation'}
                         spacing={spacing}
                         edgeStyle={edgeStyle}
                         textPos={textPos}

@@ -224,7 +224,7 @@ export interface LayoutGraph {
 
 export type IconStyleId = 'classic' | 'modern' | 'modern_clean' | 'timeline-circle';
 export type LineStyleId = 'straight' | 'floating' | 'step' | 'bezier' | 'timeline-path';
-export type LayoutModeId = 'dagre' | 'dagre-lr' | 'timeline' | 'swimlanes' | 'repulsive' | 'timeline2';
+export type LayoutModeId = 'dagre' | 'dagre-lr' | 'timeline' | 'swimlanes' | 'repulsive' | 'timeline2' | 'notation';
 export type BackgroundElementId = 'timeline-grid' | 'lane-bands-horizontal' | 'lane-bands-vertical';
 
 /**

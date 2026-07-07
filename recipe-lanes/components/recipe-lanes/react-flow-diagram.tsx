@@ -35,6 +35,7 @@ import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX
 
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
+import { calculateNotationLayout } from '../../lib/recipe-lanes/layout-notation';
 import { getLeafNodeIds } from '../../lib/recipe-lanes/leaf-nodes';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import { getNodeIconUrl, getNodeIconId, preserveNodeShortlist, getNodeShortlistLength } from '../../lib/recipe-lanes/model-utils';
@@ -42,8 +43,11 @@ import MinimalNode from './nodes/minimal-node';
 import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
 import TimelineNode from './nodes/timeline-node';
+import NotationVerbNode from './nodes/notation-verb-node';
+import NotationStationNode from './nodes/notation-station-node';
 import FloatingEdge from './edges/floating-edge';
 import TimelineEdge from './edges/timeline-edge';
+import NotationEdge from './edges/notation-edge';
 import TimelineBackground, { type TimelineData } from './timeline-background';
 import { getCanvasTheme } from '@/lib/recipe-lanes/canvas-theme';
 import { toPng } from 'html-to-image';
@@ -55,7 +59,7 @@ import { useRecipeStore } from '../../lib/stores/recipe-store';
 
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
-  mode: LayoutMode | 'repulsive';
+  mode: LayoutMode | 'repulsive' | 'notation';
   spacing?: number;
   edgeStyle?: 'straight' | 'step' | 'bezier';
   textPos?: 'bottom' | 'top' | 'left' | 'right';
@@ -82,11 +86,14 @@ const INITIAL_NODE_TYPES = {
     lane: LaneNode,
     micro: MicroNode,
     'timeline-node': TimelineNode,
+    'notation-verb': NotationVerbNode,
+    'notation-station': NotationStationNode,
 };
 
 const INITIAL_EDGE_TYPES = {
     floating: FloatingEdge,
     timeline: TimelineEdge,
+    notation: NotationEdge,
 };
 
 const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode: propMode, spacing = 1, edgeStyle: propEdgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme: propIconTheme = 'classic' }, ref) => {
@@ -288,8 +295,14 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         }
 
         const canPreserve = shouldUseSavedLayout;
+        const isNotation = mode === 'notation';
 
-        if (canPreserve) {
+        // 'notation' is a from-scratch layout, same as 'repulsive' — it does not
+        // participate in the saved-position preservation path (no per-node x/y
+        // persistence format for it yet; v2 concern).
+        if (isNotation) {
+            layout = calculateNotationLayout(effectiveGraph);
+        } else if (canPreserve) {
             const safeMode = (['swimlanes', 'dagre', 'dagre-lr', 'timeline'].includes(mode as string)) ? (mode as LayoutMode) : 'dagre';
             layout = calculateLayout(effectiveGraph, safeMode, spacing, true);
         } else if (mode === 'repulsive') {
@@ -302,67 +315,92 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
         const newNodes: Node[] = [];
 
-        layout.lanes.forEach(lane => {
-             newNodes.push({
-                 id: lane.id,
-                 type: 'lane',
-                 position: { x: lane.x, y: lane.y },
-                 data: { label: lane.label, color: lane.color },
-                 style: {
-                     width: lane.width,
-                     height: lane.height,
-                     zIndex: -1,
-                     // In timeline mode: colored band background + no pointer events so
-                     // clicking empty space deselects nodes correctly.
-                     ...(isTimeline ? { backgroundColor: lane.color, pointerEvents: 'none' } : {}),
-                 },
-                 draggable: false,
-                 selectable: false,
-                 focusable: false,
-                 zIndex: -1
-             });
-        });
+        // Notation mode draws its own station badges instead of column/row
+        // background bands (LaneNode assumes vertical swimlanes) — skip lane nodes.
+        if (!isNotation) {
+            layout.lanes.forEach(lane => {
+                 newNodes.push({
+                     id: lane.id,
+                     type: 'lane',
+                     position: { x: lane.x, y: lane.y },
+                     data: { label: lane.label, color: lane.color },
+                     style: {
+                         width: lane.width,
+                         height: lane.height,
+                         zIndex: -1,
+                         // In timeline mode: colored band background + no pointer events so
+                         // clicking empty space deselects nodes correctly.
+                         ...(isTimeline ? { backgroundColor: lane.color, pointerEvents: 'none' } : {}),
+                     },
+                     draggable: false,
+                     selectable: false,
+                     focusable: false,
+                     zIndex: -1
+                 });
+            });
+        }
 
         // Leaf = no incoming edge (in-degree 0: raw ingredients). Threaded into
         // node data so the node view can render it smaller via the slider (#155).
         const leafIds = getLeafNodeIds(graph);
         layout.nodes.forEach(n => {
              const originalNode = graph.nodes.find(gn => gn.id === n.id);
-             const nodeType = isTimeline ? 'timeline-node' : 'minimal';
+             const role = (n as any).role as ('leaf' | 'verb' | 'state' | 'station' | undefined);
+             const nodeType = isNotation
+                 ? (role === 'station' ? 'notation-station' : role === 'verb' ? 'notation-verb' : 'minimal')
+                 : (isTimeline ? 'timeline-node' : 'minimal');
              newNodes.push({
                  id: n.id,
                  type: nodeType,
                  position: { x: n.x, y: n.y },
                  data: {
                      ...originalNode, ...n.data,
-                     ...(isTimeline ? { lineColor: n.lineColor } : {}),
-                     textPos, depth: n.depth,
-                     isLeaf: leafIds.has(n.id),
+                     ...(isTimeline ? { lineColor: (n as any).lineColor } : {}),
+                     textPos, depth: (n as any).depth,
+                     isLeaf: isNotation ? role === 'leaf' : leafIds.has(n.id),
                      onDelete: () => handleDeleteNode(n.id),
                      onSetLongPress: setLongPress,
                      iconTheme,
                  },
                  width: n.width,
                  height: n.height,
-                 draggable: true,
+                 // Station badges are synthetic row anchors (not in graph.nodes):
+                 // not draggable, not selectable, and not Backspace-deletable —
+                 // otherwise ReactFlow's default delete handling removes them
+                 // from local canvas state (looks like data loss) without going
+                 // through handleDeleteNode.
+                 draggable: !(isNotation && role === 'station'),
+                 ...(isNotation && role === 'station'
+                     ? { selectable: false, deletable: false, focusable: false }
+                     : {}),
              });
         });
 
         // Capture timeline grid data so the background can render it.
-        if (isTimeline && layout.timelineData) {
-            setTimelineData(layout.timelineData);
+        if (isTimeline && (layout as any).timelineData) {
+            setTimelineData((layout as any).timelineData);
         } else if (!isTimeline) {
             setTimelineData(null);
         }
 
         const newEdges: Edge[] = layout.edges.map(e => {
+            if (isNotation) {
+                return {
+                    id: e.id,
+                    source: e.sourceId,
+                    target: e.targetId,
+                    type: 'notation',
+                    data: { kind: (e as any).kind },
+                    style: {},
+                };
+            }
             if (isTimeline) {
                 return {
                     id: e.id,
                     source: e.sourceId,
                     target: e.targetId,
                     type: 'timeline',
-                    data: { lineColor: e.lineColor, kind: e.kind },
+                    data: { lineColor: (e as any).lineColor, kind: e.kind },
                     style: {},
                 };
             }
@@ -423,30 +461,50 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     // second snapshot has them, but by then hasInitialLayoutRef is already true.
     const prevLayoutsKeyRef = useRef<string | null | undefined>(undefined);
 
+    // True while a mode/spacing switch is scheduled but its 5ms layout timer
+    // hasn't fired yet (re-renders can cancel + reschedule it repeatedly).
+    const pendingLayoutSwitchRef = useRef(false);
+
     // Layout Effect
     useEffect(() => {
         if (isLive) return; // Skip static layout if physics is running
 
+        const isNotationMode = mode === 'notation';
         const modeChanged = prevMode.current !== mode;
         const spacingChanged = prevSpacing.current !== spacing;
 
         if (modeChanged || spacingChanged) {
-            prevMode.current = mode;
-            prevSpacing.current = spacing;
             setIsDirty(true);
 
-            // Throttle snapshot for spacing to prevent history spam and lag
-            const now = Date.now();
-            if (modeChanged || now - lastSnapshotRef.current > 500) {
-                takeSnapshot();
-                lastSnapshotRef.current = now;
+            // Throttle snapshot for spacing to prevent history spam and lag.
+            // pendingLayoutSwitchRef also guards against duplicate snapshots
+            // while the switch below is being rescheduled by re-renders.
+            if (!pendingLayoutSwitchRef.current) {
+                const now = Date.now();
+                if (modeChanged || now - lastSnapshotRef.current > 500) {
+                    takeSnapshot();
+                    lastSnapshotRef.current = now;
+                }
             }
+            pendingLayoutSwitchRef.current = true;
 
             // Yield to main thread for UI updates.
             // On mode change: restore saved positions if available. On spacing-only change: always re-run fresh layout.
+            //
+            // prevMode/prevSpacing are committed INSIDE the timeout, when the
+            // layout actually runs. They used to be set eagerly before it —
+            // so when an unrelated re-render (icon snapshot, text sync…)
+            // cancelled this timer during the 5ms window, the next effect run
+            // saw modeChanged === false and the layout switch was silently
+            // lost forever (the "select says Timeline but canvas didn't
+            // change until you hit reset" bug). Committing them on fire means
+            // a cancelled switch simply reschedules on the next run.
             const hasSavedPositions = modeChanged && !!(graph.layouts?.[mode]);
+            const shouldFit = modeChanged;
             const timer = setTimeout(() => {
-                const shouldFit = modeChanged;
+                pendingLayoutSwitchRef.current = false;
+                prevMode.current = mode;
+                prevSpacing.current = spacing;
                 runLayout(hasSavedPositions, shouldFit);
             }, 5);
             return () => clearTimeout(timer);
@@ -460,7 +518,12 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         // Fires once when saved layout data arrives after the initial dagre render ran
         // without it (two-snapshot scenario). The key comparison already prevents
         // re-firing on unchanged data, so we don't need an !isDirty guard here.
+        // Notation is excluded: calculateNotationLayout ignores saved positions
+        // (always from-scratch), so "layouts arrived" would just recompute the
+        // layout and snap any user drags back — the first autosave in notation
+        // mode writes layouts['notation'], which used to trip this on the echo.
         const layoutsJustArrived =
+            !isNotationMode &&
             hasInitialLayoutRef.current &&
             currentLayoutsKey !== null &&
             prevLayoutsKeyRef.current === null;
@@ -476,8 +539,14 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             // Detect full regeneration: if none of the incoming graph node IDs match
             // current ReactFlow nodes, the recipe was re-parsed with all-new IDs.
             // In that case, do a fresh layout rather than a no-op metadata patch.
+            // Synthetic notation station badges are RF-only (never in graph.nodes):
+            // they must be excluded here or hasRemovedNodes is permanently true in
+            // notation mode, re-running the from-scratch layout on EVERY graph tick
+            // (autosave echoes, icon writes …) and snapping user drags back.
             const currentRFNodeIds = new Set(
-                getNodes().filter((n: any) => n.type !== 'lane').map((n: any) => n.id)
+                getNodes()
+                    .filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station')
+                    .map((n: any) => n.id)
             );
             const incomingIds = graph.nodes.map(n => n.id);
             // Guard: if rfNodes is empty but hasInitialLayoutRef is true, runLayout

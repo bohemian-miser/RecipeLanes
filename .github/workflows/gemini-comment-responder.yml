@@ -8,7 +8,9 @@ name: Gemini PR Comment Responder
 # `<!-- gemini-agent -->`; such comments are ignored here. Only comments from
 # OWNER/MEMBER/COLLABORATOR trigger a run, so strangers can't burn quota.
 #
-# Secrets required: GEMINI_API_KEY, AGENT_GH_PAT (see gemini-issue-solver.yml).
+# Config required: GEMINI_API_KEY, AGENT_APP_ID + AGENT_APP_PRIVATE_KEY
+# (GitHub App; AGENT_GH_PAT honored as fallback) — see gemini-issue-solver.yml
+# and docs/gemini-agent.md.
 
 on:
   issue_comment:
@@ -35,11 +37,19 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      - name: Mint agent token (GitHub App)
+        id: agent_token
+        if: vars.AGENT_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.AGENT_GH_PAT || github.token }}
+          token: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -60,7 +70,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
-          GH_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
-          GITHUB_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+          GH_TOKEN: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
+          GITHUB_TOKEN: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
         run: |
           gemini --approval-mode=yolo -p "/address-comment ${{ github.event.issue.number }}"

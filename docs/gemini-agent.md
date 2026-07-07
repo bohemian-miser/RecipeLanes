@@ -18,12 +18,18 @@ A Gemini CLI-based counterpart to the Claude cloud bug-worker routine. Two GitHu
 
 Every comment the agent posts ends with `<!-- gemini-agent -->`. The responder workflow ignores comments containing that marker and only triggers for OWNER/MEMBER/COLLABORATOR authors.
 
-## Secrets
+## Agent identity: GitHub App
 
-| Secret | Purpose |
-|---|---|
-| `GEMINI_API_KEY` | Gemini CLI auth (already configured) |
-| `AGENT_GH_PAT` | Fine-grained PAT (this repo; contents rw, pull-requests rw, issues rw). **Required**: PRs opened with the default `GITHUB_TOKEN` never trigger CI, so without it every solver run fails its wait-for-CI gate. |
+The agent acts as the **`recipelanes-agent` GitHub App** (a service account — no extra email/user account needed). Each run mints a short-lived installation token via `actions/create-github-app-token`. This matters because PRs opened with the default `GITHUB_TOKEN` never trigger CI, which would permanently fail the solver's wait-for-CI gate; app-minted tokens trigger CI normally. PRs/comments are authored by `recipelanes-agent[bot]`, so the owner can approve them (with the machine-account/PAT-from-owner approach you couldn't — GitHub forbids approving your own PRs), and the app has no admin bypass, so `main`'s required-review protection is a hard human gate.
+
+One-time setup (owner, in browser): Settings → Developer settings → GitHub Apps → New GitHub App — name `recipelanes-agent`, webhook disabled, repository permissions **Contents: rw, Pull requests: rw, Issues: rw**, "Only on this account" → create, **generate a private key**, then **Install App** on the RecipeLanes repo.
+
+| Config | Kind | Purpose |
+|---|---|---|
+| `GEMINI_API_KEY` | secret | Gemini CLI auth (already configured) |
+| `AGENT_APP_ID` | repo **variable** | The GitHub App's numeric App ID |
+| `AGENT_APP_PRIVATE_KEY` | secret | The app's private key (.pem contents) |
+| `AGENT_GH_PAT` | secret (optional fallback) | Fine-grained PAT used only if the app isn't configured |
 
 ## Agent brain
 

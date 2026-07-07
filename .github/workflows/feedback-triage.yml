@@ -1,0 +1,65 @@
+name: Feedback Triage
+
+# Daily Gemini agent that turns new docs in the production `feedback`
+# Firestore collection into GitHub issues (labeled `feedback` + bug or
+# enhancement). The owner then routes an issue to a fixer agent by adding
+# `agent-ready` (Claude) or `agent-ready-gemini` (Gemini).
+#
+# Each doc is marked in Firestore (triage.status = filed|skipped) right after
+# it is handled, so re-runs never double-file. Prompt:
+# .github/gemini/triage-feedback.md; Firestore CLI:
+# recipe-lanes/scripts/feedback-triage.ts.
+#
+# Secrets: GEMINI_API_KEY, FIREBASE_SERVICE_ACCOUNT_PROD (Firestore
+# read/write on `feedback`), AGENT_GH_PAT (optional here — GITHUB_TOKEN can
+# file issues; the PAT just attributes them consistently with the other
+# agent workflows).
+
+on:
+  schedule:
+    - cron: '53 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: feedback-triage
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (prod)
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROD }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: recipe-lanes/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix recipe-lanes
+
+      - name: Install Gemini CLI
+        run: npm install -g @google/gemini-cli --silent
+
+      - name: Run triage agent
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          GH_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+          GITHUB_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: recipe-lanes
+        run: |
+          gemini --approval-mode=yolo -p "$(cat .github/gemini/triage-feedback.md)"

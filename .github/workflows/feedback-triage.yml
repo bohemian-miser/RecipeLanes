@@ -10,10 +10,11 @@ name: Feedback Triage
 # .github/gemini/feedback-triage.md; Firestore CLI:
 # recipe-lanes/scripts/feedback-triage.ts.
 #
-# Secrets: GEMINI_API_KEY, FIREBASE_SERVICE_ACCOUNT_PROD (Firestore
-# read/write on `feedback`), AGENT_GH_PAT (optional here — GITHUB_TOKEN can
-# file issues; the PAT just attributes them consistently with the other
-# agent workflows).
+# Config: GEMINI_API_KEY, FIREBASE_SERVICE_ACCOUNT_PROD (Firestore
+# read/write on `feedback`), and optionally the recipelanes-agent GitHub App
+# (AGENT_APP_ID variable + AGENT_APP_PRIVATE_KEY secret; AGENT_GH_PAT as
+# fallback) so issues are filed by recipelanes-agent[bot] consistently with
+# the other agent workflows — GITHUB_TOKEN also works here.
 
 on:
   schedule:
@@ -33,6 +34,14 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      - name: Mint agent token (GitHub App)
+        id: agent_token
+        if: vars.AGENT_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -58,8 +67,8 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
-          GH_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
-          GITHUB_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+          GH_TOKEN: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
+          GITHUB_TOKEN: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
           NEXT_PUBLIC_FIREBASE_PROJECT_ID: recipe-lanes
         run: |
           gemini --approval-mode=yolo -p "$(cat .github/gemini/feedback-triage.md)"

@@ -51,7 +51,7 @@ import NotationEdge from './edges/notation-edge';
 import TimelineBackground, { type TimelineData } from './timeline-background';
 import { getCanvasTheme } from '@/lib/recipe-lanes/canvas-theme';
 import { toPng } from 'html-to-image';
-import { Download, Share2, Undo, Redo, Check, Save } from 'lucide-react';
+import { Download, Share2, Undo, Redo, Check, Save, Copy } from 'lucide-react';
 import { useHistoryManager } from './hooks/useHistoryManager';
 import { useSaveAndFork, getSaveButtonState } from './hooks/useSaveAndFork';
 import { useAutosave } from './hooks/useAutosave';
@@ -132,6 +132,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         getGraph,
         performSave,
         handleSave,
+        handleSaveCopy,
         handleShare,
         toggleVisibility,
     } = useSaveAndFork({
@@ -923,17 +924,39 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                         </button>
                     </div>
 
-                     <button
-                        onClick={handleSave}
-                        disabled={!saveButton.enabled}
-                        className={`flex items-center gap-1.5 p-2 rounded shadow-md border border-zinc-200 transition-colors ${saved ? 'bg-green-50 text-green-600 border-green-200' : saveButton.enabled ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
-                        title={saveButton.label}
-                    >
-                        {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                        {saveButton.isCopy && <span className="text-xs font-bold hidden sm:inline">{saveButton.label}</span>}
-                    </button>
+                    <div className="relative group">
+                        {/* Save sits on top of the stack (relative z-10, opaque bg) so the
+                            Copy button can tuck directly behind it when at rest. */}
+                        <button
+                            onClick={handleSave}
+                            disabled={!saveButton.enabled}
+                            className={`relative z-10 flex items-center gap-1.5 p-2 rounded shadow-md border border-zinc-200 transition-colors ${saved ? 'bg-green-50 text-green-600 border-green-200' : saveButton.enabled ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
+                            title={saveButton.label}
+                        >
+                            {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                            {saveButton.isCopy && <span className="text-xs font-bold hidden sm:inline">{saveButton.label}</span>}
+                        </button>
+                        {/* Save-a-copy (issue #239): a same-sized square Copy icon below the
+                            Save button (top-0, z-0).
+                            - Mobile (base): there's no hover, so it's PERMANENTLY out and
+                              tappable — translated fully below Save with pointer-events on.
+                            - Desktop (sm:): it stacks *behind* Save, peeking a few px at rest
+                              (sm:translate-y-1.5) for discoverability, and slides fully down
+                              out from behind Save on hover/focus. The ::before strip bridges
+                              the reveal gap so the hover stays live. */}
+                        {isLoggedIn && (
+                            <button
+                                onClick={handleSaveCopy}
+                                className="absolute left-0 top-0 z-0 translate-y-[calc(100%+0.25rem)] pointer-events-auto sm:translate-y-1.5 sm:pointer-events-none p-2 rounded shadow-md border border-zinc-200 bg-white text-zinc-600 transition-all duration-200 ease-out hover:bg-zinc-50 sm:group-hover:translate-y-[calc(100%+0.25rem)] sm:group-hover:pointer-events-auto sm:focus-visible:translate-y-[calc(100%+0.25rem)] sm:focus-visible:pointer-events-auto before:absolute before:-top-1 before:left-0 before:h-1 before:w-full before:content-['']"
+                                title="Save a copy"
+                                aria-label="Save a copy"
+                            >
+                                <Copy className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
 
-                     <button 
+                     <button
                         onClick={handleShare} 
                         className={`p-2 rounded shadow-md border border-zinc-200 transition-colors ${copied ? 'bg-green-50 text-green-600 border-green-200' : 'bg-white text-zinc-600 hover:bg-zinc-50'}`}
                         title={copied ? "Copied!" : "Save & Copy Link"}

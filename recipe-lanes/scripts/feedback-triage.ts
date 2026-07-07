@@ -22,6 +22,7 @@
 import dotenv from 'dotenv';
 import { FieldValue } from 'firebase-admin/firestore';
 import { DB_COLLECTION_FEEDBACK } from '../lib/config';
+import { scanCollection } from './lib/db-tools';
 import { isUntriaged, toTriageItem } from './lib/feedback-triage-lib';
 
 dotenv.config();
@@ -41,17 +42,19 @@ async function main() {
         const limit = limitIdx >= 0 ? parseInt(rest[limitIdx + 1], 10) : 50;
         if (!Number.isFinite(limit) || limit < 1) usageDie('Invalid --limit');
 
-        // No `triage` field on legacy docs, so an inequality query can't find
-        // them; scan newest-first and filter. Feedback volume is tiny.
-        const snap = await db.collection(DB_COLLECTION_FEEDBACK)
-            .orderBy('created_at', 'desc')
-            .limit(limit)
-            .get();
-        const items = snap.docs
-            .filter(d => isUntriaged(d.data()))
-            .map(d => toTriageItem(d.id, d.data()));
+        // No `triage` field on legacy docs, so a query can't select them —
+        // and orderBy('created_at') would silently drop any doc missing that
+        // field. Scan the whole collection (feedback volume is tiny) and
+        // filter here; --limit caps how many items are emitted per run.
+        const items = [];
+        let scanned = 0;
+        for await (const doc of scanCollection(db, DB_COLLECTION_FEEDBACK)) {
+            scanned++;
+            if (isUntriaged(doc.data())) items.push(toTriageItem(doc.id, doc.data()));
+            if (items.length >= limit) break;
+        }
         console.log(JSON.stringify(items, null, 2));
-        console.error(`${items.length} untriaged of ${snap.size} scanned (limit ${limit})`);
+        console.error(`${items.length} untriaged of ${scanned} scanned (limit ${limit})`);
         return;
     }
 

@@ -7,7 +7,7 @@ name: Feedback Triage
 #
 # Each doc is marked in Firestore (triage.status = filed|skipped) right after
 # it is handled, so re-runs never double-file. Prompt:
-# .github/gemini/triage-feedback.md; Firestore CLI:
+# .github/gemini/feedback-triage.md; Firestore CLI:
 # recipe-lanes/scripts/feedback-triage.ts.
 #
 # Secrets: GEMINI_API_KEY, FIREBASE_SERVICE_ACCOUNT_PROD (Firestore
@@ -62,4 +62,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
           NEXT_PUBLIC_FIREBASE_PROJECT_ID: recipe-lanes
         run: |
-          gemini --approval-mode=yolo -p "$(cat .github/gemini/triage-feedback.md)"
+          gemini --approval-mode=yolo -p "$(cat .github/gemini/feedback-triage.md)"

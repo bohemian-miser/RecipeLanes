@@ -1,0 +1,9 @@
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.auto.tfvars.example
+# Lock files generated on this arm64 Pi would pin arm64-only hashes and break
+# init elsewhere; provider versions are pinned via required_providers instead.
+.terraform.lock.hcl
+crash.log

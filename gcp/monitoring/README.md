@@ -1,5 +1,10 @@
 # Icon-forge alerting as code (`gcp/monitoring/`)
 
+> **Superseded by Terraform.** This stack is now declared in
+> [`gcp/terraform/`](../terraform/README.md) (`modules/project-baseline/monitoring.tf`).
+> These scripts remain only until both envs have been imported + applied via
+> Terraform; do not evolve the YAML here — change the Terraform instead.
+
 Source of truth for the **Cloud Monitoring** alert that fires when too many icons
 are forged in a short window (Bug 171). The team originally created this by hand
 in the prod project; these files commit that config and make it reproducible

@@ -20,10 +20,11 @@ env:
     value: "1005946856175"
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
     value: "1:1005946856175:web:09f733a839281ab667311a"
-  # Placeholder: overrides the base apphosting.yaml `secret: GEMINI_API_KEY`
-  # mapping so the build doesn't require a Secret Manager entry in the CTF
-  # project. AI (Gemini) calls will fail at runtime until a real key is set;
-  # everything else works. Swap for a real `secret:` ref when the CTF fork
-  # needs live AI.
+  # Gemini key from the CTF project's own Secret Manager (GEMINI_API_KEY,
+  # value copied from the prod key). Reuses base apphosting.yaml's secret
+  # mapping; kept explicit here for clarity.
+  # SECURITY: this is currently the SAME key as prod/staging. Before the fork
+  # is made deliberately vulnerable, rotate the CTF project to a dedicated,
+  # restricted key so an exploit can't exfiltrate the prod key.
   - variable: GEMINI_API_KEY
-    value: PLACEHOLDER_SET_A_REAL_KEY
+    secret: GEMINI_API_KEY

@@ -1,0 +1,29 @@
+# App Hosting config for the CTF backend (recipe-lanes-ctf project).
+# Selected by the `ctf` App Hosting backend (environment = ctf).
+#
+# Points the app at the ISOLATED recipe-lanes-ctf Firebase project — its own
+# Auth/Firestore/Storage, no access to prod or staging data. See the CTF fork
+# notes in docs/agent-isolation-roadmap.md.
+#
+# The NEXT_PUBLIC_FIREBASE_* values are client-side config (shipped to the
+# browser, not secret) — same as apphosting.prod.yaml / apphosting.staging.yaml.
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyBCmSf_qTFBeCzFOeffqsvUhLhrERGK8OQ
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: recipe-lanes-ctf.firebaseapp.com
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: recipe-lanes-ctf
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: recipe-lanes-ctf.firebasestorage.app
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "1005946856175"
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:1005946856175:web:09f733a839281ab667311a"
+  # Placeholder: overrides the base apphosting.yaml `secret: GEMINI_API_KEY`
+  # mapping so the build doesn't require a Secret Manager entry in the CTF
+  # project. AI (Gemini) calls will fail at runtime until a real key is set;
+  # everything else works. Swap for a real `secret:` ref when the CTF fork
+  # needs live AI.
+  - variable: GEMINI_API_KEY
+    value: PLACEHOLDER_SET_A_REAL_KEY

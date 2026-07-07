@@ -13,6 +13,10 @@ locals {
     "roles/iam.serviceAccountUser",
     "roles/artifactregistry.writer",
     "roles/artifactregistry.admin",
+    # pr-preview.yml's authorized-domains automation PATCHes the Identity
+    # Toolkit Admin API to (de)register each PR's preview hostname in Firebase
+    # Auth authorized domains; needs firebaseauth.configs.update.
+    "roles/firebaseauth.admin",
   ]
   preview_runtime_roles = [
     "roles/aiplatform.user",

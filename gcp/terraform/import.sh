@@ -68,7 +68,8 @@ if [ "${PREVIEW}" = "1" ]; then
       "projects/${PROJECT_ID}/locations/${REGION}/repositories/preview"
 
   for role in roles/run.admin roles/iam.serviceAccountUser \
-              roles/artifactregistry.writer roles/artifactregistry.admin; do
+              roles/artifactregistry.writer roles/artifactregistry.admin \
+              roles/firebaseauth.admin; do
     imp "module.baseline.google_project_iam_member.preview_deploy[\"${role}\"]" \
         "${PROJECT_ID} ${role} serviceAccount:${DEPLOY_SA}"
   done

@@ -936,16 +936,18 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                             {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
                             {saveButton.isCopy && <span className="text-xs font-bold hidden sm:inline">{saveButton.label}</span>}
                         </button>
-                        {/* Save-a-copy (issue #239): a same-sized square Copy icon stacked
-                            *behind* the Save button (top-0, z-0). At rest it peeks out a
-                            few px below Save (translate-y-1.5) so it's discoverable, like a
-                            card tucked behind; on hover/focus it slides fully down out from
-                            behind Save. The ::before strip bridges the reveal gap so the
-                            hover stays live. */}
+                        {/* Save-a-copy (issue #239): a same-sized square Copy icon below the
+                            Save button (top-0, z-0).
+                            - Mobile (base): there's no hover, so it's PERMANENTLY out and
+                              tappable — translated fully below Save with pointer-events on.
+                            - Desktop (sm:): it stacks *behind* Save, peeking a few px at rest
+                              (sm:translate-y-1.5) for discoverability, and slides fully down
+                              out from behind Save on hover/focus. The ::before strip bridges
+                              the reveal gap so the hover stays live. */}
                         {isLoggedIn && (
                             <button
                                 onClick={handleSaveCopy}
-                                className="absolute left-0 top-0 z-0 translate-y-1.5 p-2 rounded shadow-md border border-zinc-200 bg-white text-zinc-600 pointer-events-none transition-all duration-200 ease-out hover:bg-zinc-50 group-hover:translate-y-[calc(100%+0.25rem)] group-hover:pointer-events-auto focus-visible:translate-y-[calc(100%+0.25rem)] focus-visible:pointer-events-auto before:absolute before:-top-1 before:left-0 before:h-1 before:w-full before:content-['']"
+                                className="absolute left-0 top-0 z-0 translate-y-[calc(100%+0.25rem)] pointer-events-auto sm:translate-y-1.5 sm:pointer-events-none p-2 rounded shadow-md border border-zinc-200 bg-white text-zinc-600 transition-all duration-200 ease-out hover:bg-zinc-50 sm:group-hover:translate-y-[calc(100%+0.25rem)] sm:group-hover:pointer-events-auto sm:focus-visible:translate-y-[calc(100%+0.25rem)] sm:focus-visible:pointer-events-auto before:absolute before:-top-1 before:left-0 before:h-1 before:w-full before:content-['']"
                                 title="Save a copy"
                                 aria-label="Save a copy"
                             >

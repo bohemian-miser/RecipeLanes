@@ -19,6 +19,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { RecipeGraph } from '../../../lib/recipe-lanes/types';
 import { saveRecipeAction } from '@/app/actions';
+import { getClaimToken, clearClaimToken } from '@/lib/recipe-lanes/claim-token-client';
 
 /**
  * Pure helper extracted from getGraph() so it can be tested without React.
@@ -31,7 +32,11 @@ export function buildGraphForSave(
     rfNodes: any[],
     rfEdges: any[],
 ): RecipeGraph {
-    const currentNodes = rfNodes.filter((n: any) => n.type !== 'lane');
+    // Exclude synthetic canvas-only nodes: lane bands and notation station
+    // badges (row anchors that exist only in the layout, not in graph.nodes).
+    // Without this, saving in notation mode writes phantom
+    // `notation-station-<laneId>` rows into layouts[mode] forever.
+    const currentNodes = rfNodes.filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station');
     const layouts = { ...(graph.layouts || {}) };
     layouts[mode] = currentNodes.map((n: any) => ({ id: n.id, x: n.position.x, y: n.position.y }));
 
@@ -146,6 +151,12 @@ export function useSaveAndFork({
         // Use ref for latest value (important for toggleVisibility which is async)
         const visibility = visibilityRef.current ? 'public' : 'unlisted';
 
+        // If this browser minted the recipe anonymously, attach its claim
+        // token so this ordinary save (now that the user is signed in) also
+        // transfers ownership — saveRecipe only honors it when the recipe
+        // still has no owner (#151 follow-up).
+        const claimToken = currentId ? getClaimToken(localStorage, currentId) : undefined;
+
         // Forking Logic for Non-Owners (Alice Copy)
         if (isLoggedIn && !isOwner && currentId) {
             console.log('[ReactFlow] Forking on Save (Non-Owner)');
@@ -176,7 +187,10 @@ export function useSaveAndFork({
         // Ensure visibility is part of the graph object passed back
         graphToSave.visibility = visibility;
 
-        const result = await saveRecipeAction(graphToSave, currentId, visibility);
+        const result = await saveRecipeAction(graphToSave, currentId, visibility, claimToken);
+        // One attempt is enough — whether it succeeded or the token was
+        // stale/invalid, there's nothing to gain by attaching it again.
+        if (claimToken && currentId) clearClaimToken(localStorage, currentId);
 
         if (onSave) onSave(graphToSave);
         return result;

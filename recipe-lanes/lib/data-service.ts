@@ -20,6 +20,7 @@ import { setIngredientStatuses } from './data-helpers';
 import { memoryStore, IconData, IngredientData } from './store';
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
+import { claimHashForCreate, isValidClaim } from './recipe-lanes/claim-token';
 import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
@@ -48,7 +49,7 @@ export interface DataService {
   ): Promise<void>;
 
   
-  saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public', ownerName?: string): Promise<string>;
+  saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public', ownerName?: string, claimToken?: string): Promise<string>;
   getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null>;
 
   voteRecipe(recipeId: string, userId: string, vote: 'like' | 'dislike' | 'none'): Promise<void>;
@@ -754,16 +755,32 @@ export class FirebaseDataService implements DataService {
       return recipes;
   }
 
-  async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted', ownerName?: string): Promise<string> {
+  async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public', ownerName?: string, claimToken?: string): Promise<string> {
       const data: any = {
           graph, // TODO add last_updated to graph.
           updated_at: FieldValue.serverTimestamp()
       };
-      
+
       if (userId) data.ownerId = userId;
       if (ownerName) data.ownerName = ownerName;
-      if (visibility) data.visibility = visibility;
-      
+      // On update, only touch visibility if the caller explicitly asked to change
+      // it — otherwise leave the stored value alone so autosaves don't clobber it.
+      // On create, default anon saves to public and signed-in saves to unlisted.
+      let createVisibility: 'unlisted' | 'public' | 'private' | undefined;
+      if (existingId) {
+          if (visibility) data.visibility = visibility;
+      } else {
+          createVisibility = visibility || (userId ? 'unlisted' : 'public');
+          data.visibility = createVisibility;
+          // Anon-created public recipes have no signed-in owner to credit —
+          // give them a stable display name instead of leaving it unset.
+          if (!userId && createVisibility === 'public') data.ownerName = 'Anon';
+          // Anon creations stamp a hash of the browser-held claim token so the
+          // creator can claim ownership after signing in (see claim-token.ts).
+          const stampHash = claimHashForCreate(userId, claimToken);
+          if (stampHash) data.claimTokenHash = stampHash;
+      }
+
       // Ensure title is synced both at top level and inside graph
       if (graph.title) {
           data.title = graph.title;
@@ -781,6 +798,18 @@ export class FirebaseDataService implements DataService {
               // TODO: Consider just saving under a new ID if not owner?
               if (existingData?.ownerId && existingData.ownerId !== userId) {
                   throw new Error("You are not the owner of this recipe.");
+              }
+              // Anon-owned recipes (no ownerId) can never be silently claimed
+              // by a later signed-in save — UNLESS the caller proves the claim
+              // token minted in their browser at creation (see claim-token.ts).
+              // That's the only path ownership can move away from anon.
+              if (!existingData?.ownerId) {
+                  if (isValidClaim(userId, claimToken, existingData?.claimTokenHash)) {
+                      data.claimTokenHash = FieldValue.delete();
+                  } else {
+                      delete data.ownerId;
+                      delete data.ownerName;
+                  }
               }
               for (const n of existingData?.graph?.nodes || []) {
                   oldNodesById.set(n.id, n);
@@ -842,14 +871,15 @@ export class FirebaseDataService implements DataService {
             } catch (e) { /* Ignore fetch error */ }
         }
 
-        return { 
-            graph, 
-            ownerId: data.ownerId, 
+        return {
+            graph,
+            ownerId: data.ownerId,
             ownerName,
-            visibility: data.visibility, 
+            visibility: data.visibility,
             stats: { likes: data.likes || 0, dislikes: data.dislikes || 0 }
         };
     }
+
   async voteRecipe(recipeId: string, userId: string, vote: 'like' | 'dislike' | 'none') {
       const userRef = db.collection('users').doc(userId);
       const recipeRef = db.collection(DB_COLLECTION_RECIPES).doc(recipeId);
@@ -1283,6 +1313,7 @@ export class MemoryDataService implements DataService {
         sourceId?: string;
         visibility: string;
         isVetted?: boolean;
+        claimTokenHash?: string;
         stats: { likes: number; dislikes: number };
         created_at: number;
     }>();
@@ -1582,48 +1613,71 @@ export class MemoryDataService implements DataService {
         this.recipes.delete(recipeId);
     }
     
-    async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility: 'private' | 'unlisted' | 'public' = 'unlisted', ownerName?: string): Promise<string> {
+    async saveRecipe(graph: RecipeGraph, existingId?: string, userId?: string, visibility?: 'private' | 'unlisted' | 'public', ownerName?: string, claimToken?: string): Promise<string> {
         const id = existingId || randomUUID();
         const existing = this.recipes.get(id);
-        
+
         if (existing && existing.ownerId && existing.ownerId !== userId) {
             throw new Error("You are not the owner of this recipe.");
         }
 
         const stats = existing?.stats || { likes: 0, dislikes: 0 };
         const created_at = existing?.created_at || Date.now();
-        const ownerId = existing?.ownerId || userId; // Keep original owner if update
-        const finalOwnerName = existing?.ownerName || ownerName;
-        
+        // On update, preserve the stored visibility unless the caller explicitly
+        // changes it — don't let autosaves clobber it back to the default.
+        // On create, default anon saves to public and signed-in saves to unlisted.
+        const finalVisibility = existing
+            ? (visibility || existing.visibility)
+            : (visibility || (userId ? 'unlisted' : 'public'));
+        // Anon-owned recipes (no ownerId) can never be silently claimed by a
+        // later signed-in save — UNLESS the caller proves the claim token
+        // minted in their browser at creation (see claim-token.ts). That's
+        // the only path ownership can move away from anon.
+        const isAnonOwned = existing ? !existing.ownerId : !userId;
+        const canClaim = isAnonOwned && !!existing
+            && isValidClaim(userId, claimToken, existing.claimTokenHash);
+        const ownerId = canClaim
+            ? userId
+            : (isAnonOwned ? undefined : (existing?.ownerId || userId));
+        const finalOwnerName = canClaim
+            ? (ownerName || existing?.ownerName)
+            : (isAnonOwned
+                ? (existing?.ownerName || (finalVisibility === 'public' ? 'Anon' : undefined))
+                : (existing?.ownerName || ownerName));
+        // Only stamp a claim-token hash when first creating an anon recipe;
+        // preserve whatever hash (if any) already exists on later saves,
+        // clearing it once successfully claimed.
+        const claimTokenHash = canClaim
+            ? undefined
+            : (existing ? existing.claimTokenHash : claimHashForCreate(userId, claimToken));
+
         this.recipes.set(id, {
             graph,
             ownerId,
             ownerName: finalOwnerName,
             sourceId: graph.sourceId,
-            visibility,
+            visibility: finalVisibility,
+            claimTokenHash,
             stats,
             created_at
         });
         return id;
     }
-    
-    async getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null> { 
+
+    async getRecipe(id: string): Promise<{ graph: RecipeGraph, ownerId?: string, ownerName?: string, visibility?: string, stats?: any } | null> {
         const r = this.recipes.get(id);
         if (!r) return null;
         const graph = r.graph;
         if (r.visibility) graph.visibility = r.visibility as any;
 
-        // Mock lookup if needed, but for now just use ownerId as fallback or assume name is not stored in memory recipes unless we expand schema
-        const ownerName = r.ownerId ? `User ${r.ownerId}` : undefined;
-
-        return { 
-            graph, 
-            ownerId: r.ownerId, 
-            ownerName,
-            visibility: r.visibility, 
-            stats: r.stats 
-        }; 
-    } 
+        return {
+            graph,
+            ownerId: r.ownerId,
+            ownerName: r.ownerName,
+            visibility: r.visibility,
+            stats: r.stats
+        };
+    }
 
     private mapMemoryRecipe(id: string, r: any) {
         let title = r.graph.title || 'Untitled Recipe';

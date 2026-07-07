@@ -224,8 +224,14 @@ export interface LayoutGraph {
 
 export type IconStyleId = 'classic' | 'modern' | 'modern_clean' | 'timeline-circle';
 export type LineStyleId = 'straight' | 'floating' | 'step' | 'bezier' | 'timeline-path';
-export type LayoutModeId = 'dagre' | 'dagre-lr' | 'timeline' | 'swimlanes' | 'repulsive' | 'timeline2';
+export type LayoutModeId = 'dagre' | 'dagre-lr' | 'timeline' | 'swimlanes' | 'repulsive' | 'timeline2' | 'notation';
 export type BackgroundElementId = 'timeline-grid' | 'lane-bands-horizontal' | 'lane-bands-vertical';
+
+/**
+ * The paper/surface the diagram canvas is drawn on. Independent of icon style
+ * so any icon style can sit on any background (issue #111).
+ */
+export type CanvasBackgroundId = 'default' | 'butcher';
 
 export interface LayoutPreset {
     id: string;

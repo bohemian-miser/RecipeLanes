@@ -248,4 +248,29 @@ describe('useRecipeStore', () => {
             assert.equal(s.status, 'idle');
         });
     });
+
+    describe('canvasBackground (issue #111) — independent of iconStyle', () => {
+        it('defaults to "default"', () => {
+            assert.equal(useRecipeStore.getState().canvasBackground, 'default');
+        });
+
+        it('setCanvasBackground updates the background', () => {
+            useRecipeStore.getState().setCanvasBackground('butcher');
+            assert.equal(useRecipeStore.getState().canvasBackground, 'butcher');
+            useRecipeStore.getState().setCanvasBackground('default');
+            assert.equal(useRecipeStore.getState().canvasBackground, 'default');
+        });
+
+        it('does not change the icon style (the two are decoupled)', () => {
+            const styleBefore = useRecipeStore.getState().iconStyle;
+            useRecipeStore.getState().setCanvasBackground('butcher');
+            assert.equal(useRecipeStore.getState().iconStyle, styleBefore);
+        });
+
+        it('setIconStyle does not change the canvas background', () => {
+            useRecipeStore.getState().setCanvasBackground('butcher');
+            useRecipeStore.getState().setIconStyle('modern');
+            assert.equal(useRecipeStore.getState().canvasBackground, 'butcher');
+        });
+    });
 });

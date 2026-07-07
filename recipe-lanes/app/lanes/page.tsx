@@ -40,6 +40,7 @@ import { Banner } from '@/components/ui/banner';
 import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
 import { fileToRecipePhotoDataUrl } from '@/lib/recipe-lanes/image-client';
 import { loadDraft, saveDraft, commitDraftOnForge, clearBlankDraft } from '@/lib/recipe-lanes/draft-persistence';
+import { mintClaimToken, storeClaimToken } from '@/lib/recipe-lanes/claim-token-client';
 import { LoadingScreen, LoadingPhase } from '@/components/recipe-lanes/ui/loading-screen';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -82,7 +83,9 @@ function RecipeLanesContent() {
   const layoutMode = useRecipeStore(s => s.nodeLayout);
   const layoutModeRestoredRef = useRef(false);
   const iconTheme = useRecipeStore(s => s.iconStyle) as 'classic' | 'modern' | 'modern_clean';
-  const { setNodeLayout, setIconStyle, setLineStyle } = useRecipeStore.getState();
+  const leafNodeScale = useRecipeStore(s => s.leafNodeScale);
+  const canvasBackground = useRecipeStore(s => s.canvasBackground);
+  const { setNodeLayout, setIconStyle, setLineStyle, setLeafNodeScale, setCanvasBackground } = useRecipeStore.getState();
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
@@ -603,9 +606,13 @@ const handleVisualize = async () => {
     try {
         // Use New Fast Path Action
         const currentId = searchParams.get('id');
-        const res = await createVisualRecipeAction(recipeText, currentId || undefined);
-        
-        finalizeCreatedRecipe(res, recipeText);
+        // Anon creation (#151 follow-up): mint a claim token so the creator can
+        // later prove ownership from this browser and claim the recipe after
+        // signing in. Only the hash is ever sent to/stored on the server.
+        const claimToken = mintClaimToken(!!user);
+        const res = await createVisualRecipeAction(recipeText, currentId || undefined, claimToken);
+
+        finalizeCreatedRecipe(res, recipeText, claimToken);
     } catch (e: any) {
         console.error('Visualization failed:', e);
         setError(e.message);
@@ -616,9 +623,15 @@ const handleVisualize = async () => {
   // Shared post-creation handling for both the text and photo (issue #182)
   // flows: seed the chat, persist it, and navigate to the new recipe. Throws on
   // an errored/empty result so callers surface it through their catch.
-  const finalizeCreatedRecipe = (res: { id?: string; error?: string }, userMessage: string) => {
+  const finalizeCreatedRecipe = (res: { id?: string; error?: string }, userMessage: string, claimToken?: string) => {
         if (res.error || !res.id) {
             throw new Error(res.error || 'Failed to parse recipe structure.');
+        }
+        // Stash the claim token under the real recipe id — the next ordinary
+        // save (useSaveAndFork.performSave) attaches it automatically once
+        // this browser signs in, transferring ownership with no extra step.
+        if (claimToken) {
+            storeClaimToken(localStorage, res.id, claimToken);
         }
         const url = new URL(window.location.href);
         url.searchParams.delete('new');
@@ -671,8 +684,9 @@ const handleVisualize = async () => {
         const dataUrl = await fileToRecipePhotoDataUrl(file);
 
         const currentId = searchParams.get('id');
-        const res = await createVisualRecipeFromImageAction(dataUrl, currentId || undefined);
-        finalizeCreatedRecipe(res, '📷 Recipe from photo');
+        const claimToken = mintClaimToken(!!user);
+        const res = await createVisualRecipeFromImageAction(dataUrl, currentId || undefined, claimToken);
+        finalizeCreatedRecipe(res, '📷 Recipe from photo', claimToken);
     } catch (err: any) {
         console.error('Photo visualization failed:', err);
         setError(err.message);
@@ -720,7 +734,7 @@ const handleVisualize = async () => {
       }
   };
 
-    const handleLayoutClick = async (mode: LayoutMode | 'repulsive' | 'timeline2') => {
+    const handleLayoutClick = async (mode: LayoutMode | 'repulsive' | 'timeline2' | 'notation') => {
         if (layoutMode === mode) {
             diagramRef.current?.resetLayout();
         } else {
@@ -752,7 +766,7 @@ const handleVisualize = async () => {
   const isPublic = graph?.visibility === 'public';
 
   // Common Nav Item Styles
-  const navItemClass = "flex items-center gap-2 px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
+  const navItemClass = "flex items-center gap-2 px-2 md:px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
 
   let loadingPhase: LoadingPhase = null;
   if (status === 'parsing' || status === 'loading') {
@@ -765,7 +779,7 @@ const handleVisualize = async () => {
     <div className="fixed inset-0 flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden overscroll-none">
         {/* Utility Bar */}
         <header className="h-14 shrink-0 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-950 z-20">
-            <div className="flex items-center gap-4 overflow-hidden">
+            <div className="flex-1 min-w-0 flex items-center gap-4 overflow-hidden">
                 {/* Logo */}
                 <div className="flex items-center gap-2 shrink-0">
                     <ChefHat className="w-6 h-6 text-yellow-500" />
@@ -801,13 +815,14 @@ const handleVisualize = async () => {
                     )}
                 </div>
             </div>
-            
-            {/* Right Side Actions */}
-            <div className="flex items-center gap-2">
+
+            {/* Right Side Actions — must not squeeze the title on mobile (issue #139),
+                so it never shrinks and drops secondary items / labels on small screens. */}
+            <div className="flex items-center gap-1 md:gap-2 shrink-0">
                 {/* Navigation Tabs */}
                 <Link href="/gallery" className={navItemClass} title="Public Gallery">
                     <Globe className="w-4 h-4" />
-                    <span>Gallery</span>
+                    <span className="hidden md:inline">Gallery</span>
                 </Link>
                 {user && (
                     <>
@@ -826,11 +841,11 @@ const handleVisualize = async () => {
                     <span className="hidden md:inline">New</span>
                 </button>
                 
-                <button onClick={() => setShowFeedback(true)} className={navItemClass} title="Feedback & Contribute">
+                <button onClick={() => setShowFeedback(true)} className={`${navItemClass} hidden md:flex`} title="Feedback & Contribute">
                     <MessageSquare className="w-4 h-4" />
                 </button>
 
-                <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={navItemClass} title="Find me on GitHub">
+                <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={`${navItemClass} hidden md:flex`} title="Find me on GitHub">
                     <Github className="w-4 h-4" />
                 </a>
 
@@ -859,8 +874,7 @@ const handleVisualize = async () => {
                 {/* Existing Copies Banner - Hide if Fork Prompt is active */}
                 {existingCopies && existingCopies.length > 0 && !showForkPrompt && !existingCopiesDismissed && (
                     <Banner color="blue" onDismiss={() => setExistingCopiesDismissed(true)}>
-                        {/* TODO: Filter by sourceId when implemented */}
-                        <span>You have <Link href="/gallery?filter=mine" className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length > 1 ? 'copies' : 'copy'}</Link> of this recipe. <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">Go to latest?</Link></span>
+                        <span>You have <Link href={`/gallery?filter=source&sourceId=${recipeId}`} className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length > 1 ? 'copies' : 'copy'}</Link> of this recipe. <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">Go to latest?</Link></span>
                         <div className="flex flex-wrap justify-center gap-2">
                             <button onClick={handleFork} className="underline font-bold hover:text-white">
                                 Save another copy?
@@ -879,8 +893,7 @@ const handleVisualize = async () => {
                 {/* Fork Prompt Banner (Destructive Action Intercept) */}
                 {showForkPrompt && existingCopies && existingCopies.length > 0 && (
                     <Banner color="blue" onDismiss={() => setShowForkPrompt(false)}>
-                        {/* TODO: Filter by sourceId when implemented */}
-                        <span>You have <Link href="/gallery?filter=mine" className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length === 1 ? 'copy' : 'copies'}</Link> of this recipe, to make changes, open one of these. Any further changes won&apos;t be saved.</span>
+                        <span>You have <Link href={`/gallery?filter=source&sourceId=${recipeId}`} className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length === 1 ? 'copy' : 'copies'}</Link> of this recipe, to make changes, open one of these. Any further changes won&apos;t be saved.</span>
                         <div className="flex gap-2">
                             <button onClick={handleFork} className="underline font-bold hover:text-white">
                                 Save another copy
@@ -1005,6 +1018,7 @@ const handleVisualize = async () => {
                             <option value="repulsive">Repulsive</option>
                             <option value="timeline">Timeline</option>
                             <option value="timeline2">Timeline (Classic)</option>
+                            <option value="notation">Notation</option>
                         </select>
                         {/* Reset Layout Button */}
                         <button 
@@ -1068,7 +1082,36 @@ const handleVisualize = async () => {
                             <option value="modern_clean">Clean</option>
                         </select>
                     </div>
-                    
+
+                    {/* Background (Paper) Dropdown — independent of icon style */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-zinc-400">Paper</span>
+                        <select
+                            value={canvasBackground}
+                            onChange={(e) => setCanvasBackground(e.target.value as any)}
+                            className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1.5 text-zinc-700 font-medium focus:ring-1 focus:ring-yellow-500/50 outline-none"
+                            title="Canvas Background"
+                        >
+                            <option value="default">Default</option>
+                            <option value="butcher">Butcher&apos;s Paper</option>
+                        </select>
+                    </div>
+
+                    {/* Leaf node size — global slider (issue #155) */}
+                    <div className="flex items-center gap-2" title="Size of leaf nodes (raw ingredients)">
+                        <span className="text-xs font-mono text-zinc-400 whitespace-nowrap">Leaf size</span>
+                        <input
+                            type="range"
+                            min={0.4}
+                            max={1}
+                            step={0.05}
+                            value={leafNodeScale}
+                            onChange={(e) => setLeafNodeScale(parseFloat(e.target.value))}
+                            className="w-20 accent-yellow-500 cursor-pointer"
+                            aria-label="Leaf node size"
+                        />
+                        <span className="text-xs font-mono text-zinc-400 w-8 tabular-nums">{Math.round(leafNodeScale * 100)}%</span>
+                    </div>
 
                 </div>
 
@@ -1182,7 +1225,7 @@ const handleVisualize = async () => {
                     <ReactFlowDiagram
                         ref={diagramRef}
                         graph={graph}
-                        mode={layoutMode as LayoutMode | 'repulsive'}
+                        mode={layoutMode as LayoutMode | 'repulsive' | 'notation'}
                         spacing={spacing}
                         edgeStyle={edgeStyle}
                         textPos={textPos}

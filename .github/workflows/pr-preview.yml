@@ -282,9 +282,63 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Deregister preview host from authorized Firebase Auth domains
+      # Resource cleanup (Cloud Run tag + Artifact Registry images) is the
+      # critical, must-not-skip half of teardown: leaving these behind is what
+      # actually orphans preview infrastructure. It now runs FIRST and
+      # unconditionally (if: always()), so a failure anywhere later in this
+      # job (e.g. in the best-effort Auth-domain cleanup below) can never
+      # again prevent it from executing. Previously the domain-deregister step
+      # ran first with `set -euo pipefail`; when its own initial `gcloud run
+      # services describe ... | head -n1` lookup failed (the exit code
+      # propagated through the pipe, under pipefail, into the `URL=$(...)`
+      # assignment), `set -e` aborted the whole step *before* any of its own
+      # diagnostics printed, and the job stopped there — "Remove preview tag"
+      # and "Delete pushed preview images" never ran, orphaning the previews
+      # for PR #198 and #199.
+      - name: Remove preview tag
+        if: always()
         run: |
-          set -euo pipefail
+          gcloud run services update-traffic "$SERVICE" \
+            --project "$GCP_PROJECT" --region "$REGION" \
+            --remove-tags "pr-${{ github.event.number }}" || \
+            echo "No tag pr-${{ github.event.number }} to remove; skipping."
+
+      - name: Delete pushed preview images
+        if: always()
+        run: |
+          IMAGE_PATH="${REGION}-docker.pkg.dev/${GCP_PROJECT}/${AR_REPO}/${SERVICE}"
+          gcloud artifacts docker tags list "$IMAGE_PATH" \
+            --filter="tag.basename()~^pr-${{ github.event.number }}-" \
+            --format="value(tag.basename())" 2>/dev/null | while read -r TAG; do
+            [ -z "$TAG" ] && continue
+            gcloud artifacts docker images delete "${IMAGE_PATH}:${TAG}" \
+              --delete-tags --quiet || true
+          done
+
+      # Best-effort domain cleanup. Deliberately NOT `set -e`: this step must
+      # never be able to abort mid-way, and — more importantly — must never
+      # again be allowed to block the resource cleanup above (which is why it
+      # also now runs last). `continue-on-error: true` is a second layer of
+      # defense: even an unanticipated failure here (bad token, transient
+      # network error, gcloud CLI regression) can only fail *this* step, never
+      # the job, and never the steps before it.
+      #
+      # Safety guard (see the incident this fixes): a bug in the read-modify-
+      # write PATCH once wiped `authorizedDomains` to an empty list and took
+      # down all logins across staging (`TypeError: t is not iterable` in
+      # validate_origin). This step now refuses to PATCH unless: the GET
+      # parsed as a JSON array, that array was non-empty, and the computed new
+      # list removes at most the single intended host and is not itself empty.
+      - name: Deregister preview host from authorized Firebase Auth domains
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          # No `-e` here on purpose (see comment above): every fallible
+          # command below is checked explicitly, so a failure logs a clear
+          # message and this step exits 0 (best-effort) instead of dying
+          # silently partway through — which is exactly what orphaned #198/#199.
+
           URL=$(gcloud run services describe "$SERVICE" \
             --project "$GCP_PROJECT" --region "$REGION" \
             --format="value(status.traffic.url)" \
@@ -295,10 +349,10 @@ jobs:
               --format="json" 2>/dev/null | node -e '
                 const d=JSON.parse(require("fs").readFileSync(0,"utf8"));
                 const t=(d.status?.traffic||[]).find(x=>x.tag==="pr-${{ github.event.number }}");
-                if(t?.url)process.stdout.write(t.url);' || true)
+                if(t?.url)process.stdout.write(t.url);' 2>/dev/null)
           fi
           if [ -z "$URL" ]; then
-            echo "No tagged URL found for pr-${{ github.event.number }}; nothing to deregister."
+            echo "No tagged URL found for pr-${{ github.event.number }} (already removed, or lookup failed); nothing to deregister."
             exit 0
           fi
           HOST="${URL#https://}"
@@ -306,7 +360,10 @@ jobs:
           HOST="${HOST%%/*}"
           echo "Deregistering authorized domain: $HOST"
 
-          TOKEN=$(gcloud auth print-access-token)
+          TOKEN=$(gcloud auth print-access-token) || {
+            echo "::warning::Could not obtain access token; skipping Auth-domain deregistration (best-effort)."
+            exit 0
+          }
           CONFIG_URL="https://identitytoolkit.googleapis.com/admin/v2/projects/${GCP_PROJECT}/config"
 
           ATTEMPTS=5
@@ -318,8 +375,8 @@ jobs:
             GET_CODE=$(echo "$GET_RESP" | tail -n1)
 
             if [ "$GET_CODE" = "403" ]; then
-              echo "::error::Permission denied (403) reading Identity Toolkit config for project ${GCP_PROJECT}. The FIREBASE_SERVICE_ACCOUNT_STAGING service account needs a role with firebaseauth.configs.update (e.g. roles/firebaseauth.admin)."
-              exit 1
+              echo "::warning::Permission denied (403) reading Identity Toolkit config for project ${GCP_PROJECT}. The FIREBASE_SERVICE_ACCOUNT_STAGING service account needs a role with firebaseauth.configs.update (e.g. roles/firebaseauth.admin). Skipping (best-effort)."
+              exit 0
             fi
             if [ "$GET_CODE" -lt 200 ] || [ "$GET_CODE" -ge 300 ]; then
               echo "GET failed with status $GET_CODE (attempt $i/$ATTEMPTS); retrying..."
@@ -327,8 +384,40 @@ jobs:
               continue
             fi
 
-            NEW_DOMAINS=$(echo "$GET_BODY" | jq -c --arg host "$HOST" \
-              '[(.authorizedDomains // [])[] | select(. != $host)]')
+            # --- Safety guard: validate the snapshot before computing anything. ---
+            OLD_DOMAINS=$(echo "$GET_BODY" | jq -c '.authorizedDomains // empty' 2>/dev/null)
+            if [ -z "$OLD_DOMAINS" ]; then
+              echo "::warning::Could not parse a non-empty authorizedDomains array from the GET response; refusing to PATCH. Body: $GET_BODY"
+              exit 0
+            fi
+            OLD_COUNT=$(echo "$OLD_DOMAINS" | jq 'length' 2>/dev/null)
+            if [ -z "$OLD_COUNT" ] || [ "$OLD_COUNT" -lt 1 ]; then
+              echo "::warning::authorizedDomains snapshot is empty or unparseable (count=$OLD_COUNT); refusing to PATCH to avoid wiping the list."
+              exit 0
+            fi
+
+            NEW_DOMAINS=$(echo "$OLD_DOMAINS" | jq -c --arg host "$HOST" \
+              '[.[] | select(. != $host)]' 2>/dev/null)
+            if [ -z "$NEW_DOMAINS" ]; then
+              echo "::warning::Failed to compute updated domain list; refusing to PATCH."
+              exit 0
+            fi
+            NEW_COUNT=$(echo "$NEW_DOMAINS" | jq 'length' 2>/dev/null)
+            if [ -z "$NEW_COUNT" ]; then
+              echo "::warning::Could not determine size of updated domain list; refusing to PATCH."
+              exit 0
+            fi
+            # Removing one host must remove at most one entry, and must never
+            # empty the list. Refuse the PATCH if either invariant is violated.
+            if [ "$NEW_COUNT" -lt 1 ] || [ "$NEW_COUNT" -lt "$((OLD_COUNT - 1))" ]; then
+              echo "::warning::Refusing to PATCH authorizedDomains: would shrink from $OLD_COUNT to $NEW_COUNT entries (removing '$HOST' should drop at most 1). Leaving the list untouched."
+              exit 0
+            fi
+            if [ "$NEW_COUNT" -eq "$OLD_COUNT" ]; then
+              echo "Host '$HOST' was not present in authorizedDomains; nothing to remove."
+              SUCCESS=true
+              break
+            fi
 
             PATCH_RESP=$(curl -sS -w '\n%{http_code}' -X PATCH \
               "${CONFIG_URL}?updateMask=authorizedDomains" \
@@ -339,11 +428,11 @@ jobs:
             PATCH_CODE=$(echo "$PATCH_RESP" | tail -n1)
 
             if [ "$PATCH_CODE" = "403" ]; then
-              echo "::error::Permission denied (403) updating Identity Toolkit config for project ${GCP_PROJECT}. The FIREBASE_SERVICE_ACCOUNT_STAGING service account needs a role with firebaseauth.configs.update (e.g. roles/firebaseauth.admin)."
-              exit 1
+              echo "::warning::Permission denied (403) updating Identity Toolkit config for project ${GCP_PROJECT}. Skipping (best-effort)."
+              exit 0
             fi
             if [ "$PATCH_CODE" -ge 200 ] && [ "$PATCH_CODE" -lt 300 ]; then
-              echo "Authorized domain '$HOST' removed."
+              echo "Authorized domain '$HOST' removed ($OLD_COUNT -> $NEW_COUNT entries)."
               SUCCESS=true
               break
             fi
@@ -354,29 +443,11 @@ jobs:
           done
 
           if [ "$SUCCESS" != "true" ]; then
-            echo "::error::Failed to deregister authorized domain '$HOST' after ${ATTEMPTS} attempts."
-            exit 1
+            echo "::warning::Failed to deregister authorized domain '$HOST' after ${ATTEMPTS} attempts (best-effort; not failing the job)."
           fi
 
-      - name: Remove preview tag
-        run: |
-          gcloud run services update-traffic "$SERVICE" \
-            --project "$GCP_PROJECT" --region "$REGION" \
-            --remove-tags "pr-${{ github.event.number }}" || \
-            echo "No tag pr-${{ github.event.number }} to remove; skipping."
-
-      - name: Delete pushed preview images
-        run: |
-          IMAGE_PATH="${REGION}-docker.pkg.dev/${GCP_PROJECT}/${AR_REPO}/${SERVICE}"
-          gcloud artifacts docker tags list "$IMAGE_PATH" \
-            --filter="tag.basename()~^pr-${{ github.event.number }}-" \
-            --format="value(tag.basename())" 2>/dev/null | while read -r TAG; do
-            [ -z "$TAG" ] && continue
-            gcloud artifacts docker images delete "${IMAGE_PATH}:${TAG}" \
-              --delete-tags --quiet || true
-          done
-
       - name: Update sticky comment
+        if: always()
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: cloud-run-preview

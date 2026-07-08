@@ -48,6 +48,26 @@ resource "google_dns_record_set" "staging_a" {
   rrdatas      = ["35.219.201.32"]
 }
 
+# CTF fork (recipe-lanes-ctf App Hosting backend). A + ownership TXT required
+# by the App Hosting custom-domain for ctf.recipelanes.com.
+resource "google_dns_record_set" "ctf_a" {
+  project      = "recipe-lanes-infra"
+  managed_zone = google_dns_managed_zone.recipelanes_com.name
+  name         = "ctf.recipelanes.com."
+  type         = "A"
+  ttl          = 300
+  rrdatas      = ["35.219.201.32"]
+}
+
+resource "google_dns_record_set" "ctf_txt" {
+  project      = "recipe-lanes-infra"
+  managed_zone = google_dns_managed_zone.recipelanes_com.name
+  name         = "ctf.recipelanes.com."
+  type         = "TXT"
+  ttl          = 3600
+  rrdatas      = ["\"fah-claim=00b-02-b2c3e38b-617e-40c6-b790-6f51147b69da\""]
+}
+
 # Firebase App Hosting certificate-manager ACME delegation.
 resource "google_dns_record_set" "acme_delegation" {
   project      = "recipe-lanes-infra"

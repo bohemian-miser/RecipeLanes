@@ -40,3 +40,28 @@ resource "google_project_iam_member" "compute_cloudbuild_builder" {
   role    = "roles/cloudbuild.builds.builder"
   member  = "serviceAccount:${google_project.ctf.number}-compute@developer.gserviceaccount.com"
 }
+
+# App Hosting runtime SA (the Next.js server actions run as this). To FORGE
+# icons it enqueues Cloud Tasks to the processIconTask queue and mints the
+# invoker OIDC token, so it needs cloudtasks.enqueuer + iam.serviceAccountUser.
+# The rest mirror prod's firebase-app-hosting-compute grants (trace/logging/
+# run.invoker) so the CTF app has parity. Without cloudtasks.enqueuer the forge
+# silently no-ops (nothing reaches processIconTask).
+locals {
+  apphosting_sa = "firebase-app-hosting-compute@${google_project.ctf.project_id}.iam.gserviceaccount.com"
+  apphosting_roles = [
+    "roles/cloudtasks.enqueuer",
+    "roles/iam.serviceAccountUser",
+    "roles/run.invoker",
+    "roles/cloudtrace.agent",
+    "roles/logging.logWriter",
+  ]
+}
+
+resource "google_project_iam_member" "apphosting_sa" {
+  for_each = toset(local.apphosting_roles)
+
+  project = google_project.ctf.project_id
+  role    = each.value
+  member  = "serviceAccount:${local.apphosting_sa}"
+}

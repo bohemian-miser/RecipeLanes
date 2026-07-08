@@ -63,14 +63,31 @@ jobs:
       - name: Install Gemini CLI
         run: npm install -g @google/gemini-cli --silent
 
+      # Gemini CLI strips token/credential-like env vars from the shells it
+      # spawns, so everything the agent's commands need must live in files:
+      # gh auth in hosts.yml, GCP creds at the ADC well-known path, and the
+      # Firebase project id in recipe-lanes/.env (read by the script's dotenv).
+      - name: Configure agent auth (file-based)
+        env:
+          APP_ID: ${{ vars.AGENT_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          REPO: ${{ github.repository }}
+          FALLBACK_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+        run: |
+          if [ -n "$APP_ID" ]; then
+            node .github/scripts/mint-app-token.mjs | gh auth login --with-token
+          else
+            printf '%s' "$FALLBACK_TOKEN" | gh auth login --with-token
+          fi
+          mkdir -p "$HOME/.config/gcloud"
+          cp "$GOOGLE_APPLICATION_CREDENTIALS" "$HOME/.config/gcloud/application_default_credentials.json"
+          echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=recipe-lanes" >> recipe-lanes/.env
+
       - name: Run triage agent
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
           GEMINI_MODEL: gemini-3.1-pro-preview
-          GH_TOKEN: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
-          GITHUB_TOKEN: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: recipe-lanes
         run: |
           gemini --approval-mode=yolo -p "$(cat .github/gemini/feedback-triage.md)" 2>&1 | tee "$RUNNER_TEMP/gemini-run.log"
 

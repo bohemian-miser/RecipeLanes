@@ -84,6 +84,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          GEMINI_MODEL: gemini-3.1-pro-preview
           GH_TOKEN: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
           GITHUB_TOKEN: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
           TARGET_ISSUE: ${{ github.event_name == 'issues' && github.event.issue.number || github.event.inputs.issue_number }}
@@ -94,4 +95,31 @@ jobs:
             PROMPT="/resolve-issue"
           fi
           echo "Executing: gemini --approval-mode=yolo -p \"$PROMPT\""
-          gemini --approval-mode=yolo -p "$PROMPT"
+          gemini --approval-mode=yolo -p "$PROMPT" 2>&1 | tee "$RUNNER_TEMP/gemini-run.log"
+
+      - name: Collect and scrub agent logs
+        if: always()
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          APP_TOKEN: ${{ steps.agent_token.outputs.token }}
+          FALLBACK_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/gemini-logs"
+          cp "$RUNNER_TEMP/gemini-run.log" "$RUNNER_TEMP/gemini-logs/" 2>/dev/null || true
+          # Gemini CLI session transcripts (full conversation + tool calls)
+          cp -r "$HOME/.gemini/tmp" "$RUNNER_TEMP/gemini-logs/sessions" 2>/dev/null || true
+          # Artifacts on a public repo are downloadable — scrub credentials.
+          find "$RUNNER_TEMP/gemini-logs" -type f | while read -r f; do
+            for s in "$GEMINI_API_KEY" "$APP_TOKEN" "$FALLBACK_TOKEN"; do
+              [ -n "$s" ] && sed -i "s|$s|***SCRUBBED***|g" "$f" || true
+            done
+          done
+
+      - name: Upload agent logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-logs-${{ github.run_id }}
+          path: ${{ runner.temp }}/gemini-logs/
+          if-no-files-found: ignore
+          retention-days: 30

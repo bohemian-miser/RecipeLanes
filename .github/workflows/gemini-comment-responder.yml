@@ -23,11 +23,12 @@ concurrency:
 jobs:
   respond:
     # Only: comments on PRs (not plain issues), on agent:gemini-labeled PRs,
-    # from maintainers, and not the agent's own marker-tagged comments.
+    # from the repo owner (was: any collaborator), and not the agent's own
+    # marker-tagged comments.
     if: >-
       github.event.issue.pull_request != null &&
       contains(github.event.issue.labels.*.name, 'agent:gemini') &&
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+      github.event.comment.user.login == github.repository_owner &&
       !contains(github.event.comment.body, '<!-- gemini-agent -->')
     runs-on: ubuntu-latest
     permissions:

@@ -37,9 +37,13 @@ concurrency:
 
 jobs:
   solve-issue:
+    # Label events fire only when the labeler is the repo owner — labeling
+    # already requires triage access, but pin it to the owner outright.
+    # (workflow_dispatch requires write access by definition.)
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      github.event.label.name == 'agent-ready-gemini'
+      (github.event.label.name == 'agent-ready-gemini' &&
+       github.event.sender.login == github.repository_owner)
     runs-on: ubuntu-latest
     permissions:
       contents: write

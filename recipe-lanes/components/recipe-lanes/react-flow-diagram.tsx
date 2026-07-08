@@ -18,7 +18,6 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, memo } from 'react';
-import { useSearchParams } from 'next/navigation';
 import ReactFlow, {
     Background,
     Controls,
@@ -75,6 +74,13 @@ interface ReactFlowDiagramProps {
   onNotify?: (msg: string) => void;
   isOwner?: boolean; // YOLO: Added to support auto-save on move logic
   iconTheme?: 'classic' | 'modern' | 'modern_clean';
+  // Analytics-only: which recipe (the ?id= search param) is being edited, so
+  // diagram_interacted can be deduped per-recipe. Passed as a plain string
+  // prop (not read via useSearchParams() in here) — this component is memoized
+  // and Zustand-selector-optimized to minimize re-renders, and subscribing to
+  // useSearchParams() directly would re-render it on every router navigation
+  // (see the recipeId-vs-searchParams note in app/lanes/page.tsx).
+  recipeId?: string;
 }
 
 export interface ReactFlowDiagramHandle {
@@ -107,7 +113,7 @@ function trackDiagramInteractionOnce(recipeId: string | undefined) {
     track('diagram_interacted');
 }
 
-const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode: propMode, spacing = 1, edgeStyle: propEdgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme: propIconTheme = 'classic' }, ref) => {
+const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode: propMode, spacing = 1, edgeStyle: propEdgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme: propIconTheme = 'classic', recipeId }, ref) => {
 
     const iconStyle = useRecipeStore(s => s.iconStyle);
     const edgeStyle = useRecipeStore(s => s.lineStyle);
@@ -129,9 +135,15 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const getEdges = getEdgesRaw as () => any[];
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
-    // Not yet saved (no ?id= in the URL) still gets one diagram_interacted per
-    // page load, keyed on a stable sentinel rather than a real recipe id.
-    const analyticsRecipeId = useSearchParams().get('id') ?? 'unsaved';
+    // Not yet saved (no recipeId prop) still gets one diagram_interacted per
+    // mount, keyed on an id generated once for this component instance rather
+    // than a shared sentinel — otherwise two different unsaved recipes edited
+    // in the same tab would collide on the same key.
+    const unsavedAnalyticsIdRef = useRef<string | undefined>(undefined);
+    if (!unsavedAnalyticsIdRef.current) {
+        unsavedAnalyticsIdRef.current = `unsaved-${Math.random().toString(36).slice(2)}`;
+    }
+    const analyticsRecipeId = recipeId ?? unsavedAnalyticsIdRef.current;
     const [timelineData, setTimelineData] = useState<TimelineData | null>(null);
     // e2e signal: true once the initial layout (and any fitView) has settled.
     // Tests wait on the data-testid="rf-ready" marker instead of arbitrary sleeps.

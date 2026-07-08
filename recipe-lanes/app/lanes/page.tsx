@@ -1247,6 +1247,7 @@ const handleVisualize = async () => {
                         isLoggedIn={!!user}
                         isOwner={isOwner}
                         onNotify={showNotification}
+                        recipeId={recipeId || undefined}
                     />
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400">

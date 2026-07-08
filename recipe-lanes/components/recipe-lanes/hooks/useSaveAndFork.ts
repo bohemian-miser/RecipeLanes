@@ -20,6 +20,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { RecipeGraph } from '../../../lib/recipe-lanes/types';
 import { saveRecipeAction } from '@/app/actions';
 import { getClaimToken, clearClaimToken } from '@/lib/recipe-lanes/claim-token-client';
+import { track } from '@/lib/analytics';
 
 /**
  * Pure helper extracted from getGraph() so it can be tested without React.
@@ -216,6 +217,7 @@ export function useSaveAndFork({
         // stale/invalid, there's nothing to gain by attaching it again.
         if (claimToken && currentId) clearClaimToken(localStorage, currentId);
 
+        if (result.id) track('recipe_saved');
         if (onSave) onSave(graphToSave);
         return result;
     };
@@ -282,6 +284,7 @@ export function useSaveAndFork({
             url.searchParams.set('id', res.id);
             router.push(url.pathname + url.search);
             navigator.clipboard.writeText(url.toString());
+            track('share_clicked');
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
             setIsDirty(false);

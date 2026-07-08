@@ -18,6 +18,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, memo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import ReactFlow, {
     Background,
     Controls,
@@ -50,6 +51,7 @@ import TimelineEdge from './edges/timeline-edge';
 import NotationEdge from './edges/notation-edge';
 import TimelineBackground, { type TimelineData } from './timeline-background';
 import { getCanvasTheme } from '@/lib/recipe-lanes/canvas-theme';
+import { track } from '@/lib/analytics';
 import { toPng } from 'html-to-image';
 import { Download, Share2, Undo, Redo, Check, Save, Copy } from 'lucide-react';
 import { useHistoryManager } from './hooks/useHistoryManager';
@@ -96,6 +98,15 @@ const INITIAL_EDGE_TYPES = {
     notation: NotationEdge,
 };
 
+// Fire `diagram_interacted` at most once per recipe per page load, regardless
+// of how many times the diagram component itself mounts/unmounts.
+const trackedInteractionRecipeIds = new Set<string>();
+function trackDiagramInteractionOnce(recipeId: string | undefined) {
+    if (!recipeId || trackedInteractionRecipeIds.has(recipeId)) return;
+    trackedInteractionRecipeIds.add(recipeId);
+    track('diagram_interacted');
+}
+
 const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode: propMode, spacing = 1, edgeStyle: propEdgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme: propIconTheme = 'classic' }, ref) => {
 
     const iconStyle = useRecipeStore(s => s.iconStyle);
@@ -118,6 +129,9 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const getEdges = getEdgesRaw as () => any[];
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
+    // Not yet saved (no ?id= in the URL) still gets one diagram_interacted per
+    // page load, keyed on a stable sentinel rather than a real recipe id.
+    const analyticsRecipeId = useSearchParams().get('id') ?? 'unsaved';
     const [timelineData, setTimelineData] = useState<TimelineData | null>(null);
     // e2e signal: true once the initial layout (and any fitView) has settled.
     // Tests wait on the data-testid="rf-ready" marker instead of arbitrary sleeps.
@@ -737,7 +751,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
         onInteraction?.();
-        takeSnapshot(); 
+        trackDiagramInteractionOnce(analyticsRecipeId);
+        takeSnapshot();
         selectBranch(node.id);
     };
 
@@ -865,6 +880,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     const onNodeDragStop = () => {
         dragRef.current = { active: false };
+        trackDiagramInteractionOnce(analyticsRecipeId);
         updateLaneBounds();
         if (isOwner) {
             scheduleAutosave();

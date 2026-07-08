@@ -38,6 +38,7 @@ import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
+import { track } from '@/lib/analytics';
 import { fileToRecipePhotoDataUrl } from '@/lib/recipe-lanes/image-client';
 import { loadDraft, saveDraft, commitDraftOnForge, clearBlankDraft } from '@/lib/recipe-lanes/draft-persistence';
 import { mintClaimToken, storeClaimToken } from '@/lib/recipe-lanes/claim-token-client';
@@ -610,11 +611,14 @@ const handleVisualize = async () => {
         // later prove ownership from this browser and claim the recipe after
         // signing in. Only the hash is ever sent to/stored on the server.
         const claimToken = mintClaimToken(!!user);
+        track('recipe_submitted', { input_type: 'text' });
         const res = await createVisualRecipeAction(recipeText, currentId || undefined, claimToken);
 
         finalizeCreatedRecipe(res, recipeText, claimToken);
+        track('parse_succeeded');
     } catch (e: any) {
         console.error('Visualization failed:', e);
+        track('parse_failed');
         setError(e.message);
         setStatus('error');
     }
@@ -685,10 +689,13 @@ const handleVisualize = async () => {
 
         const currentId = searchParams.get('id');
         const claimToken = mintClaimToken(!!user);
+        track('recipe_submitted', { input_type: 'photo' });
         const res = await createVisualRecipeFromImageAction(dataUrl, currentId || undefined, claimToken);
         finalizeCreatedRecipe(res, '📷 Recipe from photo', claimToken);
+        track('parse_succeeded');
     } catch (err: any) {
         console.error('Photo visualization failed:', err);
+        track('parse_failed');
         setError(err.message);
         setStatus('error');
     }
@@ -1240,6 +1247,7 @@ const handleVisualize = async () => {
                         isLoggedIn={!!user}
                         isOwner={isOwner}
                         onNotify={showNotification}
+                        recipeId={recipeId || undefined}
                     />
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400">

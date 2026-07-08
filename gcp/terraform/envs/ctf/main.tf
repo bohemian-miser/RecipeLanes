@@ -46,6 +46,12 @@ resource "google_project" "ctf" {
   project_id      = "recipe-lanes-ctf"
   billing_account = var.billing_account
 
+  # The recipelanes.com Cloud org (auto-created with the Workspace domain).
+  # New projects land in it by default; pinning this keeps Terraform from
+  # trying to move the project OUT of the org on apply. (Prod predates the
+  # org and is org-less, so it has no org_id.)
+  org_id = "247736101927"
+
   labels = {
     environment = "ctf"
     purpose     = "security-training"

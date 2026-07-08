@@ -50,6 +50,7 @@ import TimelineEdge from './edges/timeline-edge';
 import NotationEdge from './edges/notation-edge';
 import TimelineBackground, { type TimelineData } from './timeline-background';
 import { getCanvasTheme } from '@/lib/recipe-lanes/canvas-theme';
+import { track } from '@/lib/analytics';
 import { toPng } from 'html-to-image';
 import { Download, Share2, Undo, Redo, Check, Save, Copy } from 'lucide-react';
 import { useHistoryManager } from './hooks/useHistoryManager';
@@ -73,6 +74,13 @@ interface ReactFlowDiagramProps {
   onNotify?: (msg: string) => void;
   isOwner?: boolean; // YOLO: Added to support auto-save on move logic
   iconTheme?: 'classic' | 'modern' | 'modern_clean';
+  // Analytics-only: which recipe (the ?id= search param) is being edited, so
+  // diagram_interacted can be deduped per-recipe. Passed as a plain string
+  // prop (not read via useSearchParams() in here) — this component is memoized
+  // and Zustand-selector-optimized to minimize re-renders, and subscribing to
+  // useSearchParams() directly would re-render it on every router navigation
+  // (see the recipeId-vs-searchParams note in app/lanes/page.tsx).
+  recipeId?: string;
 }
 
 export interface ReactFlowDiagramHandle {
@@ -96,7 +104,16 @@ const INITIAL_EDGE_TYPES = {
     notation: NotationEdge,
 };
 
-const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode: propMode, spacing = 1, edgeStyle: propEdgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme: propIconTheme = 'classic' }, ref) => {
+// Fire `diagram_interacted` at most once per recipe per page load, regardless
+// of how many times the diagram component itself mounts/unmounts.
+const trackedInteractionRecipeIds = new Set<string>();
+function trackDiagramInteractionOnce(recipeId: string | undefined) {
+    if (!recipeId || trackedInteractionRecipeIds.has(recipeId)) return;
+    trackedInteractionRecipeIds.add(recipeId);
+    track('diagram_interacted');
+}
+
+const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode: propMode, spacing = 1, edgeStyle: propEdgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme: propIconTheme = 'classic', recipeId }, ref) => {
 
     const iconStyle = useRecipeStore(s => s.iconStyle);
     const edgeStyle = useRecipeStore(s => s.lineStyle);
@@ -118,6 +135,15 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const getEdges = getEdgesRaw as () => any[];
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
+    // Not yet saved (no recipeId prop) still gets one diagram_interacted per
+    // mount, keyed on an id generated once for this component instance rather
+    // than a shared sentinel — otherwise two different unsaved recipes edited
+    // in the same tab would collide on the same key.
+    const unsavedAnalyticsIdRef = useRef<string | undefined>(undefined);
+    if (!unsavedAnalyticsIdRef.current) {
+        unsavedAnalyticsIdRef.current = `unsaved-${Math.random().toString(36).slice(2)}`;
+    }
+    const analyticsRecipeId = recipeId ?? unsavedAnalyticsIdRef.current;
     const [timelineData, setTimelineData] = useState<TimelineData | null>(null);
     // e2e signal: true once the initial layout (and any fitView) has settled.
     // Tests wait on the data-testid="rf-ready" marker instead of arbitrary sleeps.
@@ -737,7 +763,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
         onInteraction?.();
-        takeSnapshot(); 
+        trackDiagramInteractionOnce(analyticsRecipeId);
+        takeSnapshot();
         selectBranch(node.id);
     };
 
@@ -865,6 +892,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     const onNodeDragStop = () => {
         dragRef.current = { active: false };
+        trackDiagramInteractionOnce(analyticsRecipeId);
         updateLaneBounds();
         if (isOwner) {
             scheduleAutosave();

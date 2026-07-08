@@ -34,7 +34,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
-    timeout-minutes: 20
+    timeout-minutes: 60
 
     steps:
       - name: Mint agent token (GitHub App)
@@ -58,8 +58,10 @@ jobs:
           cache: 'npm'
           cache-dependency-path: recipe-lanes/package-lock.json
 
-      - name: Install Gemini CLI
-        run: npm install -g @google/gemini-cli --silent
+      - name: Install Gemini CLI and ripgrep
+        run: |
+          npm install -g @google/gemini-cli --silent
+          sudo apt-get install -y --no-install-recommends ripgrep
 
       - name: Configure Git
         run: |

@@ -1,0 +1,95 @@
+name: Gemini Issue Solver
+
+# Autonomous Gemini worker, triggered by labeling an issue
+# `agent-ready-gemini` (the Claude routine owns the `agent-ready` label the
+# same way). Fixes the issue with tests, opens a PR, and watches CI. No cron:
+# runs only in response to the label or a manual dispatch.
+#
+# Config required (see docs/gemini-agent.md):
+#   GEMINI_API_KEY (secret)         — Gemini API key for the CLI.
+#   AGENT_APP_ID (repo variable) +
+#   AGENT_APP_PRIVATE_KEY (secret)  — GitHub App "recipelanes-agent"
+#     (contents: rw, pull-requests: rw, issues: rw), installed on this repo.
+#     The job mints a short-lived installation token from it. REQUIRED:
+#     PRs opened with the default GITHUB_TOKEN do not trigger CI workflows,
+#     so without it the agent's PRs never get checks and every run fails
+#     its "wait for CI" gate. (AGENT_GH_PAT is honored as a fallback.)
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Target issue number (blank = oldest eligible agent-ready-gemini issue)'
+        required: false
+        type: string
+
+# Never run two Gemini agent jobs at once (solver or comment responder) —
+# they share branches and the dedup logic assumes serial runs. Note GitHub
+# keeps at most ONE queued run per group: if several issues are labeled while
+# a run is active, a superseded queued run is dropped — re-apply the label or
+# dispatch manually to pick the stragglers up (the label + dedup make that
+# safe).
+concurrency:
+  group: gemini-agent
+  cancel-in-progress: false
+
+jobs:
+  solve-issue:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.label.name == 'agent-ready-gemini'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    timeout-minutes: 25
+
+    steps:
+      - name: Mint agent token (GitHub App)
+        id: agent_token
+        if: vars.AGENT_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Push/PR as the app (or PAT) so CI triggers on the agent's PRs.
+          token: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: recipe-lanes/package-lock.json
+
+      - name: Install Gemini CLI
+        run: npm install -g @google/gemini-cli --silent
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "gemini-bot"
+          git config --global user.email "gemini-bot@users.noreply.github.com"
+
+      - name: Run issue solver
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          GH_TOKEN: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
+          GITHUB_TOKEN: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
+          TARGET_ISSUE: ${{ github.event_name == 'issues' && github.event.issue.number || github.event.inputs.issue_number }}
+        run: |
+          if [ -n "$TARGET_ISSUE" ]; then
+            PROMPT="/resolve-issue $TARGET_ISSUE"
+          else
+            PROMPT="/resolve-issue"
+          fi
+          echo "Executing: gemini --approval-mode=yolo -p \"$PROMPT\""
+          gemini --approval-mode=yolo -p "$PROMPT"

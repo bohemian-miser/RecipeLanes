@@ -1,0 +1,185 @@
+name: Gemini Issue Solver
+
+# Autonomous Gemini worker, triggered by labeling an issue
+# `agent-ready-gemini` (the Claude routine owns the `agent-ready` label the
+# same way). Fixes the issue with tests, opens a PR, and watches CI. No cron:
+# runs only in response to the label or a manual dispatch.
+#
+# Config required (see docs/gemini-agent.md):
+#   GEMINI_API_KEY (secret)         — Gemini API key for the CLI.
+#   AGENT_APP_ID (repo variable) +
+#   AGENT_APP_PRIVATE_KEY (secret)  — GitHub App "recipelanes-agent"
+#     (contents: rw, pull-requests: rw, issues: rw), installed on this repo.
+#     REQUIRED: PRs opened with the default GITHUB_TOKEN do not trigger CI
+#     workflows, so without it the agent's PRs never get checks and every
+#     run fails its "wait for CI" gate. (AGENT_GH_PAT honored as fallback.)
+#
+# AUTH IS FILE-BASED, NOT ENV-BASED: Gemini CLI strips token-like env vars
+# from the shells it spawns, so GH_TOKEN in the step env never reaches the
+# agent's gh/git commands (learned from the first real run). Instead we log
+# gh in via its hosts.yml (`gh auth login --with-token` + `gh auth
+# setup-git`), which the agent's shells can read. App installation tokens
+# also expire after 1h while runs may take up to 90min, so a background
+# refresher re-mints and re-logs-in every 40min.
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Target issue number (blank = oldest eligible agent-ready-gemini issue)'
+        required: false
+        type: string
+
+# Never run two Gemini agent jobs at once (solver or comment responder) —
+# they share branches and the dedup logic assumes serial runs. Note GitHub
+# keeps at most ONE queued run per group: if several issues are labeled while
+# a run is active, a superseded queued run is dropped — re-apply the label or
+# dispatch manually to pick the stragglers up (the label + dedup make that
+# safe).
+concurrency:
+  group: gemini-agent
+  cancel-in-progress: false
+
+jobs:
+  solve-issue:
+    # Label events fire only when the labeler is the repo owner — labeling
+    # already requires triage access, but pin it to the owner outright.
+    # (workflow_dispatch requires write access by definition.)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.label.name == 'agent-ready-gemini' &&
+       github.event.sender.login == github.repository_owner)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    timeout-minutes: 90
+    env:
+      TARGET_ISSUE: ${{ github.event_name == 'issues' && github.event.issue.number || github.event.inputs.issue_number }}
+
+    steps:
+      - name: Mint agent token (GitHub App)
+        id: agent_token
+        if: vars.AGENT_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
+          # Do NOT persist this token into git config: it expires after 1h
+          # and would shadow the self-refreshing gh credential helper below.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: recipe-lanes/package-lock.json
+
+      - name: Install Gemini CLI and ripgrep
+        run: |
+          npm install -g @google/gemini-cli --silent
+          sudo apt-get install -y --no-install-recommends ripgrep
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "gemini-bot"
+          git config --global user.email "gemini-bot@users.noreply.github.com"
+
+      - name: Configure agent GitHub auth (file-based, self-refreshing)
+        env:
+          APP_ID: ${{ vars.AGENT_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          REPO: ${{ github.repository }}
+          FALLBACK_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+        run: |
+          mint() {
+            if [ -n "$APP_ID" ]; then
+              node .github/scripts/mint-app-token.mjs
+            else
+              printf '%s' "$FALLBACK_TOKEN"
+            fi
+          }
+          mint | gh auth login --with-token
+          gh auth setup-git   # git pushes via gh's credential helper (file-based)
+          gh auth status || true
+          if [ -n "$APP_ID" ]; then
+            nohup bash -c 'while sleep 2400; do node .github/scripts/mint-app-token.mjs | gh auth login --with-token && echo "agent token refreshed"; done' \
+              >> "$RUNNER_TEMP/token-refresher.log" 2>&1 &
+            echo "token refresher started (every 40min)"
+          fi
+
+      - name: Run issue solver
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          GEMINI_MODEL: gemini-3.1-pro-preview
+        run: |
+          if [ -n "$TARGET_ISSUE" ]; then
+            PROMPT="/resolve-issue $TARGET_ISSUE"
+          else
+            PROMPT="/resolve-issue"
+          fi
+          echo "Executing: gemini --approval-mode=yolo -p \"$PROMPT\""
+          gemini --approval-mode=yolo -p "$PROMPT" 2>&1 | tee "$RUNNER_TEMP/gemini-run.log"
+
+      # The gemini CLI exits 0 even when the agent failed its contract —
+      # verify the run actually delivered: the target issue must be closed
+      # (already-fixed path) or have an open PR referencing it.
+      - name: Verify agent outcome
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$TARGET_ISSUE" ]; then
+            echo "Queue mode (no target issue) — skipping outcome verification"
+            exit 0
+          fi
+          STATE=$(gh issue view "$TARGET_ISSUE" -R "${{ github.repository }}" --json state -q .state)
+          if [ "$STATE" = "CLOSED" ]; then
+            echo "Issue #$TARGET_ISSUE is closed — OK"
+            exit 0
+          fi
+          if gh pr list -R "${{ github.repository }}" --state open --search "#$TARGET_ISSUE" --json number -q '.[].number' | grep -q .; then
+            echo "Open PR referencing #$TARGET_ISSUE found — OK"
+            exit 0
+          fi
+          echo "::error::Agent run ended without closing issue #$TARGET_ISSUE or opening a PR for it — see the gemini-logs artifact"
+          exit 1
+
+      - name: Collect and scrub agent logs
+        if: always()
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          APP_TOKEN: ${{ steps.agent_token.outputs.token }}
+          FALLBACK_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/gemini-logs"
+          cp "$RUNNER_TEMP/gemini-run.log" "$RUNNER_TEMP/gemini-logs/" 2>/dev/null || true
+          # Gemini CLI session transcripts (full conversation + tool calls)
+          cp -r "$HOME/.gemini/tmp" "$RUNNER_TEMP/gemini-logs/sessions" 2>/dev/null || true
+          # Artifacts on a public repo are downloadable — scrub credentials.
+          # (Refreshed app tokens aren't known here, but they expire within
+          # 1h and gh never echoes them; the initial mint is scrubbed.)
+          find "$RUNNER_TEMP/gemini-logs" -type f | while read -r f; do
+            for s in "$GEMINI_API_KEY" "$APP_TOKEN" "$FALLBACK_TOKEN"; do
+              [ -n "$s" ] && sed -i "s|$s|***SCRUBBED***|g" "$f" || true
+            done
+          done
+
+      - name: Upload agent logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-logs-${{ github.run_id }}
+          path: ${{ runner.temp }}/gemini-logs/
+          if-no-files-found: ignore
+          retention-days: 30

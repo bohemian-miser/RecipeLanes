@@ -19,6 +19,7 @@ import React, { memo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
+import { CLASSIC_CONTAINER, MODERN_CONTAINER, getLeafScaleOrigin } from '../../../lib/recipe-lanes/edge-anchors';
 import { forgeIconAction } from '@/app/actions';
 import {
     getNodeIngredientName,
@@ -59,6 +60,9 @@ export const MinimalNode: React.FC<any> = ({
   // selector re-renders only when this specific node changes.
   const storeNode = useRecipeStore(s => s.graph?.nodes.find(n => n.id === id));
   const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
+  // Global "leaf node size" setting (#155): scale leaf nodes (no incoming edge).
+  // `data.isLeaf` is computed once during layout in react-flow-diagram.
+  const leafNodeScale = useRecipeStore(s => s.leafNodeScale);
 
   // Use storeNode when available (it has up-to-date shortlistIndex after cycling).
   // Fall back to data prop for nodes not yet in the store.
@@ -152,11 +156,24 @@ export const MinimalNode: React.FC<any> = ({
       onPointerCancelCapture: handlePointerUpOrCancel
   };
 
-  if (iconTheme === 'modern' || iconTheme === 'modern_clean') {
-      return <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
-  }
+  const inner = (iconTheme === 'modern' || iconTheme === 'modern_clean')
+      ? <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />
+      : <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
 
-  return <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
+  // Scale leaf nodes down when the global slider is below 100%. The transform
+  // origin is pinned to the HANDLE point (top-center of the icon container) so
+  // ReactFlow's measured handle position stays valid at every scale — CSS
+  // transforms don't trigger re-measurement, and scaling about the node center
+  // used to drag the icon (and every edge ending) downward. See edge-anchors.ts.
+  if (data.isLeaf && leafNodeScale < 1) {
+      const isModern = iconTheme === 'modern' || iconTheme === 'modern_clean';
+      const containerSize = isModern
+          ? MODERN_CONTAINER[data.type === 'ingredient' ? 'ingredient' : 'action']
+          : CLASSIC_CONTAINER[data.type === 'ingredient' ? 'ingredient' : 'action'];
+      const origin = getLeafScaleOrigin(data.textPos || 'bottom', containerSize);
+      return <div style={{ transform: `scale(${leafNodeScale})`, transformOrigin: origin }}>{inner}</div>;
+  }
+  return inner;
 };
 
 export default memo(MinimalNode);

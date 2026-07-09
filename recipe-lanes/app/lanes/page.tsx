@@ -38,6 +38,7 @@ import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
+import { track } from '@/lib/analytics';
 import { fileToRecipePhotoDataUrl } from '@/lib/recipe-lanes/image-client';
 import { loadDraft, saveDraft, commitDraftOnForge, clearBlankDraft } from '@/lib/recipe-lanes/draft-persistence';
 import { mintClaimToken, storeClaimToken } from '@/lib/recipe-lanes/claim-token-client';
@@ -84,8 +85,9 @@ function RecipeLanesContent() {
   const layoutMode = useRecipeStore(s => s.nodeLayout);
   const layoutModeRestoredRef = useRef(false);
   const iconTheme = useRecipeStore(s => s.iconStyle) as 'classic' | 'modern' | 'modern_clean';
+  const leafNodeScale = useRecipeStore(s => s.leafNodeScale);
   const canvasBackground = useRecipeStore(s => s.canvasBackground);
-  const { setNodeLayout, setIconStyle, setLineStyle, setCanvasBackground } = useRecipeStore.getState();
+  const { setNodeLayout, setIconStyle, setLineStyle, setLeafNodeScale, setCanvasBackground } = useRecipeStore.getState();
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
@@ -639,11 +641,14 @@ const handleVisualize = async () => {
         // later prove ownership from this browser and claim the recipe after
         // signing in. Only the hash is ever sent to/stored on the server.
         const claimToken = mintClaimToken(!!user);
+        track('recipe_submitted', { input_type: 'text' });
         const res = await createVisualRecipeAction(recipeText, currentId || undefined, claimToken);
 
         finalizeCreatedRecipe(res, recipeText, claimToken);
+        track('parse_succeeded');
     } catch (e: any) {
         console.error('Visualization failed:', e);
+        track('parse_failed');
         setError(e.message);
         setStatus('error');
     }
@@ -714,10 +719,13 @@ const handleVisualize = async () => {
 
         const currentId = searchParams.get('id');
         const claimToken = mintClaimToken(!!user);
+        track('recipe_submitted', { input_type: 'photo' });
         const res = await createVisualRecipeFromImageAction(dataUrl, currentId || undefined, claimToken);
         finalizeCreatedRecipe(res, '📷 Recipe from photo', claimToken);
+        track('parse_succeeded');
     } catch (err: any) {
         console.error('Photo visualization failed:', err);
+        track('parse_failed');
         setError(err.message);
         setStatus('error');
     }
@@ -763,7 +771,7 @@ const handleVisualize = async () => {
       }
   };
 
-    const handleLayoutClick = async (mode: LayoutMode | 'repulsive' | 'timeline2') => {
+    const handleLayoutClick = async (mode: LayoutMode | 'repulsive' | 'timeline2' | 'notation') => {
         if (layoutMode === mode) {
             diagramRef.current?.resetLayout();
         } else {
@@ -795,7 +803,7 @@ const handleVisualize = async () => {
   const isPublic = graph?.visibility === 'public';
 
   // Common Nav Item Styles
-  const navItemClass = "flex items-center gap-2 px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
+  const navItemClass = "flex items-center gap-2 px-2 md:px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
 
   let loadingPhase: LoadingPhase = null;
   if (status === 'parsing' || status === 'loading') {
@@ -808,7 +816,7 @@ const handleVisualize = async () => {
     <div className="fixed inset-0 flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden overscroll-none">
         {/* Utility Bar */}
         <header className="h-14 shrink-0 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-950 z-20">
-            <div className="flex items-center gap-4 overflow-hidden">
+            <div className="flex-1 min-w-0 flex items-center gap-4 overflow-hidden">
                 {/* Logo */}
                 <div className="flex items-center gap-2 shrink-0">
                     <ChefHat className="w-6 h-6 text-yellow-500" />
@@ -845,12 +853,13 @@ const handleVisualize = async () => {
                 </div>
             </div>
 
-            {/* Right Side Actions */}
-            <div className="flex items-center gap-2">
+            {/* Right Side Actions — must not squeeze the title on mobile (issue #139),
+                so it never shrinks and drops secondary items / labels on small screens. */}
+            <div className="flex items-center gap-1 md:gap-2 shrink-0">
                 {/* Navigation Tabs */}
                 <Link href="/gallery" className={navItemClass} title="Public Gallery">
                     <Globe className="w-4 h-4" />
-                    <span>Gallery</span>
+                    <span className="hidden md:inline">Gallery</span>
                 </Link>
                 {user && (
                     <>
@@ -869,11 +878,11 @@ const handleVisualize = async () => {
                     <span className="hidden md:inline">New</span>
                 </button>
                 
-                <button onClick={() => setShowFeedback(true)} className={navItemClass} title="Feedback & Contribute">
+                <button onClick={() => setShowFeedback(true)} className={`${navItemClass} hidden md:flex`} title="Feedback & Contribute">
                     <MessageSquare className="w-4 h-4" />
                 </button>
 
-                <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={navItemClass} title="Find me on GitHub">
+                <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={`${navItemClass} hidden md:flex`} title="Find me on GitHub">
                     <Github className="w-4 h-4" />
                 </a>
 
@@ -1046,6 +1055,7 @@ const handleVisualize = async () => {
                             <option value="repulsive">Repulsive</option>
                             <option value="timeline">Timeline</option>
                             <option value="timeline2">Timeline (Classic)</option>
+                            <option value="notation">Notation</option>
                         </select>
                         {/* Reset Layout Button */}
                         <button 
@@ -1124,6 +1134,21 @@ const handleVisualize = async () => {
                         </select>
                     </div>
 
+                    {/* Leaf node size — global slider (issue #155) */}
+                    <div className="flex items-center gap-2" title="Size of leaf nodes (raw ingredients)">
+                        <span className="text-xs font-mono text-zinc-400 whitespace-nowrap">Leaf size</span>
+                        <input
+                            type="range"
+                            min={0.4}
+                            max={1}
+                            step={0.05}
+                            value={leafNodeScale}
+                            onChange={(e) => setLeafNodeScale(parseFloat(e.target.value))}
+                            className="w-20 accent-yellow-500 cursor-pointer"
+                            aria-label="Leaf node size"
+                        />
+                        <span className="text-xs font-mono text-zinc-400 w-8 tabular-nums">{Math.round(leafNodeScale * 100)}%</span>
+                    </div>
 
                 </div>
 
@@ -1241,7 +1266,7 @@ const handleVisualize = async () => {
                     <ReactFlowDiagram
                         ref={diagramRef}
                         graph={graph}
-                        mode={layoutMode as LayoutMode | 'repulsive'}
+                        mode={layoutMode as LayoutMode | 'repulsive' | 'notation'}
                         spacing={spacing}
                         edgeStyle={edgeStyle}
                         textPos={textPos}
@@ -1256,6 +1281,7 @@ const handleVisualize = async () => {
                         isLoggedIn={!!user}
                         isOwner={isOwner}
                         onNotify={showNotification}
+                        recipeId={recipeId || undefined}
                     />
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400">

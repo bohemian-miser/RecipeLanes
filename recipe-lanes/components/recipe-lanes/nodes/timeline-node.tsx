@@ -49,6 +49,7 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
 
     const storeNode      = useRecipeStore(s => s.graph?.nodes.find(n => n.id === id));
     const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
+    const leafNodeScale  = useRecipeStore(s => s.leafNodeScale);
     const node           = storeNode ?? data;
 
     const currentIndex = Math.max(0, currentShortlistIndex(node));
@@ -107,7 +108,13 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
     return (
         <div
             className="group"
-            style={{ position: 'relative', width: DIAMETER, height: DIAMETER }}
+            style={{
+                position: 'relative', width: DIAMETER, height: DIAMETER,
+                // Leaf-node size slider (#155): shrink leaves (no incoming edge).
+                ...(data.isLeaf && leafNodeScale < 1
+                    ? { transform: `scale(${leafNodeScale})`, transformOrigin: 'center center' }
+                    : {}),
+            }}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
         >

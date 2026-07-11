@@ -116,6 +116,18 @@ describe('generateRecipePrompt', () => {
     );
   });
 
+  it('includes native language rule in the prompt', () => {
+    const prompt = generateRecipePrompt('Hervir 2 huevos durante 10 minutos');
+    assert.ok(
+      prompt.includes('NATIVE LANGUAGE:'),
+      'prompt should contain the native language rule',
+    );
+    assert.ok(
+      prompt.includes('visualDescription'),
+      'prompt should still mention visualDescription',
+    );
+  });
+
 });
 
 // ---------------------------------------------------------------------------

@@ -38,19 +38,20 @@ Creating the project needs the caller to have `billing.resourceAssociations.crea
 on that billing account (the owner's user creds do). Find the id with
 `gcloud billing projects describe recipe-lanes --format='value(billingAccountName)'`.
 
-## Runtime resources (`runtime.tf`) — adopt with `runtime-adopt.sh`
+## Structure
 
-`runtime.tf` manages the Firestore database, the App Hosting runtime SA's
-`aiplatform.user` grant (needed by the genkit/Vertex recipe parser), and the
-Identity Platform config (authorized domains). These were first created
-imperatively while bringing the site up; after merging, run:
+- **`main.tf`** — creates the `recipe-lanes-ctf` project (billing, `org_id`,
+  `prevent_destroy`), the CTF-specific APIs, Firebase enablement, and
+  instantiates **`module.baseline`** (the same shared module prod/staging use)
+  for the icon-processor SA + roles, the App Hosting SA roles, the core
+  run/artifactregistry/aiplatform APIs, and icon-forge monitoring. The only
+  CTF-local IAM is `roles/cloudbuild.builds.builder` on the compute SA (new org
+  projects grant it nothing; prod/staging predate the org and inherited Editor).
+- **`runtime.tf`** — CTF-only bits the module doesn't cover: the Firestore
+  database and the Identity Platform config (authorized domains).
 
-```bash
-export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token)  # TF state creds
-./runtime-adopt.sh          # imports the live resources
-terraform plan              # expect no changes
-terraform apply
-```
+The shared baseline (icon-processor SA, App Hosting SA roles, monitoring) lives
+in `modules/project-baseline` — do NOT re-declare those here.
 
 ## What is NOT Terraform (and shouldn't be)
 

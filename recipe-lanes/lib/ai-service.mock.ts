@@ -19,6 +19,35 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { AIService } from './ai-service';
 
+/**
+ * Recover the "added" source lines from an adjuster prompt so the mock can
+ * deterministically ADD one node per added line. Prefers the RICH form (diff
+ * the "New recipe text" block against "Previous recipe text"); falls back to
+ * the CONCISE "Added lines:" digest.
+ */
+function extractAddedRecipeLines(prompt: string): string[] {
+    const block = (label: string): string[] | null => {
+        const m = prompt.match(new RegExp(`${label}:\\n"""\\n([\\s\\S]*?)\\n"""`));
+        return m ? m[1].split('\n').map(l => l.trim()).filter(Boolean) : null;
+    };
+    const prev = block('Previous recipe text');
+    const next = block('New recipe text');
+    if (prev && next) {
+        const remaining = new Map<string, number>();
+        for (const l of prev) remaining.set(l, (remaining.get(l) ?? 0) + 1);
+        return next.filter(l => {
+            const n = remaining.get(l) ?? 0;
+            if (n > 0) { remaining.set(l, n - 1); return false; }
+            return true;
+        });
+    }
+    const addedBlock = prompt.match(/Added lines:\n([\s\S]*?)(?:\n\n|$)/);
+    if (addedBlock) {
+        return addedBlock[1].split('\n').map(l => l.replace(/^-\s*/, '').trim()).filter(Boolean);
+    }
+    return [];
+}
+
 export class MockAIService implements AIService {
   async generateText(prompt: string): Promise<string> {
     const lower = prompt.toLowerCase();
@@ -28,20 +57,14 @@ export class MockAIService implements AIService {
     // Issue #156 — Forge-on-existing routes through the AI *adjust* path. This
     // branch recognises the adjuster prompt (generateAdjustmentPrompt) and
     // returns a surgical RecipePatch so tests can assert that existing nodes
-    // (and their positions) survive: we ADD one node per "Added lines:" entry
-    // and touch nothing else. Must precede the parse branches below.
+    // (and their positions) survive: we ADD one node per newly-added source
+    // line and touch nothing else. Handles both instruction shapes — the RICH
+    // "Previous recipe text / New recipe text" form (default) and the CONCISE
+    // "Added lines:" digest. Must precede the parse branches below.
     if (prompt.includes('expert recipe graph editor')) {
-        const addedBlock = prompt.match(/Added lines:\n([\s\S]*?)(?:\n\n|$)/);
-        const addNodes: object[] = [];
-        if (addedBlock) {
-            const lines = addedBlock[1]
-                .split('\n')
-                .map(l => l.replace(/^-\s*/, '').trim())
-                .filter(Boolean);
-            lines.forEach((text, i) => {
-                addNodes.push({ id: `added-${i + 1}`, laneId: 'l1', text, type: 'ingredient', visualDescription: text });
-            });
-        }
+        const addNodes = extractAddedRecipeLines(prompt).map((text, i) => (
+            { id: `added-${i + 1}`, laneId: 'l1', text, type: 'ingredient', visualDescription: text }
+        ));
         return JSON.stringify({ message: 'Applied your recipe edits.', addNodes });
     }
 

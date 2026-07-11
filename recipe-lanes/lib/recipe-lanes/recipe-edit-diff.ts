@@ -15,6 +15,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { MAX_ADJUST_INSTRUCTION_CHARS } from './limits';
+
 /**
  * Issue #156 — Forge-on-existing-recipe routes through the AI *adjust* path
  * (incremental, node positions preserved) instead of a full re-parse. The
@@ -76,26 +78,77 @@ export function diffRecipeLines(baseline: string, edited: string): RecipeLineDif
   return { removed, added };
 }
 
+// Shared framing for both instruction shapes. Two things it must get right,
+// because the earlier "Removed lines / Added lines"-only instruction got them
+// wrong on the owner's burger test (#231 review): (1) apply the *delta*, not
+// make the graph literally equal a short description — otherwise a burger graph
+// asked to "match: a simple burger recipe with pineapple" could be gutted; and
+// (2) a contents edit is NOT a title rename — the model previously read
+// "a simple burger recipe" -> "... with pineapple" as an `updateTitle` and
+// added no pineapple at all.
+const RECONCILE_INTRO =
+  "The user edited this recipe's source text and pressed Forge. Apply the " +
+  'DIFFERENCE between the previous and new text to the current graph: add, ' +
+  'remove, or modify only the ingredients and steps that actually changed ' +
+  'between the two versions, and keep every unchanged node with its existing ' +
+  "ID and position. This is an edit to the recipe's contents (its ingredients " +
+  'and steps) — do NOT treat it as a title rename.';
+
 /**
- * Build a short human-readable adjust instruction from the diff between the
- * last-saved recipe text (`baseline`) and the currently edited text (`edited`).
+ * RICH form: hand the model the full previous + new text and let IT compute the
+ * delta. Far more reliable than a pre-digested line diff for short natural-
+ * language descriptions — a line diff of "a simple burger recipe" ->
+ * "a simple burger recipe with pineapple" reads as a whole-line replacement
+ * (i.e. a rename) rather than "add pineapple".
+ */
+function buildRichInstruction(baseline: string, edited: string): string {
+  return [
+    RECONCILE_INTRO,
+    'Previous recipe text:\n"""\n' + baseline.trim() + '\n"""',
+    'New recipe text:\n"""\n' + edited.trim() + '\n"""',
+  ].join('\n\n');
+}
+
+/**
+ * CONCISE form: a "Removed lines / Added lines" digest. Fallback for long
+ * recipes whose full before/after would blow the instruction cap but whose
+ * individual edited lines are already unambiguous ingredient/step lines.
+ */
+function buildConciseInstruction(diff: RecipeLineDiff): string {
+  const parts: string[] = [RECONCILE_INTRO];
+  if (diff.removed.length > 0) {
+    parts.push('Removed lines:\n' + diff.removed.map((l) => `- ${l}`).join('\n'));
+  }
+  if (diff.added.length > 0) {
+    parts.push('Added lines:\n' + diff.added.map((l) => `- ${l}`).join('\n'));
+  }
+  return parts.join('\n\n');
+}
+
+/**
+ * Build a short AI-adjust instruction from the difference between the last-saved
+ * recipe text (`baseline`) and the currently edited text (`edited`).
  *
  * Returns `null` when no line-level change is detected (caller should treat the
  * Forge as a no-op rather than regenerate and disturb node positions).
+ *
+ * Prefers the RICH form (full before/after) whenever it fits `maxChars`, since
+ * the model diffs the two versions far more reliably than a line-level digest —
+ * this is what fixes the reported "edit adds nothing / renames the title" bug.
+ * Falls back to the CONCISE digest for long recipes. If even the concise form
+ * exceeds `maxChars`, the caller falls through to a full re-parse (a positions
+ * reset is acceptable for a major rewrite).
  */
-export function buildRecipeEditInstruction(baseline: string, edited: string): string | null {
-  const { removed, added } = diffRecipeLines(baseline, edited);
-  if (removed.length === 0 && added.length === 0) return null;
+export function buildRecipeEditInstruction(
+  baseline: string,
+  edited: string,
+  maxChars: number = MAX_ADJUST_INSTRUCTION_CHARS,
+): string | null {
+  const diff = diffRecipeLines(baseline, edited);
+  if (diff.removed.length === 0 && diff.added.length === 0) return null;
 
-  const parts: string[] = [
-    'The recipe source text was edited. Reconcile the graph to match these edits, ' +
-      'preserving unchanged steps and their existing node IDs and positions.',
-  ];
-  if (removed.length > 0) {
-    parts.push('Removed lines:\n' + removed.map((l) => `- ${l}`).join('\n'));
-  }
-  if (added.length > 0) {
-    parts.push('Added lines:\n' + added.map((l) => `- ${l}`).join('\n'));
-  }
-  return parts.join('\n\n');
+  const rich = buildRichInstruction(baseline, edited);
+  if (rich.length <= maxChars) return rich;
+
+  return buildConciseInstruction(diff);
 }

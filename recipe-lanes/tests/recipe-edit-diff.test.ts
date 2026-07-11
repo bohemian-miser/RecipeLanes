@@ -46,20 +46,43 @@ describe('buildRecipeEditInstruction', () => {
     assert.equal(buildRecipeEditInstruction('Flour\nWater', 'Flour\nWater'), null);
   });
 
-  it('builds a concise instruction for a small edit, within the adjust cap', () => {
+  it('prefers the RICH before/after form for a small edit (model computes the delta)', () => {
     const instr = buildRecipeEditInstruction('Flour\n1 cup water', 'Flour\n2 cups water');
     assert.ok(instr, 'expected a non-null instruction');
-    assert.match(instr!, /Reconcile the graph/);
-    assert.match(instr!, /preserving unchanged steps and their existing node IDs and positions/);
-    assert.match(instr!, /Removed lines:\n- 1 cup water/);
-    assert.match(instr!, /Added lines:\n- 2 cups water/);
+    // Both full versions are handed to the model so it can diff them itself —
+    // this is what stops a "with pineapple"-style edit reading as a title rename.
+    assert.match(instr!, /Previous recipe text:\n"""\nFlour\n1 cup water\n"""/);
+    assert.match(instr!, /New recipe text:\n"""\nFlour\n2 cups water\n"""/);
+    assert.match(instr!, /do NOT treat it as a title rename/);
+    // The rich form does NOT rely on a misleading line digest.
+    assert.doesNotMatch(instr!, /Added lines:/);
     assert.ok(instr!.length <= MAX_ADJUST_INSTRUCTION_CHARS, 'small edit must fit the adjust cap');
+  });
+
+  it('appending a description phrase keeps both versions (the burger/pineapple case)', () => {
+    const instr = buildRecipeEditInstruction('a simple burger recipe', 'a simple burger recipe with pineapple');
+    assert.ok(instr, 'expected a non-null instruction');
+    assert.match(instr!, /Previous recipe text:\n"""\na simple burger recipe\n"""/);
+    assert.match(instr!, /New recipe text:\n"""\na simple burger recipe with pineapple\n"""/);
+  });
+
+  it('falls back to the CONCISE line digest when the full before/after would blow the cap', () => {
+    // A long recipe (over the cap) with a single small edit: the rich form is too
+    // big, so we send the concise "Added/Removed lines" digest, which stays small.
+    const baseline = Array.from({ length: 120 }, (_, i) => `Step ${i}: do a fairly detailed cooking thing here`).join('\n');
+    const edited = baseline + '\nStir in 100g of sugar';
+    const instr = buildRecipeEditInstruction(baseline, edited);
+    assert.ok(instr, 'expected a non-null instruction');
+    assert.match(instr!, /Added lines:\n- Stir in 100g of sugar/);
+    assert.doesNotMatch(instr!, /New recipe text:/);
+    assert.ok(instr!.length <= MAX_ADJUST_INSTRUCTION_CHARS, 'concise digest of a small edit must fit the cap');
   });
 
   it('a whole-recipe rewrite exceeds the adjust cap (drives the full-parse fallback)', () => {
     const baseline = 'Flour\nWater';
     // A brand-new large body of text: every line is an addition + both baseline
-    // lines removed, blowing well past MAX_ADJUST_INSTRUCTION_CHARS.
+    // lines removed, blowing well past MAX_ADJUST_INSTRUCTION_CHARS even as a
+    // concise digest.
     const edited = Array.from({ length: 400 }, (_, i) => `Step ${i}: do a fairly detailed cooking thing`).join('\n');
     const instr = buildRecipeEditInstruction(baseline, edited);
     assert.ok(instr, 'expected a non-null instruction');

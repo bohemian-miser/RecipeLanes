@@ -380,7 +380,16 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
                 // Strip RF-only fields and reconstruct as a RecipeNode.
                 const { onDelete, onSetLongPress, textPos, depth, ...nodeData } = n.data || {};
                 return { ...nodeData, id: n.id } as any;
-            });
+            })
+            // Only restore genuine content nodes (issue #276). Undo snapshots also
+            // capture synthetic ReactFlow decoration — lane background bands
+            // (type:'lane') and notation station anchors (type:'notation-station') —
+            // which are never part of graph.nodes. Reconstructing those injected a
+            // typeless node into the model per lane, which then re-laid-out and
+            // rendered as an empty/"hollow" node (and persisted to Firestore).
+            // A real RecipeNode always carries type 'ingredient' | 'action'; anything
+            // lacking that is decoration and must not enter graph.nodes.
+            .filter((n: any) => n.type === 'ingredient' || n.type === 'action');
         const newNodes = restoredGraphNodes.length > 0
             ? [...state.graph.nodes, ...restoredGraphNodes]
             : state.graph.nodes;

@@ -104,6 +104,23 @@ export const LANE_LINE: Record<string, string> = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Lane labels render rotated -90° in the timeline SVG, so their text runs along the
+// lane band's *height*, not TL.LANE_LABEL_W — an unbounded label bleeds into the
+// neighboring lanes. These tune truncateLaneLabel() to that constraint.
+const LANE_LABEL_CHAR_PX = 6.5; // avg glyph width, ui-sans-serif 10px/600 weight
+const LANE_LABEL_PAD_PX  = 16;  // breathing room so text doesn't touch band edges
+
+/**
+ * Truncate a lane label with an ellipsis so the rotated label fits within its
+ * lane band's height instead of overlapping neighboring lane labels.
+ */
+export function truncateLaneLabel(label: string, bandHeightPx: number): string {
+  const maxChars = Math.max(1, Math.floor((bandHeightPx - LANE_LABEL_PAD_PX) / LANE_LABEL_CHAR_PX));
+  if (label.length <= maxChars) return label;
+  if (maxChars === 1) return label[0];
+  return `${label.slice(0, maxChars - 1)}…`;
+}
+
 /**
  * Extract duration in minutes from a node.
  * Reads the first number from the `duration` string and treats it as minutes.

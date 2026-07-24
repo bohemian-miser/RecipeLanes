@@ -71,3 +71,4 @@ Scoped single test: `npm run test:one -- tests/my.test.ts`
 - `recipe-lanes/TESTING.md` — full testing guide including Pi-specific pre-commit warm-up sequence and known flaky tests
 - `docs/architecture-review-2026-06.md` — prioritized technical roadmap (June 2026 review)
 - `docs/alerting-icon-forge.md` — pure-GCP alerting on icon-generation rate (Bug 171): the `icon_forged` log signal + Cloud Monitoring metric/policy runbook
+- `docs/WORKLOG.md` — running curated log of significant agent decisions, incidents, and infra/process changes (read this for project history/context; append an entry when you make a significant change)

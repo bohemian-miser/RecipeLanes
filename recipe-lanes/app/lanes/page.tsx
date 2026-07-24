@@ -37,7 +37,8 @@ import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
-import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
+import { looksLikeUrl, isAdjustSubmitKey } from '@/lib/recipe-lanes/input-utils';
+import { track } from '@/lib/analytics';
 import { fileToRecipePhotoDataUrl } from '@/lib/recipe-lanes/image-client';
 import { loadDraft, saveDraft, commitDraftOnForge, clearBlankDraft } from '@/lib/recipe-lanes/draft-persistence';
 import { mintClaimToken, storeClaimToken } from '@/lib/recipe-lanes/claim-token-client';
@@ -83,7 +84,9 @@ function RecipeLanesContent() {
   const layoutMode = useRecipeStore(s => s.nodeLayout);
   const layoutModeRestoredRef = useRef(false);
   const iconTheme = useRecipeStore(s => s.iconStyle) as 'classic' | 'modern' | 'modern_clean';
-  const { setNodeLayout, setIconStyle, setLineStyle } = useRecipeStore.getState();
+  const leafNodeScale = useRecipeStore(s => s.leafNodeScale);
+  const canvasBackground = useRecipeStore(s => s.canvasBackground);
+  const { setNodeLayout, setIconStyle, setLineStyle, setLeafNodeScale, setCanvasBackground } = useRecipeStore.getState();
   const [showForkPrompt, setShowForkPrompt] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [existingCopies, setExistingCopies] = useState<any[] | null>(null);
@@ -608,11 +611,14 @@ const handleVisualize = async () => {
         // later prove ownership from this browser and claim the recipe after
         // signing in. Only the hash is ever sent to/stored on the server.
         const claimToken = mintClaimToken(!!user);
+        track('recipe_submitted', { input_type: 'text' });
         const res = await createVisualRecipeAction(recipeText, currentId || undefined, claimToken);
 
         finalizeCreatedRecipe(res, recipeText, claimToken);
+        track('parse_succeeded');
     } catch (e: any) {
         console.error('Visualization failed:', e);
+        track('parse_failed');
         setError(e.message);
         setStatus('error');
     }
@@ -683,10 +689,13 @@ const handleVisualize = async () => {
 
         const currentId = searchParams.get('id');
         const claimToken = mintClaimToken(!!user);
+        track('recipe_submitted', { input_type: 'photo' });
         const res = await createVisualRecipeFromImageAction(dataUrl, currentId || undefined, claimToken);
         finalizeCreatedRecipe(res, '📷 Recipe from photo', claimToken);
+        track('parse_succeeded');
     } catch (err: any) {
         console.error('Photo visualization failed:', err);
+        track('parse_failed');
         setError(err.message);
         setStatus('error');
     }
@@ -732,7 +741,7 @@ const handleVisualize = async () => {
       }
   };
 
-    const handleLayoutClick = async (mode: LayoutMode | 'repulsive' | 'timeline2') => {
+    const handleLayoutClick = async (mode: LayoutMode | 'repulsive' | 'timeline2' | 'notation') => {
         if (layoutMode === mode) {
             diagramRef.current?.resetLayout();
         } else {
@@ -764,7 +773,7 @@ const handleVisualize = async () => {
   const isPublic = graph?.visibility === 'public';
 
   // Common Nav Item Styles
-  const navItemClass = "flex items-center gap-2 px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
+  const navItemClass = "flex items-center gap-2 px-2 md:px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
 
   let loadingPhase: LoadingPhase = null;
   if (status === 'parsing' || status === 'loading') {
@@ -777,7 +786,7 @@ const handleVisualize = async () => {
     <div className="fixed inset-0 flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden overscroll-none">
         {/* Utility Bar */}
         <header className="h-14 shrink-0 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-950 z-20">
-            <div className="flex items-center gap-4 overflow-hidden">
+            <div className="flex-1 min-w-0 flex items-center gap-4 overflow-hidden">
                 {/* Logo */}
                 <div className="flex items-center gap-2 shrink-0">
                     <ChefHat className="w-6 h-6 text-yellow-500" />
@@ -814,12 +823,13 @@ const handleVisualize = async () => {
                 </div>
             </div>
 
-            {/* Right Side Actions */}
-            <div className="flex items-center gap-2">
+            {/* Right Side Actions — must not squeeze the title on mobile (issue #139),
+                so it never shrinks and drops secondary items / labels on small screens. */}
+            <div className="flex items-center gap-1 md:gap-2 shrink-0">
                 {/* Navigation Tabs */}
                 <Link href="/gallery" className={navItemClass} title="Public Gallery">
                     <Globe className="w-4 h-4" />
-                    <span>Gallery</span>
+                    <span className="hidden md:inline">Gallery</span>
                 </Link>
                 {user && (
                     <>
@@ -838,11 +848,11 @@ const handleVisualize = async () => {
                     <span className="hidden md:inline">New</span>
                 </button>
                 
-                <button onClick={() => setShowFeedback(true)} className={navItemClass} title="Feedback & Contribute">
+                <button onClick={() => setShowFeedback(true)} className={`${navItemClass} hidden md:flex`} title="Feedback & Contribute">
                     <MessageSquare className="w-4 h-4" />
                 </button>
 
-                <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={navItemClass} title="Find me on GitHub">
+                <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={`${navItemClass} hidden md:flex`} title="Find me on GitHub">
                     <Github className="w-4 h-4" />
                 </a>
 
@@ -871,8 +881,7 @@ const handleVisualize = async () => {
                 {/* Existing Copies Banner - Hide if Fork Prompt is active */}
                 {existingCopies && existingCopies.length > 0 && !showForkPrompt && !existingCopiesDismissed && (
                     <Banner color="blue" onDismiss={() => setExistingCopiesDismissed(true)}>
-                        {/* TODO: Filter by sourceId when implemented */}
-                        <span>You have <Link href="/gallery?filter=mine" className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length > 1 ? 'copies' : 'copy'}</Link> of this recipe. <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">Go to latest?</Link></span>
+                        <span>You have <Link href={`/gallery?filter=source&sourceId=${recipeId}`} className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length > 1 ? 'copies' : 'copy'}</Link> of this recipe. <Link href={`/lanes?id=${existingCopies[0].id}`} className="underline font-bold hover:text-white">Go to latest?</Link></span>
                         <div className="flex flex-wrap justify-center gap-2">
                             <button onClick={handleFork} className="underline font-bold hover:text-white">
                                 Save another copy?
@@ -891,8 +900,7 @@ const handleVisualize = async () => {
                 {/* Fork Prompt Banner (Destructive Action Intercept) */}
                 {showForkPrompt && existingCopies && existingCopies.length > 0 && (
                     <Banner color="blue" onDismiss={() => setShowForkPrompt(false)}>
-                        {/* TODO: Filter by sourceId when implemented */}
-                        <span>You have <Link href="/gallery?filter=mine" className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length === 1 ? 'copy' : 'copies'}</Link> of this recipe, to make changes, open one of these. Any further changes won&apos;t be saved.</span>
+                        <span>You have <Link href={`/gallery?filter=source&sourceId=${recipeId}`} className="underline font-bold hover:text-white">{existingCopies.length} existing {existingCopies.length === 1 ? 'copy' : 'copies'}</Link> of this recipe, to make changes, open one of these. Any further changes won&apos;t be saved.</span>
                         <div className="flex gap-2">
                             <button onClick={handleFork} className="underline font-bold hover:text-white">
                                 Save another copy
@@ -1017,6 +1025,7 @@ const handleVisualize = async () => {
                             <option value="repulsive">Repulsive</option>
                             <option value="timeline">Timeline</option>
                             <option value="timeline2">Timeline (Classic)</option>
+                            <option value="notation">Notation</option>
                         </select>
                         {/* Reset Layout Button */}
                         <button 
@@ -1080,7 +1089,36 @@ const handleVisualize = async () => {
                             <option value="modern_clean">Clean</option>
                         </select>
                     </div>
-                    
+
+                    {/* Background (Paper) Dropdown — independent of icon style */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-zinc-400">Paper</span>
+                        <select
+                            value={canvasBackground}
+                            onChange={(e) => setCanvasBackground(e.target.value as any)}
+                            className="text-xs bg-zinc-50 border border-zinc-200 rounded p-1.5 text-zinc-700 font-medium focus:ring-1 focus:ring-yellow-500/50 outline-none"
+                            title="Canvas Background"
+                        >
+                            <option value="default">Default</option>
+                            <option value="butcher">Butcher&apos;s Paper</option>
+                        </select>
+                    </div>
+
+                    {/* Leaf node size — global slider (issue #155) */}
+                    <div className="flex items-center gap-2" title="Size of leaf nodes (raw ingredients)">
+                        <span className="text-xs font-mono text-zinc-400 whitespace-nowrap">Leaf size</span>
+                        <input
+                            type="range"
+                            min={0.4}
+                            max={1}
+                            step={0.05}
+                            value={leafNodeScale}
+                            onChange={(e) => setLeafNodeScale(parseFloat(e.target.value))}
+                            className="w-20 accent-yellow-500 cursor-pointer"
+                            aria-label="Leaf node size"
+                        />
+                        <span className="text-xs font-mono text-zinc-400 w-8 tabular-nums">{Math.round(leafNodeScale * 100)}%</span>
+                    </div>
 
                 </div>
 
@@ -1194,7 +1232,7 @@ const handleVisualize = async () => {
                     <ReactFlowDiagram
                         ref={diagramRef}
                         graph={graph}
-                        mode={layoutMode as LayoutMode | 'repulsive'}
+                        mode={layoutMode as LayoutMode | 'repulsive' | 'notation'}
                         spacing={spacing}
                         edgeStyle={edgeStyle}
                         textPos={textPos}
@@ -1209,6 +1247,7 @@ const handleVisualize = async () => {
                         isLoggedIn={!!user}
                         isOwner={isOwner}
                         onNotify={showNotification}
+                        recipeId={recipeId || undefined}
                     />
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400">
@@ -1272,12 +1311,18 @@ const handleVisualize = async () => {
                                 )}
                             </button>
                             <input
-                                className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
+                                className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
                                 placeholder="Adjust recipe..."
+                                enterKeyHint="send"
                                 maxLength={MAX_ADJUST_INSTRUCTION_CHARS}
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}
+                                onKeyDown={(e) => {
+                                    if (isAdjustSubmitKey({ key: e.key, keyCode: e.keyCode, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing })) {
+                                        e.preventDefault();
+                                        handleAdjust();
+                                    }
+                                }}
                                 disabled={status === 'adjusting'}
                             />
                             <button
@@ -1293,20 +1338,26 @@ const handleVisualize = async () => {
                     {/* Mobile Layout (Split Bottom Bar) */}
                     <div className="md:hidden flex h-16 bg-white/95 backdrop-blur border-t border-zinc-200 pointer-events-auto">
                         {/* Legend (Left Half) */}
-                        <div className="w-1/2 p-2 text-[10px] text-zinc-600 border-r border-zinc-100 flex flex-col justify-center gap-1">
+                        <div className="w-1/2 min-w-0 p-2 text-[10px] text-zinc-600 border-r border-zinc-100 flex flex-col justify-center gap-1">
                             {!hasIcons && <div className="truncate">🥕 Ingredients  🍳 Actions</div>}
-                            <div className="font-bold text-zinc-800">Tap & Hold: Select Branch</div>
+                            <div className="font-bold text-zinc-800 truncate">Tap & Hold: Select Branch</div>
                         </div>
-                        
+
                         {/* Chat (Right Half) */}
-                        <div className="w-1/2 p-2 flex items-center gap-1">
+                        <div className="w-1/2 min-w-0 p-2 flex items-center gap-1">
                             <input
-                                className="flex-1 bg-zinc-100 border border-zinc-200 rounded-md px-2 text-xs h-full text-zinc-800 outline-none"
+                                className="flex-1 min-w-0 bg-zinc-100 border border-zinc-200 rounded-md px-2 text-xs h-full text-zinc-800 outline-none"
                                 placeholder="Adjust..."
+                                enterKeyHint="send"
                                 maxLength={MAX_ADJUST_INSTRUCTION_CHARS}
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}
+                                onKeyDown={(e) => {
+                                    if (isAdjustSubmitKey({ key: e.key, keyCode: e.keyCode, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing })) {
+                                        e.preventDefault();
+                                        handleAdjust();
+                                    }
+                                }}
                                 disabled={status === 'adjusting'}
                             />
                             <button

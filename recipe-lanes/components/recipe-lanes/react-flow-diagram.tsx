@@ -35,17 +35,24 @@ import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX
 
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
+import { calculateNotationLayout } from '../../lib/recipe-lanes/layout-notation';
+import { getLeafNodeIds } from '../../lib/recipe-lanes/leaf-nodes';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import { getNodeIconUrl, getNodeIconId, preserveNodeShortlist, getNodeShortlistLength } from '../../lib/recipe-lanes/model-utils';
 import MinimalNode from './nodes/minimal-node';
 import LaneNode from './nodes/lane-node';
 import MicroNode from './nodes/micro-node';
 import TimelineNode from './nodes/timeline-node';
+import NotationVerbNode from './nodes/notation-verb-node';
+import NotationStationNode from './nodes/notation-station-node';
 import FloatingEdge from './edges/floating-edge';
 import TimelineEdge from './edges/timeline-edge';
+import NotationEdge from './edges/notation-edge';
 import TimelineBackground, { type TimelineData } from './timeline-background';
+import { getCanvasTheme } from '@/lib/recipe-lanes/canvas-theme';
+import { track } from '@/lib/analytics';
 import { toPng } from 'html-to-image';
-import { Download, Share2, Undo, Redo, Check, Save } from 'lucide-react';
+import { Download, Share2, Undo, Redo, Check, Save, Copy } from 'lucide-react';
 import { useHistoryManager } from './hooks/useHistoryManager';
 import { useSaveAndFork, getSaveButtonState } from './hooks/useSaveAndFork';
 import { useAutosave } from './hooks/useAutosave';
@@ -53,7 +60,7 @@ import { useRecipeStore } from '../../lib/stores/recipe-store';
 
 interface ReactFlowDiagramProps {
   graph: RecipeGraph;
-  mode: LayoutMode | 'repulsive';
+  mode: LayoutMode | 'repulsive' | 'notation';
   spacing?: number;
   edgeStyle?: 'straight' | 'step' | 'bezier';
   textPos?: 'bottom' | 'top' | 'left' | 'right';
@@ -67,6 +74,13 @@ interface ReactFlowDiagramProps {
   onNotify?: (msg: string) => void;
   isOwner?: boolean; // YOLO: Added to support auto-save on move logic
   iconTheme?: 'classic' | 'modern' | 'modern_clean';
+  // Analytics-only: which recipe (the ?id= search param) is being edited, so
+  // diagram_interacted can be deduped per-recipe. Passed as a plain string
+  // prop (not read via useSearchParams() in here) — this component is memoized
+  // and Zustand-selector-optimized to minimize re-renders, and subscribing to
+  // useSearchParams() directly would re-render it on every router navigation
+  // (see the recipeId-vs-searchParams note in app/lanes/page.tsx).
+  recipeId?: string;
 }
 
 export interface ReactFlowDiagramHandle {
@@ -80,20 +94,34 @@ const INITIAL_NODE_TYPES = {
     lane: LaneNode,
     micro: MicroNode,
     'timeline-node': TimelineNode,
+    'notation-verb': NotationVerbNode,
+    'notation-station': NotationStationNode,
 };
 
 const INITIAL_EDGE_TYPES = {
     floating: FloatingEdge,
     timeline: TimelineEdge,
+    notation: NotationEdge,
 };
 
-const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode: propMode, spacing = 1, edgeStyle: propEdgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme: propIconTheme = 'classic' }, ref) => {
+// Fire `diagram_interacted` at most once per recipe per page load, regardless
+// of how many times the diagram component itself mounts/unmounts.
+const trackedInteractionRecipeIds = new Set<string>();
+function trackDiagramInteractionOnce(recipeId: string | undefined) {
+    if (!recipeId || trackedInteractionRecipeIds.has(recipeId)) return;
+    trackedInteractionRecipeIds.add(recipeId);
+    track('diagram_interacted');
+}
+
+const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramProps>(({ graph, mode: propMode, spacing = 1, edgeStyle: propEdgeStyle = 'straight', textPos = 'bottom', isLive = false, onInteraction, onEdit, onSave, isPublic: propIsPublic, onVisibilityChange, isLoggedIn = false, onNotify, isOwner = false, iconTheme: propIconTheme = 'classic', recipeId }, ref) => {
 
     const iconStyle = useRecipeStore(s => s.iconStyle);
     const edgeStyle = useRecipeStore(s => s.lineStyle);
     const mode = useRecipeStore(s => s.nodeLayout);
     const backgrounds = useRecipeStore(s => s.backgrounds);
+    const canvasBackground = useRecipeStore(s => s.canvasBackground);
     const iconTheme = iconStyle;
+    const canvasTheme = getCanvasTheme(canvasBackground);
 
     // Cast hooks to avoid implicit any in callbacks
     const [nodes, setNodesRaw, onNodesChange] = useNodesState([]);
@@ -107,6 +135,15 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const getEdges = getEdgesRaw as () => any[];
     const flowWrapper = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<any>(null);
+    // Not yet saved (no recipeId prop) still gets one diagram_interacted per
+    // mount, keyed on an id generated once for this component instance rather
+    // than a shared sentinel — otherwise two different unsaved recipes edited
+    // in the same tab would collide on the same key.
+    const unsavedAnalyticsIdRef = useRef<string | undefined>(undefined);
+    if (!unsavedAnalyticsIdRef.current) {
+        unsavedAnalyticsIdRef.current = `unsaved-${Math.random().toString(36).slice(2)}`;
+    }
+    const analyticsRecipeId = recipeId ?? unsavedAnalyticsIdRef.current;
     const [timelineData, setTimelineData] = useState<TimelineData | null>(null);
     // e2e signal: true once the initial layout (and any fitView) has settled.
     // Tests wait on the data-testid="rf-ready" marker instead of arbitrary sleeps.
@@ -121,6 +158,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         getGraph,
         performSave,
         handleSave,
+        handleSaveCopy,
         handleShare,
         toggleVisibility,
     } = useSaveAndFork({
@@ -284,8 +322,14 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         }
 
         const canPreserve = shouldUseSavedLayout;
+        const isNotation = mode === 'notation';
 
-        if (canPreserve) {
+        // 'notation' is a from-scratch layout, same as 'repulsive' — it does not
+        // participate in the saved-position preservation path (no per-node x/y
+        // persistence format for it yet; v2 concern).
+        if (isNotation) {
+            layout = calculateNotationLayout(effectiveGraph);
+        } else if (canPreserve) {
             const safeMode = (['swimlanes', 'dagre', 'dagre-lr', 'timeline'].includes(mode as string)) ? (mode as LayoutMode) : 'dagre';
             layout = calculateLayout(effectiveGraph, safeMode, spacing, true);
         } else if (mode === 'repulsive') {
@@ -298,63 +342,92 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
         const newNodes: Node[] = [];
 
-        layout.lanes.forEach(lane => {
-             newNodes.push({
-                 id: lane.id,
-                 type: 'lane',
-                 position: { x: lane.x, y: lane.y },
-                 data: { label: lane.label, color: lane.color },
-                 style: {
-                     width: lane.width,
-                     height: lane.height,
-                     zIndex: -1,
-                     // In timeline mode: colored band background + no pointer events so
-                     // clicking empty space deselects nodes correctly.
-                     ...(isTimeline ? { backgroundColor: lane.color, pointerEvents: 'none' } : {}),
-                 },
-                 draggable: false,
-                 selectable: false,
-                 focusable: false,
-                 zIndex: -1
-             });
-        });
+        // Notation mode draws its own station badges instead of column/row
+        // background bands (LaneNode assumes vertical swimlanes) — skip lane nodes.
+        if (!isNotation) {
+            layout.lanes.forEach(lane => {
+                 newNodes.push({
+                     id: lane.id,
+                     type: 'lane',
+                     position: { x: lane.x, y: lane.y },
+                     data: { label: lane.label, color: lane.color },
+                     style: {
+                         width: lane.width,
+                         height: lane.height,
+                         zIndex: -1,
+                         // In timeline mode: colored band background + no pointer events so
+                         // clicking empty space deselects nodes correctly.
+                         ...(isTimeline ? { backgroundColor: lane.color, pointerEvents: 'none' } : {}),
+                     },
+                     draggable: false,
+                     selectable: false,
+                     focusable: false,
+                     zIndex: -1
+                 });
+            });
+        }
 
+        // Leaf = no incoming edge (in-degree 0: raw ingredients). Threaded into
+        // node data so the node view can render it smaller via the slider (#155).
+        const leafIds = getLeafNodeIds(graph);
         layout.nodes.forEach(n => {
              const originalNode = graph.nodes.find(gn => gn.id === n.id);
-             const nodeType = isTimeline ? 'timeline-node' : 'minimal';
+             const role = (n as any).role as ('leaf' | 'verb' | 'state' | 'station' | undefined);
+             const nodeType = isNotation
+                 ? (role === 'station' ? 'notation-station' : role === 'verb' ? 'notation-verb' : 'minimal')
+                 : (isTimeline ? 'timeline-node' : 'minimal');
              newNodes.push({
                  id: n.id,
                  type: nodeType,
                  position: { x: n.x, y: n.y },
                  data: {
                      ...originalNode, ...n.data,
-                     ...(isTimeline ? { lineColor: n.lineColor } : {}),
-                     textPos, depth: n.depth,
+                     ...(isTimeline ? { lineColor: (n as any).lineColor } : {}),
+                     textPos, depth: (n as any).depth,
+                     isLeaf: isNotation ? role === 'leaf' : leafIds.has(n.id),
                      onDelete: () => handleDeleteNode(n.id),
                      onSetLongPress: setLongPress,
                      iconTheme,
                  },
                  width: n.width,
                  height: n.height,
-                 draggable: true,
+                 // Station badges are synthetic row anchors (not in graph.nodes):
+                 // not draggable, not selectable, and not Backspace-deletable —
+                 // otherwise ReactFlow's default delete handling removes them
+                 // from local canvas state (looks like data loss) without going
+                 // through handleDeleteNode.
+                 draggable: !(isNotation && role === 'station'),
+                 ...(isNotation && role === 'station'
+                     ? { selectable: false, deletable: false, focusable: false }
+                     : {}),
              });
         });
 
         // Capture timeline grid data so the background can render it.
-        if (isTimeline && layout.timelineData) {
-            setTimelineData(layout.timelineData);
+        if (isTimeline && (layout as any).timelineData) {
+            setTimelineData((layout as any).timelineData);
         } else if (!isTimeline) {
             setTimelineData(null);
         }
 
         const newEdges: Edge[] = layout.edges.map(e => {
+            if (isNotation) {
+                return {
+                    id: e.id,
+                    source: e.sourceId,
+                    target: e.targetId,
+                    type: 'notation',
+                    data: { kind: (e as any).kind },
+                    style: {},
+                };
+            }
             if (isTimeline) {
                 return {
                     id: e.id,
                     source: e.sourceId,
                     target: e.targetId,
                     type: 'timeline',
-                    data: { lineColor: e.lineColor, kind: e.kind },
+                    data: { lineColor: (e as any).lineColor, kind: e.kind },
                     style: {},
                 };
             }
@@ -415,30 +488,50 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     // second snapshot has them, but by then hasInitialLayoutRef is already true.
     const prevLayoutsKeyRef = useRef<string | null | undefined>(undefined);
 
+    // True while a mode/spacing switch is scheduled but its 5ms layout timer
+    // hasn't fired yet (re-renders can cancel + reschedule it repeatedly).
+    const pendingLayoutSwitchRef = useRef(false);
+
     // Layout Effect
     useEffect(() => {
         if (isLive) return; // Skip static layout if physics is running
 
+        const isNotationMode = mode === 'notation';
         const modeChanged = prevMode.current !== mode;
         const spacingChanged = prevSpacing.current !== spacing;
 
         if (modeChanged || spacingChanged) {
-            prevMode.current = mode;
-            prevSpacing.current = spacing;
             setIsDirty(true);
 
-            // Throttle snapshot for spacing to prevent history spam and lag
-            const now = Date.now();
-            if (modeChanged || now - lastSnapshotRef.current > 500) {
-                takeSnapshot();
-                lastSnapshotRef.current = now;
+            // Throttle snapshot for spacing to prevent history spam and lag.
+            // pendingLayoutSwitchRef also guards against duplicate snapshots
+            // while the switch below is being rescheduled by re-renders.
+            if (!pendingLayoutSwitchRef.current) {
+                const now = Date.now();
+                if (modeChanged || now - lastSnapshotRef.current > 500) {
+                    takeSnapshot();
+                    lastSnapshotRef.current = now;
+                }
             }
+            pendingLayoutSwitchRef.current = true;
 
             // Yield to main thread for UI updates.
             // On mode change: restore saved positions if available. On spacing-only change: always re-run fresh layout.
+            //
+            // prevMode/prevSpacing are committed INSIDE the timeout, when the
+            // layout actually runs. They used to be set eagerly before it —
+            // so when an unrelated re-render (icon snapshot, text sync…)
+            // cancelled this timer during the 5ms window, the next effect run
+            // saw modeChanged === false and the layout switch was silently
+            // lost forever (the "select says Timeline but canvas didn't
+            // change until you hit reset" bug). Committing them on fire means
+            // a cancelled switch simply reschedules on the next run.
             const hasSavedPositions = modeChanged && !!(graph.layouts?.[mode]);
+            const shouldFit = modeChanged;
             const timer = setTimeout(() => {
-                const shouldFit = modeChanged;
+                pendingLayoutSwitchRef.current = false;
+                prevMode.current = mode;
+                prevSpacing.current = spacing;
                 runLayout(hasSavedPositions, shouldFit);
             }, 5);
             return () => clearTimeout(timer);
@@ -452,7 +545,12 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         // Fires once when saved layout data arrives after the initial dagre render ran
         // without it (two-snapshot scenario). The key comparison already prevents
         // re-firing on unchanged data, so we don't need an !isDirty guard here.
+        // Notation is excluded: calculateNotationLayout ignores saved positions
+        // (always from-scratch), so "layouts arrived" would just recompute the
+        // layout and snap any user drags back — the first autosave in notation
+        // mode writes layouts['notation'], which used to trip this on the echo.
         const layoutsJustArrived =
+            !isNotationMode &&
             hasInitialLayoutRef.current &&
             currentLayoutsKey !== null &&
             prevLayoutsKeyRef.current === null;
@@ -468,8 +566,14 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             // Detect full regeneration: if none of the incoming graph node IDs match
             // current ReactFlow nodes, the recipe was re-parsed with all-new IDs.
             // In that case, do a fresh layout rather than a no-op metadata patch.
+            // Synthetic notation station badges are RF-only (never in graph.nodes):
+            // they must be excluded here or hasRemovedNodes is permanently true in
+            // notation mode, re-running the from-scratch layout on EVERY graph tick
+            // (autosave echoes, icon writes …) and snapping user drags back.
             const currentRFNodeIds = new Set(
-                getNodes().filter((n: any) => n.type !== 'lane').map((n: any) => n.id)
+                getNodes()
+                    .filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station')
+                    .map((n: any) => n.id)
             );
             const incomingIds = graph.nodes.map(n => n.id);
             // Guard: if rfNodes is empty but hasInitialLayoutRef is true, runLayout
@@ -620,7 +724,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
         try {
             const dataUrl = await toPng(flowWrapper.current, {
-                backgroundColor: '#ffffff',
+                backgroundColor: canvasTheme.exportBackground,
                 style: { width: 'auto', height: 'auto', transform: 'none' },
                 cacheBust: true,
                 skipFonts: true,
@@ -631,7 +735,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             console.warn("Download failed, retrying with minimal options...", err);
             try {
                 const dataUrl = await toPng(flowWrapper.current, {
-                    backgroundColor: '#ffffff',
+                    backgroundColor: canvasTheme.exportBackground,
                     style: { width: 'auto', height: 'auto', transform: 'none' },
                     pixelRatio: 2,
                     skipFonts: true,
@@ -659,7 +763,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
         onInteraction?.();
-        takeSnapshot(); 
+        trackDiagramInteractionOnce(analyticsRecipeId);
+        takeSnapshot();
         selectBranch(node.id);
     };
 
@@ -787,6 +892,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     const onNodeDragStop = () => {
         dragRef.current = { active: false };
+        trackDiagramInteractionOnce(analyticsRecipeId);
         updateLaneBounds();
         if (isOwner) {
             scheduleAutosave();
@@ -796,7 +902,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     };
 
     return (
-        <div className="w-full h-full touch-none" ref={flowWrapper}>
+        <div className="w-full h-full touch-none" ref={flowWrapper} style={{ backgroundColor: canvasTheme.surface }}>
             {layoutReady && <div data-testid="rf-ready" style={{ display: 'none' }} />}
             <ReactFlow
                 nodes={nodes}
@@ -823,7 +929,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             >
                 {timelineData
                     ? <TimelineBackground data={timelineData} />
-                    : <Background color="#f4f4f5" gap={20} />
+                    : <Background color={canvasTheme.pattern} gap={20} />
                 }
                 <Controls showInteractive={false} />
                 <Panel position="top-right" className="flex gap-2">
@@ -846,17 +952,39 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                         </button>
                     </div>
 
-                     <button
-                        onClick={handleSave}
-                        disabled={!saveButton.enabled}
-                        className={`flex items-center gap-1.5 p-2 rounded shadow-md border border-zinc-200 transition-colors ${saved ? 'bg-green-50 text-green-600 border-green-200' : saveButton.enabled ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
-                        title={saveButton.label}
-                    >
-                        {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                        {saveButton.isCopy && <span className="text-xs font-bold hidden sm:inline">{saveButton.label}</span>}
-                    </button>
+                    <div className="relative group">
+                        {/* Save sits on top of the stack (relative z-10, opaque bg) so the
+                            Copy button can tuck directly behind it when at rest. */}
+                        <button
+                            onClick={handleSave}
+                            disabled={!saveButton.enabled}
+                            className={`relative z-10 flex items-center gap-1.5 p-2 rounded shadow-md border border-zinc-200 transition-colors ${saved ? 'bg-green-50 text-green-600 border-green-200' : saveButton.enabled ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-zinc-400'}`}
+                            title={saveButton.label}
+                        >
+                            {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                            {saveButton.isCopy && <span className="text-xs font-bold hidden sm:inline">{saveButton.label}</span>}
+                        </button>
+                        {/* Save-a-copy (issue #239): a same-sized square Copy icon below the
+                            Save button (top-0, z-0).
+                            - Mobile (base): there's no hover, so it's PERMANENTLY out and
+                              tappable — translated fully below Save with pointer-events on.
+                            - Desktop (sm:): it stacks *behind* Save, peeking a few px at rest
+                              (sm:translate-y-1.5) for discoverability, and slides fully down
+                              out from behind Save on hover/focus. The ::before strip bridges
+                              the reveal gap so the hover stays live. */}
+                        {isLoggedIn && (
+                            <button
+                                onClick={handleSaveCopy}
+                                className="absolute left-0 top-0 z-0 translate-y-[calc(100%+0.25rem)] pointer-events-auto sm:translate-y-1.5 sm:pointer-events-none p-2 rounded shadow-md border border-zinc-200 bg-white text-zinc-600 transition-all duration-200 ease-out hover:bg-zinc-50 sm:group-hover:translate-y-[calc(100%+0.25rem)] sm:group-hover:pointer-events-auto sm:focus-visible:translate-y-[calc(100%+0.25rem)] sm:focus-visible:pointer-events-auto before:absolute before:-top-1 before:left-0 before:h-1 before:w-full before:content-['']"
+                                title="Save a copy"
+                                aria-label="Save a copy"
+                            >
+                                <Copy className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
 
-                     <button 
+                     <button
                         onClick={handleShare} 
                         className={`p-2 rounded shadow-md border border-zinc-200 transition-colors ${copied ? 'bg-green-50 text-green-600 border-green-200' : 'bg-white text-zinc-600 hover:bg-zinc-50'}`}
                         title={copied ? "Copied!" : "Save & Copy Link"}

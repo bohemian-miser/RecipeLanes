@@ -20,6 +20,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { RecipeGraph } from '../../../lib/recipe-lanes/types';
 import { saveRecipeAction } from '@/app/actions';
 import { getClaimToken, clearClaimToken } from '@/lib/recipe-lanes/claim-token-client';
+import { track } from '@/lib/analytics';
 
 /**
  * Pure helper extracted from getGraph() so it can be tested without React.
@@ -32,7 +33,11 @@ export function buildGraphForSave(
     rfNodes: any[],
     rfEdges: any[],
 ): RecipeGraph {
-    const currentNodes = rfNodes.filter((n: any) => n.type !== 'lane');
+    // Exclude synthetic canvas-only nodes: lane bands and notation station
+    // badges (row anchors that exist only in the layout, not in graph.nodes).
+    // Without this, saving in notation mode writes phantom
+    // `notation-station-<laneId>` rows into layouts[mode] forever.
+    const currentNodes = rfNodes.filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station');
     const layouts = { ...(graph.layouts || {}) };
     layouts[mode] = currentNodes.map((n: any) => ({ id: n.id, x: n.position.x, y: n.position.y }));
 
@@ -47,6 +52,45 @@ export function buildGraphForSave(
         });
 
     return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
+}
+
+/**
+ * Pure helper: given a recipe title, produce the title for the next saved
+ * copy. Repeated copies escalate "Copy of" → "Another copy of" → "Yet another
+ * copy of X (n)" so a chain of copies stays readable. Extracted so both the
+ * fork-on-save path and the explicit "Save a copy" button (issue #239) share
+ * one naming scheme and it can be unit-tested.
+ */
+export function nextCopyTitle(title: string | undefined): string {
+    const base = title || 'Untitled';
+    if (base.startsWith('Yet another copy of ')) {
+        const match = base.match(/Yet another copy of (.*) \((\d+)\)$/);
+        if (match) {
+            return `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;
+        }
+        return `${base} (1)`;
+    }
+    if (base.startsWith('Another copy of ')) {
+        return base.replace('Another copy of ', 'Yet another copy of ');
+    }
+    if (base.startsWith('Copy of ')) {
+        return base.replace('Copy of ', 'Another copy of ');
+    }
+    return `Copy of ${base}`;
+}
+
+/**
+ * Pure helper: turn the current graph into the graph that should be persisted
+ * as an explicit copy (issue #239). Always a brand-new recipe — it records the
+ * original as `sourceId` and renames via nextCopyTitle. Callers pass the copy
+ * to saveRecipeAction with no id so the original is never overwritten.
+ */
+export function buildCopyGraph(graph: RecipeGraph, sourceId: string | undefined): RecipeGraph {
+    return {
+        ...graph,
+        sourceId,
+        title: nextCopyTitle(graph.title),
+    };
 }
 
 /**
@@ -160,23 +204,8 @@ export function useSaveAndFork({
             currentId = undefined; // Force new creation
             graphToSave.sourceId = sourceId;
 
-            // Smarter Copy Naming
-            let newTitle = graphToSave.title || 'Untitled';
-            if (newTitle.startsWith('Yet another copy of ')) {
-                const match = newTitle.match(/Yet another copy of (.*) \((\d+)\)$/);
-                if (match) {
-                    newTitle = `Yet another copy of ${match[1]} (${parseInt(match[2]) + 1})`;
-                } else {
-                    newTitle = `${newTitle} (1)`;
-                }
-            } else if (newTitle.startsWith('Another copy of ')) {
-                newTitle = newTitle.replace('Another copy of ', 'Yet another copy of ');
-            } else if (newTitle.startsWith('Copy of ')) {
-                newTitle = newTitle.replace('Copy of ', 'Another copy of ');
-            } else {
-                newTitle = `Copy of ${newTitle}`;
-            }
-            graphToSave.title = newTitle;
+            // Smarter Copy Naming (shared with the explicit "Save a copy" button).
+            graphToSave.title = nextCopyTitle(graphToSave.title);
             onNotify?.("Saving a copy...");
         }
 
@@ -188,6 +217,7 @@ export function useSaveAndFork({
         // stale/invalid, there's nothing to gain by attaching it again.
         if (claimToken && currentId) clearClaimToken(localStorage, currentId);
 
+        if (result.id) track('recipe_saved');
         if (onSave) onSave(graphToSave);
         return result;
     };
@@ -212,6 +242,41 @@ export function useSaveAndFork({
         }
     };
 
+    // Explicit "Save a copy" (issue #239): always fork the *current* graph into
+    // a brand-new recipe, even for the owner. Unlike handleSave's non-owner fork
+    // path, this never overwrites the original and captures unsaved edits.
+    const performSaveCopy = async () => {
+        const sourceId = searchParams.get('id') || undefined;
+        const graphToSave = buildCopyGraph(getGraph(), sourceId);
+        const visibility = visibilityRef.current ? 'public' : 'unlisted';
+        graphToSave.visibility = visibility;
+        onNotify?.("Saving a copy...");
+        // No id → saveRecipe always creates a new recipe.
+        const result = await saveRecipeAction(graphToSave, undefined, visibility);
+        if (onSave) onSave(graphToSave);
+        return result;
+    };
+
+    const handleSaveCopy = async () => {
+        if (!isLoggedIn) {
+            onNotify?.('Log in to save recipe');
+            return;
+        }
+        const res = await performSaveCopy();
+        if (res.id) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('id', res.id);
+            router.push(url.pathname + url.search);
+            setIsDirty(false);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+            onNotify?.("Saved a copy.");
+        } else {
+            console.error('Failed to save copy.');
+            onNotify?.("Failed to save copy.");
+        }
+    };
+
     const handleShare = async () => {
         const res = await performSave();
         if (res.id) {
@@ -219,6 +284,7 @@ export function useSaveAndFork({
             url.searchParams.set('id', res.id);
             router.push(url.pathname + url.search);
             navigator.clipboard.writeText(url.toString());
+            track('share_clicked');
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
             setIsDirty(false);
@@ -251,6 +317,7 @@ export function useSaveAndFork({
         getGraph,
         performSave,
         handleSave,
+        handleSaveCopy,
         handleShare,
         toggleVisibility,
     };

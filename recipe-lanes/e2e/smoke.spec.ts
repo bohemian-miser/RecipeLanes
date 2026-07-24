@@ -1,63 +1,72 @@
 import { test, expect } from './utils/fixtures';
-import { deviceConfigs } from './utils/devices';
+
+// Device fan-out is driven by Playwright projects (see playwright.config.ts):
+// this suite runs once under the `desktop` project and once under the `mobile`
+// project (real Pixel 5 device emulation — Issue #20). Mobile-awareness is
+// derived from the active project rather than an in-spec viewport loop, so the
+// tests exercise genuine touch/isMobile device emulation, not just a resized
+// desktop viewport.
+const isMobileProject = () => test.info().project.name === 'mobile';
 
 test.describe('Smoke Tests (Consolidated)', () => {
-  const desktop = deviceConfigs.find(d => d.name === 'desktop')!;
-  const phone = deviceConfigs.find(d => d.name === 'phone')!;
-  const smokeDevices = [desktop, phone];
+  test('Basic Page Loads', async ({ page }) => {
+    // Home / Lanes
+    await page.goto('/lanes');
+    await expect(page).toHaveTitle(/Recipe Lanes/);
 
-  for (const device of smokeDevices) {
-    test(`${device.name}: Basic Page Loads`, async ({ page }) => {
-      await page.setViewportSize(device.viewport);
+    // Gallery
+    await page.goto('/gallery');
+    await expect(page.locator('h1, h2').filter({ hasText: /Gallery|Collection/ })).toBeVisible();
+  });
 
-      // Home / Lanes
-      await page.goto('/lanes');
-      await expect(page).toHaveTitle(/Recipe Lanes/);
+  test('Auth Flow & Nav Visibility', async ({ page, login }) => {
+    const device = test.info().project.name;
 
-      // Gallery
-      await page.goto('/gallery');
-      await expect(page.locator('h1, h2').filter({ hasText: /Gallery|Collection/ })).toBeVisible();
-    });
+    // 1. Guest Mode
+    await page.goto('/lanes');
+    const loginBtn = page.getByRole('button', { name: 'Login' });
+    await expect(loginBtn).toBeVisible();
+    await expect(page.getByTitle('My Recipes')).not.toBeVisible();
 
-    test(`${device.name}: Auth Flow & Nav Visibility`, async ({ page, login }) => {
-      await page.setViewportSize(device.viewport);
+    // 2. Login
+    const uid = `smoke-user-${device}`;
+    const displayName = `Smoke Tester ${device}`;
+    await login(uid, { displayName });
 
-      // 1. Guest Mode
-      await page.goto('/lanes');
-      const loginBtn = page.getByRole('button', { name: 'Login' });
-      await expect(loginBtn).toBeVisible();
-      await expect(page.getByTitle('My Recipes')).not.toBeVisible();
+    const logoutBtn = page.getByTitle('Logout');
+    await expect(logoutBtn).toBeVisible({ timeout: 15000 });
 
-      // 2. Login
-      const uid = `smoke-user-${device.name}`;
-      const displayName = `Smoke Tester ${device.name}`;
-      await login(uid, { displayName });
+    // Profile check
+    if (isMobileProject()) {
+      await expect(page.getByText(displayName)).toBeAttached();
+    } else {
+      await expect(page.getByText(displayName)).toBeVisible();
+    }
 
-      const logoutBtn = page.getByTitle('Logout');
-      await expect(logoutBtn).toBeVisible({ timeout: 15000 });
+    // Nav Links check
+    await expect(page.getByTitle('My Recipes')).toBeVisible();
+    await expect(page.getByTitle('Starred')).toBeVisible();
 
-      // Profile check
-      if (device.isMobile) {
-          await expect(page.getByText(displayName)).toBeAttached();
-      } else {
-          await expect(page.getByText(displayName)).toBeVisible();
-      }
+    // 3. Logout
+    await logoutBtn.click();
+    await expect(loginBtn).toBeVisible();
+    await expect(page.getByTitle('My Recipes')).not.toBeVisible();
+  });
 
-      // Nav Links check
-      await expect(page.getByTitle('My Recipes')).toBeVisible();
-      await expect(page.getByTitle('Starred')).toBeVisible();
-
-      // 3. Logout
-      await logoutBtn.click();
-      await expect(loginBtn).toBeVisible();
-      await expect(page.getByTitle('My Recipes')).not.toBeVisible();
-    });
-  }
+  // Regression guard for Issue #20: the mobile project must apply *real* device
+  // emulation (touch + isMobile), not just a resized desktop viewport. If the
+  // mobile project is removed or degraded again, this fails on the mobile run.
+  test('mobile: real device emulation is active', async ({ page }) => {
+    test.skip(!isMobileProject(), 'mobile-project only');
+    await page.goto('/lanes');
+    const maxTouchPoints = await page.evaluate(() => navigator.maxTouchPoints);
+    expect(maxTouchPoints).toBeGreaterThan(0);
+  });
 
   // Banner logic (Desktop only to avoid layout complexity)
   test('Desktop: Banner Logic (Guest & Notifications)', async ({ page, context }) => {
+    test.skip(isMobileProject(), 'desktop-only');
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    await page.setViewportSize(desktop.viewport);
 
     await page.goto('/lanes?new=true');
     await page.getByPlaceholder('Paste recipe here...').fill('Smoke Banner Test');
@@ -85,7 +94,7 @@ test.describe('Smoke Tests (Consolidated)', () => {
   });
 
   test('Regression: Issue 34 - Hide Raw User ID', async ({ page, login }) => {
-    await page.setViewportSize(desktop.viewport);
+    test.skip(isMobileProject(), 'desktop-only');
 
     const uid = 'user-no-name-' + Date.now();
     await page.goto('/lanes?new=true');

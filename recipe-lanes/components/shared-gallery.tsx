@@ -22,6 +22,7 @@ import { getPagedIconsAction, deleteIconByIdAction } from '@/app/actions';
 import { Search, ChevronLeft, ChevronRight, Loader2, Trash2, Sparkles } from 'lucide-react';
 import { IconStats } from '@/lib/recipe-lanes/types';
 import { getIconThumbUrl } from '@/lib/recipe-lanes/model-utils';
+import { GALLERY_LABEL_TRANSFORM_CLASS } from '@/lib/recipe-lanes/gallery-label';
 
 interface SharedGalleryProps {
   onIconClick?: (icon: IconStats, ingredientName: string) => void;
@@ -122,7 +123,7 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
                        <Trash2 className="w-3 h-3" />
                    </button>
 
-                   <div className="absolute bottom-0 left-0 right-0 z-10 bg-black/70 p-1 text-[9px] text-zinc-300 text-center truncate backdrop-blur-sm translate-y-full group-hover:translate-y-0 transition-transform">
+                   <div className={`absolute bottom-0 left-0 right-0 z-10 bg-black/70 p-1 text-[9px] text-zinc-300 text-center truncate backdrop-blur-sm transition-transform ${GALLERY_LABEL_TRANSFORM_CLASS}`}>
                        {icon.ingredient_name || icon.ingredient || icon.visualDescription}
                    </div>
                    {onIconClick ? (

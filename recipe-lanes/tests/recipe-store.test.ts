@@ -273,4 +273,67 @@ describe('useRecipeStore', () => {
             assert.equal(useRecipeStore.getState().canvasBackground, 'butcher');
         });
     });
+
+    // Regression: issue #276 — switching between notation and lanes views and
+    // hitting undo injected synthetic ReactFlow decoration (lane background bands
+    // / notation station anchors) into graph.nodes, which then rendered as empty
+    // "hollow" nodes (one per lane) and persisted to Firestore.
+    describe('restoreNodes (issue #276 — hollow nodes on undo)', () => {
+        // ReactFlow node shapes as captured in an undo snapshot. Content nodes
+        // carry `...originalNode` in their data (so data.type is set); synthetic
+        // lane/station nodes only carry presentational data.
+        const rfContentNode = (id: string, type: 'ingredient' | 'action' = 'ingredient') => ({
+            id,
+            type: 'minimal',
+            data: { id, laneId: 'lane-1', text: `Node ${id}`, visualDescription: `v-${id}`, type },
+        });
+        const rfLaneBand = (id: string) => ({ id, type: 'lane', data: { label: id, color: '#abc' } });
+        const rfStationAnchor = (id: string) => ({ id, type: 'notation-station', data: { label: id } });
+
+        it('does not inject synthetic lane/station nodes into graph.nodes', () => {
+            useRecipeStore.getState().setGraph(makeGraph([makeNode('n1')]));
+
+            useRecipeStore.getState().restoreNodes([
+                rfLaneBand('lane-1'),
+                rfLaneBand('lane-2'),
+                rfStationAnchor('station-x'),
+            ] as any);
+
+            const nodes = useRecipeStore.getState().graph!.nodes;
+            // Only the original content node remains — no lane/station junk added.
+            assert.deepEqual(nodes.map(n => n.id), ['n1']);
+            // Invariant the bug violated: every graph node has a real model type.
+            assert.ok(nodes.every(n => n.type === 'ingredient' || n.type === 'action'));
+        });
+
+        it('leaves the graph reference untouched when only decoration is restored', () => {
+            const graph = makeGraph([makeNode('n1')]);
+            useRecipeStore.getState().setGraph(graph);
+            const before = useRecipeStore.getState().graph;
+
+            useRecipeStore.getState().restoreNodes([rfLaneBand('lane-1')] as any);
+
+            assert.equal(useRecipeStore.getState().graph, before);
+        });
+
+        it('still restores genuine deleted content nodes', () => {
+            useRecipeStore.getState().setGraph(makeGraph([makeNode('n1')]));
+
+            // Snapshot captured while in lanes view: real content node + lane bands.
+            useRecipeStore.getState().restoreNodes([
+                rfContentNode('n1'),
+                rfContentNode('n2', 'action'),
+                rfLaneBand('lane-1'),
+            ] as any);
+
+            const nodes = useRecipeStore.getState().graph!.nodes;
+            const ids = nodes.map(n => n.id).sort();
+            // n2 comes back; n1 (already present) is preserved once; no lane band.
+            assert.deepEqual(ids, ['n1', 'n2']);
+            const n2 = nodes.find(n => n.id === 'n2')!;
+            assert.equal(n2.type, 'action');
+            assert.equal(n2.text, 'Node n2');
+            assert.ok(nodes.every(n => n.type === 'ingredient' || n.type === 'action'));
+        });
+    });
 });

@@ -480,8 +480,11 @@ export async function getPagedIconsAction(page: number = 1, limit: number = 20, 
 }
 
 export async function getAllStorageFilesAction() {
+    // Server actions run with the Admin SDK (Firestore/Storage rules don't apply),
+    // so the admin gate must live here (issue #217). Restored — it was commented out,
+    // exposing the full debug file listing to any caller.
     const session = await getAuthService().verifyAuth();
-    // if (!session?.isAdmin) return null; // Removed Admin check
+    if (!session?.isAdmin) return null;
     return getDataService().listDebugFiles();
 }
 
@@ -699,6 +702,14 @@ export async function applyIconSearchResultsAction(
 ): Promise<{ success: boolean; applied: number; elapsed: number; error?: string }> {
     const t0 = Date.now();
     try {
+        // Server actions run with the Admin SDK, so Firestore rules don't apply —
+        // authorize here (issue #217). Without this, any caller who knows a recipe
+        // id could transactionally rewrite another user's nodes.
+        const session = await getAuthService().verifyAuth();
+        if (!session) {
+            return { success: false, applied: 0, elapsed: Date.now() - t0, error: 'Login required' };
+        }
+
         // Build all shortlists outside the transaction (pure computation, no I/O).
         const shortlists = results
             .filter(r => r.icons.length > 0)
@@ -719,7 +730,15 @@ export async function applyIconSearchResultsAction(
         await db.runTransaction(async (t) => {
             const snap = await t.get(recipeRef);
             if (!snap.exists) return;
-            const nodes: any[] = snap.data()?.graph?.nodes || [];
+            const data = snap.data()!;
+            // Ownership rule mirrors rejectRecipeIcon (data-service.ts): reject writes
+            // to a recipe owned by someone else. Anon-owned recipes (no ownerId) stay
+            // writable per existing product behavior. Throwing aborts the transaction,
+            // so the doc is left byte-identical.
+            if (data.ownerId && data.ownerId !== session.uid) {
+                throw new Error('Unauthorized: you do not own this recipe.');
+            }
+            const nodes: any[] = data.graph?.nodes || [];
             for (const { name, entries } of shortlists) {
                 const changed = mutateNodesByIngredient(nodes, name, (n: any) => {
                     assignNodeShortlist(n, entries, 0);

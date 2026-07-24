@@ -5,7 +5,7 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { RecipeGraph, RecipeNode } from '../lib/recipe-lanes/types';
-import { getNodeStatus, setNodeStatus, prependToShortlist, buildShortlistEntry, toRecipeIcon } from '../lib/recipe-lanes/model-utils';
+import { getNodeStatus, setNodeStatus, prependToShortlist, buildShortlistEntry, toRecipeIcon, buildIngredientText } from '../lib/recipe-lanes/model-utils';
 
 function makeNode(id: string, overrides: Partial<RecipeNode> = {}): RecipeNode {
     return {
@@ -88,5 +88,20 @@ describe('prependToShortlist', () => {
         const res = prependToShortlist([e1, e2], makeEntry('new'));
         assert.equal(res.length, 3);
         assert.equal(res[0].icon.id, 'new');
+    });
+});
+
+describe('buildIngredientText', () => {
+    it('joins quantity, unit and name', () => {
+        assert.equal(buildIngredientText(2, 'cup', 'Flour'), '2 cup Flour');
+    });
+
+    it('collapses the gap left by a missing unit', () => {
+        assert.equal(buildIngredientText(3, '', 'Onions'), '3 Onions');
+        assert.equal(buildIngredientText(3, undefined, 'Onions'), '3 Onions');
+    });
+
+    it('keeps fractional quantities as rendered', () => {
+        assert.equal(buildIngredientText(0.5, 'tsp', 'Salt'), '0.5 tsp Salt');
     });
 });

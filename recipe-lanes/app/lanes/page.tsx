@@ -24,15 +24,15 @@ import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
-import { createVisualRecipeAction, createVisualRecipeFromImageAction, adjustRecipeAction, saveRecipeAction, saveChatHistoryAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
+import { createVisualRecipeAction, createVisualRecipeFromImageAction, adjustRecipeAction, saveRecipeAction, saveChatHistoryAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction, forgeIconAction } from '@/app/actions';
 import { ChatPanel } from '@/components/recipe-lanes/chat-panel';
 import { MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
 import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
 import { standardizeIngredientName, formatDisplayName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import { TimelineView } from '@/components/recipe-lanes/timeline-view';
-import type { RecipeGraph, LayoutModeId } from '@/lib/recipe-lanes/types';
-import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients } from '@/lib/recipe-lanes/model-utils';
+import type { RecipeGraph, LayoutModeId, RecipeNode } from '@/lib/recipe-lanes/types';
+import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients, getNodeIcon, buildIngredientText } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera } from 'lucide-react';
@@ -63,7 +63,7 @@ function RecipeLanesContent() {
   const graph = useRecipeStore(s => s.graph);
   const ownerId = useRecipeStore(s => s.ownerId);
   const ownerName = useRecipeStore(s => s.ownerName);
-  const { mergeSnapshot, setGraph, setGraphWithUndo, undo, reset: resetRecipeStore, addMessage, clearMessages } = useRecipeStore.getState();
+  const { mergeSnapshot, setGraph, setGraphWithUndo, undo, updateNode, cycleShortlist, reset: resetRecipeStore, addMessage, clearMessages } = useRecipeStore.getState();
   const canUndo = useRecipeStore(s => s.undoStack.length > 0);
   const messageCount = useRecipeStore(s => s.messages.length);
   
@@ -75,6 +75,7 @@ function RecipeLanesContent() {
   const [status, setStatus] = useState<'idle' | 'parsing' | 'forging' | 'adjusting' | 'complete' | 'error' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
+  const [forgingIds, setForgingIds] = useState<Set<string>>(new Set());
   const [showIngredients, setShowIngredients] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [iconSearchStatus, setIconSearchStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
@@ -145,7 +146,7 @@ function RecipeLanesContent() {
               const newQty = Math.round((n.quantity * scale) * 100) / 100;
               // Update text if we can reconstruct it cleanly
               if (n.canonicalName) {
-                  return { ...n, text: `${newQty} ${n.unit || ''} ${n.canonicalName}`.trim().replace(/\s+/g, ' ') };
+                  return { ...n, text: buildIngredientText(newQty, n.unit, n.canonicalName) };
               }
           }
           return n;
@@ -325,6 +326,35 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
           }
       } catch (e) {
           showNotification("Invalid JSON");
+      }
+  };
+
+  const handleEditNode = async (nodeId: string, patch: Partial<RecipeNode>) => {
+      // Undoable local edit, then persist — mirrors handleJsonSave's save/fork path.
+      updateNode(nodeId, patch);
+      const currentGraph = useRecipeStore.getState().graph;
+      if (user && currentGraph) {
+          await saveAndHandleFork({ ...currentGraph });
+      }
+  };
+
+  const handleForgeIcon = async (node: RecipeNode) => {
+      // Reject the current icon and queue a brand-new AI icon. Server-side
+      // checkForgeAllowed enforces the rate limit / anon gate; we surface its error.
+      if (!recipeId) {
+          showNotification('Save the recipe first to forge icons.');
+          return;
+      }
+      setForgingIds(prev => new Set(prev).add(node.id));
+      try {
+          const res = await forgeIconAction(recipeId, getNodeIngredientName(node), getNodeIcon(node)?.id);
+          showNotification(res?.success ? 'Forging a new icon…' : (res?.error || 'Forge failed.'));
+      } finally {
+          setForgingIds(prev => {
+              const next = new Set(prev);
+              next.delete(node.id);
+              return next;
+          });
       }
   };
 
@@ -1187,7 +1217,7 @@ const handleVisualize = async () => {
                                 <span className="hidden xl:inline">{isPublic ? 'Public' : 'Unlisted'}</span>
                             </button>
 
-                            <button 
+                            <button
                                 onClick={handleToggleJson}
                                 className={`p-1.5 rounded hover:bg-zinc-100 transition-colors ${showJson ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-400'}`}
                                 title="Toggle JSON View"
@@ -1200,10 +1230,14 @@ const handleVisualize = async () => {
             </div>
             
             {showIngredients && graph && (
-                <IngredientsSidebar 
-                    graph={graph} 
-                    onClose={() => setShowIngredients(false)} 
-                    onUpdateServes={handleUpdateServes} 
+                <IngredientsSidebar
+                    graph={graph}
+                    onClose={() => setShowIngredients(false)}
+                    onUpdateServes={handleUpdateServes}
+                    onEditNode={handleEditNode}
+                    onCycleShortlist={cycleShortlist}
+                    onForge={handleForgeIcon}
+                    forgingIds={forgingIds}
                 />
             )}
 

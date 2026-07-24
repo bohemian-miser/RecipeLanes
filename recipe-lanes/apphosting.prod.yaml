@@ -11,5 +11,7 @@ env:
     value: "173546820314"
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
     value: "1:173546820314:web:9470683731f7eb1f564be3"
+  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    value: "G-BWM578D5HR"
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY

@@ -21,6 +21,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User, signInWithPopup, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, googleProvider, isInitialized, db } from '@/lib/firebase-client';
+import { track } from '@/lib/analytics';
 import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
@@ -101,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       await signInWithPopup(auth, googleProvider);
+      track('login', { method: 'google' });
     } catch (err: any) {
       console.error('Login failed:', err);
       let msg = 'Failed to sign in.';

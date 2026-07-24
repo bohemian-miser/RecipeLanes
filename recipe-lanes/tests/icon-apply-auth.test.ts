@@ -14,6 +14,7 @@ import { setAuthService, AuthSession } from '../lib/auth-service';
 import { db } from '../lib/firebase-admin';
 import { DB_COLLECTION_RECIPES } from '../lib/config';
 import { standardizeIngredientName } from '../lib/utils';
+import { hashClaimToken } from '../lib/recipe-lanes/claim-token';
 
 class MockAuth {
     constructor(private user: AuthSession | null) {}
@@ -32,13 +33,18 @@ function makeResults() {
     return [{ name: STD_NAME, icons: [{ id: 'icon-1' } as any], matchScores: { 'icon-1': 0.9 } }];
 }
 
-async function seedRecipe(ownerId: string | undefined, nodes: any[]): Promise<string> {
+async function seedRecipe(
+    ownerId: string | undefined,
+    nodes: any[],
+    claimTokenHash?: string,
+): Promise<string> {
     const payload: any = {
         graph: { title: 'test', lanes: [], nodes },
         visibility: 'private',
         created_at: new Date(),
     };
     if (ownerId !== undefined) payload.ownerId = ownerId;
+    if (claimTokenHash !== undefined) payload.claimTokenHash = claimTokenHash;
     const doc = await db.collection(DB_COLLECTION_RECIPES).add(payload);
     return doc.id;
 }
@@ -62,7 +68,7 @@ describe('applyIconSearchResultsAction authorization (issue #217)', () => {
         assert.equal(after[0].iconShortlist, undefined);
     });
 
-    it('rejects an anonymous (no session) caller with "Login required"', async () => {
+    it('rejects an anonymous caller (no session, no token) on an owned recipe, byte-identical', async () => {
         const recipeId = await seedRecipe('userA', [makeNode()]);
         const before = await fetchNodes(recipeId);
 
@@ -70,9 +76,9 @@ describe('applyIconSearchResultsAction authorization (issue #217)', () => {
         const res = await applyIconSearchResultsAction(recipeId, makeResults());
 
         assert.equal(res.success, false);
-        assert.equal(res.error, 'Login required');
         const after = await fetchNodes(recipeId);
         assert.deepEqual(after, before);
+        assert.equal(after[0].iconShortlist, undefined);
     });
 
     it('applies shortlists for the recipe owner', async () => {
@@ -87,7 +93,46 @@ describe('applyIconSearchResultsAction authorization (issue #217)', () => {
         assert.ok(Array.isArray(after[0].iconShortlist) && after[0].iconShortlist.length > 0);
     });
 
-    it('stays writable for an anon-owned recipe (no ownerId) by any logged-in user', async () => {
+    it('applies for an anon caller presenting the matching claim token (anon icon hydration)', async () => {
+        const token = 'anon-token-abc';
+        const recipeId = await seedRecipe(undefined, [makeNode()], hashClaimToken(token));
+
+        setAuthService(new MockAuth(null)); // no session — the anon creator
+        const res = await applyIconSearchResultsAction(recipeId, makeResults(), token);
+
+        assert.equal(res.success, true);
+        assert.equal(res.applied, 1);
+        const after = await fetchNodes(recipeId);
+        assert.ok(Array.isArray(after[0].iconShortlist) && after[0].iconShortlist.length > 0);
+    });
+
+    it('rejects an anon caller with a wrong/missing claim token on an anon-owned recipe, byte-identical', async () => {
+        const recipeId = await seedRecipe(undefined, [makeNode()], hashClaimToken('the-real-token'));
+        const before = await fetchNodes(recipeId);
+
+        setAuthService(new MockAuth(null));
+        const wrong = await applyIconSearchResultsAction(recipeId, makeResults(), 'not-the-token');
+        assert.equal(wrong.success, false);
+        assert.deepEqual(await fetchNodes(recipeId), before);
+
+        const missing = await applyIconSearchResultsAction(recipeId, makeResults());
+        assert.equal(missing.success, false);
+        assert.deepEqual(await fetchNodes(recipeId), before);
+    });
+
+    it('rejects a different logged-in user without the token on an anon-owned recipe', async () => {
+        const recipeId = await seedRecipe(undefined, [makeNode()], hashClaimToken('owner-token'));
+        const before = await fetchNodes(recipeId);
+
+        setAuthService(new MockAuth({ uid: 'someone-else', isAdmin: false }));
+        const res = await applyIconSearchResultsAction(recipeId, makeResults());
+
+        assert.equal(res.success, false);
+        assert.deepEqual(await fetchNodes(recipeId), before);
+        assert.equal(before[0].iconShortlist, undefined);
+    });
+
+    it('stays writable for a legacy unowned recipe (no ownerId, no claimTokenHash)', async () => {
         const recipeId = await seedRecipe(undefined, [makeNode()]);
 
         setAuthService(new MockAuth({ uid: 'someone-else', isAdmin: false }));

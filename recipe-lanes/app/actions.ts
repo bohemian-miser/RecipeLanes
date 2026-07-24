@@ -27,6 +27,7 @@ import { generateAdjustmentPrompt } from '@/lib/recipe-lanes/adjuster';
 import { assertInputWithinLimit, assertGraphWithinLimit, assertImageWithinLimit, RecipeLimitError, MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
 import type { RecipeGraph, IconStats, FastMatch, RecipePatch } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
+import { hashClaimToken } from '@/lib/recipe-lanes/claim-token';
 import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon, extractBatchIngredients, getNodeIngredientName, applyPatch, assignNodeShortlist } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
@@ -699,16 +700,21 @@ export async function nextjsBatchSearchAction(
 export async function applyIconSearchResultsAction(
     recipeId: string,
     results: { name: string; icons: IconStats[]; matchScores: Record<string, number> }[],
+    claimToken?: string,
 ): Promise<{ success: boolean; applied: number; elapsed: number; error?: string }> {
     const t0 = Date.now();
     try {
         // Server actions run with the Admin SDK, so Firestore rules don't apply —
         // authorize here (issue #217). Without this, any caller who knows a recipe
         // id could transactionally rewrite another user's nodes.
+        //
+        // Authorization does NOT require a login: anon icon hydration is a
+        // first-class flow. A caller is authorized if they either (a) are the
+        // signed-in owner, or (b) hold the anon claim token that hashes to the
+        // recipe's stored claimTokenHash (the same proof used to claim an
+        // anon-created recipe — see claim-token.ts). The check runs inside the
+        // transaction, where the recipe doc has been read.
         const session = await getAuthService().verifyAuth();
-        if (!session) {
-            return { success: false, applied: 0, elapsed: Date.now() - t0, error: 'Login required' };
-        }
 
         // Build all shortlists outside the transaction (pure computation, no I/O).
         const shortlists = results
@@ -731,11 +737,19 @@ export async function applyIconSearchResultsAction(
             const snap = await t.get(recipeRef);
             if (!snap.exists) return;
             const data = snap.data()!;
-            // Ownership rule mirrors rejectRecipeIcon (data-service.ts): reject writes
-            // to a recipe owned by someone else. Anon-owned recipes (no ownerId) stay
-            // writable per existing product behavior. Throwing aborts the transaction,
-            // so the doc is left byte-identical.
-            if (data.ownerId && data.ownerId !== session.uid) {
+            // Authorize the write. Throwing aborts the transaction, so on
+            // rejection the doc is left byte-identical (no t.update runs).
+            //   - Signed-in owner: ownerId matches the session uid.
+            //   - Anon owner: the recipe is anon-owned (has a claimTokenHash) and
+            //     the caller presents the matching claim token — this is the anon
+            //     icon-hydration path, and works with or without a session.
+            //   - Legacy/unowned: neither an ownerId nor a claimTokenHash exists,
+            //     so there is no owner to protect; stays writable as before.
+            const isOwner = !!data.ownerId && data.ownerId === session?.uid;
+            const hasValidClaim = !!data.claimTokenHash && !!claimToken
+                && hashClaimToken(claimToken) === data.claimTokenHash;
+            const isUnowned = !data.ownerId && !data.claimTokenHash;
+            if (!isOwner && !hasValidClaim && !isUnowned) {
                 throw new Error('Unauthorized: you do not own this recipe.');
             }
             const nodes: any[] = data.graph?.nodes || [];

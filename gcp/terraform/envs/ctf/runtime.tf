@@ -12,14 +12,8 @@ resource "google_firestore_database" "default" {
   depends_on = [google_project_service.ctf]
 }
 
-# --- Vertex AI access for the App Hosting runtime SA -------------------------
-# Without this the recipe parser (genkit vertexAI, gemini-2.5-flash) fails with
-# "Invalid AI Response Format".
-resource "google_project_iam_member" "apphosting_aiplatform" {
-  project = google_project.ctf.project_id
-  role    = "roles/aiplatform.user"
-  member  = "serviceAccount:firebase-app-hosting-compute@${google_project.ctf.project_id}.iam.gserviceaccount.com"
-}
+# (App Hosting SA roles — incl. aiplatform.user for the Vertex recipe parser —
+# now come from module.baseline's app_hosting_extra, shared with prod/staging.)
 
 # --- Firebase Auth / Identity Platform config -------------------------------
 # Manages the authorized-domains list for Google sign-in popups. The Google
@@ -37,6 +31,12 @@ resource "google_identity_platform_config" "auth" {
     "ctf.recipelanes.com",
     "localhost",
   ]
+
+  # Declared to match the server default (Identity Platform always returns this
+  # block); without it every plan shows a spurious in-place update.
+  multi_tenant {
+    allow_tenants = false
+  }
 
   depends_on = [google_project_service.ctf]
 }

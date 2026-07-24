@@ -37,7 +37,7 @@ import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
-import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
+import { looksLikeUrl, isAdjustSubmitKey } from '@/lib/recipe-lanes/input-utils';
 import { track } from '@/lib/analytics';
 import { fileToRecipePhotoDataUrl } from '@/lib/recipe-lanes/image-client';
 import { loadDraft, saveDraft, commitDraftOnForge, clearBlankDraft } from '@/lib/recipe-lanes/draft-persistence';
@@ -1345,12 +1345,18 @@ const handleVisualize = async () => {
                                 )}
                             </button>
                             <input
-                                className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
+                                className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
                                 placeholder="Adjust recipe..."
+                                enterKeyHint="send"
                                 maxLength={MAX_ADJUST_INSTRUCTION_CHARS}
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}
+                                onKeyDown={(e) => {
+                                    if (isAdjustSubmitKey({ key: e.key, keyCode: e.keyCode, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing })) {
+                                        e.preventDefault();
+                                        handleAdjust();
+                                    }
+                                }}
                                 disabled={status === 'adjusting'}
                             />
                             <button
@@ -1366,20 +1372,26 @@ const handleVisualize = async () => {
                     {/* Mobile Layout (Split Bottom Bar) */}
                     <div className="md:hidden flex h-16 bg-white/95 backdrop-blur border-t border-zinc-200 pointer-events-auto">
                         {/* Legend (Left Half) */}
-                        <div className="w-1/2 p-2 text-[10px] text-zinc-600 border-r border-zinc-100 flex flex-col justify-center gap-1">
+                        <div className="w-1/2 min-w-0 p-2 text-[10px] text-zinc-600 border-r border-zinc-100 flex flex-col justify-center gap-1">
                             {!hasIcons && <div className="truncate">🥕 Ingredients  🍳 Actions</div>}
-                            <div className="font-bold text-zinc-800">Tap & Hold: Select Branch</div>
+                            <div className="font-bold text-zinc-800 truncate">Tap & Hold: Select Branch</div>
                         </div>
-                        
+
                         {/* Chat (Right Half) */}
-                        <div className="w-1/2 p-2 flex items-center gap-1">
+                        <div className="w-1/2 min-w-0 p-2 flex items-center gap-1">
                             <input
-                                className="flex-1 bg-zinc-100 border border-zinc-200 rounded-md px-2 text-xs h-full text-zinc-800 outline-none"
+                                className="flex-1 min-w-0 bg-zinc-100 border border-zinc-200 rounded-md px-2 text-xs h-full text-zinc-800 outline-none"
                                 placeholder="Adjust..."
+                                enterKeyHint="send"
                                 maxLength={MAX_ADJUST_INSTRUCTION_CHARS}
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}
+                                onKeyDown={(e) => {
+                                    if (isAdjustSubmitKey({ key: e.key, keyCode: e.keyCode, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing })) {
+                                        e.preventDefault();
+                                        handleAdjust();
+                                    }
+                                }}
                                 disabled={status === 'adjusting'}
                             />
                             <button

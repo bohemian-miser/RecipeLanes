@@ -36,6 +36,11 @@ variable "billing_account" {
   type        = string
 }
 
+variable "alert_email" {
+  description = "Recipient for the icon-forge alert (same as prod). Set via TF_VAR_alert_email."
+  type        = string
+}
+
 # --- the CTF project --------------------------------------------------------
 # A deliberately-vulnerable teaching fork of the app. It is a SEPARATE project
 # on purpose: its own Firestore/Auth/Storage and service accounts, zero access
@@ -68,6 +73,8 @@ resource "google_project" "ctf" {
 # itself (firebaseapphosting) and the domain claim are wired in a later PR,
 # once the fork branch exists and the backend can generate its serving records.
 resource "google_project_service" "ctf" {
+  # run / artifactregistry / aiplatform are owned by module.baseline (shared
+  # across envs); the rest are CTF-specific extras the module doesn't cover.
   for_each = toset([
     "cloudresourcemanager.googleapis.com",
     "serviceusage.googleapis.com",
@@ -76,11 +83,8 @@ resource "google_project_service" "ctf" {
     "identitytoolkit.googleapis.com",
     "storage.googleapis.com",
     "firebasestorage.googleapis.com",
-    "run.googleapis.com",
     "cloudbuild.googleapis.com",
-    "artifactregistry.googleapis.com",
     "firebaseapphosting.googleapis.com",
-    "aiplatform.googleapis.com",
   ])
 
   project            = google_project.ctf.project_id
@@ -95,6 +99,31 @@ resource "google_firebase_project" "ctf" {
   project  = google_project.ctf.project_id
 
   depends_on = [google_project_service.ctf]
+}
+
+# --- shared baseline ---------------------------------------------------------
+# icon-processor SA + roles, app-hosting SA roles, core APIs, and icon-forge
+# monitoring — the same module prod/staging use. Preview pipeline stays off
+# (previews deploy to staging only).
+module "baseline" {
+  source = "../../modules/project-baseline"
+
+  project_id              = google_project.ctf.project_id
+  project_number          = google_project.ctf.number
+  enable_preview_pipeline = false
+  alert_email             = var.alert_email
+
+  depends_on = [google_project_service.ctf]
+}
+
+# --- CTF-specific IAM (not in the shared module) -----------------------------
+# gen2 Cloud Functions build runs as the default compute SA. New org projects
+# grant that SA nothing by default (prod/staging predate the org and inherited
+# Editor), so CTF alone needs the builder role explicitly for function builds.
+resource "google_project_iam_member" "compute_cloudbuild_builder" {
+  project = google_project.ctf.project_id
+  role    = "roles/cloudbuild.builds.builder"
+  member  = "serviceAccount:${google_project.ctf.number}-compute@developer.gserviceaccount.com"
 }
 
 output "ctf_project_id" {

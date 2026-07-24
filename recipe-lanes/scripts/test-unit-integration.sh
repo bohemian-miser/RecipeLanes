@@ -7,8 +7,11 @@ if [ -d "/usr/lib/jvm/java-21-openjdk-amd64" ]; then
     export PATH=$JAVA_HOME/bin:$PATH
 fi
 
-INTEGRATION_TESTS="tests/admin-security.test.ts tests/data-helpers-transaction.test.ts tests/functions-metadata.test.ts tests/hybrid-integration.test.ts tests/icon-index.test.ts tests/icon-queue-config.test.ts tests/forge-gate-regression.test.ts tests/impression-rejection.test.ts"
-# Note: these tests import firebase-admin and require Firestore/Auth emulators to be available.
+# Emulator-dependent test list comes from the shared manifest
+# (scripts/unit-test-manifest.mjs), the single source of truth also used by the
+# pure tier. These tests import firebase-admin and require the Firestore/Auth
+# emulators to be available.
+INTEGRATION_TESTS=$(node "$(dirname "$0")/unit-tests.mjs" list-integration)
 
 echo "----------------------------------------------------------------"
 echo "Running Emulator-dependent Integration Tests"

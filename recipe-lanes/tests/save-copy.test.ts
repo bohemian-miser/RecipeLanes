@@ -9,7 +9,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getSaveButtonState } from '../components/recipe-lanes/hooks/useSaveAndFork';
+import {
+    getSaveButtonState,
+    nextCopyTitle,
+    buildCopyGraph,
+} from '../components/recipe-lanes/hooks/useSaveAndFork';
+import { RecipeGraph } from '../lib/recipe-lanes/types';
 
 describe('getSaveButtonState', () => {
     it('lets a logged-in non-owner save a copy without editing first', () => {
@@ -44,5 +49,73 @@ describe('getSaveButtonState', () => {
         const state = getSaveButtonState({ isLoggedIn: false, isOwner: false, isDirty: false, saved: false });
         assert.equal(state.isCopy, false);
         assert.equal(state.enabled, false);
+    });
+});
+
+/**
+ * Naming scheme shared by the fork-on-save path and the explicit "Save a copy"
+ * button (issue #239). A chain of copies must escalate the prefix rather than
+ * pile up "Copy of Copy of ...".
+ */
+describe('nextCopyTitle', () => {
+    it('prefixes a plain title with "Copy of"', () => {
+        assert.equal(nextCopyTitle('Pancakes'), 'Copy of Pancakes');
+    });
+
+    it('escalates "Copy of" to "Another copy of"', () => {
+        assert.equal(nextCopyTitle('Copy of Pancakes'), 'Another copy of Pancakes');
+    });
+
+    it('escalates "Another copy of" to "Yet another copy of"', () => {
+        assert.equal(nextCopyTitle('Another copy of Pancakes'), 'Yet another copy of Pancakes');
+    });
+
+    it('starts numbering once at "Yet another copy of"', () => {
+        assert.equal(nextCopyTitle('Yet another copy of Pancakes'), 'Yet another copy of Pancakes (1)');
+    });
+
+    it('increments an existing "Yet another copy of ... (n)" counter', () => {
+        assert.equal(nextCopyTitle('Yet another copy of Pancakes (3)'), 'Yet another copy of Pancakes (4)');
+    });
+
+    it('falls back to "Untitled" for a missing title', () => {
+        assert.equal(nextCopyTitle(undefined), 'Copy of Untitled');
+        assert.equal(nextCopyTitle(''), 'Copy of Untitled');
+    });
+});
+
+/**
+ * buildCopyGraph turns the *current* graph into the graph that gets persisted
+ * as a brand-new recipe when the Save-a-copy button is clicked (issue #239).
+ */
+describe('buildCopyGraph', () => {
+    const base: RecipeGraph = {
+        title: 'Pancakes',
+        nodes: [{ id: 'n1' } as any],
+        layouts: {},
+    } as RecipeGraph;
+
+    it('renames the copy and records the source recipe id', () => {
+        const copy = buildCopyGraph(base, 'src-123');
+        assert.equal(copy.title, 'Copy of Pancakes');
+        assert.equal(copy.sourceId, 'src-123');
+    });
+
+    it('preserves the original graph contents (nodes carried over)', () => {
+        const copy = buildCopyGraph(base, 'src-123');
+        assert.deepEqual(copy.nodes, base.nodes);
+    });
+
+    it('does not mutate the source graph', () => {
+        const copy = buildCopyGraph(base, 'src-123');
+        assert.equal(base.title, 'Pancakes');
+        assert.equal(base.sourceId, undefined);
+        assert.notEqual(copy, base);
+    });
+
+    it('handles a copy made from an unsaved recipe (no source id)', () => {
+        const copy = buildCopyGraph(base, undefined);
+        assert.equal(copy.sourceId, undefined);
+        assert.equal(copy.title, 'Copy of Pancakes');
     });
 });

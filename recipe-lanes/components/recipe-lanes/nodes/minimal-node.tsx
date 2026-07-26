@@ -19,6 +19,7 @@ import React, { memo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
+import { CLASSIC_CONTAINER, MODERN_CONTAINER, getLeafScaleOrigin } from '../../../lib/recipe-lanes/edge-anchors';
 import { forgeIconAction } from '@/app/actions';
 import {
     getNodeIngredientName,
@@ -159,10 +160,18 @@ export const MinimalNode: React.FC<any> = ({
       ? <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />
       : <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
 
-  // Scale leaf nodes down when the global slider is below 100%. A uniform scale
-  // keeps handles proportional so edges still meet the node cleanly.
+  // Scale leaf nodes down when the global slider is below 100%. The transform
+  // origin is pinned to the HANDLE point (top-center of the icon container) so
+  // ReactFlow's measured handle position stays valid at every scale — CSS
+  // transforms don't trigger re-measurement, and scaling about the node center
+  // used to drag the icon (and every edge ending) downward. See edge-anchors.ts.
   if (data.isLeaf && leafNodeScale < 1) {
-      return <div style={{ transform: `scale(${leafNodeScale})`, transformOrigin: 'center center' }}>{inner}</div>;
+      const isModern = iconTheme === 'modern' || iconTheme === 'modern_clean';
+      const containerSize = isModern
+          ? MODERN_CONTAINER[data.type === 'ingredient' ? 'ingredient' : 'action']
+          : CLASSIC_CONTAINER[data.type === 'ingredient' ? 'ingredient' : 'action'];
+      const origin = getLeafScaleOrigin(data.textPos || 'bottom', containerSize);
+      return <div style={{ transform: `scale(${leafNodeScale})`, transformOrigin: origin }}>{inner}</div>;
   }
   return inner;
 };

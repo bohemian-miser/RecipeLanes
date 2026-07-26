@@ -32,20 +32,28 @@ interface EdgeProps {
   data?: any;
 }
 import { getEdgeParams } from '../../../lib/recipe-lanes/graph-utils';
+import { useRecipeStore } from '../../../lib/stores/recipe-store';
 
 function FloatingEdge({ id, source, target, markerEnd, style, data, sourceX, sourceY, targetX, targetY }: EdgeProps) {
   const sourceNode = useStore(useCallback((store: any) => store.nodeInternals.get(source), [source]));
   const targetNode = useStore(useCallback((store: any) => store.nodeInternals.get(target), [target]));
+  // Leaf-node size (#155): leaves render CSS-scaled, so anchor frames must
+  // shrink by the same factor (see edge-anchors.ts).
+  const leafNodeScale = useRecipeStore(s => s.leafNodeScale);
 
   if (!sourceNode || !targetNode) {
     return null;
   }
 
   const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(
-      sourceNode, 
+      sourceNode,
       targetNode,
       (typeof sourceX === 'number' && typeof sourceY === 'number') ? { x: sourceX, y: sourceY } : undefined,
-      (typeof targetX === 'number' && typeof targetY === 'number') ? { x: targetX, y: targetY } : undefined
+      (typeof targetX === 'number' && typeof targetY === 'number') ? { x: targetX, y: targetY } : undefined,
+      {
+        source: sourceNode.data?.isLeaf ? leafNodeScale : 1,
+        target: targetNode.data?.isLeaf ? leafNodeScale : 1,
+      }
   );
 
   const variant = data?.variant || 'straight';

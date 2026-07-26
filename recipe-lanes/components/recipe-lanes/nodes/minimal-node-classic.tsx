@@ -89,6 +89,12 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
         >
             {/* Icon Container */}
             <div className={`relative ${containerSize} flex-shrink-0 flex items-center justify-center transition-all duration-200 z-10 ${selected || isPivotMode ? 'border-2 border-dashed border-blue-500 rounded-lg bg-blue-50/10' : ''} ${isPivotMode ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`}>
+                {/* NOTE: despite the top-1/2 classes, ReactFlow's stylesheet
+                    (.react-flow__handle-top { top:-4px }) wins the cascade, so these
+                    handles actually sit at the TOP-CENTER of this container (verified
+                    by DOM measurement). The edge-anchor math in lib/recipe-lanes/
+                    edge-anchors.ts depends on that — if you change handle positioning,
+                    update the contract there and re-run the probe. */}
                 <Handle id="target" type="target" position={Position.Top} className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                 <Handle id="source" type="source" position={Position.Top} className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
 

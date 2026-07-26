@@ -59,6 +59,54 @@ test.describe('Recipe Lifecycle & Social (Consolidated)', () => {
     await expect(page.getByText(/You have \d+ existing cop/)).toBeVisible();
   });
 
+  test('Save a copy: owner forks their own recipe from the toolbar (issue #239)', async ({ page, login }) => {
+    // Owner creates and saves a recipe.
+    await page.goto('/lanes?new=true');
+    await login('carol-user');
+    await create_recipe(page, 'Carol Original');
+    await wait_for_graph(page);
+    await expect(page).toHaveURL(/id=/);
+    const originalId = new URL(page.url()).searchParams.get('id');
+
+    // The Save-a-copy button is a square icon that drops down from Save on hover
+    // (pointer-events-none until the group is hovered). Hover the group first so
+    // the button becomes interactive, then click it.
+    const saveGroup = page.locator('div.group', { has: page.getByTitle('Save a copy') });
+    await saveGroup.hover();
+    const copyBtn = page.getByTitle('Save a copy');
+    await expect(copyBtn).toBeVisible();
+    await copyBtn.click();
+
+    // A brand-new recipe is created (new id, "Copy of ..." title) — the original
+    // is never overwritten.
+    await expect(page).toHaveURL(new RegExp(`id=(?!${originalId})`));
+    await expect(page.locator('h1').first()).toHaveText(/Copy of/);
+  });
+
+  test('Save a copy: tappable without hover at mobile width (issue #239)', async ({ page, login }) => {
+    // Create + save at desktop width (reliable flow), then shrink to a phone
+    // viewport where there is no hover.
+    await page.goto('/lanes?new=true');
+    await login('dave-user');
+    await create_recipe(page, 'Dave Original');
+    await wait_for_graph(page);
+    await expect(page).toHaveURL(/id=/);
+    const originalId = new URL(page.url()).searchParams.get('id');
+
+    const phone = deviceConfigs.find(d => d.name === 'phone')!;
+    await page.setViewportSize(phone.viewport);
+
+    // On mobile the Save-a-copy button must be permanently out and tappable
+    // WITHOUT any hover (hover doesn't exist on touch). Click it directly — if it
+    // were still pointer-events-none / hidden behind Save, this click would fail.
+    const copyBtn = page.getByTitle('Save a copy');
+    await expect(copyBtn).toBeVisible();
+    await copyBtn.click();
+
+    await expect(page).toHaveURL(new RegExp(`id=(?!${originalId})`));
+    await expect(page.locator('h1').first()).toHaveText(/Copy of/);
+  });
+
   test('Gallery: Search & Vetting (Admin)', async ({ page, login }) => {
     test.slow();
 

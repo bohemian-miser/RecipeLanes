@@ -20,6 +20,7 @@
 import React, { useState } from 'react';
 import { X, Loader2, Send, MessageSquare } from 'lucide-react';
 import { submitFeedbackAction } from '@/app/actions';
+import { track } from '@/lib/analytics';
 
 interface FeedbackModalProps {
     isOpen: boolean;
@@ -52,6 +53,7 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
             if (result.error) {
                 setError(result.error);
             } else {
+                track('feedback_submitted');
                 setSuccess(true);
                 setTimeout(() => {
                     onClose();

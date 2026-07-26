@@ -111,13 +111,11 @@ function recipeGraphInstructions(): string {
 3. **Lanes (Containers):** Represents physical locations (Bowl, Pan, Pot).
 
 ### Critical Rules
-1. **QUANTITY:** The
-text\n field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
+1. **QUANTITY:** The \`text\` field for Ingredient Nodes MUST include the specific quantity used in that step (e.g. "3 Eggs", "200g Flour", "Pinch of Salt"). Never just "Eggs".
 2. **SPLIT INGREDIENTS:** If an ingredient is divided and used in different steps (e.g. "Add half sugar now, half later"), create **TWO separate Ingredient Nodes** with the partial quantities (e.g. "100g Sugar" and "100g Sugar").
 3. **SPLIT OUTPUTS:** If a mixture is divided (e.g. "Pour batter into two pans"), the single Action Node producing the mixture should be listed as an input for **BOTH** destination nodes.
-4. **TITLE & SERVES:** Extract a concise
-_title_\n and estimated
-_baseServes_\n (number) from the text.
+4. **TITLE & SERVES:** Extract a concise \`title\` and estimated \`baseServes\` (number) from the text.
+5. **NATIVE LANGUAGE:** If the input recipe is provided in a language other than English, output all user-facing text fields (\`title\`, lane \`label\`, node \`text\`, \`temperature\`, \`duration\`, \`originalText\`) in that SAME native language. However, the \`visualDescription\` and \`hydeQueries\` must ALWAYS be in English.
 
 ### Schema
 Return ONLY raw JSON complying with this TypeScript interface. No Comments:

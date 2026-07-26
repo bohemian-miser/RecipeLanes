@@ -27,6 +27,7 @@ import { ReactFlowProvider } from 'reactflow';
 import { createVisualRecipeAction, createVisualRecipeFromImageAction, adjustRecipeAction, saveRecipeAction, saveChatHistoryAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction } from '@/app/actions';
 import { ChatPanel } from '@/components/recipe-lanes/chat-panel';
 import { MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
+import { buildRecipeEditInstruction } from '@/lib/recipe-lanes/recipe-edit-diff';
 import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
 import { standardizeIngredientName, formatDisplayName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
@@ -37,10 +38,11 @@ import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera, VenetianMask } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
-import { looksLikeUrl } from '@/lib/recipe-lanes/input-utils';
+import { looksLikeUrl, isAdjustSubmitKey } from '@/lib/recipe-lanes/input-utils';
+import { track } from '@/lib/analytics';
 import { fileToRecipePhotoDataUrl } from '@/lib/recipe-lanes/image-client';
 import { loadDraft, saveDraft, commitDraftOnForge, clearBlankDraft } from '@/lib/recipe-lanes/draft-persistence';
-import { mintClaimToken, storeClaimToken } from '@/lib/recipe-lanes/claim-token-client';
+import { mintClaimToken, storeClaimToken, getClaimToken } from '@/lib/recipe-lanes/claim-token-client';
 import { LoadingScreen, LoadingPhase } from '@/components/recipe-lanes/ui/loading-screen';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -213,7 +215,9 @@ function RecipeLanesContent() {
 
           console.log(`[batchIconSearch] ${method.name} — ${ingredients.length} ingredients`);
           const results = await method.search(ingredients, 12);
-          const res = await applyIconSearchResultsAction(recipeId, results);
+          // Pass the anon claim token so anon creators can hydrate icons on the
+          // recipe they own without signing in (server authorizes owner OR token).
+          const res = await applyIconSearchResultsAction(recipeId, results, getClaimToken(localStorage, recipeId));
           if (!res.success) throw new Error(res.error);
           console.log(`[batchIconSearch] applied ${res.applied} in ${res.elapsed}ms`);
           setIconSearchElapsed(res.elapsed);
@@ -245,7 +249,7 @@ function RecipeLanesContent() {
       try {
           const t0 = Date.now();
           const results = await hydrateClientSide(itemsToHydrate);
-          const res = await applyIconSearchResultsAction(recipeId, results);
+          const res = await applyIconSearchResultsAction(recipeId, results, getClaimToken(localStorage, recipeId));
           if (!res.success) throw new Error(res.error);
           console.log(`[hydrateFastMatches] applied ${res.applied} in ${res.elapsed}ms (total: ${Date.now() - t0}ms)`);
           setIconSearchElapsed(res.elapsed);
@@ -603,18 +607,81 @@ const handleVisualize = async () => {
     // LLM finishes parsing and we run the real icon lookup. Fire-and-forget.
     preheatIconSearch();
 
+    const currentId = searchParams.get('id');
+
+    // Issue #156: when the user re-forges their OWN existing recipe, editing its
+    // source text should be an INCREMENTAL AI adjust (existing graph + node
+    // positions preserved via the patch branch) rather than a full re-parse.
+    // We translate the text edit into a short instruction for the same
+    // adjustRecipeAction that handleAdjust uses. Big rewrites that can't be
+    // summarized within the instruction cap fall through to the full parse
+    // below (a positions reset is acceptable for a major rewrite).
+    //
+    // Gate on OWNERSHIP: a non-owner pressing Forge is forking someone else's
+    // recipe (and an anon re-forge mints a fresh recipe) — both must keep the
+    // full-parse path below, which handles the fork/create.
+    const isOwnedByUser = !!user && !!ownerId && user.uid === ownerId;
+    if (currentId && graph && isOwnedByUser) {
+        const instruction = buildRecipeEditInstruction(graph.originalText || '', recipeText);
+        if (instruction === null) {
+            // No line-level change — nothing to re-forge. Leave the graph and
+            // the input box exactly as they are.
+            setStatus('complete');
+            return;
+        }
+        if (instruction.length <= MAX_ADJUST_INSTRUCTION_CHARS) {
+            try {
+                setStatus('adjusting');
+                const res = await adjustRecipeAction(graph, instruction);
+                if (res.error || !res.graph) {
+                    throw new Error(res.error || 'Failed to adjust graph.');
+                }
+                res.graph.title = recipeTitle;
+                // Advance the baseline so the next edit diffs against what the
+                // user just forged — and so the post-save snapshot repopulates
+                // the input with the SAME text (leaving the input box untouched).
+                res.graph.originalText = recipeText;
+                setGraphWithUndo(res.graph);
+                addMessage({ role: 'user', content: 'Applied recipe text edits.' });
+                addMessage({ role: 'assistant', content: (res as any).message || 'Recipe updated from your edits.' });
+                setShowChat(true);
+                setStatus('complete');
+                setWarningDismissed(false);
+
+                // Fire-and-forget save — mirrors handleAdjust.
+                saveRecipeAction(res.graph, currentId).then(() => {
+                    const allMessages = useRecipeStore.getState().messages;
+                    localStorage.setItem(`chat_${currentId}`, JSON.stringify(allMessages));
+                    saveChatHistoryAction(currentId, allMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })));
+                }).catch(e => {
+                    console.error('[handleVisualize incremental] save failed:', e);
+                    addMessage({ role: 'assistant', content: `Changes applied locally but failed to save: ${e.message}` });
+                });
+            } catch (e: any) {
+                console.error('Incremental adjust failed:', e);
+                setError(e.message);
+                setStatus('error');
+            }
+            return;
+        }
+        // else: large rewrite — fall through to the full re-parse below.
+        setStatus('parsing');
+    }
+
     try {
-        // Use New Fast Path Action
-        const currentId = searchParams.get('id');
+        // Use New Fast Path Action (new recipe, or large-rewrite fallback).
         // Anon creation (#151 follow-up): mint a claim token so the creator can
         // later prove ownership from this browser and claim the recipe after
         // signing in. Only the hash is ever sent to/stored on the server.
         const claimToken = mintClaimToken(!!user);
+        track('recipe_submitted', { input_type: 'text' });
         const res = await createVisualRecipeAction(recipeText, currentId || undefined, claimToken);
 
         finalizeCreatedRecipe(res, recipeText, claimToken);
+        track('parse_succeeded');
     } catch (e: any) {
         console.error('Visualization failed:', e);
+        track('parse_failed');
         setError(e.message);
         setStatus('error');
     }
@@ -685,10 +752,13 @@ const handleVisualize = async () => {
 
         const currentId = searchParams.get('id');
         const claimToken = mintClaimToken(!!user);
+        track('recipe_submitted', { input_type: 'photo' });
         const res = await createVisualRecipeFromImageAction(dataUrl, currentId || undefined, claimToken);
         finalizeCreatedRecipe(res, '📷 Recipe from photo', claimToken);
+        track('parse_succeeded');
     } catch (err: any) {
         console.error('Photo visualization failed:', err);
+        track('parse_failed');
         setError(err.message);
         setStatus('error');
     }
@@ -734,7 +804,7 @@ const handleVisualize = async () => {
       }
   };
 
-    const handleLayoutClick = async (mode: LayoutMode | 'repulsive' | 'timeline2') => {
+    const handleLayoutClick = async (mode: LayoutMode | 'repulsive' | 'timeline2' | 'notation') => {
         if (layoutMode === mode) {
             diagramRef.current?.resetLayout();
         } else {
@@ -767,7 +837,7 @@ const handleVisualize = async () => {
   const isAnonymous = graph?.anonymous === true;
 
   // Common Nav Item Styles
-  const navItemClass = "flex items-center gap-2 px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
+  const navItemClass = "flex items-center gap-2 px-2 md:px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
 
   let loadingPhase: LoadingPhase = null;
   if (status === 'parsing' || status === 'loading') {
@@ -780,7 +850,7 @@ const handleVisualize = async () => {
     <div className="fixed inset-0 flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden overscroll-none">
         {/* Utility Bar */}
         <header className="h-14 shrink-0 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-950 z-20">
-            <div className="flex items-center gap-4 overflow-hidden">
+            <div className="flex-1 min-w-0 flex items-center gap-4 overflow-hidden">
                 {/* Logo */}
                 <div className="flex items-center gap-2 shrink-0">
                     <ChefHat className="w-6 h-6 text-yellow-500" />
@@ -817,12 +887,13 @@ const handleVisualize = async () => {
                 </div>
             </div>
 
-            {/* Right Side Actions */}
-            <div className="flex items-center gap-2">
+            {/* Right Side Actions — must not squeeze the title on mobile (issue #139),
+                so it never shrinks and drops secondary items / labels on small screens. */}
+            <div className="flex items-center gap-1 md:gap-2 shrink-0">
                 {/* Navigation Tabs */}
                 <Link href="/gallery" className={navItemClass} title="Public Gallery">
                     <Globe className="w-4 h-4" />
-                    <span>Gallery</span>
+                    <span className="hidden md:inline">Gallery</span>
                 </Link>
                 {user && (
                     <>
@@ -841,11 +912,11 @@ const handleVisualize = async () => {
                     <span className="hidden md:inline">New</span>
                 </button>
                 
-                <button onClick={() => setShowFeedback(true)} className={navItemClass} title="Feedback & Contribute">
+                <button onClick={() => setShowFeedback(true)} className={`${navItemClass} hidden md:flex`} title="Feedback & Contribute">
                     <MessageSquare className="w-4 h-4" />
                 </button>
 
-                <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={navItemClass} title="Find me on GitHub">
+                <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={`${navItemClass} hidden md:flex`} title="Find me on GitHub">
                     <Github className="w-4 h-4" />
                 </a>
 
@@ -1018,6 +1089,7 @@ const handleVisualize = async () => {
                             <option value="repulsive">Repulsive</option>
                             <option value="timeline">Timeline</option>
                             <option value="timeline2">Timeline (Classic)</option>
+                            <option value="notation">Notation</option>
                         </select>
                         {/* Reset Layout Button */}
                         <button 
@@ -1240,7 +1312,7 @@ const handleVisualize = async () => {
                     <ReactFlowDiagram
                         ref={diagramRef}
                         graph={graph}
-                        mode={layoutMode as LayoutMode | 'repulsive'}
+                        mode={layoutMode as LayoutMode | 'repulsive' | 'notation'}
                         spacing={spacing}
                         edgeStyle={edgeStyle}
                         textPos={textPos}
@@ -1255,6 +1327,7 @@ const handleVisualize = async () => {
                         isLoggedIn={!!user}
                         isOwner={isOwner}
                         onNotify={showNotification}
+                        recipeId={recipeId || undefined}
                     />
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-400">
@@ -1318,12 +1391,18 @@ const handleVisualize = async () => {
                                 )}
                             </button>
                             <input
-                                className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
+                                className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder-zinc-400 h-10 px-2"
                                 placeholder="Adjust recipe..."
+                                enterKeyHint="send"
                                 maxLength={MAX_ADJUST_INSTRUCTION_CHARS}
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}
+                                onKeyDown={(e) => {
+                                    if (isAdjustSubmitKey({ key: e.key, keyCode: e.keyCode, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing })) {
+                                        e.preventDefault();
+                                        handleAdjust();
+                                    }
+                                }}
                                 disabled={status === 'adjusting'}
                             />
                             <button
@@ -1339,20 +1418,26 @@ const handleVisualize = async () => {
                     {/* Mobile Layout (Split Bottom Bar) */}
                     <div className="md:hidden flex h-16 bg-white/95 backdrop-blur border-t border-zinc-200 pointer-events-auto">
                         {/* Legend (Left Half) */}
-                        <div className="w-1/2 p-2 text-[10px] text-zinc-600 border-r border-zinc-100 flex flex-col justify-center gap-1">
+                        <div className="w-1/2 min-w-0 p-2 text-[10px] text-zinc-600 border-r border-zinc-100 flex flex-col justify-center gap-1">
                             {!hasIcons && <div className="truncate">🥕 Ingredients  🍳 Actions</div>}
-                            <div className="font-bold text-zinc-800">Tap & Hold: Select Branch</div>
+                            <div className="font-bold text-zinc-800 truncate">Tap & Hold: Select Branch</div>
                         </div>
-                        
+
                         {/* Chat (Right Half) */}
-                        <div className="w-1/2 p-2 flex items-center gap-1">
+                        <div className="w-1/2 min-w-0 p-2 flex items-center gap-1">
                             <input
-                                className="flex-1 bg-zinc-100 border border-zinc-200 rounded-md px-2 text-xs h-full text-zinc-800 outline-none"
+                                className="flex-1 min-w-0 bg-zinc-100 border border-zinc-200 rounded-md px-2 text-xs h-full text-zinc-800 outline-none"
                                 placeholder="Adjust..."
+                                enterKeyHint="send"
                                 maxLength={MAX_ADJUST_INSTRUCTION_CHARS}
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAdjust()}
+                                onKeyDown={(e) => {
+                                    if (isAdjustSubmitKey({ key: e.key, keyCode: e.keyCode, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing })) {
+                                        e.preventDefault();
+                                        handleAdjust();
+                                    }
+                                }}
                                 disabled={status === 'adjusting'}
                             />
                             <button

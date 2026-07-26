@@ -1,0 +1,148 @@
+name: Gemini PR Comment Responder
+
+# When a maintainer comments on a PR labeled `agent:gemini` (a PR the Gemini
+# issue solver opened), wake the agent to address the feedback, push fixes,
+# and re-watch CI.
+#
+# Loop guard: the agent ends every comment it posts with the marker
+# `<!-- gemini-agent -->`; such comments are ignored here. Only comments from
+# OWNER/MEMBER/COLLABORATOR trigger a run, so strangers can't burn quota.
+#
+# Config required: GEMINI_API_KEY, AGENT_APP_ID + AGENT_APP_PRIVATE_KEY
+# (GitHub App; AGENT_GH_PAT honored as fallback) — see gemini-issue-solver.yml
+# and docs/gemini-agent.md.
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: gemini-agent
+  cancel-in-progress: false
+
+jobs:
+  respond:
+    # Only: comments on PRs (not plain issues), on agent:gemini-labeled PRs,
+    # from the repo owner (was: any collaborator), and not the agent's own
+    # marker-tagged comments.
+    if: >-
+      github.event.issue.pull_request != null &&
+      contains(github.event.issue.labels.*.name, 'agent:gemini') &&
+      github.event.comment.user.login == github.repository_owner &&
+      !contains(github.event.comment.body, '<!-- gemini-agent -->')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    timeout-minutes: 60
+
+    steps:
+      - name: Mint agent token (GitHub App)
+        id: agent_token
+        if: vars.AGENT_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.agent_token.outputs.token || secrets.AGENT_GH_PAT || github.token }}
+          # Expiring token must not shadow the gh credential helper below.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: recipe-lanes/package-lock.json
+
+      - name: Install Gemini CLI and ripgrep
+        run: |
+          npm install -g @google/gemini-cli --silent
+          sudo apt-get install -y --no-install-recommends ripgrep
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "gemini-bot"
+          git config --global user.email "gemini-bot@users.noreply.github.com"
+
+      # Gemini CLI strips token-like env vars from the shells it spawns, so
+      # auth must be file-based (gh hosts.yml + gh credential helper); app
+      # tokens expire after 1h, so refresh in the background.
+      - name: Configure agent GitHub auth (file-based, self-refreshing)
+        env:
+          APP_ID: ${{ vars.AGENT_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          REPO: ${{ github.repository }}
+          FALLBACK_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+        run: |
+          if [ -n "$APP_ID" ]; then
+            node .github/scripts/mint-app-token.mjs | gh auth login --with-token
+          else
+            printf '%s' "$FALLBACK_TOKEN" | gh auth login --with-token
+          fi
+          gh auth setup-git
+          if [ -n "$APP_ID" ]; then
+            nohup bash -c 'while sleep 2400; do node .github/scripts/mint-app-token.mjs | gh auth login --with-token && echo "agent token refreshed"; done' \
+              >> "$RUNNER_TEMP/token-refresher.log" 2>&1 &
+          fi
+
+      # Pre-filter the comment threads OUTSIDE the LLM: keep only the repo
+      # owner's comments (minus the agent's own marker-tagged ones) and hand
+      # the agent that file as its work queue. External users' comments never
+      # enter the agent's context, so they can't prompt-inject it.
+      - name: Build owner-only comment queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          PR: ${{ github.event.issue.number }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-input"
+          FILTER='[.[] | select(.user.login == env.OWNER) | select(.body | contains("<!-- gemini-agent -->") | not)]'
+          gh api "repos/${{ github.repository }}/issues/$PR/comments?per_page=100" \
+            --jq "$FILTER | map({id, created_at, body})" \
+            > "$RUNNER_TEMP/agent-input/pr-comments.json"
+          gh api "repos/${{ github.repository }}/pulls/$PR/comments?per_page=100" \
+            --jq "$FILTER | map({id, path, line, created_at, body})" \
+            > "$RUNNER_TEMP/agent-input/review-comments.json"
+          echo "Owner comments queued: $(jq length "$RUNNER_TEMP/agent-input/pr-comments.json") PR-level, $(jq length "$RUNNER_TEMP/agent-input/review-comments.json") inline"
+
+      - name: Address PR feedback
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          GEMINI_MODEL: gemini-3.1-pro-preview
+        run: |
+          gemini --approval-mode=yolo -p "/address-comment ${{ github.event.issue.number }} $RUNNER_TEMP/agent-input" 2>&1 | tee "$RUNNER_TEMP/gemini-run.log"
+
+      - name: Collect and scrub agent logs
+        if: always()
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          APP_TOKEN: ${{ steps.agent_token.outputs.token }}
+          FALLBACK_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/gemini-logs"
+          cp "$RUNNER_TEMP/gemini-run.log" "$RUNNER_TEMP/gemini-logs/" 2>/dev/null || true
+          # Gemini CLI session transcripts (full conversation + tool calls)
+          cp -r "$HOME/.gemini/tmp" "$RUNNER_TEMP/gemini-logs/sessions" 2>/dev/null || true
+          # Artifacts on a public repo are downloadable — scrub credentials.
+          find "$RUNNER_TEMP/gemini-logs" -type f | while read -r f; do
+            for s in "$GEMINI_API_KEY" "$APP_TOKEN" "$FALLBACK_TOKEN"; do
+              [ -n "$s" ] && sed -i "s|$s|***SCRUBBED***|g" "$f" || true
+            done
+          done
+
+      - name: Upload agent logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-logs-${{ github.run_id }}
+          path: ${{ runner.temp }}/gemini-logs/
+          if-no-files-found: ignore
+          retention-days: 30

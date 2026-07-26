@@ -17,64 +17,54 @@
 
 import { Position, Node } from 'reactflow';
 import { getNodeIconMetadata, getNodeTheme } from './model-utils';
+import {
+    AnchorFrame,
+    anchorBBox,
+    anchorPoint,
+    fallbackRadius,
+    frameCenter,
+    getClassicFrame,
+    getModernFrame,
+} from './edge-anchors';
+
+/**
+ * Metadata reference frame for a minimal node, or null when it can't be
+ * derived. See edge-anchors.ts for the coordinate contract (notably: the
+ * classic handle sits at the TOP-CENTER of the icon container).
+ * `scale` is the leaf-node scale (#155); the leaf transform origin is pinned
+ * to the handle point, so only frame sizes scale.
+ */
+function getFrame(node: Node, handlePos?: { x: number, y: number }, scale = 1): AnchorFrame | null {
+    if (node.type !== 'minimal') return null;
+    const theme = getNodeTheme(node.data);
+    const isIngredient = node.data?.type === 'ingredient';
+
+    if (theme === 'modern' || theme === 'modern_clean') {
+        // Modern containers are fixed-width, so node.position is reliable;
+        // its handles sit at the top/bottom edges and don't locate the icon.
+        const pos = node.positionAbsolute || node.position;
+        return getModernFrame(pos, isIngredient, scale);
+    }
+    // Classic: node width varies with text wrapping — the handle is the only
+    // reliable reference.
+    if (!handlePos) return null;
+    return getClassicFrame(handlePos, isIngredient, scale);
+}
 
 // Helper to get center
-function getCenter(node: Node, handlePos?: { x: number, y: number }) {
-    // For MinimalNode, we know exact geometry relative to node position
-    if (node.type === 'minimal') {
-        const theme = getNodeTheme(node.data);
+function getCenter(node: Node, handlePos?: { x: number, y: number }, scale = 1) {
+    const frame = getFrame(node, handlePos, scale);
+    if (frame) {
         const meta = getNodeIconMetadata(node.data); // { center: {x,y}, bbox: ... } normalized 0-1
-
-        if (theme === 'modern' || theme === 'modern_clean') {
-            // Modern: Fixed 120x120 container. 96x96 icon centered.
-            // We use node position because handles are at edges (top/bottom), not center.
-            // Width is fixed, so node.position is reliable.
-            const { x, y } = node.positionAbsolute || node.position;
-            const imageX = x + 12;
-            const imageY = y + 12;
-            const imageSize = 96;
-
-            if (meta && meta.center) {
-                return {
-                    x: imageX + meta.center.x * imageSize,
-                    y: imageY + meta.center.y * imageSize
-                };
-            } else {
-                console.warn('NO METADATA center for modern icon node:', node.id);
-            }
-            return { x: imageX + imageSize / 2, y: imageY + imageSize / 2 };
-        } 
-        else {
-            // Classic: Dynamic Size. Icon container is 80x80.
-            // Handles are ALWAYS centered in the Icon Container (top-1/2 left-1/2).
-            // We MUST use handlePos because node width is unreliable (text wrapping).
-            if (handlePos) {
-                // Red Dot Visualization uses the full 80x80 container for metadata mapping.
-                // To align arrows with the red dot, we must use the same reference frame.
-                const imageSize = 80;
-                const imageX = handlePos.x - imageSize/2; // Handle is center.
-                const imageY = handlePos.y; 
-                
-                if (meta && meta.center) {
-                    return {
-                        x: imageX + meta.center.x * imageSize,
-                        y: imageY + meta.center.y * imageSize
-                    };
-                }
-                return handlePos; // Default to handle (center)
-            }
-            
-            
-            // Fallback if no handlePos (rare/initial): Use heuristics but accept they might be off
-            // ... (keep existing fallback logic if desired, or simplify) ...
-            const { x, y } = node.positionAbsolute || node.position;
-             // Best guess for bottom layout
-            return { x: x + 50, y: y + 50 }; 
-        }
+        if (meta && meta.center) return anchorPoint(frame, meta.center);
+        // No metadata (#170): anchor at the frame's own center, NOT the handle
+        // (the classic handle is at the container top — anchoring there made
+        // arrows stop a half-icon high on emoji/pending nodes).
+        return frameCenter(frame);
     }
 
     if (handlePos && typeof handlePos.x === 'number' && typeof handlePos.y === 'number') return handlePos;
-    
+
     const { x, y } = node.positionAbsolute || node.position;
     const w = node.width ?? 100;
     const h = node.height ?? 100;
@@ -91,69 +81,25 @@ function getNodeIntersection(center: {x:number, y:number}, otherCenter: {x:numbe
     };
 }
 
-function getBBox(node: Node, handlePos?: {x: number, y: number}) {
+function getBBox(node: Node, handlePos?: {x: number, y: number}, scale = 1) {
     if (node.type !== 'minimal') return null;
     const meta = getNodeIconMetadata(node.data);
     if (!meta || !meta.bbox) return null;
-    
+
+    const frame = getFrame(node, handlePos, scale);
+    if (!frame) return null;
+
     const theme = getNodeTheme(node.data);
     const isIngredient = node.data?.type === 'ingredient';
-    let imageX = 0, imageY = 0, imageSize = 0;
 
-    let paddingX = 5;
-    let paddingTop = 5;
-    let paddingBottom = 5;
+    // Visual padding: arrowhead standoff around the icon's tight bbox.
+    const padding = (theme === 'modern' || theme === 'modern_clean')
+        ? { x: 8, top: 2, bottom: 15 }
+        : isIngredient
+            ? { x: 2, top: 2, bottom: 2 }
+            : { x: 5, top: 5, bottom: 5 };
 
-    if (theme === 'modern' || theme === 'modern_clean') {
-        const { x, y } = node.positionAbsolute || node.position;
-        // Asymmetric padding for Modern
-        paddingX = 8;
-        paddingTop = 2;
-        paddingBottom = 15;
-
-        if (isIngredient) {
-            // Compact Modern Ingredient: 80px container, 64px icon
-            imageSize = 64;
-            imageX = x + 8; // (80-64)/2
-            imageY = y + 8;
-        } else {
-            // Standard Modern Action: 120px container, 96px icon
-            imageSize = 96;
-            imageX = x + 12; // (120-96)/2
-            imageY = y + 12;
-        }
-    } else {
-        // Classic
-        if (!handlePos) return null; // Simplified fallback for Classic
-        
-        if (isIngredient) {
-            imageSize = 48; // Visual size (w-12)
-            // Container is 56 (w-14). Padding is 4.
-            // handlePos is center of 56.
-            // Image Top Left = handlePos - 28 + 4 = handlePos - 24.
-            imageX = handlePos.x - 24;
-            imageY = handlePos.y - 24;
-            
-            // Tighter padding for small ingredients
-            paddingX = 2;
-            paddingTop = 2;
-            paddingBottom = 2;
-        } else {
-             // Action: Visual is 72. Container 80.
-             // imageX = handlePos.x - 40 + 4 = handlePos - 36.
-             // But existing getCenter used 80 mapping. If we use 80, padding absorbs the error.
-             imageSize = 80;
-             imageX = handlePos.x - 40;
-            imageY = handlePos.y; //- 40;
-        }
-    }
-    
-    return {
-        x: imageX + meta.bbox.x * imageSize - paddingX,
-        y: imageY + meta.bbox.y * imageSize - paddingTop,
-        w: meta.bbox.w * imageSize + (paddingX*2),
-        h: meta.bbox.h * imageSize + (paddingTop + paddingBottom)
-    };
+    return anchorBBox(frame, meta.bbox, padding);
 }
 
 function getRectIntersection(center: {x:number, y:number}, other: {x:number, y:number}, rect: {x:number, y:number, w:number, h:number}) {
@@ -191,41 +137,46 @@ function getRectIntersection(center: {x:number, y:number}, other: {x:number, y:n
     return center;
 }
 
-function getRadius(node: Node, hasHandle: boolean) {
+function getRadius(node: Node, scale = 1) {
     if (node.type !== 'minimal') {
         return (Math.min(node.width??100, node.height??50)/2 + 5);
     }
     const theme = getNodeTheme(node.data);
-    if (theme === 'modern' || theme === 'modern_clean') {
-        return 58; // 96px / 2
-    }
-    return 36; // 72px / 2
+    const isIngredient = node.data?.type === 'ingredient';
+    return fallbackRadius(
+        (theme === 'modern' || theme === 'modern_clean') ? 'modern' : 'classic',
+        isIngredient,
+        scale,
+    );
 }
 
 export function getEdgeParams(
-    source: Node, 
+    source: Node,
     target: Node,
     sourceHandlePos?: { x: number, y: number },
-    targetHandlePos?: { x: number, y: number }
+    targetHandlePos?: { x: number, y: number },
+    scales?: { source?: number; target?: number },
 ) {
-    const c1 = getCenter(source, sourceHandlePos);
-    const c2 = getCenter(target, targetHandlePos);
+    const sScale = scales?.source ?? 1;
+    const tScale = scales?.target ?? 1;
+    const c1 = getCenter(source, sourceHandlePos, sScale);
+    const c2 = getCenter(target, targetHandlePos, tScale);
 
     let sInter, tInter;
 
-    const bbox1 = getBBox(source, sourceHandlePos);
+    const bbox1 = getBBox(source, sourceHandlePos, sScale);
     if (bbox1) {
         sInter = getRectIntersection(c1, c2, bbox1);
     } else {
-        const r1 = getRadius(source, !!sourceHandlePos);
+        const r1 = getRadius(source, sScale);
         sInter = getNodeIntersection(c1, c2, r1);
     }
 
-    const bbox2 = getBBox(target, targetHandlePos);
+    const bbox2 = getBBox(target, targetHandlePos, tScale);
     if (bbox2) {
         tInter = getRectIntersection(c2, c1, bbox2);
     } else {
-        const r2 = getRadius(target, !!targetHandlePos);
+        const r2 = getRadius(target, tScale);
         tInter = getNodeIntersection(c2, c1, r2);
     }
 

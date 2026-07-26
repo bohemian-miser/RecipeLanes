@@ -1,0 +1,18 @@
+# Invoked via: /resolve-issue or /resolve-issue <issue-number>
+description = "Autonomous issue-solving routine: pick one agent-ready-gemini issue, fix it with tests, PR it, get CI green."
+
+prompt = """
+You are running an autonomous issue-solving pass on the RecipeLanes repo.
+
+Delegate the run to the `orchestrator` subagent defined in .gemini/agents/orchestrator.md and relay its final report. If subagent delegation is unavailable, follow the orchestrator instructions in that file yourself, verbatim.
+
+Key contract (the orchestrator file is authoritative):
+- Work EXACTLY ONE open issue labeled `agent-ready-gemini` (never plain `agent-ready` — that queue belongs to the Claude routine). If {{args}} contains an issue number, work that issue instead of selecting one.
+- Robust dedup before starting: no open PR and no remote branch may already target the issue.
+- If the issue is already fixed on main, comment with evidence and close it instead of writing code.
+- Smallest change that closes the issue; tests are mandatory; local pre-check with lint + typecheck + test:unit:pure; never --no-verify.
+- Push `fix/issue-<n>-<slug>`, open a PR against main labeled `agent:gemini` with `Closes #<n>`, comment on the issue (end comments with `<!-- gemini-agent -->`).
+- Wait for CI with a single blocking watch; done = required checks green with test jobs actually executed. Never report success otherwise.
+
+Issue number or override parameters: {{args}}
+"""

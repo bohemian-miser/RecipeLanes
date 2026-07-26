@@ -35,7 +35,7 @@ interface IngredientsSidebarProps {
   forgingIds?: Set<string>;
 }
 
-type Draft = { qty: string; unit: string; name: string; desc: string };
+type Draft = { qty: string; unit: string; name: string };
 
 /** Seed a node's editable drafts. Quantity is shown scaled to the current serves. */
 function nodeToDraft(n: RecipeNode, scale: number): Draft {
@@ -43,7 +43,6 @@ function nodeToDraft(n: RecipeNode, scale: number): Draft {
     qty: n.quantity != null ? String(Math.round(n.quantity * scale * 100) / 100) : '',
     unit: n.unit ?? '',
     name: n.canonicalName ?? n.text ?? '',
-    desc: n.visualDescription ?? '',
   };
 }
 
@@ -66,10 +65,10 @@ export function IngredientsSidebar({
 
   const ingredientNodes = graph.nodes.filter(n => n.type === 'ingredient');
 
-  // Local drafts for the inline editors (number / unit / name / visual
-  // description). Kept in sync with the graph for the node the user isn't
-  // actively editing (e.g. after undo, a serves change, or a snapshot merge)
-  // without clobbering in-progress typing on the focused row.
+  // Local drafts for the inline editors (number / unit / name). Kept in sync
+  // with the graph for the node the user isn't actively editing (e.g. after
+  // undo, a serves change, or a snapshot merge) without clobbering
+  // in-progress typing on the focused row.
   const [drafts, setDrafts] = useState<Record<string, Draft>>(
     () => Object.fromEntries(ingredientNodes.map(n => [n.id, nodeToDraft(n, scale)])),
   );
@@ -83,7 +82,7 @@ export function IngredientsSidebar({
         if (n.id === editingIdRef.current) continue;
         const d = nodeToDraft(n, scale);
         const cur = next[n.id];
-        if (!cur || cur.qty !== d.qty || cur.unit !== d.unit || cur.name !== d.name || cur.desc !== d.desc) {
+        if (!cur || cur.qty !== d.qty || cur.unit !== d.unit || cur.name !== d.name) {
           next[n.id] = d;
           changed = true;
         }
@@ -94,7 +93,7 @@ export function IngredientsSidebar({
   }, [graph]);
 
   const setField = (id: string, field: keyof Draft, val: string) =>
-    setDrafts(d => ({ ...d, [id]: { ...(d[id] ?? { qty: '', unit: '', name: '', desc: '' }), [field]: val } }));
+    setDrafts(d => ({ ...d, [id]: { ...(d[id] ?? { qty: '', unit: '', name: '' }), [field]: val } }));
 
   // Commit the number / unit / name boxes together — text (the diagram label)
   // is rebuilt from all three so the info isn't duplicated across fields.
@@ -103,11 +102,6 @@ export function IngredientsSidebar({
     if (!d || !onEditNode) return;
     const patch = computeIngredientRowPatch(node, d, scale);
     if (Object.keys(patch).length > 0) onEditNode(node.id, patch);
-  };
-
-  const commitDesc = (node: RecipeNode) => {
-    const v = drafts[node.id]?.desc ?? '';
-    if (v !== (node.visualDescription ?? '')) onEditNode?.(node.id, { visualDescription: v });
   };
 
   const focusRow = (id: string) => { editingIdRef.current = id; };
@@ -178,7 +172,7 @@ export function IngredientsSidebar({
                             )}
                         </div>
 
-                        {/* Right column: number + unit, then the ingredient name, then the visual description. */}
+                        {/* Right column: number + unit, then the ingredient name. */}
                         <div className="flex-1 pt-0.5 min-w-0 space-y-1.5">
                             {onEditNode ? (
                                 <>
@@ -214,16 +208,6 @@ export function IngredientsSidebar({
                                         onBlur={() => blurRow(() => commitRow(node))}
                                         placeholder="Ingredient name"
                                         aria-label={`Ingredient name for ${label}`}
-                                    />
-                                    <textarea
-                                        className="w-full bg-zinc-50 border border-zinc-200 rounded px-2 py-1 text-[11px] text-zinc-600 resize-none focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200 leading-snug"
-                                        rows={2}
-                                        value={drafts[node.id]?.desc ?? ''}
-                                        onChange={(e) => setField(node.id, 'desc', e.target.value)}
-                                        onFocus={() => focusRow(node.id)}
-                                        onBlur={() => blurRow(() => commitDesc(node))}
-                                        placeholder="Visual description (what the icon shows)…"
-                                        aria-label={`Visual description for ${label}`}
                                     />
                                 </>
                             ) : (

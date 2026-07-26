@@ -60,6 +60,7 @@ Scoped single test: `npm run test:one -- tests/my.test.ts`
 4. **Do not resurrect `e2e/old_tests/`.** Those tests are retired; do not re-enable them.
 5. **Regression fixes discovered mid-feature belong in their own branch and PR** with a regression test — do not bolt them onto the in-progress feature branch.
 6. **This dev machine is a Raspberry Pi (arm64).** Run scoped tests (`test:one`, `test:unit`), not repeated full builds. Full `npm run verify` is slow and should be reserved for pre-commit.
+7. **Claim an issue before you work it.** Autonomous runs overlap, so "no PR exists yet" is not proof nobody is on it — three runs once shipped three PRs for the same bug. Run `node .github/scripts/agent-claim.mjs claim <issue>` first; **exit 3 means someone else holds it — pick a different issue**. Release it (`… release <issue>`) if you stop without opening a PR. See `docs/agent-worker-protocol.md`.
 
 ---
 
@@ -71,4 +72,5 @@ Scoped single test: `npm run test:one -- tests/my.test.ts`
 - `recipe-lanes/TESTING.md` — full testing guide including Pi-specific pre-commit warm-up sequence and known flaky tests
 - `docs/architecture-review-2026-06.md` — prioritized technical roadmap (June 2026 review)
 - `docs/alerting-icon-forge.md` — pure-GCP alerting on icon-generation rate (Bug 171): the `icon_forged` log signal + Cloud Monitoring metric/policy runbook
+- `docs/agent-worker-protocol.md` — how autonomous workers claim issues off the `agent-ready` queue without duplicating each other's work
 - `docs/WORKLOG.md` — running curated log of significant agent decisions, incidents, and infra/process changes (read this for project history/context; append an entry when you make a significant change)

@@ -1,0 +1,53 @@
+name: Agent Claim Reaper
+
+# Releases stale `agent-claimed` issues so a crashed or abandoned worker run
+# cannot wedge the queue. A claim expires after AGENT_CLAIM_TTL_MINUTES (3h by
+# default, comfortably longer than the 90min the Gemini solver is allowed and
+# than any bug-worker run observed so far).
+#
+# An expired claim whose worker DID open a PR is left alone — the open PR is
+# itself the "someone is on this" signal, and stripping the label would just
+# invite a second worker onto an issue that already has a fix in review.
+#
+# See docs/agent-worker-protocol.md for the protocol this enforces.
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report what would be released without changing anything'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+concurrency:
+  group: agent-claim-reaper
+  cancel-in-progress: false
+
+jobs:
+  reap:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Release expired claims
+        env:
+          GITHUB_TOKEN: ${{ secrets.AGENT_GH_PAT || github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          AGENT_CLAIM_TTL_MINUTES: ${{ vars.AGENT_CLAIM_TTL_MINUTES || '180' }}
+          AGENT_CLAIM_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: node .github/scripts/agent-claim.mjs reap

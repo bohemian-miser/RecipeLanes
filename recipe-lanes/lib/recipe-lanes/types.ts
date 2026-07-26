@@ -156,7 +156,10 @@ export interface RecipeGraph {
   layoutMode?: string;
   visibility?: 'public' | 'unlisted' | 'private';
   isVetted?: boolean;
-  
+  // Issue #146: when true the recipe is published without the owner's display
+  // name — ownerId is still retained for edit/ownership gates.
+  anonymous?: boolean;
+
   // Scaling
   serves?: number; // Current servings setting
   baseServes?: number; // Original recipe servings

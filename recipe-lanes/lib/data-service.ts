@@ -24,7 +24,7 @@ import { claimHashForCreate, isValidClaim } from './recipe-lanes/claim-token';
 import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
-import { standardizeIngredientName, removeUndefined } from './utils';
+import { standardizeIngredientName, removeUndefined, computeStoredOwnerName } from './utils';
 // import { calculateWilsonLCB } from './utils';
 import { applyIconToNode, assignNodeShortlist, buildShortlistEntry, clearNodeShortlist, computeShortlistDelta, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getNodeShortlist, getNodeShortlistLength, getPendingImpressionIds, getPendingRejectionIds, getPendingImpressionTargets, getPendingRejectionTargets, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, markEntryImpressedAtIndex, markSeenEntriesImpressed, markSeenEntriesRejected, mutateNodesByIngredient, prependToShortlist, rankIconsByEmbedding, toRecipeIcon, setNodeStatusByIngredient, extractBatchIngredients } from './recipe-lanes/model-utils';
 
@@ -762,7 +762,12 @@ export class FirebaseDataService implements DataService {
       };
 
       if (userId) data.ownerId = userId;
-      if (ownerName) data.ownerName = ownerName;
+      // Issue #146: honour anonymous publishing for signed-in authors. When the
+      // graph is marked anonymous, storedOwnerName is '' which clears any
+      // previously-saved name on the merge write below; ownerId is still written
+      // so ownership/edit gates keep working.
+      const storedOwnerName = computeStoredOwnerName(ownerName, graph.anonymous);
+      if (storedOwnerName !== undefined) data.ownerName = storedOwnerName;
       // On update, only touch visibility if the caller explicitly asked to change
       // it — otherwise leave the stored value alone so autosaves don't clobber it.
       // On create, default anon saves to public and signed-in saves to unlisted.
@@ -780,6 +785,7 @@ export class FirebaseDataService implements DataService {
           const stampHash = claimHashForCreate(userId, claimToken);
           if (stampHash) data.claimTokenHash = stampHash;
       }
+
 
       // Ensure title is synced both at top level and inside graph
       if (graph.title) {
@@ -858,10 +864,13 @@ export class FirebaseDataService implements DataService {
         if (data.title && !graph.title) graph.title = data.title;
         if (graph.title && !data.title) data.title = graph.title;
   
-        let ownerName = data.ownerName;
-        
+        // Issue #146: recipes published anonymously never surface the owner's
+        // name — neither the stored value nor the user-profile fallback below.
+        const isAnonymous = (data.graph as RecipeGraph | undefined)?.anonymous === true;
+        let ownerName = isAnonymous ? undefined : data.ownerName;
+
         // Fallback: Fetch from user profile if not cached on recipe
-        if (!ownerName && data.ownerId) {
+        if (!isAnonymous && !ownerName && data.ownerId) {
             try {
                 const userSnap = await db.collection('users').doc(data.ownerId).get();
                 if (userSnap.exists) {
@@ -1670,10 +1679,13 @@ export class MemoryDataService implements DataService {
         const graph = r.graph;
         if (r.visibility) graph.visibility = r.visibility as any;
 
+        // Issue #146: suppress the byline for anonymously-published recipes.
+        const ownerName = r.graph?.anonymous ? undefined : r.ownerName;
+
         return {
             graph,
             ownerId: r.ownerId,
-            ownerName: r.ownerName,
+            ownerName,
             visibility: r.visibility,
             stats: r.stats
         };

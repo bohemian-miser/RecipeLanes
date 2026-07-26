@@ -41,6 +41,7 @@ import { fileURLToPath } from 'node:url';
 // Firebase emulators. Everything else is discovered automatically.
 export const INTEGRATION_TESTS = [
   'admin-security.test.ts',
+  'anonymous-publish-integration.test.ts',
   'data-helpers-transaction.test.ts',
   'forge-gate-regression.test.ts',
   'functions-metadata.test.ts',

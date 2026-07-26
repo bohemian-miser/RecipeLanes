@@ -29,14 +29,14 @@ import { ChatPanel } from '@/components/recipe-lanes/chat-panel';
 import { MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
 import { buildRecipeEditInstruction } from '@/lib/recipe-lanes/recipe-edit-diff';
 import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
-import { standardizeIngredientName, formatDisplayName } from '@/lib/utils';
+import { standardizeIngredientName, resolveBylineName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import { TimelineView } from '@/components/recipe-lanes/timeline-view';
 import type { RecipeGraph, LayoutModeId } from '@/lib/recipe-lanes/types';
 import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
-import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera } from 'lucide-react';
+import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera, Eye, EyeOff } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { looksLikeUrl, isAdjustSubmitKey } from '@/lib/recipe-lanes/input-utils';
 import { track } from '@/lib/analytics';
@@ -834,6 +834,7 @@ const handleVisualize = async () => {
   
   const hasIcons = graph?.nodes.some(n => hasNodeIcon(n));
   const isPublic = graph?.visibility === 'public';
+  const isAnonymous = graph?.anonymous === true;
 
   // Common Nav Item Styles
   const navItemClass = "flex items-center gap-2 px-2 md:px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-medium";
@@ -879,8 +880,25 @@ const handleVisualize = async () => {
                         </div>
                     )}
                     {ownerId && (
-                        <span className="text-[9px] text-zinc-600 font-mono ml-2">
-                           by {formatDisplayName(ownerId, ownerName)}
+                        <span className="text-[9px] text-zinc-600 font-mono ml-2 inline-flex items-center gap-1">
+                           by {resolveBylineName(ownerId, ownerName, isAnonymous, isOwner, user?.displayName)}
+                           {/* Issue #146: anonymous toggle lives on the byline — an eye that
+                               hides/shows your name. Owner-only; toggling flips the flag
+                               optimistically (instant byline update) and persists on save. */}
+                           {isOwner && (
+                               <button
+                                   onClick={(e) => {
+                                       e.stopPropagation();
+                                       if (graph) setGraph({ ...graph, anonymous: !isAnonymous });
+                                       diagramRef.current?.toggleAnonymous();
+                                   }}
+                                   className="p-0.5 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                                   title={isAnonymous ? 'Published anonymously — click to show your name' : 'Publish as Anon (hide your name)'}
+                                   aria-label={isAnonymous ? 'Show your name' : 'Publish anonymously'}
+                               >
+                                   {isAnonymous ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                               </button>
+                           )}
                         </span>
                     )}
                 </div>
@@ -1250,7 +1268,7 @@ const handleVisualize = async () => {
                                 <span className="hidden xl:inline">{isPublic ? 'Public' : 'Unlisted'}</span>
                             </button>
 
-                            <button 
+                            <button
                                 onClick={handleToggleJson}
                                 className={`p-1.5 rounded hover:bg-zinc-100 transition-colors ${showJson ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-400'}`}
                                 title="Toggle JSON View"

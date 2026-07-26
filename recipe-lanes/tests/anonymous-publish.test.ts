@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeStoredOwnerName, formatDisplayName } from '../lib/utils';
+import { computeStoredOwnerName, formatDisplayName, resolveBylineName } from '../lib/utils';
 import { getDataService, setDataService, MemoryDataService } from '../lib/data-service';
 import type { RecipeGraph } from '../lib/recipe-lanes/types';
 
@@ -27,6 +27,34 @@ describe('computeStoredOwnerName (issue #146)', () => {
     it('the stored anonymous value renders as "Anon" via the display fallback', () => {
         const stored = computeStoredOwnerName('Ada Lovelace', true); // ''
         assert.equal(formatDisplayName('uid-1', stored), 'Anon');
+    });
+});
+
+describe('resolveBylineName (issue #146 — instant byline, no double-update)', () => {
+    it('always reads "Anon" when anonymous, regardless of stored/own name', () => {
+        assert.equal(resolveBylineName('uid-1', 'Ada Lovelace', true, true, 'Ada Lovelace'), 'Anon');
+        assert.equal(resolveBylineName('uid-1', '', true, true, 'Ada Lovelace'), 'Anon');
+    });
+
+    it('shows the stored owner name when present and not anonymous', () => {
+        assert.equal(resolveBylineName('uid-1', 'Ada Lovelace', false, true, 'someone-else'), 'Ada Lovelace');
+        assert.equal(resolveBylineName('uid-1', 'Ada Lovelace', false, false, undefined), 'Ada Lovelace');
+    });
+
+    it('falls back to the owner-viewer\'s own name when the stored name is empty (instant un-anon)', () => {
+        // Right after toggling back from anonymous, the store ownerName is still
+        // the cleared '' — the byline must read the real name instantly, not "Anon".
+        assert.equal(resolveBylineName('uid-1', '', false, true, 'Ada Lovelace'), 'Ada Lovelace');
+        assert.equal(resolveBylineName('uid-1', null, false, true, 'Ada Lovelace'), 'Ada Lovelace');
+    });
+
+    it('does NOT use the current name for a non-owner viewer (only the stored name)', () => {
+        assert.equal(resolveBylineName('uid-1', '', false, false, 'Viewer Name'), 'Anon');
+    });
+
+    it('reads "Anon" when nobody has a usable name', () => {
+        assert.equal(resolveBylineName('uid-1', '', false, true, ''), 'Anon');
+        assert.equal(resolveBylineName('uid-1', undefined, false, true, undefined), 'Anon');
     });
 });
 

@@ -86,6 +86,35 @@ export function computeStoredOwnerName(
     return ownerName ? ownerName : undefined;
 }
 
+/**
+ * Issue #146: the author name shown in the "by …" byline.
+ *
+ * Anonymous recipes always read "Anon". Otherwise we prefer the stored
+ * `ownerName`, but when it is empty/missing AND the current viewer owns the
+ * recipe, we fall back to the viewer's own name. That fallback is what makes
+ * toggling *back* from anonymous update the byline instantly: right after the
+ * toggle the store's `ownerName` is still the cleared '' (it only refreshes
+ * once the save round-trips), so without the fallback the byline would briefly
+ * read "Anon" and then flip to the real name a second later — the double-update
+ * the toggle used to cause.
+ */
+export function resolveBylineName(
+    ownerId: string | null | undefined,
+    ownerName: string | null | undefined,
+    anonymous: boolean | null | undefined,
+    isOwner: boolean,
+    currentUserName: string | null | undefined,
+): string {
+    if (anonymous) return 'Anon';
+    const stored = (ownerName ?? '').trim();
+    if (stored) return formatDisplayName(ownerId, stored);
+    if (isOwner) {
+        const own = (currentUserName ?? '').trim();
+        if (own) return formatDisplayName(ownerId, own);
+    }
+    return formatDisplayName(ownerId, ownerName);
+}
+
 export function calculateWilsonLCB(n: number, r: number): number {
     if (n === 0) return 0;
     const k = n - r; const p = k / n; const z = 1.645;

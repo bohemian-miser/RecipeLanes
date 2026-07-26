@@ -13,11 +13,15 @@
 // and ordered, so after the settle window every worker computes the same
 // winner from the same comment list and all but one back off.
 //
+// A run is dispatched to ONE issue (the labeled one), so exit 3 means resign —
+// end the run, quietly and successfully. There is no second issue to fall back
+// to, and a losing run must not go shopping for other work to fill itself.
+//
 // Usage:
-//   node .github/scripts/agent-claim.mjs list                 # eligible issues, JSON
-//   node .github/scripts/agent-claim.mjs status <issue>       # who holds it, JSON
-//   node .github/scripts/agent-claim.mjs claim <issue>        # exit 0 held, 3 lost
+//   node .github/scripts/agent-claim.mjs claim <issue>        # exit 0 held, 3 resign
 //   node .github/scripts/agent-claim.mjs release <issue>      # give it back
+//   node .github/scripts/agent-claim.mjs status <issue>       # who holds it, JSON
+//   node .github/scripts/agent-claim.mjs list                 # queue state, JSON
 //   node .github/scripts/agent-claim.mjs reap                 # release expired claims
 //
 // Env:
@@ -82,7 +86,7 @@ function die(message, code = 1) {
     process.exit(code);
 }
 
-const EXIT_LOST = 3; // "not yours — pick a different issue", not a failure
+const EXIT_LOST = 3; // "not yours — resign and end the run", not a failure
 
 // ------------------------------------------------------------------- github
 
@@ -184,7 +188,9 @@ async function cmdList() {
     // Oldest first: the queue should drain in the order the owner filled it.
     results.sort((a, b) => a.number - b.number);
     console.log(JSON.stringify(results, null, 2));
-    return results.some((r) => r.eligible) ? 0 : EXIT_LOST;
+    // Always 0 — this is a diagnostic view of the queue, not a work-finding
+    // step. Reserving exit 3 for `claim` keeps "resign" unambiguous.
+    return 0;
 }
 
 async function cmdStatus(issueNumber) {
@@ -240,7 +246,7 @@ async function cmdClaim(issueNumber) {
         readyLabel: READY,
     });
     if (!pre.eligible) {
-        console.error(`agent-claim: #${issueNumber} not claimable (${pre.reason})`);
+        console.error(`agent-claim: #${issueNumber} not claimable (${pre.reason}) — resign`);
         console.log(JSON.stringify({ claimed: false, ...pre }));
         return EXIT_LOST;
     }
@@ -263,7 +269,7 @@ async function cmdClaim(issueNumber) {
     if (!heldByMe) {
         // Someone staked first. Withdraw our comment and leave their label alone.
         await deleteComment(comment.id);
-        console.error(`agent-claim: #${issueNumber} lost the claim race to ${winner?.workerId ?? 'unknown'}`);
+        console.error(`agent-claim: #${issueNumber} lost the claim race to ${winner?.workerId ?? 'unknown'} — resign`);
         console.log(JSON.stringify({ claimed: false, reason: 'claimed-by-other', holder: winner?.workerId ?? null }));
         return EXIT_LOST;
     }

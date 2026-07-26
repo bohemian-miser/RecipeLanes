@@ -45,11 +45,17 @@ to each other.
 2. STAKE      post a claim comment (hidden `<!-- agent-claim worker="…" -->`
               marker), then add the `agent-claimed` label
 3. SETTLE     wait ~20s, re-read all claims — earliest live claim wins.
-              Lost? delete your own claim comment and pick another issue.
+              Lost? delete your own claim comment and RESIGN: end the run.
 4. WORK       open the PR referencing the issue
 5. RELEASE    abandoning without a PR? delete your claim comment and drop the
               label so the issue returns to the queue
 ```
+
+**Resign, don't reroute.** A worker is dispatched to *one* issue — the one
+carrying the label — so there is no second issue to fall back to. Losing the
+race is a clean, successful no-op: withdraw the claim and exit. The issue is
+already being worked by whoever won, and the run that lost has nothing left to
+do. Do **not** go shopping for another issue to fill the run.
 
 Claims expire after **180 minutes** (`AGENT_CLAIM_TTL_MINUTES`). An expired
 claim is ignored by step 1 and cleaned up hourly by
@@ -68,29 +74,34 @@ concurrent runs (a session id or `GITHUB_RUN_ID`; it falls back to
 ```bash
 export AGENT_WORKER_ID="$CLAUDE_SESSION_ID"
 
-# What is actually free right now?
-node .github/scripts/agent-claim.mjs list
+# Claim the issue you were dispatched to. This is the first thing the run does.
+# Exit 0 = it is yours, carry on. Exit 3 = someone else has it, stop here.
+node .github/scripts/agent-claim.mjs claim 278 || exit 0
 
-# Take one. Exit 0 = it is yours; exit 3 = someone else got it, pick another.
-node .github/scripts/agent-claim.mjs claim 278 || pick_a_different_issue
-
-# Who holds it?
+# Who holds it? (diagnostics)
 node .github/scripts/agent-claim.mjs status 278
+
+# What is claimed right now across the queue? (diagnostics)
+node .github/scripts/agent-claim.mjs list
 
 # Bailing out without a PR — put it back.
 node .github/scripts/agent-claim.mjs release 278
 ```
 
 Exit codes: `0` success, `3` not yours (ineligible or lost the race — **not** a
-failure, just choose something else), `1` a real error.
+failure, this is the expected way a duplicate run ends), `1` a real error.
 
 Flags mirror the env vars: `--repo`, `--worker`, `--ttl`, `--settle`,
 `--dry-run true`.
 
+`list` and `status` are for humans and debugging. They are **not** a work-finding
+step: the label decides which issue a run gets, not the script.
+
 ### Rules for workers
 
 1. **Claim before you work.** No claim, no branch, no PR.
-2. **Exit 3 means move on.** Never work an issue you did not win.
+2. **Exit 3 means resign.** End the run — quietly, and as a success. Do not work
+   an issue you did not win, and do not substitute a different one.
 3. **Release what you abandon.** If you finish without a PR — cannot reproduce,
    out of scope, blocked — `release` it and leave a comment saying where you
    got to. Do not leave a claim standing on work nobody is doing.

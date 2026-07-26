@@ -49,9 +49,9 @@ export function formatClaimBody(workerId, meta = {}) {
         claimMarker(workerId, meta),
         `🤖 Claimed by agent worker \`${workerId}\`${where}.`,
         '',
-        `Another worker should pick a different issue while this claim is live. ` +
-            `The claim is released automatically if no PR appears within ` +
-            `${meta.ttlMinutes ?? DEFAULT_TTL_MINUTES} minutes.`,
+        `Any other worker dispatched to this issue should resign while this ` +
+            `claim is live. The claim is released automatically if no PR ` +
+            `appears within ${meta.ttlMinutes ?? DEFAULT_TTL_MINUTES} minutes.`,
     ].join('\n');
 }
 

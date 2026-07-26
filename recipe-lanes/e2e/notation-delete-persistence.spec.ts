@@ -47,7 +47,10 @@ test.describe('notation-view delete persistence (issue #278)', () => {
         // ── create a recipe as owner so edits auto-save ───────────────────────
         await page.goto('/lanes?new=true');
         await login('notation-delete-user-' + Date.now());
-        await create_recipe(page, '2 eggs, 1 cup flour, 1 pan. mix eggs and flour. fry the batter in the pan for 5 min.');
+        // "test eggs" is the mock AI's deterministic fixture: 3 nodes
+        // (2 Eggs, 100g Flour, Mix). Free-form text would be split per LINE by
+        // the mock, so a single-line recipe yields only one node.
+        await create_recipe(page, 'test eggs');
         await wait_for_graph(page);
         await expect(page).toHaveURL(/id=/);
         const recipeUrl = page.url();
@@ -65,16 +68,23 @@ test.describe('notation-view delete persistence (issue #278)', () => {
         // ── wait for the timeline nodes to render, then pick a target ──────────
         const nodes = page.locator(NODE_SELECTOR);
         await expect(nodes.first().locator('circle').first()).toBeVisible({ timeout: 15000 });
+
+        // Delete "Mix" — the terminal action node. Nothing takes it as an input,
+        // so removing it cannot leave another node with a dangling `inputs` ref
+        // and the assertion stays about persistence, not layout recovery.
+        // Waiting on this specific node also guarantees the timeline has finished
+        // rendering before the count below is taken.
+        const targetGroup = nodes.filter({ hasText: 'Mix' });
+        await expect(targetGroup).toHaveCount(1, { timeout: 15000 });
+
         const countBefore = await nodes.count();
         expect(countBefore).toBeGreaterThan(1);
-
-        const targetGroup = nodes.first();
         const targetTestId = await targetGroup.getAttribute('data-testid');
         expect(targetTestId).toBeTruthy();
 
         // ── hover to reveal the per-node controls, then delete the node ───────
         await targetGroup.hover();
-        const deleteControl = page.locator('[data-testid="node-delete"]');
+        const deleteControl = targetGroup.locator('[data-testid="node-delete"]');
         await expect(deleteControl).toBeVisible({ timeout: 10000 });
 
         // The delete triggers onSave → saveRecipeAction (a POST to /lanes).

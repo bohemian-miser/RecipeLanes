@@ -212,8 +212,11 @@ function IngredientNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSel
 export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (graph: RecipeGraph) => void }) {
   const searchParams   = useSearchParams();
   const recipeId       = searchParams.get('id');
-  const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
-  const setGraph       = useRecipeStore(s => s.setGraph);
+  const cycleShortlist  = useRecipeStore(s => s.cycleShortlist);
+  const setGraph        = useRecipeStore(s => s.setGraph);
+  const markNodeDeleted = useRecipeStore(s => s.markNodeDeleted);
+  const restoreNodes    = useRecipeStore(s => s.restoreNodes);
+  const setDirty        = useRecipeStore(s => s.setDirty);
 
   const layout = useMemo(() => buildTimelineLayout(graph), [graph]);
   const { nodes, edges, lanes, totalMinutes, totalWidth, totalHeight, pixelsPerMin: ppm, actionZoneY } = layout;
@@ -248,10 +251,14 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
     setUndoStack(prev => {
       if (!prev.length) return prev;
       const next = [...prev];
-      setGraph(next.pop()!);
+      const restored = next.pop()!;
+      setGraph(restored);
+      // Clear pendingDeletedIds for any node the undo brings back, so a later
+      // snapshot does not silently re-delete a node the user just restored.
+      restoreNodes(restored.nodes.map(n => ({ id: n.id, data: n })));
       return next;
     });
-  }, [setGraph]);
+  }, [setGraph, restoreNodes]);
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
@@ -331,11 +338,19 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
   // ── Delete ────────────────────────────────────────────────────────────────
   const deleteNode = useCallback((nodeId: string) => {
     pushUndo(graph);
-    setGraph({ ...graph, nodes: graph.nodes.filter(n => n.id !== nodeId) });
+    // Route the delete through markNodeDeleted (mirrors the ReactFlow/notation
+    // path) rather than a plain setGraph filter. markNodeDeleted removes the node
+    // from the store graph AND records it in pendingDeletedIds, so a background
+    // Firestore snapshot (e.g. resolveRecipeIcons writing icon data back) that
+    // still contains the node cannot resurrect it and revert unsaved state before
+    // the delete is persisted. Without this guard the graph would "reset to how it
+    // was at the start" the moment such a snapshot arrived (Issue #278).
+    markNodeDeleted(nodeId);
+    setDirty(true);
     setPosOverrides(p => { const n = new Map(p); n.delete(nodeId); return n; });
     setSelectedIds(p => { const n = new Set(p); n.delete(nodeId); return n; });
     setHoveredNodeId(null);
-  }, [graph, setGraph, pushUndo]);
+  }, [graph, markNodeDeleted, setDirty, pushUndo]);
 
   // ── Viewport / drag ───────────────────────────────────────────────────────
   const [vp, setVp]       = useState<Viewport>(DEFAULT_VP);

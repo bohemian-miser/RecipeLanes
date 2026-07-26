@@ -213,7 +213,8 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
   const searchParams   = useSearchParams();
   const recipeId       = searchParams.get('id');
   const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
-  const setGraph       = useRecipeStore(s => s.setGraph);
+  const deleteNodeFromStore = useRecipeStore(s => s.deleteNode);
+  const restoreGraph   = useRecipeStore(s => s.restoreGraph);
 
   const layout = useMemo(() => buildTimelineLayout(graph), [graph]);
   const { nodes, edges, lanes, totalMinutes, totalWidth, totalHeight, pixelsPerMin: ppm, actionZoneY } = layout;
@@ -248,10 +249,13 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
     setUndoStack(prev => {
       if (!prev.length) return prev;
       const next = [...prev];
-      setGraph(next.pop()!);
+      // restoreGraph (not setGraph) so a restored node is cleared from the
+      // pending-delete guard — otherwise undoing a delete would let the next
+      // Firestore snapshot strip the node back out (issue #278).
+      restoreGraph(next.pop()!);
       return next;
     });
-  }, [setGraph]);
+  }, [restoreGraph]);
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
@@ -331,11 +335,15 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
   // ── Delete ────────────────────────────────────────────────────────────────
   const deleteNode = useCallback((nodeId: string) => {
     pushUndo(graph);
-    setGraph({ ...graph, nodes: graph.nodes.filter(n => n.id !== nodeId) });
+    // Route through the store's protected delete so the node is registered in
+    // pendingDeletedIds; otherwise the next Firestore snapshot resurrects it and
+    // the graph appears to reset (issue #278 — reliably reproduced on mobile,
+    // where a standalone delete is not followed by a persisting drag).
+    deleteNodeFromStore(nodeId);
     setPosOverrides(p => { const n = new Map(p); n.delete(nodeId); return n; });
     setSelectedIds(p => { const n = new Set(p); n.delete(nodeId); return n; });
     setHoveredNodeId(null);
-  }, [graph, setGraph, pushUndo]);
+  }, [graph, deleteNodeFromStore, pushUndo]);
 
   // ── Viewport / drag ───────────────────────────────────────────────────────
   const [vp, setVp]       = useState<Viewport>(DEFAULT_VP);

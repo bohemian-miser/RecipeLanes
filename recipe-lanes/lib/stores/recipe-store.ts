@@ -139,6 +139,26 @@ interface RecipeActions {
     markNodeDeleted: (nodeId: string) => void;
 
     /**
+     * Deletes a node from the graph *with* resurrection protection: it removes
+     * the node from `graph.nodes`, records the ID in `pendingDeletedIds` (so a
+     * subsequent Firestore snapshot cannot re-add it — see markNodeDeleted), and
+     * marks the graph dirty for autosave. Use this from any view that lets a user
+     * delete a node directly (issue #278: the timeline view deleted via a plain
+     * `setGraph`, skipping the pending-delete guard, so the next server snapshot
+     * resurrected the node and the graph appeared to reset).
+     */
+    deleteNode: (nodeId: string) => void;
+
+    /**
+     * Replaces the whole graph with a prior snapshot (e.g. a view-local undo)
+     * and clears the pending-delete guard for every node the snapshot restores.
+     * Without the clear, undoing a `deleteNode` would put the node back in the
+     * graph while it stayed in `pendingDeletedIds`, so the next Firestore
+     * snapshot would strip it out again (issue #278 undo interaction).
+     */
+    restoreGraph: (graph: RecipeGraph) => void;
+
+    /**
      * Restores nodes that were previously marked as deleted (e.g. on undo).
      * Clears the node IDs from pendingDeletedIds and merges the nodes back into
      * the graph, so that mergeSnapshot and the layout effect see a consistent state.
@@ -364,6 +384,26 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
             ? { ...state.graph, nodes: state.graph.nodes.filter(n => n.id !== nodeId) }
             : state.graph,
     })),
+
+    deleteNode: (nodeId) => set((state) => {
+        if (!state.graph) return {};
+        return {
+            graph: { ...state.graph, nodes: state.graph.nodes.filter(n => n.id !== nodeId) },
+            isDirty: true,
+            pendingDeletedIds: state.pendingDeletedIds.includes(nodeId)
+                ? state.pendingDeletedIds
+                : [...state.pendingDeletedIds, nodeId],
+        };
+    }),
+
+    restoreGraph: (graph) => set((state) => {
+        const restoredIds = new Set(graph.nodes.map(n => n.id));
+        return {
+            graph,
+            isDirty: true,
+            pendingDeletedIds: state.pendingDeletedIds.filter(id => !restoredIds.has(id)),
+        };
+    }),
 
     restoreNodes: (rfNodes) => set((state) => {
         if (!state.graph) return {};

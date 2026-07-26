@@ -40,6 +40,56 @@ export function buildIngredientText(
     return `${quantity} ${unit || ''} ${canonicalName}`.trim().replace(/\s+/g, ' ');
 }
 
+/**
+ * Computes the field patch for one ingredient row's structured editor (the
+ * number / unit / name boxes in the ingredients sidebar). `draft.qty` is the
+ * amount as shown to the user (scaled to the current serves); it is stored
+ * unscaled as `quantity`. `unit` and `name` map to `unit` / `canonicalName`,
+ * and `text` (the diagram label) is rebuilt from all three so the number, unit
+ * and name are not duplicated across separate fields.
+ *
+ * Returns only the fields that actually changed (empty object = no-op, so the
+ * caller can skip a spurious undo entry).
+ */
+export function computeIngredientRowPatch(
+    node: RecipeNode,
+    draft: { qty: string; unit: string; name: string },
+    scale: number,
+): Partial<RecipeNode> {
+    const seedQty = node.quantity != null ? String(Math.round(node.quantity * scale * 100) / 100) : '';
+    const qtyStr = draft.qty.trim();
+    const unit = draft.unit.trim();
+    const name = draft.name.trim();
+    const seedName = (node.canonicalName ?? node.text ?? '').trim();
+
+    const qtyChanged = qtyStr !== seedQty;
+    const unitChanged = unit !== (node.unit ?? '').trim();
+    const nameChanged = name !== seedName;
+
+    const patch: Partial<RecipeNode> = {};
+    if (!qtyChanged && !unitChanged && !nameChanged) return patch;
+
+    if (qtyChanged) {
+        if (qtyStr === '') {
+            patch.quantity = undefined;
+        } else {
+            const displayed = parseFloat(qtyStr);
+            if (Number.isFinite(displayed)) {
+                patch.quantity = scale ? Math.round((displayed / scale) * 100) / 100 : displayed;
+            }
+        }
+    }
+    if (unitChanged) patch.unit = unit;
+    if (nameChanged) patch.canonicalName = name;
+
+    // Rebuild the display label from the (scaled) number + unit + name — the
+    // single source of truth, so nothing is duplicated across fields.
+    const newText = [qtyStr, unit, name].filter(s => s !== '').join(' ').replace(/\s+/g, ' ').trim();
+    if (newText !== '' && newText !== (node.text ?? '')) patch.text = newText;
+
+    return patch;
+}
+
 /** Returns the display theme for a node's icon. */
 export function getNodeTheme(node: RecipeNode): IconStyleId {
     return (node.iconTheme as IconStyleId) || 'classic';

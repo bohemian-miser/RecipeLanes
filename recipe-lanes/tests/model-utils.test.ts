@@ -5,7 +5,7 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { RecipeGraph, RecipeNode } from '../lib/recipe-lanes/types';
-import { getNodeStatus, setNodeStatus, prependToShortlist, buildShortlistEntry, toRecipeIcon, buildIngredientText } from '../lib/recipe-lanes/model-utils';
+import { getNodeStatus, setNodeStatus, prependToShortlist, buildShortlistEntry, toRecipeIcon, buildIngredientText, computeIngredientRowPatch } from '../lib/recipe-lanes/model-utils';
 
 function makeNode(id: string, overrides: Partial<RecipeNode> = {}): RecipeNode {
     return {
@@ -103,5 +103,61 @@ describe('buildIngredientText', () => {
 
     it('keeps fractional quantities as rendered', () => {
         assert.equal(buildIngredientText(0.5, 'tsp', 'Salt'), '0.5 tsp Salt');
+    });
+});
+
+describe('computeIngredientRowPatch', () => {
+    const node = makeNode('a', { quantity: 2, unit: 'cup', canonicalName: 'Flour', text: '2 cup Flour' });
+
+    it('returns an empty patch when nothing changed (scale 1)', () => {
+        const patch = computeIngredientRowPatch(node, { qty: '2', unit: 'cup', name: 'Flour' }, 1);
+        assert.deepEqual(patch, {});
+    });
+
+    it('updates the quantity and rebuilds the label', () => {
+        const patch = computeIngredientRowPatch(node, { qty: '3', unit: 'cup', name: 'Flour' }, 1);
+        assert.equal(patch.quantity, 3);
+        assert.equal(patch.text, '3 cup Flour');
+        assert.equal(patch.unit, undefined); // unchanged fields are omitted
+        assert.equal(patch.canonicalName, undefined);
+    });
+
+    it('stores the unscaled base quantity when serves are scaled', () => {
+        // displayed 4 at scale 2 -> base 2 is unchanged, so only text (if any) changes
+        const patch2 = computeIngredientRowPatch(node, { qty: '6', unit: 'cup', name: 'Flour' }, 2);
+        assert.equal(patch2.quantity, 3); // 6 / 2
+        assert.equal(patch2.text, '6 cup Flour'); // label shows the scaled amount
+    });
+
+    it('updates only the unit', () => {
+        const patch = computeIngredientRowPatch(node, { qty: '2', unit: 'tbsp', name: 'Flour' }, 1);
+        assert.equal(patch.unit, 'tbsp');
+        assert.equal(patch.quantity, undefined);
+        assert.equal(patch.canonicalName, undefined);
+        assert.equal(patch.text, '2 tbsp Flour');
+    });
+
+    it('updates only the ingredient name', () => {
+        const patch = computeIngredientRowPatch(node, { qty: '2', unit: 'cup', name: 'Bread Flour' }, 1);
+        assert.equal(patch.canonicalName, 'Bread Flour');
+        assert.equal(patch.text, '2 cup Bread Flour');
+        assert.equal(patch.quantity, undefined);
+    });
+
+    it('handles a node with no canonicalName (seeds the name from text)', () => {
+        const salt = makeNode('b', { text: 'Salt' }); // no quantity/unit/canonicalName
+        // Unchanged: name seeded from text -> no-op
+        assert.deepEqual(computeIngredientRowPatch(salt, { qty: '', unit: '', name: 'Salt' }, 1), {});
+        // Editing the name sets canonicalName and rebuilds text
+        const patch = computeIngredientRowPatch(salt, { qty: '', unit: '', name: 'Sea Salt' }, 1);
+        assert.equal(patch.canonicalName, 'Sea Salt');
+        assert.equal(patch.text, 'Sea Salt');
+    });
+
+    it('clears the quantity when the number box is emptied', () => {
+        const patch = computeIngredientRowPatch(node, { qty: '', unit: 'cup', name: 'Flour' }, 1);
+        assert.equal(patch.quantity, undefined);
+        assert.equal('quantity' in patch, true); // present, set to undefined (cleared)
+        assert.equal(patch.text, 'cup Flour');
     });
 });

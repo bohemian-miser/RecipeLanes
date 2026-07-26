@@ -19,7 +19,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RecipeGraph, RecipeNode } from '@/lib/recipe-lanes/types';
 import { ChefHat, X, Users, RefreshCw, Hammer } from 'lucide-react';
-import { getNodeIconUrl, getNodeShortlistLength, buildIngredientText } from '@/lib/recipe-lanes/model-utils';
+import { getNodeIconUrl, getNodeShortlistLength, computeIngredientRowPatch } from '@/lib/recipe-lanes/model-utils';
 
 interface IngredientsSidebarProps {
   graph: RecipeGraph;
@@ -35,12 +35,16 @@ interface IngredientsSidebarProps {
   forgingIds?: Set<string>;
 }
 
-type Draft = { text: string; qty: string; desc: string };
+type Draft = { qty: string; unit: string; name: string; desc: string };
 
 /** Seed a node's editable drafts. Quantity is shown scaled to the current serves. */
 function nodeToDraft(n: RecipeNode, scale: number): Draft {
-  const scaledQty = n.quantity != null ? String(Math.round(n.quantity * scale * 100) / 100) : '';
-  return { text: n.text ?? '', qty: scaledQty, desc: n.visualDescription ?? '' };
+  return {
+    qty: n.quantity != null ? String(Math.round(n.quantity * scale * 100) / 100) : '',
+    unit: n.unit ?? '',
+    name: n.canonicalName ?? n.text ?? '',
+    desc: n.visualDescription ?? '',
+  };
 }
 
 export function IngredientsSidebar({
@@ -62,10 +66,10 @@ export function IngredientsSidebar({
 
   const ingredientNodes = graph.nodes.filter(n => n.type === 'ingredient');
 
-  // Local drafts for the inline editors (text / quantity / visual description).
-  // Kept in sync with the graph for the node the user isn't actively editing
-  // (e.g. after undo, a serves change, or a snapshot merge) without clobbering
-  // in-progress typing on the focused row.
+  // Local drafts for the inline editors (number / unit / name / visual
+  // description). Kept in sync with the graph for the node the user isn't
+  // actively editing (e.g. after undo, a serves change, or a snapshot merge)
+  // without clobbering in-progress typing on the focused row.
   const [drafts, setDrafts] = useState<Record<string, Draft>>(
     () => Object.fromEntries(ingredientNodes.map(n => [n.id, nodeToDraft(n, scale)])),
   );
@@ -79,7 +83,7 @@ export function IngredientsSidebar({
         if (n.id === editingIdRef.current) continue;
         const d = nodeToDraft(n, scale);
         const cur = next[n.id];
-        if (!cur || cur.text !== d.text || cur.qty !== d.qty || cur.desc !== d.desc) {
+        if (!cur || cur.qty !== d.qty || cur.unit !== d.unit || cur.name !== d.name || cur.desc !== d.desc) {
           next[n.id] = d;
           changed = true;
         }
@@ -90,31 +94,20 @@ export function IngredientsSidebar({
   }, [graph]);
 
   const setField = (id: string, field: keyof Draft, val: string) =>
-    setDrafts(d => ({ ...d, [id]: { ...(d[id] ?? { text: '', qty: '', desc: '' }), [field]: val } }));
+    setDrafts(d => ({ ...d, [id]: { ...(d[id] ?? { qty: '', unit: '', name: '', desc: '' }), [field]: val } }));
 
-  const commitText = (node: RecipeNode) => {
-    const v = drafts[node.id]?.text ?? '';
-    if (v !== (node.text ?? '')) onEditNode?.(node.id, { text: v });
+  // Commit the number / unit / name boxes together — text (the diagram label)
+  // is rebuilt from all three so the info isn't duplicated across fields.
+  const commitRow = (node: RecipeNode) => {
+    const d = drafts[node.id];
+    if (!d || !onEditNode) return;
+    const patch = computeIngredientRowPatch(node, d, scale);
+    if (Object.keys(patch).length > 0) onEditNode(node.id, patch);
   };
 
   const commitDesc = (node: RecipeNode) => {
     const v = drafts[node.id]?.desc ?? '';
     if (v !== (node.visualDescription ?? '')) onEditNode?.(node.id, { visualDescription: v });
-  };
-
-  const commitQty = (node: RecipeNode) => {
-    const raw = drafts[node.id]?.qty ?? '';
-    if (raw.trim() === '') return;
-    const displayed = parseFloat(raw);
-    if (!Number.isFinite(displayed)) return;
-    // The field shows the scaled amount; store the unscaled base so serves
-    // scaling keeps working from the new value.
-    const newBase = scale ? Math.round((displayed / scale) * 100) / 100 : displayed;
-    if (newBase === node.quantity) return;
-    const patch: Partial<RecipeNode> = { quantity: newBase };
-    // Rebuild the label from the (scaled) displayed amount, mirroring serves scaling.
-    if (node.canonicalName) patch.text = buildIngredientText(displayed, node.unit, node.canonicalName);
-    onEditNode?.(node.id, patch);
   };
 
   const focusRow = (id: string) => { editingIdRef.current = id; };
@@ -150,80 +143,96 @@ export function IngredientsSidebar({
                 const iconUrl = getNodeIconUrl(node);
                 const isForging = forgingIds?.has(node.id) ?? false;
                 const canCycle = getNodeShortlistLength(node) > 0;
+                const label = node.canonicalName || node.text;
 
                 return (
                     <div key={node.id} className="flex items-start gap-3 group">
-                        {iconUrl ? (
-                            <img src={iconUrl} className="w-10 h-10 object-contain mix-blend-multiply bg-zinc-50 rounded-lg p-1 border border-zinc-100 shrink-0" alt="" />
-                        ) : (
-                            <div className="w-10 h-10 flex items-center justify-center bg-zinc-100 rounded-lg text-xl shrink-0">🥕</div>
-                        )}
+                        {/* Left column: icon with the cycle / forge buttons stacked beneath it. */}
+                        <div className="flex flex-col items-center gap-1 shrink-0 w-10">
+                            {iconUrl ? (
+                                <img src={iconUrl} className="w-10 h-10 object-contain mix-blend-multiply bg-zinc-50 rounded-lg p-1 border border-zinc-100" alt="" />
+                            ) : (
+                                <div className="w-10 h-10 flex items-center justify-center bg-zinc-100 rounded-lg text-xl">🥕</div>
+                            )}
+                            {onCycleShortlist && (
+                                <button
+                                    onClick={() => onCycleShortlist(node.id)}
+                                    disabled={!canCycle}
+                                    className="p-1 rounded hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title={canCycle ? 'Cycle icon' : 'No other icons yet'}
+                                    aria-label={`Cycle icon for ${label}`}
+                                >
+                                    <RefreshCw className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                            {onForge && (
+                                <button
+                                    onClick={() => onForge(node)}
+                                    disabled={isForging}
+                                    className="p-1 rounded hover:bg-zinc-100 text-zinc-400 hover:text-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    title="Forge new icon"
+                                    aria-label={`Forge new icon for ${label}`}
+                                >
+                                    <Hammer className={`w-3.5 h-3.5 ${isForging ? 'animate-pulse' : ''}`} />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Right column: number + unit, then the ingredient name, then the visual description. */}
                         <div className="flex-1 pt-0.5 min-w-0 space-y-1.5">
-                             <div className="flex items-center gap-1.5">
-                                 {onEditNode ? (
-                                     <input
-                                         type="number"
-                                         step="any"
-                                         min="0"
-                                         className="w-14 bg-zinc-50 border border-zinc-200 rounded px-1.5 py-0.5 text-sm font-bold text-blue-600 focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200"
-                                         value={drafts[node.id]?.qty ?? ''}
-                                         onChange={(e) => setField(node.id, 'qty', e.target.value)}
-                                         onFocus={() => focusRow(node.id)}
-                                         onBlur={() => blurRow(() => commitQty(node))}
-                                         aria-label={`Quantity for ${node.canonicalName || node.text}`}
-                                     />
-                                 ) : (
-                                     displayQty !== '' && <span className="font-bold text-blue-600">{displayQty}</span>
-                                 )}
-                                 {node.unit && <span className="text-zinc-500 text-xs uppercase font-bold">{node.unit}</span>}
-                                 <span className="capitalize text-sm text-zinc-800 font-medium flex-1 truncate" title={node.canonicalName || node.text}>{node.canonicalName || node.text}</span>
-                                 {onCycleShortlist && (
-                                     <button
-                                         onClick={() => onCycleShortlist(node.id)}
-                                         disabled={!canCycle}
-                                         className="p-1 rounded hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
-                                         title={canCycle ? 'Cycle icon' : 'No other icons yet'}
-                                         aria-label={`Cycle icon for ${node.canonicalName || node.text}`}
-                                     >
-                                         <RefreshCw className="w-3.5 h-3.5" />
-                                     </button>
-                                 )}
-                                 {onForge && (
-                                     <button
-                                         onClick={() => onForge(node)}
-                                         disabled={isForging}
-                                         className="p-1 rounded hover:bg-zinc-100 text-zinc-400 hover:text-amber-600 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-                                         title="Forge new icon"
-                                         aria-label={`Forge new icon for ${node.canonicalName || node.text}`}
-                                     >
-                                         <Hammer className={`w-3.5 h-3.5 ${isForging ? 'animate-pulse' : ''}`} />
-                                     </button>
-                                 )}
-                             </div>
-                             {onEditNode && (
-                                 <input
-                                     type="text"
-                                     className="w-full bg-zinc-50 border border-zinc-200 rounded px-2 py-1 text-xs text-zinc-700 focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200"
-                                     value={drafts[node.id]?.text ?? ''}
-                                     onChange={(e) => setField(node.id, 'text', e.target.value)}
-                                     onFocus={() => focusRow(node.id)}
-                                     onBlur={() => blurRow(() => commitText(node))}
-                                     placeholder="Recipe text"
-                                     aria-label={`Recipe text for ${node.canonicalName || node.text}`}
-                                 />
-                             )}
-                             {onEditNode && (
-                                 <textarea
-                                     className="w-full bg-zinc-50 border border-zinc-200 rounded px-2 py-1 text-[11px] text-zinc-600 resize-none focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200 leading-snug"
-                                     rows={2}
-                                     value={drafts[node.id]?.desc ?? ''}
-                                     onChange={(e) => setField(node.id, 'desc', e.target.value)}
-                                     onFocus={() => focusRow(node.id)}
-                                     onBlur={() => blurRow(() => commitDesc(node))}
-                                     placeholder="Visual description (what the icon shows)…"
-                                     aria-label={`Visual description for ${node.canonicalName || node.text}`}
-                                 />
-                             )}
+                            {onEditNode ? (
+                                <>
+                                    <div className="flex items-center gap-1.5">
+                                        <input
+                                            type="number"
+                                            step="any"
+                                            min="0"
+                                            className="w-16 bg-zinc-50 border border-zinc-200 rounded px-1.5 py-0.5 text-sm font-bold text-blue-600 focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200"
+                                            value={drafts[node.id]?.qty ?? ''}
+                                            onChange={(e) => setField(node.id, 'qty', e.target.value)}
+                                            onFocus={() => focusRow(node.id)}
+                                            onBlur={() => blurRow(() => commitRow(node))}
+                                            aria-label={`Quantity for ${label}`}
+                                        />
+                                        <input
+                                            type="text"
+                                            className="flex-1 min-w-0 bg-zinc-50 border border-zinc-200 rounded px-2 py-0.5 text-xs uppercase font-bold text-zinc-500 focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200"
+                                            value={drafts[node.id]?.unit ?? ''}
+                                            onChange={(e) => setField(node.id, 'unit', e.target.value)}
+                                            onFocus={() => focusRow(node.id)}
+                                            onBlur={() => blurRow(() => commitRow(node))}
+                                            placeholder="unit"
+                                            aria-label={`Unit for ${label}`}
+                                        />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className="w-full bg-zinc-50 border border-zinc-200 rounded px-2 py-1 text-sm text-zinc-800 font-medium capitalize focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200"
+                                        value={drafts[node.id]?.name ?? ''}
+                                        onChange={(e) => setField(node.id, 'name', e.target.value)}
+                                        onFocus={() => focusRow(node.id)}
+                                        onBlur={() => blurRow(() => commitRow(node))}
+                                        placeholder="Ingredient name"
+                                        aria-label={`Ingredient name for ${label}`}
+                                    />
+                                    <textarea
+                                        className="w-full bg-zinc-50 border border-zinc-200 rounded px-2 py-1 text-[11px] text-zinc-600 resize-none focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200 leading-snug"
+                                        rows={2}
+                                        value={drafts[node.id]?.desc ?? ''}
+                                        onChange={(e) => setField(node.id, 'desc', e.target.value)}
+                                        onFocus={() => focusRow(node.id)}
+                                        onBlur={() => blurRow(() => commitDesc(node))}
+                                        placeholder="Visual description (what the icon shows)…"
+                                        aria-label={`Visual description for ${label}`}
+                                    />
+                                </>
+                            ) : (
+                                <div className="text-sm text-zinc-800 font-medium leading-tight">
+                                    {displayQty !== '' && <span className="font-bold text-blue-600 mr-1">{displayQty}</span>}
+                                    {node.unit && <span className="text-zinc-500 text-xs uppercase font-bold mr-1">{node.unit}</span>}
+                                    <span className="capitalize">{label}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 );

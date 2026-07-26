@@ -45,6 +45,7 @@ export const INTEGRATION_TESTS = [
   'forge-gate-regression.test.ts',
   'functions-metadata.test.ts',
   'hybrid-integration.test.ts',
+  'icon-apply-auth.test.ts',
   'icon-index.test.ts',
   'icon-queue-config.test.ts',
   'impression-rejection.test.ts',

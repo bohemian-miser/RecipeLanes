@@ -139,6 +139,15 @@ interface RecipeActions {
     markNodeDeleted: (nodeId: string) => void;
 
     /**
+     * Clears the given node IDs from pendingDeletedIds without touching the
+     * graph. Used by views whose undo restores a whole prior graph snapshot
+     * directly (e.g. the notation/timeline view): once the nodes are back in
+     * the graph, their pending-delete flags must be cleared so mergeSnapshot
+     * does not immediately re-suppress them on the next Firestore snapshot.
+     */
+    unmarkNodesDeleted: (ids: string[]) => void;
+
+    /**
      * Restores nodes that were previously marked as deleted (e.g. on undo).
      * Clears the node IDs from pendingDeletedIds and merges the nodes back into
      * the graph, so that mergeSnapshot and the layout effect see a consistent state.
@@ -364,6 +373,16 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
             ? { ...state.graph, nodes: state.graph.nodes.filter(n => n.id !== nodeId) }
             : state.graph,
     })),
+
+    unmarkNodesDeleted: (ids) => set((state) => {
+        if (state.pendingDeletedIds.length === 0) return {};
+        const idSet = new Set(ids);
+        const filtered = state.pendingDeletedIds.filter(id => !idSet.has(id));
+        // No-op if none of the given IDs were pending — keep the reference stable.
+        return filtered.length === state.pendingDeletedIds.length
+            ? {}
+            : { pendingDeletedIds: filtered };
+    }),
 
     restoreNodes: (rfNodes) => set((state) => {
         if (!state.graph) return {};

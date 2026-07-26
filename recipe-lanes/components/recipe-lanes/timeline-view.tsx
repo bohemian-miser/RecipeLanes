@@ -94,7 +94,7 @@ function NodeControls({ cx, cy, isForging, onReroll, onForge, onDelete }: {
           {isForging ? '…' : '⚒'}
         </text>
       </g>
-      <g onClick={onDelete} style={{ cursor: 'pointer' }}>
+      <g onClick={onDelete} style={{ cursor: 'pointer' }} data-testid="node-delete">
         <circle cx={cx + 18} cy={y} r={8} fill="#ef4444" stroke="white" strokeWidth={1.5}/>
         <text x={cx + 18} y={y} textAnchor="middle" dominantBaseline="middle" fontSize={11} fill="white">×</text>
       </g>
@@ -212,8 +212,10 @@ function IngredientNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSel
 export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (graph: RecipeGraph) => void }) {
   const searchParams   = useSearchParams();
   const recipeId       = searchParams.get('id');
-  const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
-  const setGraph       = useRecipeStore(s => s.setGraph);
+  const cycleShortlist     = useRecipeStore(s => s.cycleShortlist);
+  const setGraph           = useRecipeStore(s => s.setGraph);
+  const markNodeDeleted    = useRecipeStore(s => s.markNodeDeleted);
+  const unmarkNodesDeleted = useRecipeStore(s => s.unmarkNodesDeleted);
 
   const layout = useMemo(() => buildTimelineLayout(graph), [graph]);
   const { nodes, edges, lanes, totalMinutes, totalWidth, totalHeight, pixelsPerMin: ppm, actionZoneY } = layout;
@@ -248,10 +250,14 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
     setUndoStack(prev => {
       if (!prev.length) return prev;
       const next = [...prev];
-      setGraph(next.pop()!);
+      const restored = next.pop()!;
+      setGraph(restored);
+      // Clear the pending-delete flags for any node the undo brings back, so
+      // mergeSnapshot does not immediately re-suppress a just-restored node.
+      unmarkNodesDeleted(restored.nodes.map(n => n.id));
       return next;
     });
-  }, [setGraph]);
+  }, [setGraph, unmarkNodesDeleted]);
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
@@ -331,11 +337,19 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
   // ── Delete ────────────────────────────────────────────────────────────────
   const deleteNode = useCallback((nodeId: string) => {
     pushUndo(graph);
-    setGraph({ ...graph, nodes: graph.nodes.filter(n => n.id !== nodeId) });
+    const nextGraph = { ...graph, nodes: graph.nodes.filter(n => n.id !== nodeId) };
+    setGraph(nextGraph);
+    // Record the deletion so an in-flight Firestore snapshot (e.g. an icon
+    // write-back, or the listener reconnecting after the app is backgrounded on
+    // mobile) cannot resurrect the node and revert the graph to its saved state.
+    markNodeDeleted(nodeId);
+    // Persist the deletion — without this the node only vanishes from local
+    // state and the next snapshot / reload brings it back.
+    onSave?.(nextGraph);
     setPosOverrides(p => { const n = new Map(p); n.delete(nodeId); return n; });
     setSelectedIds(p => { const n = new Set(p); n.delete(nodeId); return n; });
     setHoveredNodeId(null);
-  }, [graph, setGraph, pushUndo]);
+  }, [graph, setGraph, markNodeDeleted, onSave, pushUndo]);
 
   // ── Viewport / drag ───────────────────────────────────────────────────────
   const [vp, setVp]       = useState<Viewport>(DEFAULT_VP);

@@ -42,7 +42,7 @@ import { looksLikeUrl, isAdjustSubmitKey } from '@/lib/recipe-lanes/input-utils'
 import { track } from '@/lib/analytics';
 import { fileToRecipePhotoDataUrl } from '@/lib/recipe-lanes/image-client';
 import { loadDraft, saveDraft, commitDraftOnForge, clearBlankDraft } from '@/lib/recipe-lanes/draft-persistence';
-import { mintClaimToken, storeClaimToken } from '@/lib/recipe-lanes/claim-token-client';
+import { mintClaimToken, storeClaimToken, getClaimToken } from '@/lib/recipe-lanes/claim-token-client';
 import { LoadingScreen, LoadingPhase } from '@/components/recipe-lanes/ui/loading-screen';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -215,7 +215,9 @@ function RecipeLanesContent() {
 
           console.log(`[batchIconSearch] ${method.name} — ${ingredients.length} ingredients`);
           const results = await method.search(ingredients, 12);
-          const res = await applyIconSearchResultsAction(recipeId, results);
+          // Pass the anon claim token so anon creators can hydrate icons on the
+          // recipe they own without signing in (server authorizes owner OR token).
+          const res = await applyIconSearchResultsAction(recipeId, results, getClaimToken(localStorage, recipeId));
           if (!res.success) throw new Error(res.error);
           console.log(`[batchIconSearch] applied ${res.applied} in ${res.elapsed}ms`);
           setIconSearchElapsed(res.elapsed);
@@ -247,7 +249,7 @@ function RecipeLanesContent() {
       try {
           const t0 = Date.now();
           const results = await hydrateClientSide(itemsToHydrate);
-          const res = await applyIconSearchResultsAction(recipeId, results);
+          const res = await applyIconSearchResultsAction(recipeId, results, getClaimToken(localStorage, recipeId));
           if (!res.success) throw new Error(res.error);
           console.log(`[hydrateFastMatches] applied ${res.applied} in ${res.elapsed}ms (total: ${Date.now() - t0}ms)`);
           setIconSearchElapsed(res.elapsed);

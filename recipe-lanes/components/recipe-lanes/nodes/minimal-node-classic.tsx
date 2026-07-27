@@ -17,7 +17,7 @@
 
 import React from 'react';
 import { Handle, Position } from 'reactflow';
-import { RefreshCw, X, Hammer } from 'lucide-react';
+import { RefreshCw, X, Hammer, Check } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { getNodeIngredientName, getNodeIconStatus } from '../../../lib/recipe-lanes/model-utils';
 
@@ -31,10 +31,13 @@ interface MinimalNodeViewProps {
     iconUrl: string | undefined;
     /** Whether the current shortlist entry was resolved via search rather than generation. */
     isSearchMatched: boolean;
+    /** Whether this step has been ticked off as done (#281). */
+    isCompleted: boolean;
     handlers: {
         onReroll: (e: React.MouseEvent) => void;
         onForge: (e: React.MouseEvent) => void;
         onDelete: (e: React.MouseEvent) => void;
+        onToggleCompleted: (e: React.MouseEvent) => void;
         onPointerDownCapture: (e: React.PointerEvent) => void;
         onPointerMoveCapture: (e: React.PointerEvent) => void;
         onPointerUpCapture: () => void;
@@ -43,7 +46,7 @@ interface MinimalNodeViewProps {
 }
 
 export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
-    data, selected, isRerolling, isForging, isPivotMode, iconUrl, isSearchMatched, handlers
+    data, selected, isRerolling, isForging, isPivotMode, iconUrl, isSearchMatched, isCompleted, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
     const textPos = data.textPos || 'bottom';
@@ -99,10 +102,10 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                 <Handle id="source" type="source" position={Position.Top} className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
 
                 {iconUrl ? (
-                    <img 
-                        src={iconUrl} 
-                        alt="" 
-                        className={`${imageSize} object-contain drop-shadow-md mix-blend-multiply ${isRerolling ? 'opacity-50' : ''}`}
+                    <img
+                        src={iconUrl}
+                        alt=""
+                        className={`${imageSize} object-contain drop-shadow-md mix-blend-multiply ${isRerolling ? 'opacity-50' : isCompleted ? 'opacity-40' : ''}`}
                         style={{ imageRendering: 'pixelated' }}
                     />
                 ) : (
@@ -112,10 +115,10 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                            <span className="text-[8px] font-bold uppercase leading-none">Failed</span>
                        </div>
                     ) : (
-                       <span className={`text-5xl drop-shadow-sm ${getNodeIconStatus(data) === 'processing' || getNodeIconStatus(data) === 'pending' ? 'animate-pulse opacity-50' : ''}`}>{isIngredient ? '🥕' : '🍳'}</span>
+                       <span className={`text-5xl drop-shadow-sm ${getNodeIconStatus(data) === 'processing' || getNodeIconStatus(data) === 'pending' ? 'animate-pulse opacity-50' : isCompleted ? 'opacity-40' : ''}`}>{isIngredient ? '🥕' : '🍳'}</span>
                     )
                 )}
-                
+
                 {/* Reroll Button */}
                 <button
                     onClick={handlers.onReroll}
@@ -145,6 +148,15 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                     <X className="w-3 h-3" />
                 </button>
 
+                {/* Tick off Button (#281) — mark step as done */}
+                <button
+                    onClick={handlers.onToggleCompleted}
+                    className={`nodrag absolute -bottom-2 -left-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-green-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isCompleted ? '!opacity-100 block !text-green-500' : ''}`}
+                    title={isCompleted ? 'Mark as not done' : 'Tick off — mark as done'}
+                >
+                    <Check className="w-3 h-3" />
+                </button>
+
                 {/* Search-match confidence dot */}
                 {isSearchMatched && (
                     <span
@@ -156,9 +168,13 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
             </div>
 
             {/* Text Container - Scaled Up */}
-            <div 
-                className={`text-xs leading-tight text-center font-medium text-zinc-800 break-words px-1 z-20 ${isVertical ? 'w-full mt-[-4px]' : 'w-28'}`} 
-                style={{ textShadow: '0 0 4px rgba(255,255,255,0.8), 0 0 2px rgba(255,255,255,1)' }}
+            <div
+                className={`text-xs leading-tight text-center font-medium text-zinc-800 break-words px-1 z-20 ${isVertical ? 'w-full mt-[-4px]' : 'w-28'}`}
+                style={{
+                    textShadow: '0 0 4px rgba(255,255,255,0.8), 0 0 2px rgba(255,255,255,1)',
+                    // Ticked-off dim (#281) — opacity only, matches timeline-view.tsx precedent.
+                    opacity: isCompleted ? 0.4 : 1,
+                }}
             >
                 {data.text}
                 {(data.temperature || data.duration) && (

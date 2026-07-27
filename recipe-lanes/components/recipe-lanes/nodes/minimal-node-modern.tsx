@@ -17,7 +17,7 @@
 
 import React from 'react';
 import { Handle, Position } from 'reactflow';
-import { RefreshCw, X, Hammer } from 'lucide-react';
+import { RefreshCw, X, Hammer, Check } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { getNodeIngredientName, getNodeTheme } from '../../../lib/recipe-lanes/model-utils';
 
@@ -31,10 +31,13 @@ interface MinimalNodeViewProps {
     iconUrl: string | undefined;
     /** Whether the current shortlist entry was resolved via search rather than generation. */
     isSearchMatched: boolean;
+    /** Whether this step has been ticked off as done (#281). */
+    isCompleted: boolean;
     handlers: {
         onReroll: (e: React.MouseEvent) => void;
         onForge: (e: React.MouseEvent) => void;
         onDelete: (e: React.MouseEvent) => void;
+        onToggleCompleted: (e: React.MouseEvent) => void;
         onPointerDownCapture: (e: React.PointerEvent) => void;
         onPointerMoveCapture: (e: React.PointerEvent) => void;
         onPointerUpCapture: () => void;
@@ -52,7 +55,7 @@ const parseNodeText = (text: string) => {
 };
 
 export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
-    data, selected, isRerolling, isForging, isPivotMode, iconUrl, isSearchMatched, handlers
+    data, selected, isRerolling, isForging, isPivotMode, iconUrl, isSearchMatched, isCompleted, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
     const themeVariant = getNodeTheme(data) === 'modern_clean' ? 'modern_clean' : 'modern';
@@ -82,9 +85,9 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                 <Handle id="source" type="source" position={Position.Bottom} className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                                         
                                         {iconUrl ? (
-                                            <img 
-                                                src={iconUrl} 
-                                                alt=""                                className={`w-full h-full object-contain drop-shadow-md rendering-pixelated ${isRerolling ? 'opacity-50' : ''}`}
+                                            <img
+                                                src={iconUrl}
+                                                alt=""                                className={`w-full h-full object-contain drop-shadow-md rendering-pixelated ${isRerolling ? 'opacity-50' : isCompleted ? 'opacity-40' : ''}`}
                                 style={{ imageRendering: 'pixelated' }}
                             />
                         ) : (
@@ -110,6 +113,10 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                             <button onClick={handlers.onDelete} className="bg-white/80 rounded-full p-1 shadow hover:text-red-500">
                                 <X className="w-3 h-3" />
                             </button>
+                            {/* Tick off (#281) — mark step as done */}
+                            <button onClick={handlers.onToggleCompleted} className={`bg-white/80 rounded-full p-1 shadow hover:text-green-500 ${isCompleted ? 'text-green-500' : ''}`} title={isCompleted ? 'Mark as not done' : 'Tick off — mark as done'}>
+                                <Check className="w-3 h-3" />
+                            </button>
                         </div>
 
                         {/* Search-match confidence dot */}
@@ -123,7 +130,10 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                     </div>
 
                     {/* Pill Text (Name Only) - Wrapped */}
-                    <div className="relative z-50 -mt-5 bg-white/90 backdrop-blur-sm border border-white/50 shadow-sm rounded-xl px-2 py-0.5 pointer-events-none w-max max-w-[160px] text-center">
+                    <div
+                        className="relative z-50 -mt-5 bg-white/90 backdrop-blur-sm border border-white/50 shadow-sm rounded-xl px-2 py-0.5 pointer-events-none w-max max-w-[160px] text-center"
+                        style={{ opacity: isCompleted ? 0.4 : 1 }}
+                    >
                         <span className="text-[9px] font-bold text-zinc-800 uppercase tracking-wide leading-tight whitespace-normal block">
                             {parsed.name}
                         </span>
@@ -147,10 +157,10 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                         <Handle id="source" type="source" position={Position.Bottom} className="!bg-transparent !w-1 !h-1 !border-0 bottom-2 left-1/2" />
                         
                         {iconUrl ? (
-                            <img 
-                                src={iconUrl} 
-                                alt="" 
-                                className={`w-full h-full object-contain drop-shadow-md rendering-pixelated ${isRerolling ? 'opacity-50' : ''}`}
+                            <img
+                                src={iconUrl}
+                                alt=""
+                                className={`w-full h-full object-contain drop-shadow-md rendering-pixelated ${isRerolling ? 'opacity-50' : isCompleted ? 'opacity-40' : ''}`}
                                 style={{ imageRendering: 'pixelated' }}
                             />
                         ) : (
@@ -168,6 +178,10 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                             <button onClick={handlers.onDelete} className="bg-white/80 rounded-full p-1 shadow hover:text-red-500">
                                 <X className="w-3 h-3" />
                             </button>
+                            {/* Tick off (#281) — mark step as done */}
+                            <button onClick={handlers.onToggleCompleted} className={`bg-white/80 rounded-full p-1 shadow hover:text-green-500 ${isCompleted ? 'text-green-500' : ''}`} title={isCompleted ? 'Mark as not done' : 'Tick off — mark as done'}>
+                                <Check className="w-3 h-3" />
+                            </button>
                         </div>
 
                         {/* Search-match confidence dot */}
@@ -181,7 +195,10 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                     </div>
 
                     {/* Inline Pill (Qty + Name) - Wrapped */}
-                    <div className="relative z-50 -mt-5 bg-white/90 backdrop-blur-sm border border-white/50 shadow-sm rounded-xl px-2 py-0.5 pointer-events-none w-max max-w-[180px] text-center">
+                    <div
+                        className="relative z-50 -mt-5 bg-white/90 backdrop-blur-sm border border-white/50 shadow-sm rounded-xl px-2 py-0.5 pointer-events-none w-max max-w-[180px] text-center"
+                        style={{ opacity: isCompleted ? 0.4 : 1 }}
+                    >
                         <div className="flex flex-wrap items-center justify-center gap-1 text-[9px] font-bold leading-tight">
                             {parsed.qty && (
                                 <span className="text-orange-600 whitespace-nowrap">
@@ -210,7 +227,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
           >
               {/* Text Bubble (Left) */}
               <div className="absolute right-[55%] top-1/2 -translate-y-1/2 w-36 flex flex-col items-end text-right z-50 pointer-events-none opacity-90 hover:opacity-100 transition-opacity">
-                  <div className="bg-white/90 backdrop-blur-sm border border-zinc-200 shadow-md px-2 py-1.5 rounded-lg">
+                  <div className="bg-white/90 backdrop-blur-sm border border-zinc-200 shadow-md px-2 py-1.5 rounded-lg" style={{ opacity: isCompleted ? 0.4 : 1 }}>
                       <span className="text-[10px] font-semibold text-zinc-800 leading-snug block whitespace-normal">
                           {data.text}
                       </span>
@@ -239,10 +256,10 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                   <Handle id="source" type="source" position={Position.Bottom} className="!bg-transparent !w-1 !h-1 !border-0 bottom-2" />
                   
                   {iconUrl ? (
-                      <img 
-                          src={iconUrl} 
-                          alt="" 
-                          className={`w-full h-full object-contain drop-shadow-xl rendering-pixelated ${isRerolling ? 'opacity-50' : ''}`}
+                      <img
+                          src={iconUrl}
+                          alt=""
+                          className={`w-full h-full object-contain drop-shadow-xl rendering-pixelated ${isRerolling ? 'opacity-50' : isCompleted ? 'opacity-40' : ''}`}
                           style={{ imageRendering: 'pixelated' }}
                       />
                   ) : (
@@ -259,6 +276,10 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                       </button>
                       <button onClick={handlers.onDelete} className="bg-white/80 rounded-full p-1 shadow hover:text-red-500">
                           <X className="w-3 h-3" />
+                      </button>
+                      {/* Tick off (#281) — mark step as done */}
+                      <button onClick={handlers.onToggleCompleted} className={`bg-white/80 rounded-full p-1 shadow hover:text-green-500 ${isCompleted ? 'text-green-500' : ''}`} title={isCompleted ? 'Mark as not done' : 'Tick off — mark as done'}>
+                          <Check className="w-3 h-3" />
                       </button>
                   </div>
 

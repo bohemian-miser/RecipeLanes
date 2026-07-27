@@ -50,6 +50,9 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
     const storeNode      = useRecipeStore(s => s.graph?.nodes.find(n => n.id === id));
     const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
     const leafNodeScale  = useRecipeStore(s => s.leafNodeScale);
+    // "Tick off" step completion (#281). Boolean selector return stays reference-stable.
+    const isCompleted         = useRecipeStore(s => s.completedNodeIds.includes(id));
+    const toggleNodeCompleted = useRecipeStore(s => s.toggleNodeCompleted);
     const node           = storeNode ?? data;
 
     const currentIndex = Math.max(0, currentShortlistIndex(node));
@@ -91,6 +94,11 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
     const handleDelete = (e: React.MouseEvent) => {
         e.stopPropagation();
         data.onDelete?.();
+    };
+
+    const handleToggleCompleted = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        toggleNodeCompleted(id);
     };
 
     const handleTouchStart = () => {
@@ -155,6 +163,9 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                // Ticked-off dim (#281) — opacity only, no transform, so ReactFlow's
+                // measured handle position (see minimal-node.tsx) stays valid.
+                opacity: isCompleted ? 0.4 : 1,
             }}>
                 {iconUrl ? (
                     <img
@@ -175,7 +186,7 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
                 transform: 'translateX(-50%)',
                 fontSize: 8,
                 fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-                color: '#3f3f46',
+                color: isCompleted ? '#a1a1aa' : '#3f3f46',
                 textAlign: 'center',
                 whiteSpace: 'nowrap',
                 pointerEvents: 'none',
@@ -217,6 +228,14 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
                 style={{ ...BTN, top: -9, right: -9, background: '#ef4444' }}
                 title="Delete"
             >×</button>
+
+            {/* Tick off (#281) — mark step as done */}
+            <button
+                onClick={handleToggleCompleted}
+                className="nodrag opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ ...BTN, bottom: -9, left: -9, background: isCompleted ? '#22c55e' : '#71717a' }}
+                title={isCompleted ? 'Mark as not done' : 'Tick off — mark as done'}
+            >✓</button>
         </div>
     );
 };

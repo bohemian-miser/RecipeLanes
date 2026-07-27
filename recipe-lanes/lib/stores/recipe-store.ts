@@ -81,6 +81,21 @@ interface RecipeState {
      * the user just deleted before the autosave has propagated to Firestore.
      */
     pendingDeletedIds: string[];
+    /**
+     * Node IDs the cook has ticked off while working through the recipe (#281).
+     *
+     * Deliberately client-only: this is *cooking progress*, not recipe content.
+     * A recipe doc is shared (public/unlisted recipes are read by people who
+     * cannot write to them), so persisting "done" onto graph.nodes would both
+     * mutate a shared document for every other reader and fail outright for
+     * viewers without write access. Keeping it beside the graph — the same
+     * shape as pendingDeletedIds — also means ticking never marks the recipe
+     * dirty and never triggers an autosave.
+     *
+     * Consequence: progress lives for the lifetime of the page. Reloading
+     * clears it. See the issue thread for the persistence follow-up.
+     */
+    completedNodeIds: string[];
 }
 
 interface RecipeActions {
@@ -101,6 +116,19 @@ interface RecipeActions {
     ) => void;
 
     setRecipeId: (id: string | null) => void;
+
+    /**
+     * Ticks a node off, or un-ticks it (#281). Client-only progress: it never
+     * touches `graph` and never sets `isDirty`.
+     */
+    toggleNodeCompleted: (nodeId: string) => void;
+
+    /** Sets a node's ticked-off state explicitly. Idempotent. */
+    setNodeCompleted: (nodeId: string, completed: boolean) => void;
+
+    /** Clears all ticked-off nodes — "start this recipe again". */
+    clearCompletedNodes: () => void;
+
     setStatus: (status: RecipeStatus) => void;
     setError: (error: string | null) => void;
     setDirty: (dirty: boolean) => void;
@@ -281,7 +309,24 @@ const initialState: RecipeState = {
     undoStack: [],
     messages: [],
     pendingDeletedIds: [],
+    completedNodeIds: [],
 };
+
+/**
+ * Drops ticked-off IDs whose node no longer exists in `nodes`.
+ *
+ * Pruning is done against the *merged* graph, never against the raw snapshot:
+ * mergeNodes deliberately keeps locally-added nodes that Firestore has not
+ * caught up with yet, so pruning on the incoming node set alone would un-tick
+ * a step the cook just ticked on a node still waiting to be autosaved.
+ * Returns the original array reference when nothing was dropped.
+ */
+function pruneCompleted(completedNodeIds: string[], nodes: RecipeNode[]): string[] {
+    if (completedNodeIds.length === 0) return completedNodeIds;
+    const liveIds = new Set(nodes.map(n => n.id));
+    const kept = completedNodeIds.filter(id => liveIds.has(id));
+    return kept.length === completedNodeIds.length ? completedNodeIds : kept;
+}
 
 export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => ({
     ...initialState,
@@ -312,6 +357,7 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
                 status: 'complete',
                 error: null,
                 pendingDeletedIds: newPendingDeletedIds,
+                completedNodeIds: pruneCompleted(state.completedNodeIds, filteredIncoming.nodes),
                 ...(meta?.ownerId !== undefined && { ownerId: meta.ownerId }),
                 ...(meta?.ownerName !== undefined && { ownerName: meta.ownerName }),
             });
@@ -330,12 +376,41 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
             status: 'complete',
             error: null,
             pendingDeletedIds: newPendingDeletedIds,
+            // Prune against mergedNodes, which still contains locally-added
+            // nodes the snapshot has not caught up with.
+            completedNodeIds: pruneCompleted(state.completedNodeIds, mergedNodes),
             ...(meta?.ownerId !== undefined && { ownerId: meta.ownerId }),
             ...(meta?.ownerName !== undefined && { ownerName: meta.ownerName }),
         });
     },
 
-    setRecipeId: (id) => set({ recipeId: id }),
+    // Switching to a different recipe starts a fresh cook — drop the ticks from
+    // the previous one. Re-setting the same id (or clearing it) leaves them be.
+    setRecipeId: (id) => set((state) => (
+        id !== null && state.recipeId !== null && state.recipeId !== id
+            ? { recipeId: id, completedNodeIds: [] }
+            : { recipeId: id }
+    )),
+
+    toggleNodeCompleted: (nodeId) => set((state) => ({
+        completedNodeIds: state.completedNodeIds.includes(nodeId)
+            ? state.completedNodeIds.filter(id => id !== nodeId)
+            : [...state.completedNodeIds, nodeId],
+    })),
+
+    setNodeCompleted: (nodeId, completed) => set((state) => {
+        const already = state.completedNodeIds.includes(nodeId);
+        if (already === completed) return {};   // no-op: keep the array reference
+        return {
+            completedNodeIds: completed
+                ? [...state.completedNodeIds, nodeId]
+                : state.completedNodeIds.filter(id => id !== nodeId),
+        };
+    }),
+
+    clearCompletedNodes: () => set((state) => (
+        state.completedNodeIds.length === 0 ? {} : { completedNodeIds: [] }
+    )),
     setStatus: (status) => set({ status }),
     setError: (error) => set({ error, status: error ? 'error' : get().status }),
     setDirty: (dirty) => set({ isDirty: dirty }),
@@ -402,6 +477,11 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
         pendingDeletedIds: state.pendingDeletedIds.includes(nodeId)
             ? state.pendingDeletedIds
             : [...state.pendingDeletedIds, nodeId],
+        // A deleted node cannot stay ticked off, or its ID would linger and
+        // re-apply if the same ID ever came back via restoreNodes/undo.
+        completedNodeIds: state.completedNodeIds.includes(nodeId)
+            ? state.completedNodeIds.filter(id => id !== nodeId)
+            : state.completedNodeIds,
         // Also remove the node from the local graph immediately so the store
         // is consistent with the ReactFlow state and the layout effect does not
         // see a "new" node (in Zustand but not RF) and call runLayout.

@@ -63,6 +63,9 @@ export const MinimalNode: React.FC<any> = ({
   // Global "leaf node size" setting (#155): scale leaf nodes (no incoming edge).
   // `data.isLeaf` is computed once during layout in react-flow-diagram.
   const leafNodeScale = useRecipeStore(s => s.leafNodeScale);
+  // "Tick off" step completion (#281). Boolean selector return stays reference-stable.
+  const isCompleted = useRecipeStore(s => s.completedNodeIds.includes(id));
+  const toggleNodeCompleted = useRecipeStore(s => s.toggleNodeCompleted);
 
   // Use storeNode when available (it has up-to-date shortlistIndex after cycling).
   // Fall back to data prop for nodes not yet in the store.
@@ -122,6 +125,11 @@ export const MinimalNode: React.FC<any> = ({
       if (data.onDelete) data.onDelete();
   };
 
+  const handleToggleCompleted = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      toggleNodeCompleted(id);
+  };
+
   const handleReroll = (e: React.MouseEvent) => {
       e.stopPropagation();
       cycleShortlist(id);
@@ -150,6 +158,7 @@ export const MinimalNode: React.FC<any> = ({
       onReroll: handleReroll,
       onForge: handleForge,
       onDelete: handleDelete,
+      onToggleCompleted: handleToggleCompleted,
       onPointerDownCapture: handlePointerDown,
       onPointerMoveCapture: handlePointerMove,
       onPointerUpCapture: handlePointerUpOrCancel,
@@ -157,8 +166,8 @@ export const MinimalNode: React.FC<any> = ({
   };
 
   const inner = (iconTheme === 'modern' || iconTheme === 'modern_clean')
-      ? <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />
-      : <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
+      ? <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} isCompleted={isCompleted} handlers={handlers} />
+      : <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} isCompleted={isCompleted} handlers={handlers} />;
 
   // Scale leaf nodes down when the global slider is below 100%. The transform
   // origin is pinned to the HANDLE point (top-center of the icon container) so

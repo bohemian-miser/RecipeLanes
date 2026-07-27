@@ -23,7 +23,7 @@ import { randomUUID } from 'crypto';
 import { claimHashForCreate, isValidClaim } from './recipe-lanes/claim-token';
 import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
-import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES } from './config';
+import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES, ICON_GALLERY_PAGE_SIZE, ICON_SEARCH_SCAN_LIMIT } from './config';
 import { standardizeIngredientName, removeUndefined, computeStoredOwnerName } from './utils';
 // import { calculateWilsonLCB } from './utils';
 import { applyIconToNode, assignNodeShortlist, buildShortlistEntry, clearNodeShortlist, computeShortlistDelta, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getNodeShortlist, getNodeShortlistLength, getPendingImpressionIds, getPendingRejectionIds, getPendingImpressionTargets, getPendingRejectionTargets, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, markEntryImpressedAtIndex, markSeenEntriesImpressed, markSeenEntriesRejected, mutateNodesByIngredient, prependToShortlist, rankIconsByEmbedding, toRecipeIcon, setNodeStatusByIngredient, extractBatchIngredients } from './recipe-lanes/model-utils';
@@ -632,21 +632,20 @@ export class FirebaseDataService implements DataService {
     // aaand it doesn't work...
     // Removed duplicate retryIconGeneration
 
+  // `total` is the size of the whole matching set, NOT of the page — the gallery
+  // pager derives its page count from it (`Math.ceil(total / limit)`), so an
+  // estimate derived from the current page produced phantom pages that render
+  // empty (issue #280).
   async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
       try {
-          const offset = (page - 1) * limit;
+          const safeLimit = Math.max(1, Math.floor(limit) || ICON_GALLERY_PAGE_SIZE);
+          const safePage = Math.max(1, Math.floor(page) || 1);
+          const offset = (safePage - 1) * safeLimit;
 
-          let q: FirebaseFirestore.Query = db.collection(DB_COLLECTION_ICON_INDEX)
+          const base: FirebaseFirestore.Query = this._db.collection(DB_COLLECTION_ICON_INDEX)
               .orderBy('created_at', 'desc');
-          
-          if (!query) {
-              q = q.offset(offset).limit(limit);
-          } else {
-              q = q.limit(1000); 
-          }
 
-          const snapshot = await q.get();
-          let allIcons: any[] = snapshot.docs.map(doc => {
+          const mapDocs = (docs: FirebaseFirestore.QueryDocumentSnapshot[]): any[] => docs.map(doc => {
               const data = doc.data();
               // eslint-disable-next-line @typescript-eslint/no-unused-vars
               const { embedding, embedding_minilm, ...rest } = data;
@@ -659,17 +658,26 @@ export class FirebaseDataService implements DataService {
               };
           });
 
-          if (query && query.trim()) {
-              const term = query.toLowerCase().trim();
-              allIcons = allIcons.filter((i: any) => 
-                  i.visualDescription?.toLowerCase().includes(term) || 
-                  i.ingredient_name?.toLowerCase().includes(term)
-              );
-              allIcons = allIcons.slice(offset, offset + limit);
+          const term = query?.toLowerCase().trim() ?? '';
+
+          if (!term) {
+              // Unfiltered: Firestore pages for us, and count() gives the exact total.
+              const [snapshot, countSnapshot] = await Promise.all([
+                  base.offset(offset).limit(safeLimit).get(),
+                  base.count().get(),
+              ]);
+              return { icons: mapDocs(snapshot.docs), total: countSnapshot.data().count };
           }
 
-          const totalEstimate = allIcons.length > 0 ? (page * limit) + allIcons.length : (page - 1) * limit;
-          return { icons: allIcons, total: totalEstimate };
+          // Search: there is no server-side text index, so the newest
+          // ICON_SEARCH_SCAN_LIMIT icons are filtered in memory. `total` is the
+          // size of that filtered set, so the pager only offers pages that exist.
+          const snapshot = await base.limit(ICON_SEARCH_SCAN_LIMIT).get();
+          const matches = mapDocs(snapshot.docs).filter((i: any) =>
+              i.visualDescription?.toLowerCase().includes(term) ||
+              i.ingredient_name?.toLowerCase().includes(term)
+          );
+          return { icons: matches.slice(offset, offset + safeLimit), total: matches.length };
       } catch (e: any) {
           console.warn('getPagedIcons failed:', e.message);
           return { icons: [], total: 0 };

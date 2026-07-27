@@ -24,6 +24,7 @@ import { IconStats } from '@/lib/recipe-lanes/types';
 import { getIconThumbUrl } from '@/lib/recipe-lanes/model-utils';
 import { GALLERY_LABEL_TRANSFORM_CLASS } from '@/lib/recipe-lanes/gallery-label';
 import { formatIconCreatedAt } from '@/lib/recipe-lanes/icon-created-at';
+import { ICON_GALLERY_PAGE_SIZE } from '@/lib/config';
 
 interface SharedGalleryProps {
   onIconClick?: (icon: IconStats, ingredientName: string) => void;
@@ -37,13 +38,12 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
   const [search, setSearch] = useState('');
   // View mode: grid of thumbnails (default) or a list showing creation time (#279).
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const limitCount = 20;
 
   useEffect(() => {
     const fetchIcons = async () => {
       setLoading(true);
       try {
-        const res = await getPagedIconsAction(page, limitCount, search);
+        const res = await getPagedIconsAction(page, ICON_GALLERY_PAGE_SIZE, search);
         setIcons(res.icons);
         setTotal(res.total);
       } catch (err) {
@@ -75,7 +75,7 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
       }
   };
 
-  const totalPages = Math.ceil(total / limitCount);
+  const totalPages = Math.ceil(total / ICON_GALLERY_PAGE_SIZE);
 
   return (
     <div className="w-full space-y-6 pt-8 border-t border-zinc-800" data-testid="shared-gallery">

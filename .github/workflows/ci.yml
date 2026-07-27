@@ -21,6 +21,10 @@ jobs:
       # 'true' if anything outside the docs-ish paths changed. Non-PR events
       # (push, merge_group) always run the full pipeline.
       code: ${{ github.event_name != 'pull_request' && 'true' || steps.filter.outputs.code }}
+      # The agent tooling under .github/scripts is excluded from `code` above,
+      # so it needs its own signal or its tests would never run on a PR that
+      # only touches it.
+      agent_scripts: ${{ github.event_name != 'pull_request' && 'true' || steps.filter.outputs.agent_scripts }}
     steps:
       - name: Checkout
         if: github.event_name == 'pull_request'
@@ -41,6 +45,34 @@ jobs:
               - '!README.md'
               - '!LICENSE'
               - '!CONTRIBUTING.md'
+            agent_scripts:
+              - '.github/scripts/**'
+
+  # Zero-dependency tests for the agent tooling (issue-claim protocol). Kept out
+  # of fast-checks because that job is gated on `code` — which deliberately
+  # excludes .github/** — and because this needs no npm install.
+  agent-scripts:
+    runs-on: ubuntu-latest
+    needs: changes
+
+    steps:
+      - name: Skip notice (no agent script changes)
+        if: needs.changes.outputs.agent_scripts != 'true'
+        run: echo "No .github/scripts changes; skipping agent script tests."
+
+      - name: Checkout
+        if: needs.changes.outputs.agent_scripts == 'true'
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        if: needs.changes.outputs.agent_scripts == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Test agent scripts
+        if: needs.changes.outputs.agent_scripts == 'true'
+        run: node --test .github/scripts/*.test.mjs
 
   fast-checks:
     runs-on: ubuntu-latest

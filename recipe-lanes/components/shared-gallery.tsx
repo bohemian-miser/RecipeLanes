@@ -19,10 +19,11 @@
 
 import { useEffect, useState } from 'react';
 import { getPagedIconsAction, deleteIconByIdAction } from '@/app/actions';
-import { Search, ChevronLeft, ChevronRight, Loader2, Trash2, Sparkles } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, Trash2, Sparkles, LayoutGrid, List } from 'lucide-react';
 import { IconStats } from '@/lib/recipe-lanes/types';
 import { getIconThumbUrl } from '@/lib/recipe-lanes/model-utils';
 import { GALLERY_LABEL_TRANSFORM_CLASS } from '@/lib/recipe-lanes/gallery-label';
+import { formatIconCreatedAt } from '@/lib/recipe-lanes/icon-created-at';
 
 interface SharedGalleryProps {
   onIconClick?: (icon: IconStats, ingredientName: string) => void;
@@ -34,6 +35,8 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
+  // View mode: grid of thumbnails (default) or a list showing creation time (#279).
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const limitCount = 20;
 
   useEffect(() => {
@@ -78,16 +81,40 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
     <div className="w-full space-y-6 pt-8 border-t border-zinc-800" data-testid="shared-gallery">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <h2 className="text-xl text-yellow-500 font-mono uppercase tracking-widest text-center">Community Collection</h2>
-          
-          <div className="relative w-full md:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-              <input 
-                  type="text"
-                  placeholder="Search ingredients..."
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded-full py-1.5 pl-9 pr-4 text-sm text-zinc-300 focus:outline-none focus:border-yellow-500/50"
-                  value={search}
-                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              />
+
+          <div className="flex items-center gap-2 w-full md:w-auto">
+              <div className="relative flex-1 md:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                  <input
+                      type="text"
+                      placeholder="Search ingredients..."
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-full py-1.5 pl-9 pr-4 text-sm text-zinc-300 focus:outline-none focus:border-yellow-500/50"
+                      value={search}
+                      onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                  />
+              </div>
+
+              {/* View toggle: grid of thumbnails vs. list with creation time (#279). */}
+              <div className="flex items-center shrink-0 rounded-full border border-zinc-700 bg-zinc-900 p-0.5" role="group" aria-label="Gallery view mode">
+                  <button
+                      type="button"
+                      onClick={() => setViewMode('grid')}
+                      aria-pressed={viewMode === 'grid'}
+                      title="Grid view"
+                      className={`p-1.5 rounded-full transition-colors ${viewMode === 'grid' ? 'bg-zinc-700 text-yellow-500' : 'text-zinc-400 hover:text-white'}`}
+                  >
+                      <LayoutGrid className="w-4 h-4" />
+                  </button>
+                  <button
+                      type="button"
+                      onClick={() => setViewMode('list')}
+                      aria-pressed={viewMode === 'list'}
+                      title="List view (with creation time)"
+                      className={`p-1.5 rounded-full transition-colors ${viewMode === 'list' ? 'bg-zinc-700 text-yellow-500' : 'text-zinc-400 hover:text-white'}`}
+                  >
+                      <List className="w-4 h-4" />
+                  </button>
+              </div>
           </div>
       </div>
       
@@ -97,6 +124,51 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
           </div>
       ) : icons.length === 0 ? (
           <div className="text-center text-zinc-600 py-12 text-sm">No icons found.</div>
+      ) : viewMode === 'list' ? (
+          <div className="flex flex-col divide-y divide-zinc-800 border border-zinc-800 rounded-lg overflow-hidden" data-testid="gallery-list">
+              {icons.map((icon) => {
+                const thumbUrl = getIconThumbUrl(icon);
+                const name = icon.ingredient_name || icon.ingredient || icon.visualDescription;
+                return (
+                <div
+                    key={icon.id}
+                    className="flex items-center gap-3 p-2 bg-zinc-900/40 hover:bg-zinc-800/60 group"
+                    data-testid="gallery-list-item"
+                    data-ingredient={name}
+                >
+                    <button
+                        type="button"
+                        className="flex items-center gap-3 flex-1 min-w-0 text-left focus:outline-none"
+                        onClick={() => onIconClick?.(icon as IconStats, name || '')}
+                        title="View details"
+                    >
+                        <img
+                            src={thumbUrl}
+                            alt={name}
+                            className="w-10 h-10 shrink-0 object-contain rendering-pixelated bg-zinc-800 border border-zinc-700 rounded"
+                            style={{ imageRendering: 'pixelated' }}
+                        />
+                        <span className="flex-1 min-w-0 truncate text-sm text-zinc-200">{name}</span>
+                        <span className="shrink-0 text-[11px] font-mono text-zinc-400" data-testid="gallery-list-created" title="Created">
+                            {formatIconCreatedAt(icon.created_at)}
+                        </span>
+                    </button>
+                    <span className="shrink-0 text-[10px] font-mono text-zinc-500 hidden sm:inline" title="score · rejections / impressions">
+                        <span className="text-green-400">{Number(icon.popularity_score || icon.score || 0).toFixed(1)}</span>
+                        {' · '}
+                        <span className="text-red-400">{icon.rejections || 0}</span>/{icon.impressions || 0}
+                    </span>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(icon.id, name); }}
+                        className="shrink-0 p-1 text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Delete Icon"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+                );
+              })}
+          </div>
       ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
               {icons.map((icon) => {

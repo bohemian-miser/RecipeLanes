@@ -50,6 +50,9 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
     const storeNode      = useRecipeStore(s => s.graph?.nodes.find(n => n.id === id));
     const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
     const leafNodeScale  = useRecipeStore(s => s.leafNodeScale);
+    // "Tick off" steps (#281): whether this node has been marked done by the cook.
+    const isCompleted         = useRecipeStore(s => s.completedNodeIds.includes(id));
+    const toggleNodeCompleted = useRecipeStore(s => s.toggleNodeCompleted);
     const node           = storeNode ?? data;
 
     const currentIndex = Math.max(0, currentShortlistIndex(node));
@@ -91,6 +94,11 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
     const handleDelete = (e: React.MouseEvent) => {
         e.stopPropagation();
         data.onDelete?.();
+    };
+
+    const handleToggleCompleted = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        toggleNodeCompleted(id);
     };
 
     const handleTouchStart = () => {
@@ -155,6 +163,7 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                opacity: isCompleted ? 0.45 : 1,
             }}>
                 {iconUrl ? (
                     <img
@@ -217,6 +226,18 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
                 style={{ ...BTN, top: -9, right: -9, background: '#ef4444' }}
                 title="Delete"
             >×</button>
+
+            {/* Complete toggle (#281) — bottom-right, stays visible (not hover-gated)
+                once completed so the cook can see and undo the tick. */}
+            <button
+                onClick={handleToggleCompleted}
+                className={`nodrag transition-opacity ${isCompleted ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}`}
+                style={{ ...BTN, top: DIAMETER - 9, right: -9, background: isCompleted ? '#10b981' : '#71717a' }}
+                aria-label={isCompleted ? 'Mark as not done' : 'Mark as done'}
+                aria-pressed={isCompleted}
+                title={isCompleted ? 'Mark as not done' : 'Mark as done'}
+                data-testid="node-complete-toggle"
+            >✓</button>
         </div>
     );
 };

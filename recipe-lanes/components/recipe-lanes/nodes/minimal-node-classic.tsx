@@ -26,6 +26,8 @@ interface MinimalNodeViewProps {
     selected?: boolean;
     isRerolling: boolean;
     isForging: boolean;
+    /** Whether the cook has ticked this step off (#281). */
+    isCompleted?: boolean;
     isPivotMode: boolean;
     /** Current icon URL driven by the shortlist store — do not call getNodeIconUrl(data) here. */
     iconUrl: string | undefined;
@@ -35,6 +37,7 @@ interface MinimalNodeViewProps {
         onReroll: (e: React.MouseEvent) => void;
         onForge: (e: React.MouseEvent) => void;
         onDelete: (e: React.MouseEvent) => void;
+        onToggleCompleted: (e: React.MouseEvent) => void;
         onPointerDownCapture: (e: React.PointerEvent) => void;
         onPointerMoveCapture: (e: React.PointerEvent) => void;
         onPointerUpCapture: () => void;
@@ -43,7 +46,7 @@ interface MinimalNodeViewProps {
 }
 
 export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
-    data, selected, isRerolling, isForging, isPivotMode, iconUrl, isSearchMatched, handlers
+    data, selected, isRerolling, isForging, isCompleted, isPivotMode, iconUrl, isSearchMatched, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
     const textPos = data.textPos || 'bottom';
@@ -88,7 +91,10 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
             onPointerCancelCapture={handlers.onPointerCancelCapture}
         >
             {/* Icon Container */}
-            <div className={`relative ${containerSize} flex-shrink-0 flex items-center justify-center transition-all duration-200 z-10 ${selected || isPivotMode ? 'border-2 border-dashed border-blue-500 rounded-lg bg-blue-50/10' : ''} ${isPivotMode ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`}>
+            <div
+                className={`relative ${containerSize} flex-shrink-0 flex items-center justify-center transition-all duration-200 z-10 ${selected || isPivotMode ? 'border-2 border-dashed border-blue-500 rounded-lg bg-blue-50/10' : ''} ${isPivotMode ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`}
+                style={isCompleted ? { opacity: 0.45 } : undefined}
+            >
                 {/* NOTE: despite the top-1/2 classes, ReactFlow's stylesheet
                     (.react-flow__handle-top { top:-4px }) wins the cascade, so these
                     handles actually sit at the TOP-CENTER of this container (verified
@@ -168,6 +174,19 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                     </div>
                 )}
             </div>
+
+            {/* Complete Toggle Button — lives on the root (not the Icon Container) so it
+                stays fully visible even while the icon container is dimmed once completed. */}
+            <button
+                onClick={handlers.onToggleCompleted}
+                className={`nodrag absolute -bottom-2 -right-2 rounded-full p-1 shadow-md border transition-all z-50 ${isCompleted ? 'opacity-100 bg-emerald-500 border-emerald-600 text-white' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 bg-zinc-100 border-zinc-200 text-zinc-500 hover:text-emerald-500'}`}
+                aria-label={isCompleted ? 'Mark as not done' : 'Mark as done'}
+                aria-pressed={isCompleted}
+                title={isCompleted ? 'Mark as not done' : 'Mark as done'}
+                data-testid="node-complete-toggle"
+            >
+                <span className="flex items-center justify-center w-3 h-3 text-[9px] font-bold leading-none">✓</span>
+            </button>
         </div>
     );
 };

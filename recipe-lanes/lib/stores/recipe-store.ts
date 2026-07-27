@@ -81,6 +81,16 @@ interface RecipeState {
      * the user just deleted before the autosave has propagated to Firestore.
      */
     pendingDeletedIds: string[];
+    /**
+     * Node IDs the cook has ticked off while working through the recipe (#281).
+     *
+     * Deliberately a top-level store field rather than a flag on the RecipeNode:
+     * this is per-person, per-cooking-session state, and the save path writes
+     * every node field verbatim (data-service has no field whitelist), so a flag
+     * on the node would be persisted to Firestore and leak one cook's progress
+     * to everyone else viewing a shared recipe.
+     */
+    completedNodeIds: string[];
 }
 
 interface RecipeActions {
@@ -170,6 +180,14 @@ interface RecipeActions {
      * data fields are used to reconstruct the RecipeNode entries.
      */
     restoreNodes: (rfNodes: any[]) => void;
+
+    /**
+     * Toggles the "done" tick on a node (#281). Purely local view state: it
+     * leaves `graph` untouched, does not mark the recipe dirty, and is never
+     * written to Firestore. Unknown node IDs are accepted — a tick simply has
+     * no effect until a node with that ID exists.
+     */
+    toggleNodeCompleted: (nodeId: string) => void;
 
     /** Clears all state — call when the user navigates away from a recipe. */
     reset: () => void;
@@ -281,6 +299,7 @@ const initialState: RecipeState = {
     undoStack: [],
     messages: [],
     pendingDeletedIds: [],
+    completedNodeIds: [],
 };
 
 export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => ({
@@ -455,6 +474,12 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
                 : state.graph,
         };
     }),
+
+    toggleNodeCompleted: (nodeId) => set((state) => ({
+        completedNodeIds: state.completedNodeIds.includes(nodeId)
+            ? state.completedNodeIds.filter(id => id !== nodeId)
+            : [...state.completedNodeIds, nodeId],
+    })),
 
     reset: () => set(initialState),
     setVisualPreset: (presetId) => set({ activePresetId: presetId }),

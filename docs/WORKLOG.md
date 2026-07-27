@@ -36,3 +36,17 @@ A shared, curated log of significant decisions, incidents, and infra/process cha
 **Testing note.** The claim logic is pure and lives in `.github/scripts/agent-claim-logic.mjs` with `node --test` coverage (including a regression case replaying the #278 collision). CI's `changes` filter deliberately excludes `.github/**` from the `code` signal, so these tests needed their own `agent-scripts` job with its own path filter — otherwise a PR touching only agent tooling would silently skip every check.
 
 **Amendment (same day).** Contract tightened after owner feedback: a worker is dispatched to **one** labeled issue, so losing the claim race means **resign** — end the run quietly as a success — not "pick a different issue". A losing run has nothing to fall back to and must not go shopping for other work to fill itself. `list`/`status` are diagnostics only (`list` now always exits 0), so exit 3 unambiguously means "resign".
+
+---
+
+## 2026-07-27 — Tick off steps while cooking (#281)
+
+**Feature.** Nodes can now be ticked off as the cook works through a recipe: a `✓` toggle on each node dims it once done. Wired into `MinimalNode` (classic + all three modern branches) and `TimelineNode`.
+
+**Design decision — completion is store state, not node state.** The tick lives in a new top-level `completedNodeIds: string[]` on the Zustand store, *not* as a flag on `RecipeNode`. This matters: the save path (`data-service.saveRecipe*` → `removeUndefined(data)`) has **no field whitelist**, so any field present on a node at save time is written to Firestore verbatim. A `completed` flag on the node would therefore have been persisted and shown one cook's progress to **everyone** viewing a shared recipe — and would have marked the recipe dirty on every tick, triggering autosaves. Keeping it off the graph also means `toggleNodeCompleted` pushes no undo entry and leaves every node object reference untouched, so the per-node selectors don't re-render.
+
+**Lifecycle.** Ticks are cleared for free by `reset()`, which `app/lanes/page.tsx` already calls in its `[recipeId]`-keyed effect before subscribing to the new doc — so node IDs cannot bleed from one recipe into the next. An earlier draft added bespoke clearing to the store's `setRecipeId`; that action turns out to have **no app caller at all** (recipe switching goes through `reset()`), so the guard was dead code and was dropped.
+
+**Mobile.** The toggle is deliberately *not* hover-gated below the `sm:` breakpoint (`opacity-100 sm:opacity-0 sm:group-hover:opacity-100`), unlike the existing reroll/forge/delete controls. Ticking off steps is a phone-in-the-kitchen action, and a `group-hover`-only control is unreachable on touch.
+
+**Tests.** `recipe-lanes/tests/recipe-store-completed.test.ts` (pure tier, auto-discovered) — toggle/untoggle, independent nodes, no-duplicate-entry, and the load-bearing guarantees: no graph mutation, `isDirty` untouched, no undo entry, **no completion field written onto the node**, ticks survive a `mergeSnapshot`, and `reset()` clears them.

@@ -26,6 +26,8 @@ interface MinimalNodeViewProps {
     selected?: boolean;
     isRerolling: boolean;
     isForging: boolean;
+    /** Whether the cook has ticked this step off (#281). */
+    isCompleted?: boolean;
     isPivotMode: boolean;
     /** Current icon URL driven by the shortlist store — do not call getNodeIconUrl(data) here. */
     iconUrl: string | undefined;
@@ -35,6 +37,7 @@ interface MinimalNodeViewProps {
         onReroll: (e: React.MouseEvent) => void;
         onForge: (e: React.MouseEvent) => void;
         onDelete: (e: React.MouseEvent) => void;
+        onToggleCompleted: (e: React.MouseEvent) => void;
         onPointerDownCapture: (e: React.PointerEvent) => void;
         onPointerMoveCapture: (e: React.PointerEvent) => void;
         onPointerUpCapture: () => void;
@@ -52,7 +55,7 @@ const parseNodeText = (text: string) => {
 };
 
 export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
-    data, selected, isRerolling, isForging, isPivotMode, iconUrl, isSearchMatched, handlers
+    data, selected, isRerolling, isForging, isCompleted, isPivotMode, iconUrl, isSearchMatched, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
     const themeVariant = getNodeTheme(data) === 'modern_clean' ? 'modern_clean' : 'modern';
@@ -77,7 +80,10 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                                     onPointerCancelCapture={handlers.onPointerCancelCapture}
                                 >
                                     {/* Icon Container */}
-                                    <div className={`relative ${iconClass} z-10 transition-transform duration-300 hover:scale-110 ${selected || isPivotMode ? 'drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : ''}`}>
+                                    <div
+                                        className={`relative ${iconClass} z-10 transition-transform duration-300 hover:scale-110 ${selected || isPivotMode ? 'drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : ''}`}
+                                        style={isCompleted ? { opacity: 0.45 } : undefined}
+                                    >
                                         <Handle id="target" type="target" position={Position.Top} className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                 <Handle id="source" type="source" position={Position.Bottom} className="absolute !bg-transparent !w-1 !h-1 !border-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                                         
@@ -128,6 +134,19 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                             {parsed.name}
                         </span>
                     </div>
+
+                    {/* Complete Toggle Button — sits on the root (not the Icon Container)
+                        so it stays fully visible even while the icon dims once completed. */}
+                    <button
+                        onClick={handlers.onToggleCompleted}
+                        className={`nodrag absolute -bottom-2 -right-2 rounded-full p-1 shadow z-50 transition-opacity ${isCompleted ? 'opacity-100 bg-emerald-500 text-white' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 bg-white/80 hover:text-emerald-500'}`}
+                        aria-label={isCompleted ? 'Mark as not done' : 'Mark as done'}
+                        aria-pressed={isCompleted}
+                        title={isCompleted ? 'Mark as not done' : 'Mark as done'}
+                        data-testid="node-complete-toggle"
+                    >
+                        <span className="flex items-center justify-center w-3 h-3 text-[9px] font-bold leading-none">✓</span>
+                    </button>
                 </div>
             );
         } else {
@@ -142,7 +161,10 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                     onPointerUpCapture={handlers.onPointerUpCapture} onPointerCancelCapture={handlers.onPointerCancelCapture}
                 >
                     {/* Icon Container */}
-                    <div className={`relative ${iconClass} z-10 transition-transform duration-300 hover:scale-110 ${selected || isPivotMode ? 'drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : ''}`}>
+                    <div
+                        className={`relative ${iconClass} z-10 transition-transform duration-300 hover:scale-110 ${selected || isPivotMode ? 'drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : ''}`}
+                        style={isCompleted ? { opacity: 0.45 } : undefined}
+                    >
                         <Handle id="target" type="target" position={Position.Top} className="!bg-transparent !w-1 !h-1 !border-0 top-2 left-1/2" />
                         <Handle id="source" type="source" position={Position.Bottom} className="!bg-transparent !w-1 !h-1 !border-0 bottom-2 left-1/2" />
                         
@@ -195,6 +217,19 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                             </span>
                         </div>
                     </div>
+
+                    {/* Complete Toggle Button — sits on the root (not the Icon Container)
+                        so it stays fully visible even while the icon dims once completed. */}
+                    <button
+                        onClick={handlers.onToggleCompleted}
+                        className={`nodrag absolute -bottom-2 -right-2 rounded-full p-1 shadow z-50 transition-opacity ${isCompleted ? 'opacity-100 bg-emerald-500 text-white' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 bg-white/80 hover:text-emerald-500'}`}
+                        aria-label={isCompleted ? 'Mark as not done' : 'Mark as done'}
+                        aria-pressed={isCompleted}
+                        title={isCompleted ? 'Mark as not done' : 'Mark as done'}
+                        data-testid="node-complete-toggle"
+                    >
+                        <span className="flex items-center justify-center w-3 h-3 text-[9px] font-bold leading-none">✓</span>
+                    </button>
                 </div>
             );
         }
@@ -234,7 +269,10 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
               </div>
 
               {/* Icon */}
-              <div className={`relative w-28 h-28 z-10 flex items-center justify-center transition-transform group-hover:scale-110 ${selected || isPivotMode ? 'drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : ''}`}>
+              <div
+                  className={`relative w-28 h-28 z-10 flex items-center justify-center transition-transform group-hover:scale-110 ${selected || isPivotMode ? 'drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : ''}`}
+                  style={isCompleted ? { opacity: 0.45 } : undefined}
+              >
                   <Handle id="target" type="target" position={Position.Top} className="!bg-transparent !w-1 !h-1 !border-0 top-2" />
                   <Handle id="source" type="source" position={Position.Bottom} className="!bg-transparent !w-1 !h-1 !border-0 bottom-2" />
                   
@@ -271,6 +309,19 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                       />
                   )}
               </div>
+
+              {/* Complete Toggle Button — sits on the root (not the Icon div) so it
+                  stays fully visible even while the icon dims once completed. */}
+              <button
+                  onClick={handlers.onToggleCompleted}
+                  className={`nodrag absolute -bottom-2 -right-2 rounded-full p-1 shadow z-50 transition-opacity ${isCompleted ? 'opacity-100 bg-emerald-500 text-white' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 bg-white/80 hover:text-emerald-500'}`}
+                  aria-label={isCompleted ? 'Mark as not done' : 'Mark as done'}
+                  aria-pressed={isCompleted}
+                  title={isCompleted ? 'Mark as not done' : 'Mark as done'}
+                  data-testid="node-complete-toggle"
+              >
+                  <span className="flex items-center justify-center w-3 h-3 text-[9px] font-bold leading-none">✓</span>
+              </button>
           </div>
         );
     }

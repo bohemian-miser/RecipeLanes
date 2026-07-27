@@ -24,6 +24,7 @@ import { MockAIService } from '../lib/ai-service.mock';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
 import { getIconPath } from '../lib/recipe-lanes/model-utils';
 import { standardizeIngredientName } from '../lib/utils';
+import { DB_COLLECTION_ICON_INDEX } from '../lib/config';
 
 // Use Mocks for parsing to ensure deterministic test.
 // "Butter" is used as the ingredient because MockAIService has a local Butter.png,
@@ -109,5 +110,16 @@ describe('Cloud Function Metadata', () => {
         console.log(`[DEBUG] Fetched Metadata:`, JSON.stringify(custom, null, 2));
 
         assert.ok(custom.geometry, "Missing geometry");
+
+        // 5. Verify icon attribution (issue #283). The forge ran as a Cloud Task with
+        //    no request context, so `createdBy` can only have come from the owner of
+        //    the recipe that queued it — MockAuthService's 'mock-user'.
+        const iconDoc = await db.collection(DB_COLLECTION_ICON_INDEX).doc(iconId!).get();
+        assert.ok(iconDoc.exists, `icon_index/${iconId} was not written`);
+        assert.equal(
+            iconDoc.data()?.createdBy,
+            'mock-user',
+            "Icon was not attributed to the owner of the recipe that forged it"
+        );
     });
 });

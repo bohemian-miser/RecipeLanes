@@ -204,7 +204,7 @@ test('REGRESSION (#278, 2026-07-26): three overlapping workers, exactly one proc
     const held = workers.filter((workerId) => resolveClaim(claims, { workerId, now: NOW, ttlMinutes: 600 }).heldByMe);
     assert.deepEqual(held, [workers[0]], 'exactly one worker may hold the issue');
 
-    // The two losers re-evaluate and are told to pick something else.
+    // The two losers re-evaluate, see the issue is not theirs, and resign.
     for (const workerId of workers.slice(1)) {
         const verdict = evaluateCandidate({ issue, claims, workerId, now: NOW, ttlMinutes: 600 });
         assert.equal(verdict.eligible, false);

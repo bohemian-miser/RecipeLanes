@@ -15,28 +15,97 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { useState, useEffect } from 'react';
-import { RecipeGraph } from '@/lib/recipe-lanes/types';
-import { ChefHat, X, Users } from 'lucide-react';
-import { getNodeIconUrl } from '@/lib/recipe-lanes/model-utils';
+/* eslint-disable @next/next/no-img-element */
+import React, { useState, useEffect, useRef } from 'react';
+import { RecipeGraph, RecipeNode } from '@/lib/recipe-lanes/types';
+import { ChefHat, X, Users, RefreshCw, Hammer } from 'lucide-react';
+import { getNodeIconUrl, getNodeShortlistLength, computeIngredientRowPatch } from '@/lib/recipe-lanes/model-utils';
 
 interface IngredientsSidebarProps {
   graph: RecipeGraph;
   onClose: () => void;
   onUpdateServes: (newServes: number) => void;
+  /** Commit a partial field patch to an ingredient (undoable store write). */
+  onEditNode?: (nodeId: string, patch: Partial<RecipeNode>) => void;
+  /** Advance the node's icon shortlist by one (no-op if the shortlist is empty). */
+  onCycleShortlist?: (nodeId: string) => void;
+  /** Reject the current icon and queue a brand-new AI icon for this ingredient. */
+  onForge?: (node: RecipeNode) => void;
+  /** Node ids with an in-flight forge request (drives the per-row spinner). */
+  forgingIds?: Set<string>;
 }
 
-export function IngredientsSidebar({ graph, onClose, onUpdateServes }: IngredientsSidebarProps) {
+type Draft = { qty: string; unit: string; name: string };
+
+/** Seed a node's editable drafts. Quantity is shown scaled to the current serves. */
+function nodeToDraft(n: RecipeNode, scale: number): Draft {
+  return {
+    qty: n.quantity != null ? String(Math.round(n.quantity * scale * 100) / 100) : '',
+    unit: n.unit ?? '',
+    name: n.canonicalName ?? n.text ?? '',
+  };
+}
+
+export function IngredientsSidebar({
+  graph,
+  onClose,
+  onUpdateServes,
+  onEditNode,
+  onCycleShortlist,
+  onForge,
+  forgingIds,
+}: IngredientsSidebarProps) {
   const serves = graph.serves || graph.baseServes || 1;
   const baseServes = graph.baseServes || 1;
   const scale = serves / baseServes;
 
   const handleServesChange = (val: number) => {
-      const newServes = Math.max(1, val);
-      onUpdateServes(newServes);
+    onUpdateServes(Math.max(1, val));
   };
 
   const ingredientNodes = graph.nodes.filter(n => n.type === 'ingredient');
+
+  // Local drafts for the inline editors (number / unit / name). Kept in sync
+  // with the graph for the node the user isn't actively editing (e.g. after
+  // undo, a serves change, or a snapshot merge) without clobbering
+  // in-progress typing on the focused row.
+  const [drafts, setDrafts] = useState<Record<string, Draft>>(
+    () => Object.fromEntries(ingredientNodes.map(n => [n.id, nodeToDraft(n, scale)])),
+  );
+  const editingIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setDrafts(prev => {
+      const next = { ...prev };
+      let changed = false;
+      for (const n of ingredientNodes) {
+        if (n.id === editingIdRef.current) continue;
+        const d = nodeToDraft(n, scale);
+        const cur = next[n.id];
+        if (!cur || cur.qty !== d.qty || cur.unit !== d.unit || cur.name !== d.name) {
+          next[n.id] = d;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph]);
+
+  const setField = (id: string, field: keyof Draft, val: string) =>
+    setDrafts(d => ({ ...d, [id]: { ...(d[id] ?? { qty: '', unit: '', name: '' }), [field]: val } }));
+
+  // Commit the number / unit / name boxes together — text (the diagram label)
+  // is rebuilt from all three so the info isn't duplicated across fields.
+  const commitRow = (node: RecipeNode) => {
+    const d = drafts[node.id];
+    if (!d || !onEditNode) return;
+    const patch = computeIngredientRowPatch(node, d, scale);
+    if (Object.keys(patch).length > 0) onEditNode(node.id, patch);
+  };
+
+  const focusRow = (id: string) => { editingIdRef.current = id; };
+  const blurRow = (commit: () => void) => { editingIdRef.current = null; commit(); };
 
   return (
     <div className="absolute left-0 top-14 bottom-0 w-72 bg-white border-r border-zinc-200 shadow-2xl z-40 flex flex-col animate-in slide-in-from-left duration-200">
@@ -49,7 +118,7 @@ export function IngredientsSidebar({ graph, onClose, onUpdateServes }: Ingredien
                 <X className="w-4 h-4" />
             </button>
         </div>
-        
+
         <div className="p-4 border-b border-zinc-100 flex items-center justify-between bg-white shrink-0">
             <div className="flex items-center gap-2 text-zinc-600 text-sm font-medium">
                 <Users className="w-4 h-4" />
@@ -64,36 +133,90 @@ export function IngredientsSidebar({ graph, onClose, onUpdateServes }: Ingredien
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {ingredientNodes.map(node => {
-                // Determine display quantity
-                // Use stored quantity if available, otherwise try to parse text?
-                // parser.ts ensures quantity is set if parseable.
-                let displayQty: number | string = '';
-                
-                if (node.quantity) {
-                    const scaled = node.quantity * scale;
-                    // Format nice decimals
-                    displayQty = Math.round(scaled * 100) / 100;
-                }
-
+                const displayQty = node.quantity != null ? Math.round(node.quantity * scale * 100) / 100 : '';
                 const iconUrl = getNodeIconUrl(node);
+                const isForging = forgingIds?.has(node.id) ?? false;
+                const canCycle = getNodeShortlistLength(node) > 0;
+                const label = node.canonicalName || node.text;
 
                 return (
                     <div key={node.id} className="flex items-start gap-3 group">
-                        {iconUrl ? (
-                            <img src={iconUrl} className="w-10 h-10 object-contain mix-blend-multiply bg-zinc-50 rounded-lg p-1 border border-zinc-100 shrink-0" alt="" />
-                        ) : (
-                            <div className="w-10 h-10 flex items-center justify-center bg-zinc-100 rounded-lg text-xl shrink-0">🥕</div>
-                        )}
-                        <div className="flex-1 pt-0.5">
-                             <div className="text-sm text-zinc-800 font-medium leading-tight">
-                                 {displayQty && <span className="font-bold text-blue-600 mr-1">{displayQty}</span>}
-                                 {node.unit && <span className="text-zinc-500 text-xs uppercase font-bold mr-1">{node.unit}</span>}
-                                 <span className="capitalize">{node.canonicalName || node.text}</span>
-                             </div>
-                             {/* Debug/Fallback if text doesn't match */}
-                             {(!node.canonicalName && node.text !== displayQty + ' ' + (node.unit||'') + ' ' + (node.canonicalName||'')) && (
-                                 <div className="text-[10px] text-zinc-400 truncate hidden">{node.text}</div>
-                             )}
+                        {/* Left column: icon with the cycle / forge buttons stacked beneath it. */}
+                        <div className="flex flex-col items-center gap-1 shrink-0 w-10">
+                            {iconUrl ? (
+                                <img src={iconUrl} className="w-10 h-10 object-contain mix-blend-multiply bg-zinc-50 rounded-lg p-1 border border-zinc-100" alt="" />
+                            ) : (
+                                <div className="w-10 h-10 flex items-center justify-center bg-zinc-100 rounded-lg text-xl">🥕</div>
+                            )}
+                            {onCycleShortlist && (
+                                <button
+                                    onClick={() => onCycleShortlist(node.id)}
+                                    disabled={!canCycle}
+                                    className="p-1 rounded hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title={canCycle ? 'Cycle icon' : 'No other icons yet'}
+                                    aria-label={`Cycle icon for ${label}`}
+                                >
+                                    <RefreshCw className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                            {onForge && (
+                                <button
+                                    onClick={() => onForge(node)}
+                                    disabled={isForging}
+                                    className="p-1 rounded hover:bg-zinc-100 text-zinc-400 hover:text-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    title="Forge new icon"
+                                    aria-label={`Forge new icon for ${label}`}
+                                >
+                                    <Hammer className={`w-3.5 h-3.5 ${isForging ? 'animate-pulse' : ''}`} />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Right column: number + unit, then the ingredient name. */}
+                        <div className="flex-1 pt-0.5 min-w-0 space-y-1.5">
+                            {onEditNode ? (
+                                <>
+                                    <div className="flex items-center gap-1.5">
+                                        <input
+                                            type="number"
+                                            step="any"
+                                            min="0"
+                                            className="w-16 bg-zinc-50 border border-zinc-200 rounded px-1.5 py-0.5 text-sm font-bold text-blue-600 focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200"
+                                            value={drafts[node.id]?.qty ?? ''}
+                                            onChange={(e) => setField(node.id, 'qty', e.target.value)}
+                                            onFocus={() => focusRow(node.id)}
+                                            onBlur={() => blurRow(() => commitRow(node))}
+                                            aria-label={`Quantity for ${label}`}
+                                        />
+                                        <input
+                                            type="text"
+                                            className="flex-1 min-w-0 bg-zinc-50 border border-zinc-200 rounded px-2 py-0.5 text-xs uppercase font-bold text-zinc-500 focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200"
+                                            value={drafts[node.id]?.unit ?? ''}
+                                            onChange={(e) => setField(node.id, 'unit', e.target.value)}
+                                            onFocus={() => focusRow(node.id)}
+                                            onBlur={() => blurRow(() => commitRow(node))}
+                                            placeholder="unit"
+                                            aria-label={`Unit for ${label}`}
+                                        />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className="w-full bg-zinc-50 border border-zinc-200 rounded px-2 py-1 text-sm text-zinc-800 font-medium capitalize focus:outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200"
+                                        value={drafts[node.id]?.name ?? ''}
+                                        onChange={(e) => setField(node.id, 'name', e.target.value)}
+                                        onFocus={() => focusRow(node.id)}
+                                        onBlur={() => blurRow(() => commitRow(node))}
+                                        placeholder="Ingredient name"
+                                        aria-label={`Ingredient name for ${label}`}
+                                    />
+                                </>
+                            ) : (
+                                <div className="text-sm text-zinc-800 font-medium leading-tight">
+                                    {displayQty !== '' && <span className="font-bold text-blue-600 mr-1">{displayQty}</span>}
+                                    {node.unit && <span className="text-zinc-500 text-xs uppercase font-bold mr-1">{node.unit}</span>}
+                                    <span className="capitalize">{label}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 );

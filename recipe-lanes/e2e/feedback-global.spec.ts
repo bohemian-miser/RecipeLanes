@@ -78,17 +78,19 @@ test.describe('Feedback button in the top bar (Issue 282)', () => {
     // /gallery?filter=mine hits an auth gate that returns *before* the header.
     // Those gates carry their own button; this covers the header itself.
     test('is in the top bar of /icon_overview once signed in', async ({ page, login }) => {
+        // Navigate first, then sign in. The `login` fixture waits on
+        // `window._firebaseAuth`, which `lib/firebase-client.ts` only installs
+        // once the app has loaded in the browser — calling login() on
+        // about:blank just times out. Every other spec does goto-then-login.
+        await page.goto('/icon_overview');
         await login('feedback-header-user');
 
-        await page.goto('/icon_overview');
-
-        const button = page.getByTestId('feedback-button');
+        // Signing in replaces the auth gate with the real page, whose top bar
+        // carries the button. Scoping to <header> is what makes this a top-bar
+        // assertion rather than "somewhere on the page" — and it will not match
+        // the gate screen's own button while the re-render is still pending.
+        const button = page.locator('header').getByTestId('feedback-button');
         await expect(button).toBeVisible();
-
-        // In the header, so near the top of the viewport rather than centred
-        // in a gate screen.
-        const box = (await button.boundingBox())!;
-        expect(box.y, 'expected the button in the top bar').toBeLessThan(60);
 
         await button.click();
         await expect(page.getByRole('heading', { name: 'Feedback & Contribute' })).toBeVisible();

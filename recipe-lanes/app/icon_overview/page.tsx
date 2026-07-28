@@ -24,6 +24,7 @@ import { SharedGallery } from '@/components/shared-gallery';
 import { QueueMonitor } from '@/components/queue-monitor';
 import { QueueConfigPanel } from '@/components/queue-config-panel';
 import { LogoutButton } from '@/components/logout-button';
+import { FeedbackButton } from '@/components/feedback-button';
 import { useAuth } from '@/components/auth-provider';
 import { createDebugRecipeAction, addIngredientNodeAction, rejectIcon, deleteRecipeAction } from '@/app/actions';
 import { ChefHat, Globe, Plus, Github } from 'lucide-react';
@@ -229,6 +230,11 @@ export default function Home() {
           >
             Login
           </button>
+          {/* This gate returns before the header below, so the top-bar button
+              is unreachable while signed out. Issue 282. */}
+          <div className="flex justify-center pt-2">
+            <FeedbackButton />
+          </div>
         </div>
       </div>
     );
@@ -256,6 +262,8 @@ export default function Home() {
                   <Plus className="w-4 h-4" />
                   <span className="hidden md:inline">Lanes</span>
               </Link>
+
+              <FeedbackButton />
 
               <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={navItemClass} title="Find me on GitHub">
                   <Github className="w-4 h-4" />

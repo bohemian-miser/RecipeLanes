@@ -18,6 +18,7 @@
 'use client';
 
 import { useAuth } from '@/components/auth-provider';
+import { FeedbackButton } from '@/components/feedback-button';
 import { LogIn } from 'lucide-react';
 
 export function Login() {
@@ -43,6 +44,12 @@ export function Login() {
         <LogIn className="w-5 h-5" />
         <span>Sign in with Google</span>
       </button>
+
+      {/* This gate replaces the whole page (see app/gallery/page.tsx, which
+          returns <Login /> instead of its top bar for the mine/starred/source
+          filters), so without this there is no way to report a problem from
+          here — including a problem with signing in. Issue 282. */}
+      <FeedbackButton />
     </div>
   );
 }

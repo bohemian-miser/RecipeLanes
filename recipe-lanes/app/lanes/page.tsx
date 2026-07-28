@@ -48,7 +48,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/lib/firebase-client';
 import { preheatIconSearch } from '@/lib/icon-search-strategy';
-import { FeedbackModal } from '@/components/feedback-modal';
+import { FeedbackButton } from '@/components/feedback-button';
 
 function RecipeLanesContent() {
   const { user, isAdmin, loading: authLoading, signIn } = useAuth();
@@ -78,7 +78,6 @@ function RecipeLanesContent() {
   const [showJson, setShowJson] = useState(false);
   const [forgingIds, setForgingIds] = useState<Set<string>>(new Set());
   const [showIngredients, setShowIngredients] = useState(false);
-  const [showFeedback, setShowFeedback] = useState(false);
   const [iconSearchStatus, setIconSearchStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [iconSearchMethodId, setIconSearchMethodId] = useState(defaultIconSearchMethod.id);
   const [iconSearchElapsed, setIconSearchElapsed] = useState<number | null>(null);
@@ -959,9 +958,7 @@ const handleVisualize = async () => {
                     <span className="hidden md:inline">New</span>
                 </button>
                 
-                <button onClick={() => setShowFeedback(true)} className={`${navItemClass} hidden md:flex`} title="Feedback & Contribute">
-                    <MessageSquare className="w-4 h-4" />
-                </button>
+                <FeedbackButton className={`${navItemClass} hidden md:flex`} />
 
                 <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={`${navItemClass} hidden md:flex`} title="Find me on GitHub">
                     <Github className="w-4 h-4" />
@@ -1488,10 +1485,6 @@ const handleVisualize = async () => {
             )}
         </div>
         
-        <FeedbackModal 
-            isOpen={showFeedback} 
-            onClose={() => setShowFeedback(false)}
-        />
     </div>
   );
 }

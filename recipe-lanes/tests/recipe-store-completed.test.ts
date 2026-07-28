@@ -152,6 +152,49 @@ describe('useRecipeStore — node completion (#281)', () => {
         });
     });
 
+    // Backs the "clear all ticks" toolbar button, which sits with undo/redo/save
+    // and activates as soon as anything is ticked.
+    describe('clearCompletedNodes', () => {
+        it('un-ticks every node at once', () => {
+            const { toggleNodeCompleted, clearCompletedNodes } = useRecipeStore.getState();
+            toggleNodeCompleted('n1');
+            toggleNodeCompleted('n2');
+            toggleNodeCompleted('n3');
+
+            clearCompletedNodes();
+
+            assert.deepEqual(completed(), []);
+        });
+
+        it('leaves the graph and isDirty alone', () => {
+            useRecipeStore.getState().mergeSnapshot(makeGraph([makeNode('n1')]));
+            useRecipeStore.getState().toggleNodeCompleted('n1');
+            const before = useRecipeStore.getState().graph;
+
+            useRecipeStore.getState().clearCompletedNodes();
+
+            assert.equal(useRecipeStore.getState().graph, before);
+            assert.equal(useRecipeStore.getState().isDirty, false);
+        });
+
+        it('keeps the array reference when there is nothing to clear', () => {
+            const before = completed();
+
+            useRecipeStore.getState().clearCompletedNodes();
+
+            assert.equal(completed(), before, 'no-op should not re-render subscribers');
+        });
+
+        it('can be ticked again after clearing', () => {
+            const { toggleNodeCompleted, clearCompletedNodes } = useRecipeStore.getState();
+            toggleNodeCompleted('n1');
+            clearCompletedNodes();
+            toggleNodeCompleted('n1');
+
+            assert.deepEqual(completed(), ['n1']);
+        });
+    });
+
     describe('reset', () => {
         // This is how ticks get cleared when the cook opens a different recipe:
         // the recipeId-keyed effect in app/lanes/page.tsx calls reset() before

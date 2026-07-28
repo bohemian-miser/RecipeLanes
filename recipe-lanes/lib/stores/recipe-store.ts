@@ -189,6 +189,13 @@ interface RecipeActions {
      */
     toggleNodeCompleted: (nodeId: string) => void;
 
+    /**
+     * Un-ticks every node at once — backs the "clear ticks" toolbar button,
+     * which activates as soon as anything is ticked. Same purely-local
+     * semantics as toggleNodeCompleted.
+     */
+    clearCompletedNodes: () => void;
+
     /** Clears all state — call when the user navigates away from a recipe. */
     reset: () => void;
     setVisualPreset: (presetId: string) => void;
@@ -480,6 +487,12 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
             ? state.completedNodeIds.filter(id => id !== nodeId)
             : [...state.completedNodeIds, nodeId],
     })),
+
+    // Keep the existing array reference when there is nothing to clear, so
+    // subscribers of completedNodeIds do not re-render on a no-op.
+    clearCompletedNodes: () => set((state) => (
+        state.completedNodeIds.length === 0 ? {} : { completedNodeIds: [] }
+    )),
 
     reset: () => set(initialState),
     setVisualPreset: (presetId) => set({ activePresetId: presetId }),

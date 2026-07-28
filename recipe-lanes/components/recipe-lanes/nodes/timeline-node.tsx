@@ -227,12 +227,12 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
                 title="Delete"
             >×</button>
 
-            {/* Complete toggle (#281) — bottom-right, stays visible (not hover-gated)
+            {/* Complete toggle (#281) — bottom-left, stays visible (not hover-gated)
                 once completed so the cook can see and undo the tick. */}
             <button
                 onClick={handleToggleCompleted}
                 className={`nodrag transition-opacity ${isCompleted ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}`}
-                style={{ ...BTN, top: DIAMETER - 9, right: -9, background: isCompleted ? '#10b981' : '#71717a' }}
+                style={{ ...BTN, top: DIAMETER - 9, left: -9, background: isCompleted ? '#10b981' : '#71717a' }}
                 aria-label={isCompleted ? 'Mark as not done' : 'Mark as done'}
                 aria-pressed={isCompleted}
                 title={isCompleted ? 'Mark as not done' : 'Mark as done'}

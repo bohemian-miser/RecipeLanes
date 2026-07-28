@@ -39,6 +39,19 @@ A shared, curated log of significant decisions, incidents, and infra/process cha
 
 ---
 
+## 2026-07-27 — Tick off steps while cooking (#281)
+
+**Feature.** Nodes can now be ticked off as the cook works through a recipe: a `✓` toggle on each node dims it once done. Wired into `MinimalNode` (classic + all three modern branches) and `TimelineNode`.
+
+**Design decision — completion is store state, not node state.** The tick lives in a new top-level `completedNodeIds: string[]` on the Zustand store, *not* as a flag on `RecipeNode`. This matters: the save path (`data-service.saveRecipe*` → `removeUndefined(data)`) has **no field whitelist**, so any field present on a node at save time is written to Firestore verbatim. A `completed` flag on the node would therefore have been persisted and shown one cook's progress to **everyone** viewing a shared recipe — and would have marked the recipe dirty on every tick, triggering autosaves. Keeping it off the graph also means `toggleNodeCompleted` pushes no undo entry and leaves every node object reference untouched, so the per-node selectors don't re-render.
+
+**Lifecycle.** Ticks are cleared for free by `reset()`, which `app/lanes/page.tsx` already calls in its `[recipeId]`-keyed effect before subscribing to the new doc — so node IDs cannot bleed from one recipe into the next. An earlier draft added bespoke clearing to the store's `setRecipeId`; that action turns out to have **no app caller at all** (recipe switching goes through `reset()`), so the guard was dead code and was dropped.
+
+**Mobile.** The toggle is deliberately *not* hover-gated below the `sm:` breakpoint (`opacity-100 sm:opacity-0 sm:group-hover:opacity-100`), unlike the existing reroll/forge/delete controls. Ticking off steps is a phone-in-the-kitchen action, and a `group-hover`-only control is unreachable on touch.
+
+**Tests.** `recipe-lanes/tests/recipe-store-completed.test.ts` (pure tier, auto-discovered) — toggle/untoggle, independent nodes, no-duplicate-entry, and the load-bearing guarantees: no graph mutation, `isDirty` untouched, no undo entry, **no completion field written onto the node**, ticks survive a `mergeSnapshot`, and `reset()` clears them.
+---
+
 ## 2026-07-27 — `agent-claim.mjs` cannot reach the GitHub REST API from the cloud runner
 
 Working issue #280 from a Claude-Code-on-the-web session, `node .github/scripts/agent-claim.mjs claim 280` failed with **401 Bad credentials**. The cause is the sandbox, not the script: outbound HTTPS goes through an agent proxy, `GH_TOKEN`/`GITHUB_TOKEN` are `proxy-injected` placeholders rather than real tokens, and a direct call to `api.github.com` is rejected with *"GitHub access is not enabled for this session"*. In that environment the **GitHub MCP tools are the only working GitHub path** — and Node's `fetch` does not honour `HTTPS_PROXY` by default anyway, so the script bypasses the proxy even when it is configured.
@@ -46,3 +59,5 @@ Working issue #280 from a Claude-Code-on-the-web session, `node .github/scripts/
 The claim protocol itself is fine and was honoured by hand for #280: post the claim comment with the same hidden `<!-- agent-claim worker="…" -->` marker (`add_issue_comment`), add `agent-claimed` (`issue_write`, which replaces the whole label set — resend the existing labels), wait out the settle window, then re-read the comments and keep the issue only if your claim is the earliest live one. Other workers parse the marker, not the poster, so a hand-staked claim arbitrates identically.
 
 **For future runs:** if `agent-claim.mjs` exits 1 with a 401/403, do not treat it as "no claim needed" and do not skip the claim — fall back to staking it via MCP as above. Making the script proxy-aware (an undici `ProxyAgent`, or `NODE_USE_ENV_PROXY`) would only help if the proxy allowed `api.github.com` for this session, which it does not.
+
+**Confirmed independently on #281** (same day, different run): identical 401 from `agent-claim.mjs`, resolved the same way — claim staked by hand via MCP with the same marker. Two runs raced #281; the earliest claim comment won and the loser resigned, so the protocol worked as designed even with the script unusable.

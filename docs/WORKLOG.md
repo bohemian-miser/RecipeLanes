@@ -36,3 +36,13 @@ A shared, curated log of significant decisions, incidents, and infra/process cha
 **Testing note.** The claim logic is pure and lives in `.github/scripts/agent-claim-logic.mjs` with `node --test` coverage (including a regression case replaying the #278 collision). CI's `changes` filter deliberately excludes `.github/**` from the `code` signal, so these tests needed their own `agent-scripts` job with its own path filter — otherwise a PR touching only agent tooling would silently skip every check.
 
 **Amendment (same day).** Contract tightened after owner feedback: a worker is dispatched to **one** labeled issue, so losing the claim race means **resign** — end the run quietly as a success — not "pick a different issue". A losing run has nothing to fall back to and must not go shopping for other work to fill itself. `list`/`status` are diagnostics only (`list` now always exits 0), so exit 3 unambiguously means "resign".
+
+---
+
+## 2026-07-27 — `agent-claim.mjs` cannot reach the GitHub REST API from the cloud runner
+
+Working issue #280 from a Claude-Code-on-the-web session, `node .github/scripts/agent-claim.mjs claim 280` failed with **401 Bad credentials**. The cause is the sandbox, not the script: outbound HTTPS goes through an agent proxy, `GH_TOKEN`/`GITHUB_TOKEN` are `proxy-injected` placeholders rather than real tokens, and a direct call to `api.github.com` is rejected with *"GitHub access is not enabled for this session"*. In that environment the **GitHub MCP tools are the only working GitHub path** — and Node's `fetch` does not honour `HTTPS_PROXY` by default anyway, so the script bypasses the proxy even when it is configured.
+
+The claim protocol itself is fine and was honoured by hand for #280: post the claim comment with the same hidden `<!-- agent-claim worker="…" -->` marker (`add_issue_comment`), add `agent-claimed` (`issue_write`, which replaces the whole label set — resend the existing labels), wait out the settle window, then re-read the comments and keep the issue only if your claim is the earliest live one. Other workers parse the marker, not the poster, so a hand-staked claim arbitrates identically.
+
+**For future runs:** if `agent-claim.mjs` exits 1 with a 401/403, do not treat it as "no claim needed" and do not skip the claim — fall back to staking it via MCP as above. Making the script proxy-aware (an undici `ProxyAgent`, or `NODE_USE_ENV_PROXY`) would only help if the proxy allowed `api.github.com` for this session, which it does not.

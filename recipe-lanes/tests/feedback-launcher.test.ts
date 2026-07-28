@@ -106,6 +106,63 @@ describe('global feedback launcher (Issue 282)', () => {
         });
     });
 
+    // Regression: the consent banner is `fixed bottom-0 left-0 right-0 z-[90]`
+    // and full width, so it covered the launcher at its resting bottom-8 /
+    // z-[80] for every user who had not yet accepted — i.e. every first-time
+    // visitor, who saw no feedback button at all. The banner is 54px tall on
+    // desktop and 121px on a phone, so the raised offset must clear 121px.
+    describe('clearing the consent banner', () => {
+        const classesFor = (route: string, consentPending: boolean) =>
+            feedbackLauncherClassName(route, { consentPending }).split(/\s+/);
+
+        it('lifts the launcher clear of the banner while consent is pending', () => {
+            const classes = classesFor('/gallery', true);
+            assert.ok(classes.includes('bottom-36'), `expected a raised offset, got: ${classes.join(' ')}`);
+            assert.ok(!classes.includes('bottom-8'), 'must not keep the resting offset under the banner');
+        });
+
+        it('raises the launcher above the banner z-index while consent is pending', () => {
+            const classes = classesFor('/gallery', true);
+            assert.ok(classes.includes('z-[95]'), `expected to outrank the banner, got: ${classes.join(' ')}`);
+            assert.ok(!classes.includes('z-[80]'), 'z-[80] sits under the banner z-[90]');
+        });
+
+        it('returns to the resting position once consent is accepted', () => {
+            const classes = classesFor('/gallery', false);
+            assert.ok(classes.includes('bottom-8'), `expected the resting offset, got: ${classes.join(' ')}`);
+            assert.ok(classes.includes('z-[80]'), 'should not keep outranking other chrome unnecessarily');
+            assert.ok(!classes.includes('bottom-36'), 'must not stay lifted with no banner to clear');
+        });
+
+        it('defaults to the resting position when no state is supplied', () => {
+            const classes = feedbackLauncherClassName('/gallery').split(/\s+/);
+            assert.ok(classes.includes('bottom-8'));
+            assert.ok(classes.includes('z-[80]'));
+        });
+
+        it('never yields two competing offsets or z-indexes', () => {
+            for (const consentPending of [true, false]) {
+                const classes = classesFor('/gallery', consentPending);
+                assert.equal(
+                    classes.filter((c) => c.startsWith('bottom-')).length, 1,
+                    `exactly one bottom offset expected, got: ${classes.join(' ')}`,
+                );
+                assert.equal(
+                    classes.filter((c) => c.startsWith('z-[')).length, 1,
+                    `exactly one z-index expected, got: ${classes.join(' ')}`,
+                );
+            }
+        });
+
+        it('still defers to the /lanes header trigger while lifted', () => {
+            // The consent offset and the per-route exemption are independent —
+            // one must not clobber the other.
+            assert.ok(classesFor('/lanes', true).includes('md:hidden'));
+            assert.ok(classesFor('/lanes', true).includes('bottom-36'));
+            assert.ok(!classesFor('/gallery', true).includes('md:hidden'));
+        });
+    });
+
     it('exempts only /lanes — every other route relies on the launcher', () => {
         assert.deepEqual(ROUTES_WITH_OWN_TRIGGER, ['/lanes']);
     });

@@ -22,6 +22,7 @@ import { usePathname } from 'next/navigation';
 import { MessageSquare } from 'lucide-react';
 import { FeedbackModal } from '@/components/feedback-modal';
 import { feedbackLauncherClassName } from '@/lib/feedback-launcher';
+import { useConsentPending } from '@/lib/use-consent';
 
 /**
  * Global feedback entry point (Issue 282).
@@ -40,6 +41,7 @@ import { feedbackLauncherClassName } from '@/lib/feedback-launcher';
  */
 export function FeedbackLauncher() {
     const pathname = usePathname();
+    const consentPending = useConsentPending();
     const [isOpen, setIsOpen] = useState(false);
 
     return (
@@ -50,7 +52,7 @@ export function FeedbackLauncher() {
                 title="Send feedback"
                 aria-label="Send feedback"
                 data-testid="global-feedback-button"
-                className={feedbackLauncherClassName(pathname)}
+                className={feedbackLauncherClassName(pathname, { consentPending })}
             >
                 <MessageSquare className="w-4 h-4 text-yellow-500" aria-hidden="true" />
                 <span className="hidden sm:inline">Feedback</span>

@@ -17,49 +17,9 @@
 
 'use client';
 
-import { useSyncExternalStore } from 'react';
 import Link from 'next/link';
-import {
-    CONSENT_STORAGE_KEY,
-    currentConsentRecord,
-    needsConsent,
-} from '@/lib/consent';
-
-// Consent is backed by localStorage, an external store. We read it during
-// render via useSyncExternalStore (rather than syncing into state in an
-// effect), which keeps the component hydration-safe and side-effect-free.
-const listeners = new Set<() => void>();
-
-function emitChange() {
-    for (const listener of listeners) listener();
-}
-
-function subscribe(onStoreChange: () => void): () => void {
-    listeners.add(onStoreChange);
-    const onStorage = (e: StorageEvent) => {
-        if (e.key === CONSENT_STORAGE_KEY) onStoreChange();
-    };
-    window.addEventListener('storage', onStorage);
-    return () => {
-        listeners.delete(onStoreChange);
-        window.removeEventListener('storage', onStorage);
-    };
-}
-
-function getSnapshot(): boolean {
-    try {
-        return needsConsent(window.localStorage.getItem(CONSENT_STORAGE_KEY));
-    } catch {
-        // localStorage unavailable (e.g. privacy mode) — show the notice.
-        return true;
-    }
-}
-
-// The server (and the hydrating first client paint) render nothing, avoiding a
-// hydration mismatch; the banner appears once the client reads localStorage.
-function getServerSnapshot(): boolean {
-    return false;
-}
+import { CONSENT_STORAGE_KEY, currentConsentRecord } from '@/lib/consent';
+import { notifyConsentChanged, useConsentPending } from '@/lib/use-consent';
 
 /**
  * One-time consent gate (Issue 147).
@@ -68,11 +28,13 @@ function getServerSnapshot(): boolean {
  * Privacy Policy, then persists their acceptance in localStorage. The banner
  * reappears only if the terms version changes (see `lib/consent.ts`).
  *
- * All decision logic lives in `lib/consent.ts` (pure, unit-tested); this
- * component is only the localStorage + UI shell around it.
+ * All decision logic lives in `lib/consent.ts` (pure, unit-tested) and the
+ * localStorage subscription in `lib/use-consent.ts` (shared with the global
+ * feedback launcher, which must move out from under this banner while it is
+ * up); this component is only the UI shell around them.
  */
 export function ConsentBanner() {
-    const show = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+    const show = useConsentPending();
 
     if (!show) return null;
 
@@ -82,7 +44,7 @@ export function ConsentBanner() {
         } catch {
             // Best effort: nothing else to do if we cannot persist.
         }
-        emitChange();
+        notifyConsentChanged();
     };
 
     return (

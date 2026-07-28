@@ -6,6 +6,31 @@ RecipeLanes is a recipe-visualization web app that converts raw recipe text into
 
 ---
 
+## How to work here — cost, batching & review
+
+The owner is on a plan with a **5-hour rolling usage window** (the binding constraint — it resets every ~5h) and a larger **weekly cap** (usually has headroom). The failure mode to avoid is capping *mid-task*: work dies with uncommitted state and resuming re-reads context cold — the most expensive outcome. Goal: spend the weekly budget across many windows, never torch one window.
+
+**Batching rule — serialize, do not fan out.** Do **not** launch many expensive worker agents in parallel for a bug batch. Default to **one issue per session**, worked to a committed checkpoint. Parallelism belongs *across* windows/days, not inside one window. (Cheap **Haiku** subagents for greps / file-location / log-reading are still encouraged — the thing to avoid is a swarm of Opus/Fable *workers*.)
+
+**Match the model to the task — do not default everything to Opus:**
+- **Haiku** — fact-finding, greps, reading logs/files, tiny mechanical edits.
+- **Sonnet** — the default *worker* for typical S/M bugs (most issues).
+- **Opus** — only issues needing real design/synthesis.
+- **Fable** — reserve for the genuinely deep one (e.g. a cross-cutting state-machine review). Rare.
+
+**Checkpoint early.** Commit a coherent unit as soon as it exists (WIP is fine on a feature branch) so a cap-out loses nothing and resume is cheap. Never leave several agents holding uncommitted state.
+
+**Window discipline.** Check `/usage` at the start. Once ~80% of the 5-hour window is burned, stop *starting* new work — finish and commit what's open, then stop. Leave headroom to land cleanly.
+
+**Review loop (owner reviews PRs, is not a confident code reviewer, does not blindly trust agents).** Every PR must make review easy and safe:
+- One concern per PR, smallest diff that closes the issue (see `feedback_pr_scoping`).
+- PR body: *what changed & why* in plain English; *how it was verified* with real evidence (UI screenshot / test output, not "looks fine"); an explicit *risks / unsure-about* section.
+- Run an independent `/code-review` on the diff **before** asking the owner to review — a second agent catches what the author agent (and the owner) would miss. The human gate at merge stays.
+- **Opening a PR is NOT "done."** Done = the PR's GitHub Actions CI is **green**. After pushing, wait for CI with a single blocking watch (`gh pr checks <pr> --watch`), not a sleep/poll loop (blocking is near-free; polling burns quota). If CI is red, read only the failing step, fix, re-push, and wait again. Never report success while checks are pending or failing. CI is the source-of-truth verification — you may lean on it instead of running the full/e2e suite locally (useful on the Pi and in cloud sandboxes without Java for emulators).
+- If an investigation shows an issue is already fixed on `main`, don't write redundant code — comment with evidence and close it.
+
+---
+
 ## Architecture map
 
 | Concern | Location |

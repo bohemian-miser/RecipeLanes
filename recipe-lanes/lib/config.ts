@@ -26,6 +26,18 @@ export const DB_COLLECTION_FEEDBACK = 'feedback';
 export const DB_COLLECTION_ICON_INDEX = 'icon_index';
 export const DB_COLLECTION_CONFIG = 'config';
 
+/**
+ * Icons per page in the shared icon gallery (/icon_overview). Shared by the
+ * client pager and the server query so the two cannot drift apart.
+ */
+export const ICON_GALLERY_PAGE_SIZE = 20;
+
+/**
+ * How many of the newest icons a gallery search scans. `icon_index` has no
+ * server-side text index, so search filters this window in memory.
+ */
+export const ICON_SEARCH_SCAN_LIMIT = 1000;
+
 // Runtime config document for the icon-generation queue. Both the server actions
 // and the Cloud Function read this so abuse controls are adjustable without a redeploy.
 export const ICON_QUEUE_CONFIG_DOC = 'icon_queue';

@@ -47,6 +47,7 @@ export const INTEGRATION_TESTS = [
   'functions-metadata.test.ts',
   'hybrid-integration.test.ts',
   'icon-apply-auth.test.ts',
+  'icon-gallery-pagination-integration.test.ts',
   'icon-index.test.ts',
   'icon-queue-config.test.ts',
   'impression-rejection.test.ts',

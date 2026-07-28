@@ -21,6 +21,7 @@ import { RecipeCard } from '@/components/ui/recipe-card';
 import { getDataService } from '@/lib/data-service';
 import { getAuthService } from '@/lib/auth-service';
 import { Login } from '@/components/login';
+import { FeedbackButton } from '@/components/feedback-button';
 import { LoginButton } from '@/components/login-button';
 import { LogoutButton } from '@/components/logout-button';
 
@@ -113,6 +114,8 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
                     <Plus className="w-4 h-4" />
                     <span className="hidden md:inline">New</span>
                 </Link>
+
+                <FeedbackButton />
 
                 <a href="https://github.com/Bohemian-Miser/RecipeLanes" target="_blank" rel="noopener noreferrer" className={navItemClass} title="Find me on GitHub">
                     <Github className="w-4 h-4" />

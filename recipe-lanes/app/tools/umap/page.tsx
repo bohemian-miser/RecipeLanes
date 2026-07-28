@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
+import { FeedbackButton } from '@/components/feedback-button';
 
 type IconPoint = {
     id: string;
@@ -250,18 +251,24 @@ export default function UmapPage() {
                 <span className="text-sm font-mono text-zinc-500">icon embedding space</span>
                 {!loading && <span className="text-xs text-zinc-400">{points.length} icons · scroll to zoom · drag to pan</span>}
                 {loading && <span className="text-xs text-zinc-400 animate-pulse">loading...</span>}
-                {!loading && (
-                    <div className="flex items-center gap-2 ml-auto">
-                        <span className="text-xs text-zinc-500">density</span>
-                        <input
-                            type="range" min={20} max={200} step={4}
-                            value={cellGap}
-                            onChange={e => setCellGap(Number(e.target.value))}
-                            className="w-24 accent-zinc-400"
-                        />
-                        <span className="text-xs text-zinc-600 w-6 text-right">{cellGap}</span>
-                    </div>
-                )}
+                <div className="ml-auto flex items-center gap-3">
+                    {!loading && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-zinc-500">density</span>
+                            <input
+                                type="range" min={20} max={200} step={4}
+                                value={cellGap}
+                                onChange={e => setCellGap(Number(e.target.value))}
+                                className="w-24 accent-zinc-400"
+                            />
+                            <span className="text-xs text-zinc-600 w-6 text-right">{cellGap}</span>
+                        </div>
+                    )}
+                    {/* This toolbar is light-themed, unlike the other top bars,
+                        so the button needs its own colours rather than the
+                        shared dark nav-item styling. */}
+                    <FeedbackButton className="flex items-center gap-2 px-2 py-1 rounded-md text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors text-xs font-medium" />
+                </div>
             </div>
 
             <div ref={containerRef} className="relative flex-1">

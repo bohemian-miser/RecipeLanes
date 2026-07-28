@@ -18,6 +18,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { FeedbackButton } from '@/components/feedback-button';
 import { TERMS_VERSION } from '@/lib/consent';
 
 export const metadata: Metadata = {
@@ -35,7 +36,7 @@ export const metadata: Metadata = {
 export default function TermsPage() {
     return (
         <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
-            <header className="h-14 shrink-0 border-b border-zinc-800 flex items-center px-4 bg-zinc-950 sticky top-0 z-20">
+            <header className="h-14 shrink-0 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-950 sticky top-0 z-20">
                 <Link
                     href="/lanes"
                     className="flex items-center gap-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors"
@@ -43,6 +44,7 @@ export default function TermsPage() {
                     <ArrowLeft className="w-4 h-4" />
                     <span>Back to editor</span>
                 </Link>
+                <FeedbackButton />
             </header>
 
             <main className="mx-auto max-w-3xl px-6 py-10 space-y-8 leading-relaxed text-zinc-300">

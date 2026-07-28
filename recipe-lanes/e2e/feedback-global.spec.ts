@@ -18,41 +18,38 @@
 import { test, expect } from './utils/fixtures';
 import { CONSENT_STORAGE_KEY } from '../lib/consent';
 
-// Issue 282: feedback used to be wired up only inside app/lanes/page.tsx, so
-// /gallery, /terms and friends had no way to report anything. The launcher is
-// now mounted from the root layout — these tests cover the routes that
-// previously had no entry point at all, and guard against the launcher
-// double-rendering next to the /lanes header button.
-test.describe('Global feedback launcher (Issue 282)', () => {
-    const launcher = 'global-feedback-button';
+// Issue 282: feedback was wired up only inside app/lanes/page.tsx, so every
+// other route had no way to report anything. Each top bar now carries a
+// FeedbackButton.
+//
+// These assertions deliberately check more than presence. An earlier attempt
+// put a floating pill over the page; it was in the DOM and passed
+// `toBeVisible()`, yet was covered by the consent banner and unreachable in
+// the real app. So each case here also *clicks* the button — Playwright fails
+// a click that another element intercepts — and the first-visit case runs with
+// the consent banner deliberately left up.
+test.describe('Feedback button in the top bar (Issue 282)', () => {
+    // Routes that previously had no feedback entry point at all.
+    const ROUTES = ['/gallery', '/gallery?filter=mine', '/icon_overview', '/terms'];
 
-    test('appears on pages that previously had no feedback button', async ({ page }) => {
-        for (const route of ['/gallery', '/terms']) {
+    for (const route of ROUTES) {
+        test(`is present and opens the modal on ${route}`, async ({ page }) => {
             await page.goto(route);
-            await expect(
-                page.getByTestId(launcher),
-                `expected the feedback button on ${route}`,
-            ).toBeVisible();
-        }
-    });
 
-    test('opens the feedback modal from a non-lanes page', async ({ page }) => {
-        await page.goto('/gallery');
+            const button = page.getByTestId('feedback-button');
+            await expect(button, `expected a feedback button in the ${route} top bar`).toBeVisible();
 
-        await page.getByTestId(launcher).click();
+            await button.click();
 
-        // The modal is the shared FeedbackModal: same heading and fields as the
-        // /lanes flow covered by recipes.spec.ts.
-        await expect(page.getByRole('heading', { name: 'Feedback & Contribute' })).toBeVisible();
-        await expect(page.locator('#message')).toBeVisible();
-    });
+            await expect(page.getByRole('heading', { name: 'Feedback & Contribute' })).toBeVisible();
+            await expect(page.locator('#message')).toBeVisible();
+        });
+    }
 
-    // Regression: the launcher rested at bottom-8 / z-[80] while the consent
-    // banner is fixed bottom-0, full width, z-[90] — so it was completely
-    // covered and unclickable for anyone who had not accepted yet, i.e. every
-    // first-time visitor. The shared fixture pre-seeds consent so the banner
-    // never renders, which is precisely why the other tests here stayed green.
-    test('is visible and clickable for a first-time visitor, with the consent banner up', async ({ page }) => {
+    test('is reachable for a first-time visitor, with the consent banner up', async ({ page }) => {
+        // The shared fixture pre-seeds consent so the banner never renders.
+        // Clear it to get the real first-visit layout back — the state in which
+        // the previous floating-pill attempt was completely covered.
         await page.addInitScript((key) => {
             try {
                 window.localStorage.removeItem(key);
@@ -63,35 +60,48 @@ test.describe('Global feedback launcher (Issue 282)', () => {
 
         await page.goto('/gallery');
 
-        const banner = page.locator('[aria-label="Consent to terms"]');
-        await expect(banner, 'the banner must actually be up for this test to mean anything').toBeVisible();
+        await expect(
+            page.locator('[aria-label="Consent to terms"]'),
+            'the banner must be up for this test to mean anything',
+        ).toBeVisible();
 
-        const button = page.getByTestId('global-feedback-button');
+        // The top bar is at the top of the viewport and the banner is pinned to
+        // the bottom, so the two cannot overlap — this pins that property.
+        const button = page.getByTestId('feedback-button');
+        await expect(button).toBeVisible();
+        await button.click();
+
+        await expect(page.getByRole('heading', { name: 'Feedback & Contribute' })).toBeVisible();
+    });
+
+    // The routes above run signed-out, which on /icon_overview and
+    // /gallery?filter=mine hits an auth gate that returns *before* the header.
+    // Those gates carry their own button; this covers the header itself.
+    test('is in the top bar of /icon_overview once signed in', async ({ page, login }) => {
+        await login('feedback-header-user');
+
+        await page.goto('/icon_overview');
+
+        const button = page.getByTestId('feedback-button');
         await expect(button).toBeVisible();
 
-        // Presence is not enough — the original bug had a "visible" button sat
-        // entirely behind the banner. Require real vertical separation.
-        const buttonBox = (await button.boundingBox())!;
-        const bannerBox = (await banner.boundingBox())!;
-        expect(
-            buttonBox.y + buttonBox.height,
-            'launcher must sit fully above the consent banner, not behind it',
-        ).toBeLessThanOrEqual(bannerBox.y);
+        // In the header, so near the top of the viewport rather than centred
+        // in a gate screen.
+        const box = (await button.boundingBox())!;
+        expect(box.y, 'expected the button in the top bar').toBeLessThan(60);
 
-        // ...and it must take a real click. Playwright fails this if another
-        // element intercepts the pointer event.
         await button.click();
         await expect(page.getByRole('heading', { name: 'Feedback & Contribute' })).toBeVisible();
     });
 
-    test('defers to the existing header button on desktop /lanes', async ({ page }) => {
-        test.skip(test.info().project.name === 'mobile', 'asserts the md+ desktop layout');
+    test('/lanes keeps its own header button', async ({ page }) => {
+        test.skip(test.info().project.name === 'mobile', 'the /lanes trigger is desktop-only by design');
 
         await page.goto('/lanes');
 
-        // /lanes already shows "Feedback & Contribute" in its header at md+, so
-        // the launcher must hide there rather than duplicate it.
+        // /lanes already had one and is untouched by this change; it is
+        // `hidden md:flex` because the mobile header deliberately drops
+        // secondary items (issue #139).
         await expect(page.getByTitle('Feedback & Contribute')).toBeVisible();
-        await expect(page.getByTestId(launcher)).toBeHidden();
     });
 });

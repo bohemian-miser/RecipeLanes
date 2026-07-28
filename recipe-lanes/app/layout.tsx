@@ -18,7 +18,6 @@
 import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/components/auth-provider";
 import { ConsentBanner } from "@/components/consent-banner";
-import { FeedbackLauncher } from "@/components/feedback-launcher";
 import { TermsLink } from "@/components/terms-link";
 import "./globals.css";
 
@@ -60,7 +59,6 @@ export default function RootLayout({
           {children}
         </AuthProvider>
         <TermsLink />
-        <FeedbackLauncher />
         <ConsentBanner />
       </body>
     </html>

@@ -30,8 +30,6 @@ const NAV_ITEM_CLASS =
 interface FeedbackButtonProps {
     /** Replaces the default top-bar styling (e.g. for the light umap toolbar). */
     className?: string;
-    /** Hide the text label, leaving just the icon. */
-    iconOnly?: boolean;
 }
 
 /**
@@ -50,7 +48,7 @@ interface FeedbackButtonProps {
  * header button sits in normal flow next to the other nav items and inherits
  * their styling, so it cannot be occluded by page chrome.
  */
-export function FeedbackButton({ className, iconOnly = false }: FeedbackButtonProps) {
+export function FeedbackButton({ className }: FeedbackButtonProps) {
     const [isOpen, setIsOpen] = useState(false);
 
     return (
@@ -63,8 +61,11 @@ export function FeedbackButton({ className, iconOnly = false }: FeedbackButtonPr
                 data-testid="feedback-button"
                 className={className ?? NAV_ITEM_CLASS}
             >
+                {/* Icon only, with the name carried by title/aria-label — the
+                    same shape as the GitHub button beside it in these headers.
+                    The app's button font is 'Press Start 2P', so a text label
+                    renders far wider than it reads. */}
                 <MessageSquare className="w-4 h-4" aria-hidden="true" />
-                {!iconOnly && <span className="hidden md:inline">Feedback</span>}
             </button>
             <FeedbackModal isOpen={isOpen} onClose={() => setIsOpen(false)} />
         </>

@@ -53,7 +53,6 @@ import { getCanvasTheme } from '@/lib/recipe-lanes/canvas-theme';
 import { track } from '@/lib/analytics';
 import { toPng } from 'html-to-image';
 import { Download, Share2, Undo, Redo, Check, Save, Copy, ListChecks } from 'lucide-react';
-import { useHistoryManager } from './hooks/useHistoryManager';
 import { useSaveAndFork, getSaveButtonState } from './hooks/useSaveAndFork';
 import { useAutosave } from './hooks/useAutosave';
 import { useRecipeStore } from '../../lib/stores/recipe-store';
@@ -245,62 +244,39 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         }
     }, [selectBranch]);
 
-    const markNodeDeleted = useRecipeStore(s => s.markNodeDeleted);
-    const restoreNodes = useRecipeStore(s => s.restoreNodes);
     // Tick-off progress (#281): a count, not the array, so the toolbar re-renders
     // only when the button's enabled state can actually change.
     const completedCount = useRecipeStore(s => s.completedNodeIds.length);
     const clearCompletedNodes = useRecipeStore(s => s.clearCompletedNodes);
 
-    // History
-    const { past, future, takeSnapshot, undo, redo, handleDeleteNode: _handleDeleteNode } = useHistoryManager({
-        getNodes,
-        getEdges,
-        setNodes,
-        setEdges,
-        edgeStyle,
-        onEdit,
-        setIsDirty,
-        // When undo restores nodes, reconcile the Zustand store so that any
-        // node restored from the undo snapshot is removed from pendingDeletedIds
-        // and added back to the Zustand graph.  Without this, a pendingDeletedIds
-        // entry would suppress the restored node from Firestore snapshots and the
-        // layout effect would see a Zustand/ReactFlow mismatch and call runLayout
-        // to remove the node again.
-        onRestoreNodes: restoreNodes,
-    });
+    // Single undo owner (issue #216): the store holds the ONE history for the
+    // whole page — graph edits, drags and deletes share a single timeline.
+    // The window Ctrl+Z/Ctrl+Y listener lives in app/lanes/page.tsx (so it
+    // also covers the TimelineView); this component has no key handling.
+    const deleteNodeWithUndo = useRecipeStore(s => s.deleteNodeWithUndo);
+    const pushUndoSnapshot = useRecipeStore(s => s.pushUndoSnapshot);
+    const commitNodePositions = useRecipeStore(s => s.commitNodePositions);
+    const syncNodePositions = useRecipeStore(s => s.syncNodePositions);
+    const storeUndo = useRecipeStore(s => s.undo);
+    const storeRedo = useRecipeStore(s => s.redo);
+    const canUndo = useRecipeStore(s => s.undoPast.length > 0);
+    const canRedo = useRecipeStore(s => s.undoFuture.length > 0);
+    const historyVersion = useRecipeStore(s => s.historyVersion);
 
-    // Wrap handleDeleteNode to immediately record the deletion in the Zustand store.
-    // markNodeDeleted does two things atomically:
-    //   1. Adds the nodeId to pendingDeletedIds so mergeSnapshot ignores any
-    //      incoming Firestore writes that still contain the node (e.g. an
-    //      icon-generation task that wrote back before the autosave propagated).
-    //   2. Removes the node from store.graph so the layout effect does not see
-    //      a mismatch between existing and incoming nodes (pendingLocal resurrection).
-    // The pending ID is cleared automatically once a snapshot arrives without it.
+    // Deletes go through the store: one history entry, children bridged onto
+    // the deleted node's inputs, and the id recorded in pendingDeletedIds so a
+    // background Firestore write cannot resurrect it before the save lands.
+    // The graph change flows back into ReactFlow via the layout sync effect
+    // (hasRemovedNodes → runLayout), which also rebuilds the bridged edges.
     const handleDeleteNode = useCallback((nodeId: string) => {
-        _handleDeleteNode(nodeId);
-        markNodeDeleted(nodeId);
-    }, [_handleDeleteNode, markNodeDeleted]);
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
-                e.preventDefault();
-                if (e.shiftKey) {
-                    redo();
-                } else {
-                    undo();
-                }
-            }
-            if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
-                 e.preventDefault();
-                 redo();
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo]);
+        deleteNodeWithUndo(nodeId);
+        setIsDirty(true);
+        if (isOwner) {
+            scheduleAutosave();
+        } else {
+            onEdit?.();
+        }
+    }, [deleteNodeWithUndo, setIsDirty, isOwner, scheduleAutosave, onEdit]);
 
     // Initial Layout Calculation
     const runLayout = useCallback((preservePositions = false, fit = true) => {
@@ -461,6 +437,16 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         setEdges(newEdges);
         hasInitialLayoutRef.current = true;
 
+        // Mirror the rendered positions into the store graph (passive: no
+        // history entry, no dirty flag) so history snapshots always capture
+        // exactly what is on screen.
+        syncNodePositions(
+            mode as string,
+            newNodes
+                .filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station')
+                .map((n: any) => ({ id: n.id, x: n.position.x, y: n.position.y })),
+        );
+
         if (fit && !canPreserve) {
             setLayoutReady(false);
             setTimeout(() => {
@@ -476,11 +462,10 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             setLayoutReady(true);
         }
 
-    }, [graph, mode, spacing, setNodes, setEdges, fitView, handleDeleteNode, edgeStyle]);
+    }, [graph, mode, spacing, setNodes, setEdges, fitView, handleDeleteNode, edgeStyle, syncNodePositions]);
 
     const prevMode = useRef(mode);
     const prevSpacing = useRef(spacing);
-    const lastSnapshotRef = useRef(0);
     // Set to true after the first runLayout completes. Once nodes are laid out,
     // subsequent graph updates (snapshots, saves) must NOT re-run layout — that
     // would reset positions the user has moved. Reset when the recipe changes
@@ -508,17 +493,6 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
         if (modeChanged || spacingChanged) {
             setIsDirty(true);
-
-            // Throttle snapshot for spacing to prevent history spam and lag.
-            // pendingLayoutSwitchRef also guards against duplicate snapshots
-            // while the switch below is being rescheduled by re-renders.
-            if (!pendingLayoutSwitchRef.current) {
-                const now = Date.now();
-                if (modeChanged || now - lastSnapshotRef.current > 500) {
-                    takeSnapshot();
-                    lastSnapshotRef.current = now;
-                }
-            }
             pendingLayoutSwitchRef.current = true;
 
             // Yield to main thread for UI updates.
@@ -649,7 +623,20 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         } else {
             runLayout(true);
         }
-    }, [graph, mode, spacing, runLayout, isDirty, setNodes, takeSnapshot]);
+    }, [graph, mode, spacing, runLayout, isDirty, setNodes]);
+
+    // Undo/redo restored a different graph: re-apply its positions to the
+    // canvas (a position-only change is deliberately ignored by the sync
+    // effect above — it must not move nodes on ordinary background writes)
+    // and persist the restored state so Firestore converges on what the user
+    // now sees.
+    const prevHistoryVersionRef = useRef(historyVersion);
+    useEffect(() => {
+        if (prevHistoryVersionRef.current === historyVersion) return;
+        prevHistoryVersionRef.current = historyVersion;
+        runLayout(true, false);
+        if (isOwner) scheduleAutosave();
+    }, [historyVersion, runLayout, isOwner, scheduleAutosave]);
 
     // Text Position Update Effect
     useEffect(() => {
@@ -682,8 +669,10 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             return;
         }
 
-        // Take snapshot on start
-        if (!wasLive) takeSnapshot();
+        // Push a history entry on entering physics mode: the store graph
+        // mirrors the pre-physics positions (synced by the last layout pass),
+        // so one undo restores the pre-physics arrangement.
+        if (!wasLive) pushUndoSnapshot();
 
         const d3Nodes = nodes.filter((n: any) => n.type !== 'lane').map((n: any) => ({ 
             id: n.id, 
@@ -756,9 +745,11 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     };
 
     const handleReset = () => {
+        // Undoable: push the current graph (positions mirrored by the last
+        // layout pass) before recomputing from scratch.
+        pushUndoSnapshot();
         setIsDirty(true);
-        takeSnapshot();
-        runLayout(false); 
+        runLayout(false);
     };
 
     useImperativeHandle(ref, () => ({
@@ -771,7 +762,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const onNodeClick = (event: React.MouseEvent, node: Node) => {
         onInteraction?.();
         trackDiagramInteractionOnce(analyticsRecipeId);
-        takeSnapshot();
+        // No history entry here — selection isn't an undoable graph change
+        // (the old per-click RF snapshot polluted the history with no-ops).
         selectBranch(node.id);
     };
 
@@ -821,7 +813,8 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     const onNodeDragStart = (event: React.MouseEvent, node: Node) => {
         onInteraction?.();
-        takeSnapshot(); 
+        // History is pushed at drag STOP (commitNodePositions captures the
+        // pre-move store graph) — no snapshot needed at drag start.
         if (event.shiftKey || longPressTriggered.current) {
             initPivotDrag(node);
         }
@@ -901,6 +894,15 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         dragRef.current = { active: false };
         trackDiagramInteractionOnce(analyticsRecipeId);
         updateLaneBounds();
+        // One history entry per drag: commitNodePositions pushes the pre-move
+        // graph, then records every real node's rendered position (so
+        // multi-node pivot drags are captured as a single undoable step).
+        commitNodePositions(
+            mode as string,
+            getNodes()
+                .filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station')
+                .map((n: any) => ({ id: n.id, x: n.position.x, y: n.position.y })),
+        );
         if (isOwner) {
             scheduleAutosave();
         } else {
@@ -941,17 +943,17 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                 <Controls showInteractive={false} />
                 <Panel position="top-right" className="flex gap-2">
                     <div className="flex gap-1 mr-2 border-r border-zinc-200 pr-2">
-                        <button 
-                            onClick={undo} 
-                            disabled={past.length === 0}
+                        <button
+                            onClick={storeUndo}
+                            disabled={!canUndo}
                             className="bg-white p-2 rounded shadow-md border border-zinc-200 hover:bg-zinc-50 text-zinc-600 disabled:opacity-50"
                             title="Undo (Ctrl+Z)"
                         >
                             <Undo className="w-4 h-4" />
                         </button>
-                        <button 
-                            onClick={redo} 
-                            disabled={future.length === 0}
+                        <button
+                            onClick={storeRedo}
+                            disabled={!canRedo}
                             className="bg-white p-2 rounded shadow-md border border-zinc-200 hover:bg-zinc-50 text-zinc-600 disabled:opacity-50"
                             title="Redo (Ctrl+Shift+Z)"
                         >

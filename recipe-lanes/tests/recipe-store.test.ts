@@ -300,10 +300,10 @@ describe('useRecipeStore', () => {
         it('is undoable — pushes the prior graph and undo restores it', () => {
             const store = useRecipeStore.getState();
             store.setGraph(makeGraph([makeNode('a')]));
-            assert.equal(useRecipeStore.getState().undoStack.length, 0);
+            assert.equal(useRecipeStore.getState().undoPast.length, 0);
 
             store.updateNodeVisualDescription('a', 'new desc');
-            assert.equal(useRecipeStore.getState().undoStack.length, 1);
+            assert.equal(useRecipeStore.getState().undoPast.length, 1);
             assert.equal(useRecipeStore.getState().graph!.nodes[0].visualDescription, 'new desc');
 
             useRecipeStore.getState().undo();
@@ -318,7 +318,7 @@ describe('useRecipeStore', () => {
             store.updateNodeVisualDescription('a', 'visual-a'); // identical to the default
 
             assert.equal(useRecipeStore.getState().graph, before, 'graph reference unchanged');
-            assert.equal(useRecipeStore.getState().undoStack.length, 0);
+            assert.equal(useRecipeStore.getState().undoPast.length, 0);
         });
 
         it('is a no-op when the node id is not found', () => {
@@ -329,7 +329,7 @@ describe('useRecipeStore', () => {
             store.updateNodeVisualDescription('missing', 'x');
 
             assert.equal(useRecipeStore.getState().graph, before);
-            assert.equal(useRecipeStore.getState().undoStack.length, 0);
+            assert.equal(useRecipeStore.getState().undoPast.length, 0);
         });
 
         it('does not throw when there is no graph', () => {
@@ -366,10 +366,10 @@ describe('useRecipeStore', () => {
         it('is undoable — pushes the prior graph and undo restores it', () => {
             const store = useRecipeStore.getState();
             store.setGraph(makeGraph([makeNode('a', { quantity: 1 })]));
-            assert.equal(useRecipeStore.getState().undoStack.length, 0);
+            assert.equal(useRecipeStore.getState().undoPast.length, 0);
 
             store.updateNode('a', { quantity: 5 });
-            assert.equal(useRecipeStore.getState().undoStack.length, 1);
+            assert.equal(useRecipeStore.getState().undoPast.length, 1);
             assert.equal(useRecipeStore.getState().graph!.nodes[0].quantity, 5);
 
             useRecipeStore.getState().undo();
@@ -384,7 +384,7 @@ describe('useRecipeStore', () => {
             store.updateNode('a', { quantity: 2, text: 'Node a' }); // identical to current
 
             assert.equal(useRecipeStore.getState().graph, before, 'graph reference unchanged');
-            assert.equal(useRecipeStore.getState().undoStack.length, 0);
+            assert.equal(useRecipeStore.getState().undoPast.length, 0);
         });
 
         it('is a no-op when the node id is not found, and does not throw with no graph', () => {
@@ -393,7 +393,7 @@ describe('useRecipeStore', () => {
             const before = useRecipeStore.getState().graph!;
             store.updateNode('missing', { text: 'x' });
             assert.equal(useRecipeStore.getState().graph, before);
-            assert.equal(useRecipeStore.getState().undoStack.length, 0);
+            assert.equal(useRecipeStore.getState().undoPast.length, 0);
 
             useRecipeStore.getState().reset();
             assert.equal(useRecipeStore.getState().graph, null);
@@ -405,70 +405,159 @@ describe('useRecipeStore', () => {
             store.setGraph(makeGraph([makeNode('a')]));
             store.updateNodeVisualDescription('a', 'a whisk in a bowl');
             assert.equal(useRecipeStore.getState().graph!.nodes[0].visualDescription, 'a whisk in a bowl');
-            assert.equal(useRecipeStore.getState().undoStack.length, 1);
+            assert.equal(useRecipeStore.getState().undoPast.length, 1);
         });
     });
 
-    // Regression: issue #276 — switching between notation and lanes views and
-    // hitting undo injected synthetic ReactFlow decoration (lane background bands
-    // / notation station anchors) into graph.nodes, which then rendered as empty
-    // "hollow" nodes (one per lane) and persisted to Firestore.
-    describe('restoreNodes (issue #276 — hollow nodes on undo)', () => {
-        // ReactFlow node shapes as captured in an undo snapshot. Content nodes
-        // carry `...originalNode` in their data (so data.type is set); synthetic
-        // lane/station nodes only carry presentational data.
-        const rfContentNode = (id: string, type: 'ingredient' | 'action' = 'ingredient') => ({
-            id,
-            type: 'minimal',
-            data: { id, laneId: 'lane-1', text: `Node ${id}`, visualDescription: `v-${id}`, type },
+    // Single store-level undo history (issue #216): graph edits, drags and
+    // deletes share ONE timeline, so one undo reverts exactly one action.
+    // (This also structurally retires the issue #276 "hollow nodes on undo"
+    // class: history entries are graph snapshots — synthetic ReactFlow
+    // decoration like lane bands / station anchors never enters graph.nodes,
+    // so undo cannot inject it.)
+    describe('store history (issue #216 — single undo owner)', () => {
+        it('undo/redo round-trips a graph edit', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a')]));
+            const before = useRecipeStore.getState().graph!;
+
+            store.setGraphWithUndo({ ...before, nodes: [...before.nodes, makeNode('b')] });
+            assert.deepEqual(useRecipeStore.getState().graph!.nodes.map(n => n.id), ['a', 'b']);
+
+            useRecipeStore.getState().undo();
+            assert.deepEqual(useRecipeStore.getState().graph!.nodes.map(n => n.id), ['a']);
+
+            useRecipeStore.getState().redo();
+            assert.deepEqual(useRecipeStore.getState().graph!.nodes.map(n => n.id), ['a', 'b']);
         });
-        const rfLaneBand = (id: string) => ({ id, type: 'lane', data: { label: id, color: '#abc' } });
-        const rfStationAnchor = (id: string) => ({ id, type: 'notation-station', data: { label: id } });
 
-        it('does not inject synthetic lane/station nodes into graph.nodes', () => {
-            useRecipeStore.getState().setGraph(makeGraph([makeNode('n1')]));
+        it('undo of an added node suppresses snapshot resurrection (pendingDeletedIds)', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a')]));
+            const before = useRecipeStore.getState().graph!;
 
-            useRecipeStore.getState().restoreNodes([
-                rfLaneBand('lane-1'),
-                rfLaneBand('lane-2'),
-                rfStationAnchor('station-x'),
-            ] as any);
+            // e.g. an AI adjustment added node b…
+            store.setGraphWithUndo({ ...before, nodes: [...before.nodes, makeNode('b')] });
+            // …and the user undoes it.
+            useRecipeStore.getState().undo();
+
+            // b is now pending-deleted: a background Firestore snapshot that
+            // still contains b must not bring it back.
+            assert.ok(useRecipeStore.getState().pendingDeletedIds.includes('b'));
+            useRecipeStore.getState().mergeSnapshot(makeGraph([makeNode('a'), makeNode('b')]));
+            assert.deepEqual(useRecipeStore.getState().graph!.nodes.map(n => n.id), ['a']);
+        });
+
+        it('undo of a delete clears the pending-delete flag so the node can live again', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a'), makeNode('b')]));
+
+            store.deleteNodeWithUndo('b');
+            assert.ok(useRecipeStore.getState().pendingDeletedIds.includes('b'));
+
+            useRecipeStore.getState().undo();
+            assert.deepEqual(useRecipeStore.getState().graph!.nodes.map(n => n.id).sort(), ['a', 'b']);
+            assert.ok(!useRecipeStore.getState().pendingDeletedIds.includes('b'));
+        });
+
+        it('redo of a delete re-suppresses the node', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a'), makeNode('b')]));
+            store.deleteNodeWithUndo('b');
+            useRecipeStore.getState().undo();
+            useRecipeStore.getState().redo();
+            assert.deepEqual(useRecipeStore.getState().graph!.nodes.map(n => n.id), ['a']);
+            assert.ok(useRecipeStore.getState().pendingDeletedIds.includes('b'));
+        });
+
+        it('deleteNodeWithUndo bridges children onto the deleted node\'s inputs', () => {
+            const store = useRecipeStore.getState();
+            // a → b → c: deleting b must leave a → c.
+            store.setGraph(makeGraph([
+                makeNode('a'),
+                makeNode('b', { inputs: ['a'] }),
+                makeNode('c', { inputs: ['b'] }),
+            ]));
+
+            store.deleteNodeWithUndo('b');
 
             const nodes = useRecipeStore.getState().graph!.nodes;
-            // Only the original content node remains — no lane/station junk added.
-            assert.deepEqual(nodes.map(n => n.id), ['n1']);
-            // Invariant the bug violated: every graph node has a real model type.
-            assert.ok(nodes.every(n => n.type === 'ingredient' || n.type === 'action'));
+            assert.deepEqual(nodes.map(n => n.id), ['a', 'c']);
+            assert.deepEqual(nodes.find(n => n.id === 'c')!.inputs, ['a']);
         });
 
-        it('leaves the graph reference untouched when only decoration is restored', () => {
-            const graph = makeGraph([makeNode('n1')]);
-            useRecipeStore.getState().setGraph(graph);
+        it('commitNodePositions pushes ONE history entry and writes x/y + layouts', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a'), makeNode('b')]));
+
+            store.commitNodePositions('dagre', [
+                { id: 'a', x: 100, y: 200 },
+                { id: 'b', x: 300, y: 400 },
+            ]);
+
+            const state = useRecipeStore.getState();
+            assert.equal(state.undoPast.length, 1);
+            assert.equal(state.isDirty, true);
+            assert.equal(state.graph!.nodes.find(n => n.id === 'a')!.x, 100);
+            assert.deepEqual(state.graph!.layouts!['dagre'].map(l => l.id), ['a', 'b']);
+
+            // Undo restores the pre-move graph (no x on the nodes, no layout entry).
+            state.undo();
+            const undone = useRecipeStore.getState().graph!;
+            assert.equal(undone.nodes.find(n => n.id === 'a')!.x, undefined);
+            assert.equal(undone.layouts?.['dagre'], undefined);
+            // Redo re-applies the move.
+            useRecipeStore.getState().redo();
+            assert.equal(useRecipeStore.getState().graph!.nodes.find(n => n.id === 'a')!.x, 100);
+        });
+
+        it('commitNodePositions is a no-op when nothing moved (no history spam)', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a')]));
+            store.commitNodePositions('dagre', [{ id: 'a', x: 10, y: 20 }]);
+            assert.equal(useRecipeStore.getState().undoPast.length, 1);
+
             const before = useRecipeStore.getState().graph;
-
-            useRecipeStore.getState().restoreNodes([rfLaneBand('lane-1')] as any);
-
-            assert.equal(useRecipeStore.getState().graph, before);
+            useRecipeStore.getState().commitNodePositions('dagre', [{ id: 'a', x: 10, y: 20 }]);
+            assert.equal(useRecipeStore.getState().graph, before, 'graph reference unchanged');
+            assert.equal(useRecipeStore.getState().undoPast.length, 1);
         });
 
-        it('still restores genuine deleted content nodes', () => {
-            useRecipeStore.getState().setGraph(makeGraph([makeNode('n1')]));
+        it('syncNodePositions mirrors x/y but never touches history, dirty or layouts', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a')]));
+            useRecipeStore.getState().setDirty(false);
 
-            // Snapshot captured while in lanes view: real content node + lane bands.
-            useRecipeStore.getState().restoreNodes([
-                rfContentNode('n1'),
-                rfContentNode('n2', 'action'),
-                rfLaneBand('lane-1'),
-            ] as any);
+            useRecipeStore.getState().syncNodePositions('dagre', [{ id: 'a', x: 50, y: 60 }]);
 
-            const nodes = useRecipeStore.getState().graph!.nodes;
-            const ids = nodes.map(n => n.id).sort();
-            // n2 comes back; n1 (already present) is preserved once; no lane band.
-            assert.deepEqual(ids, ['n1', 'n2']);
-            const n2 = nodes.find(n => n.id === 'n2')!;
-            assert.equal(n2.type, 'action');
-            assert.equal(n2.text, 'Node n2');
-            assert.ok(nodes.every(n => n.type === 'ingredient' || n.type === 'action'));
+            const state = useRecipeStore.getState();
+            assert.equal(state.graph!.nodes[0].x, 50);
+            assert.equal(state.undoPast.length, 0, 'no history entry');
+            assert.equal(state.isDirty, false, 'not marked dirty');
+            // The layouts map must stay untouched: the diagram's "saved layouts
+            // just arrived" detection compares layouts[mode] against null.
+            assert.equal(state.graph!.layouts?.['dagre'], undefined);
+        });
+
+        it('undo bumps historyVersion so views re-apply positions', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a')]));
+            const v0 = useRecipeStore.getState().historyVersion;
+            store.commitNodePositions('dagre', [{ id: 'a', x: 1, y: 2 }]);
+            useRecipeStore.getState().undo();
+            assert.equal(useRecipeStore.getState().historyVersion, v0 + 1);
+            useRecipeStore.getState().redo();
+            assert.equal(useRecipeStore.getState().historyVersion, v0 + 2);
+        });
+
+        it('undo/redo are no-ops on empty stacks', () => {
+            const store = useRecipeStore.getState();
+            store.setGraph(makeGraph([makeNode('a')]));
+            const before = useRecipeStore.getState().graph;
+            useRecipeStore.getState().undo();
+            useRecipeStore.getState().redo();
+            assert.equal(useRecipeStore.getState().graph, before);
+            assert.equal(useRecipeStore.getState().historyVersion, 0);
         });
     });
 });

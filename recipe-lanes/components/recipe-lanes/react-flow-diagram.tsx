@@ -52,7 +52,7 @@ import TimelineBackground, { type TimelineData } from './timeline-background';
 import { getCanvasTheme } from '@/lib/recipe-lanes/canvas-theme';
 import { track } from '@/lib/analytics';
 import { toPng } from 'html-to-image';
-import { Download, Share2, Undo, Redo, Check, Save, Copy } from 'lucide-react';
+import { Download, Share2, Undo, Redo, Check, Save, Copy, ListChecks } from 'lucide-react';
 import { useHistoryManager } from './hooks/useHistoryManager';
 import { useSaveAndFork, getSaveButtonState } from './hooks/useSaveAndFork';
 import { useAutosave } from './hooks/useAutosave';
@@ -247,6 +247,10 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
 
     const markNodeDeleted = useRecipeStore(s => s.markNodeDeleted);
     const restoreNodes = useRecipeStore(s => s.restoreNodes);
+    // Tick-off progress (#281): a count, not the array, so the toolbar re-renders
+    // only when the button's enabled state can actually change.
+    const completedCount = useRecipeStore(s => s.completedNodeIds.length);
+    const clearCompletedNodes = useRecipeStore(s => s.clearCompletedNodes);
 
     // History
     const { past, future, takeSnapshot, undo, redo, handleDeleteNode: _handleDeleteNode } = useHistoryManager({
@@ -952,6 +956,17 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                             title="Redo (Ctrl+Shift+Z)"
                         >
                             <Redo className="w-4 h-4" />
+                        </button>
+                        {/* Clear the cook's tick marks (#281). Activates as soon as
+                            anything is ticked; disabled otherwise, like undo/redo. */}
+                        <button
+                            onClick={clearCompletedNodes}
+                            disabled={completedCount === 0}
+                            className="bg-white p-2 rounded shadow-md border border-zinc-200 hover:bg-zinc-50 text-zinc-600 disabled:opacity-50"
+                            title="Clear all ticks"
+                            data-testid="clear-completed-nodes"
+                        >
+                            <ListChecks className="w-4 h-4" />
                         </button>
                     </div>
 

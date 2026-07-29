@@ -36,6 +36,8 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
+  type SortOption = 'created_at' | 'impressions' | 'rejections';
+  const [sortBy, setSortBy] = useState<SortOption>('created_at');
   // View mode: grid of thumbnails (default) or a list showing creation time (#279).
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -43,7 +45,7 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
     const fetchIcons = async () => {
       setLoading(true);
       try {
-        const res = await getPagedIconsAction(page, ICON_GALLERY_PAGE_SIZE, search);
+        const res = await getPagedIconsAction(page, ICON_GALLERY_PAGE_SIZE, search, sortBy);
         setIcons(res.icons);
         setTotal(res.total);
       } catch (err) {
@@ -58,7 +60,7 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
     }, 300); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [page, search]);
+  }, [page, search, sortBy]);
 
   const handleDelete = async (id: string, ingredient: string) => {
     //   if (!confirm('Are you sure you want to delete this icon?')) return;
@@ -92,6 +94,25 @@ export function SharedGallery({ onIconClick }: SharedGalleryProps = {}) {
                       value={search}
                       onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                   />
+              </div>
+
+              {/* Sort by dropdown */}
+              <div className="shrink-0 relative">
+                  <select
+                      value={sortBy}
+                      onChange={(e) => { setSortBy(e.target.value as SortOption); setPage(1); }}
+                      className="bg-zinc-900 border border-zinc-700 rounded-full py-1.5 pl-4 pr-8 text-sm text-zinc-300 focus:outline-none focus:border-yellow-500/50 appearance-none cursor-pointer"
+                      title="Sort gallery"
+                  >
+                      <option value="created_at">Newest</option>
+                      <option value="impressions">Most Impressions</option>
+                      <option value="rejections">Most Rejections</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-zinc-400">
+                      <svg className="w-4 h-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                          <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                      </svg>
+                  </div>
               </div>
 
               {/* View toggle: grid of thumbnails vs. list with creation time (#279). */}

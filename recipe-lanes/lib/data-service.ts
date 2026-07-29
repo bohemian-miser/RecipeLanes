@@ -70,7 +70,7 @@ export interface DataService {
   
   listDebugFiles(): Promise<any[]>;
   checkExistingCopies(originalId: string, userId: string): Promise<any[]>;
-  getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }>;
+  getPagedIcons(page: number, limit: number, query?: string, sortBy?: 'created_at' | 'impressions' | 'rejections'): Promise<{ icons: any[], total: number }>;
   retryIconGeneration(ingredientName: string): Promise<void>;
   // queueIcons(items: { ingredientName: string, recipeId?: string, rejectedIds?: string[] }[]): Promise<Map<string, IconStats>>;
 //   waitForQueue(ingredientName: string, timeoutMs?: number): Promise<IconStats | null>;
@@ -636,14 +636,20 @@ export class FirebaseDataService implements DataService {
   // pager derives its page count from it (`Math.ceil(total / limit)`), so an
   // estimate derived from the current page produced phantom pages that render
   // empty (issue #280).
-  async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
+  async getPagedIcons(page: number, limit: number, query?: string, sortBy?: 'created_at' | 'impressions' | 'rejections'): Promise<{ icons: any[], total: number }> {
       try {
           const safeLimit = Math.max(1, Math.floor(limit) || ICON_GALLERY_PAGE_SIZE);
           const safePage = Math.max(1, Math.floor(page) || 1);
           const offset = (safePage - 1) * safeLimit;
 
-          const base: FirebaseFirestore.Query = this._db.collection(DB_COLLECTION_ICON_INDEX)
-              .orderBy('created_at', 'desc');
+          let base: FirebaseFirestore.Query = this._db.collection(DB_COLLECTION_ICON_INDEX);
+          if (sortBy === 'impressions') {
+              base = base.orderBy('impressions', 'desc');
+          } else if (sortBy === 'rejections') {
+              base = base.orderBy('rejections', 'desc');
+          } else {
+              base = base.orderBy('created_at', 'desc');
+          }
 
           const mapDocs = (docs: FirebaseFirestore.QueryDocumentSnapshot[]): any[] => docs.map(doc => {
               const data = doc.data();
@@ -1490,12 +1496,18 @@ export class MemoryDataService implements DataService {
     // }
     
     // ... (rest of methods)
-    async getPagedIcons(page: number, limit: number, query?: string): Promise<{ icons: any[], total: number }> {
+    async getPagedIcons(page: number, limit: number, query?: string, sortBy?: 'created_at' | 'impressions' | 'rejections'): Promise<{ icons: any[], total: number }> {
         let icons = memoryStore.getAllIcons().filter(i => !i.marked_for_deletion);
         
         if (query) {
             const term = query.toLowerCase();
             icons = icons.filter(i => i.ingredient.toLowerCase().includes(term));
+        }
+        
+        if (sortBy === 'impressions') {
+             icons.sort((a, b) => (b.impressions || 0) - (a.impressions || 0));
+        } else if (sortBy === 'rejections') {
+             icons.sort((a, b) => (b.rejections || 0) - (a.rejections || 0));
         } else {
              icons.sort((a, b) => b.created_at - a.created_at);
         }

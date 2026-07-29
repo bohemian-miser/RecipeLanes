@@ -65,7 +65,7 @@ function RecipeLanesContent() {
   const ownerId = useRecipeStore(s => s.ownerId);
   const ownerName = useRecipeStore(s => s.ownerName);
   const { mergeSnapshot, setGraph, setGraphWithUndo, undo, updateNode, cycleShortlist, reset: resetRecipeStore, addMessage, clearMessages } = useRecipeStore.getState();
-  const canUndo = useRecipeStore(s => s.undoStack.length > 0);
+  const canUndo = useRecipeStore(s => s.undoPast.length > 0);
   const messageCount = useRecipeStore(s => s.messages.length);
   
   useEffect(() => {
@@ -99,16 +99,30 @@ function RecipeLanesContent() {
   const titleBeforeEdit = useRef('');
   const autoFillIconsRef = useRef(false);
 
+  // THE single Ctrl+Z/Ctrl+Y owner for the whole page (issue #216): the store
+  // holds one history shared by every view (ReactFlow diagram and the classic
+  // TimelineView), so exactly one action reverts per keypress. Views must NOT
+  // register their own key handlers.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
-        const { undoStack } = useRecipeStore.getState();
-        if (undoStack.length > 0) { e.preventDefault(); undo(); }
+      if (!(e.metaKey || e.ctrlKey)) return;
+      // Let inputs/textareas keep their native text-editing undo.
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+      const { undo: storeUndo, redo: storeRedo } = useRecipeStore.getState();
+      // toLowerCase: with Shift held the browser reports 'Z', and CapsLock
+      // uppercases plain presses — a bare === 'z' makes Ctrl+Shift+Z dead.
+      const key = e.key.toLowerCase();
+      if (key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) { storeRedo(); } else { storeUndo(); }
+      } else if (key === 'y') {
+        e.preventDefault();
+        storeRedo();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isOwner = !ownerId || (!!user && user.uid === ownerId);
@@ -1325,15 +1339,26 @@ const handleVisualize = async () => {
                     <TimelineView 
                         graph={graph} 
                         onSave={async (newGraph) => {
-                            // Update layouts map for consistency with ReactFlowDiagram
-                            const layouts = newGraph.layouts || {};
-                            layouts['timeline2'] = newGraph.nodes.map(n => ({ 
-                                id: n.id, 
-                                x: n.x ?? 0, 
-                                y: n.y ?? 0 
-                            }));
-                            const finalGraph = { ...newGraph, layouts };
-                            
+                            // The store maintains layouts['timeline2'] itself
+                            // (commitNodePositions on drag). Only fall back to
+                            // rebuilding from node x/y when no entry exists yet
+                            // AND the nodes actually carry timeline-space
+                            // coordinates — node x/y is a mirror of whichever
+                            // mode was rendered last, and rebuilding from
+                            // foreign-mode coordinates (or 0,0) permanently
+                            // scrambled saved timeline layouts.
+                            let finalGraph = newGraph;
+                            if (!newGraph.layouts?.['timeline2'] && newGraph.layoutMode === 'timeline2') {
+                                finalGraph = {
+                                    ...newGraph,
+                                    layouts: {
+                                        ...(newGraph.layouts || {}),
+                                        timeline2: newGraph.nodes
+                                            .filter(n => n.x !== undefined && n.y !== undefined)
+                                            .map(n => ({ id: n.id, x: n.x!, y: n.y! })),
+                                    },
+                                };
+                            }
                             setGraph(finalGraph);
                             if (user && isOwner && recipeId) {
                                 await saveRecipeAction(finalGraph, recipeId);

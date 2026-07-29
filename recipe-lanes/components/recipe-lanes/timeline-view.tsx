@@ -212,10 +212,9 @@ function IngredientNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSel
 export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (graph: RecipeGraph) => void }) {
   const searchParams   = useSearchParams();
   const recipeId       = searchParams.get('id');
-  const cycleShortlist     = useRecipeStore(s => s.cycleShortlist);
-  const setGraph           = useRecipeStore(s => s.setGraph);
-  const markNodeDeleted    = useRecipeStore(s => s.markNodeDeleted);
-  const unmarkNodesDeleted = useRecipeStore(s => s.unmarkNodesDeleted);
+  const cycleShortlist      = useRecipeStore(s => s.cycleShortlist);
+  const deleteNodeWithUndo  = useRecipeStore(s => s.deleteNodeWithUndo);
+  const commitNodePositions = useRecipeStore(s => s.commitNodePositions);
 
   const layout = useMemo(() => buildTimelineLayout(graph), [graph]);
   const { nodes, edges, lanes, totalMinutes, totalWidth, totalHeight, pixelsPerMin: ppm, actionZoneY } = layout;
@@ -244,27 +243,13 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
   useEffect(() => () => stopInterval(), [stopInterval]);
 
   // ── Undo ──────────────────────────────────────────────────────────────────
-  const [undoStack, setUndoStack] = useState<RecipeGraph[]>([]);
-  const pushUndo = useCallback((s: RecipeGraph) => setUndoStack(p => [...p.slice(-49), s]), []);
-  const undo = useCallback(() => {
-    setUndoStack(prev => {
-      if (!prev.length) return prev;
-      const next = [...prev];
-      const restored = next.pop()!;
-      setGraph(restored);
-      // Clear the pending-delete flags for any node the undo brings back, so
-      // mergeSnapshot does not immediately re-suppress a just-restored node.
-      unmarkNodesDeleted(restored.nodes.map(n => n.id));
-      return next;
-    });
-  }, [setGraph, unmarkNodesDeleted]);
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
-    };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [undo]);
+  // Single undo owner (issue #216): history lives in the store, shared with
+  // the ReactFlow views. The Ctrl+Z/Ctrl+Y listener lives in
+  // app/lanes/page.tsx — this component must NOT register its own key
+  // handler. The store's undo/redo also reconciles pendingDeletedIds,
+  // replacing the old local stack's unmarkNodesDeleted dance.
+  const undo    = useRecipeStore(s => s.undo);
+  const canUndo = useRecipeStore(s => s.undoPast.length > 0);
 
   // ── Forge state ───────────────────────────────────────────────────────────
   const [forgingIds, setForgingIds]   = useState<Set<string>>(new Set());
@@ -328,6 +313,36 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
   const posOverridesRef                 = useRef(posOverrides);
   useEffect(() => { posOverridesRef.current = posOverrides; }, [posOverrides]);
 
+  // Undo/redo restored a different graph: re-seed the position overrides from
+  // the restored graph (the useState initializer above only runs on mount)
+  // and persist the restored state so Firestore converges on what the user
+  // now sees.
+  const historyVersion = useRecipeStore(s => s.historyVersion);
+  const prevHistoryVersionRef = useRef(historyVersion);
+  useEffect(() => {
+    if (prevHistoryVersionRef.current === historyVersion) return;
+    prevHistoryVersionRef.current = historyVersion;
+    // queueMicrotask: setState synchronously inside an effect trips the
+    // cascading-render lint rule (same pattern as the forge-clear effect).
+    queueMicrotask(() => {
+      const g = useRecipeStore.getState().graph;
+      const m = new Map<string, { cx: number; cy: number }>();
+      if (g?.layouts?.['timeline2']) {
+        g.layouts['timeline2'].forEach(l => m.set(l.id, { cx: l.x + TL.NODE_R, cy: l.y + TL.NODE_R }));
+      } else if (g && g.layoutMode === 'timeline2') {
+        // Same guard as the mount initializer: node x/y only hold
+        // timeline-space coordinates when timeline2 is the saved mode —
+        // otherwise they mirror whichever ReactFlow mode rendered last and
+        // seeding from them scrambles the whole timeline.
+        g.nodes.forEach(n => {
+          if (n.x !== undefined && n.y !== undefined) m.set(n.id, { cx: n.x + TL.NODE_R, cy: n.y + TL.NODE_R });
+        });
+      }
+      setPosOverrides(m);
+      if (g) onSave?.(g);
+    });
+  }, [historyVersion, onSave]);
+
   // ── Hover ─────────────────────────────────────────────────────────────────
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
@@ -336,20 +351,20 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
 
   // ── Delete ────────────────────────────────────────────────────────────────
   const deleteNode = useCallback((nodeId: string) => {
-    pushUndo(graph);
-    const nextGraph = { ...graph, nodes: graph.nodes.filter(n => n.id !== nodeId) };
-    setGraph(nextGraph);
-    // Record the deletion so an in-flight Firestore snapshot (e.g. an icon
-    // write-back, or the listener reconnecting after the app is backgrounded on
-    // mobile) cannot resurrect the node and revert the graph to its saved state.
-    markNodeDeleted(nodeId);
+    // Store-level delete: one history entry, children bridged onto the
+    // deleted node's inputs, and the id recorded in pendingDeletedIds so an
+    // in-flight Firestore snapshot (e.g. an icon write-back, or the listener
+    // reconnecting after the app is backgrounded on mobile) cannot resurrect
+    // it before the save propagates.
+    deleteNodeWithUndo(nodeId);
     // Persist the deletion — without this the node only vanishes from local
     // state and the next snapshot / reload brings it back.
-    onSave?.(nextGraph);
+    const nextGraph = useRecipeStore.getState().graph;
+    if (nextGraph) onSave?.(nextGraph);
     setPosOverrides(p => { const n = new Map(p); n.delete(nodeId); return n; });
     setSelectedIds(p => { const n = new Set(p); n.delete(nodeId); return n; });
     setHoveredNodeId(null);
-  }, [graph, setGraph, markNodeDeleted, onSave, pushUndo]);
+  }, [deleteNodeWithUndo, onSave]);
 
   // ── Viewport / drag ───────────────────────────────────────────────────────
   const [vp, setVp]       = useState<Viewport>(DEFAULT_VP);
@@ -486,16 +501,25 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
     }
 
     if (d.type === 'node' && d.moved) {
-      // Drag finished, apply positions to graph and save
-      const nextNodes = graphNodesRef.current.map(n => {
-        const over = posOverridesRef.current.get(n.id);
-        if (over) return { ...n, x: over.cx - TL.NODE_R, y: over.cy - TL.NODE_R };
-        return n;
-      });
-      const nextGraph = { ...graph, nodes: nextNodes };
-      onSave?.(nextGraph);
+      // Drag finished: one undoable history entry via the store (the commit
+      // pushes the pre-move graph and updates nodes x/y + layouts.timeline2),
+      // then persist the store's resulting graph.
+      // ONLY nodes with a position override are committed: overrides are
+      // guaranteed timeline-space (seeded from layouts.timeline2 or dragged
+      // here), whereas node x/y mirrors whichever mode rendered last —
+      // committing those would write foreign-mode coordinates into
+      // layouts.timeline2 and permanently scramble the saved layout.
+      const positions = graphNodesRef.current
+        .map(n => {
+          const over = posOverridesRef.current.get(n.id);
+          return over ? { id: n.id, x: over.cx - TL.NODE_R, y: over.cy - TL.NODE_R } : null;
+        })
+        .filter((p): p is { id: string; x: number; y: number } => p !== null);
+      commitNodePositions('timeline2', positions);
+      const nextGraph = useRecipeStore.getState().graph;
+      if (nextGraph) onSave?.(nextGraph);
     }
-  }, [nodes, graph, onSave]);
+  }, [nodes, commitNodePositions, onSave]);
 
   const zoomBy    = useCallback((f: number) => {
     setVp(prev => {
@@ -580,7 +604,7 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
 
         <div className="w-px h-4 bg-zinc-200 mx-1"/>
 
-        <button onClick={undo} disabled={!undoStack.length} title="Undo (⌘Z)"
+        <button onClick={undo} disabled={!canUndo} title="Undo (⌘Z)"
           className="p-1.5 rounded text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
           <Undo2 className="w-3.5 h-3.5"/>
         </button>

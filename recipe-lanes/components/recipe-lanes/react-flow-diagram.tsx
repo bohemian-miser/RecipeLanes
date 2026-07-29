@@ -306,11 +306,28 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         const canPreserve = shouldUseSavedLayout;
         const isNotation = mode === 'notation';
 
-        // 'notation' is a from-scratch layout, same as 'repulsive' — it does not
-        // participate in the saved-position preservation path (no per-node x/y
-        // persistence format for it yet; v2 concern).
         if (isNotation) {
+            // calculateNotationLayout is a pure from-scratch engine that never
+            // reads node x/y as input, so preserving saved/dragged positions
+            // must happen post-hoc on its OUTPUT — unlike the canPreserve
+            // modes below, which bake x/y into the input graph (issue #268:
+            // drags in notation were saved to graph.layouts.notation but never
+            // applied on restore, snapping back on reload/mode-switch/undo).
             layout = calculateNotationLayout(effectiveGraph);
+            const savedNotationPositions = canPreserve ? graph.layouts?.[mode] : undefined;
+            if (savedNotationPositions) {
+                const savedById = new Map(savedNotationPositions.map(p => [p.id, p]));
+                layout = {
+                    ...layout,
+                    nodes: layout.nodes.map(n => {
+                        // Station badges are synthetic row anchors (not in
+                        // graph.nodes, not draggable) — never overlay them.
+                        if ((n as any).role === 'station') return n;
+                        const saved = savedById.get(n.id);
+                        return saved ? { ...n, x: saved.x, y: saved.y } : n;
+                    }),
+                };
+            }
         } else if (canPreserve) {
             const safeMode = (['swimlanes', 'dagre', 'dagre-lr', 'timeline'].includes(mode as string)) ? (mode as LayoutMode) : 'dagre';
             layout = calculateLayout(effectiveGraph, safeMode, spacing, true);
@@ -487,7 +504,6 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     useEffect(() => {
         if (isLive) return; // Skip static layout if physics is running
 
-        const isNotationMode = mode === 'notation';
         const modeChanged = prevMode.current !== mode;
         const spacingChanged = prevSpacing.current !== spacing;
 
@@ -525,12 +541,11 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         // Fires once when saved layout data arrives after the initial dagre render ran
         // without it (two-snapshot scenario). The key comparison already prevents
         // re-firing on unchanged data, so we don't need an !isDirty guard here.
-        // Notation is excluded: calculateNotationLayout ignores saved positions
-        // (always from-scratch), so "layouts arrived" would just recompute the
-        // layout and snap any user drags back — the first autosave in notation
-        // mode writes layouts['notation'], which used to trip this on the echo.
+        // Notation is included since runLayout overlays layouts['notation'] onto
+        // the computed spine layout (issue #268): the first-autosave echo now
+        // re-applies exactly the just-dragged positions (a visual no-op) instead
+        // of snapping back, and the two-snapshot restore works like other modes.
         const layoutsJustArrived =
-            !isNotationMode &&
             hasInitialLayoutRef.current &&
             currentLayoutsKey !== null &&
             prevLayoutsKeyRef.current === null;

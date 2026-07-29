@@ -126,7 +126,7 @@ describe('useRecipeStore — node completion (#281)', () => {
             useRecipeStore.getState().mergeSnapshot(makeGraph([makeNode('n1')]));
             useRecipeStore.getState().toggleNodeCompleted('n1');
 
-            assert.deepEqual(useRecipeStore.getState().undoStack, []);
+            assert.deepEqual(useRecipeStore.getState().undoPast, []);
         });
 
         it('accepts an ID that is not in the graph', () => {

@@ -594,4 +594,139 @@ describe('useRecipeStore', () => {
             assert.equal(useRecipeStore.getState().historyVersion, 0);
         });
     });
+
+    // Field-ownership-driven merge (issue #220): a server write that changes
+    // ONLY an uncompared field (e.g. failRecipeIcon setting status:'failed')
+    // used to hit mergeNode's fast path and be silently dropped, leaving the
+    // UI stuck on an infinite spinner. mergeNode is now driven exhaustively by
+    // lib/recipe-lanes/node-fields.ts's ownership map instead of a hand-picked
+    // field subset.
+    describe('mergeNode field ownership (issue #220)', () => {
+        it('(identity) keeps the same reference when only CLIENT fields (x/y) differ', () => {
+            const store = useRecipeStore.getState();
+            const node = makeNode('a', { x: 1, y: 1, status: 'pending' });
+            store.mergeSnapshot(makeGraph([node]));
+            const before = useRecipeStore.getState().graph!.nodes[0];
+
+            store.mergeSnapshot(makeGraph([{ ...node, x: 999, y: 999 }]));
+            const after = useRecipeStore.getState().graph!.nodes[0];
+
+            assert.strictEqual(after, before, 'STRUCTURAL and SERVER fields unchanged -> same reference');
+        });
+
+        it('(array identity) mergeSnapshot with an all-identical node array returns the same array reference', () => {
+            const store = useRecipeStore.getState();
+            const nodeA = makeNode('a');
+            const nodeB = makeNode('b');
+            store.mergeSnapshot(makeGraph([nodeA, nodeB]));
+            const before = useRecipeStore.getState().graph!.nodes;
+
+            store.mergeSnapshot(makeGraph([{ ...nodeA }, { ...nodeB }]));
+            const after = useRecipeStore.getState().graph!.nodes;
+
+            assert.strictEqual(after, before, 'identical incoming array -> same array reference');
+        });
+
+        it('(server change reflected) a status-only change is reflected, and every other node keeps identity', () => {
+            const store = useRecipeStore.getState();
+            const nodeA = makeNode('a', { status: 'pending' });
+            const nodeB = makeNode('b');
+            const nodeC = makeNode('c');
+            store.mergeSnapshot(makeGraph([nodeA, nodeB, nodeC]));
+            const beforeB = useRecipeStore.getState().graph!.nodes.find(n => n.id === 'b')!;
+            const beforeC = useRecipeStore.getState().graph!.nodes.find(n => n.id === 'c')!;
+
+            store.mergeSnapshot(makeGraph([{ ...nodeA, status: 'failed' }, nodeB, nodeC]));
+
+            const state = useRecipeStore.getState();
+            const afterA = state.graph!.nodes.find(n => n.id === 'a')!;
+            assert.equal(afterA.status, 'failed', 'status change must be reflected');
+            assert.strictEqual(state.graph!.nodes.find(n => n.id === 'b')!, beforeB);
+            assert.strictEqual(state.graph!.nodes.find(n => n.id === 'c')!, beforeC);
+        });
+
+        it('(structural change reflected) a laneId-only change is reflected', () => {
+            const store = useRecipeStore.getState();
+            const node = makeNode('a', { laneId: 'lane-1' });
+            store.mergeSnapshot(makeGraph([node]));
+
+            store.mergeSnapshot(makeGraph([{ ...node, laneId: 'lane-2' }]));
+
+            assert.equal(useRecipeStore.getState().graph!.nodes[0].laneId, 'lane-2');
+        });
+
+        it('(structural change reflected) an inputs-only change is reflected', () => {
+            const store = useRecipeStore.getState();
+            const node = makeNode('a', { inputs: ['x'] });
+            store.mergeSnapshot(makeGraph([node]));
+
+            store.mergeSnapshot(makeGraph([{ ...node, inputs: ['x', 'y'] }]));
+
+            assert.deepEqual(useRecipeStore.getState().graph!.nodes[0].inputs, ['x', 'y']);
+        });
+
+        it('(structural change reflected) a duration-only change is reflected', () => {
+            const store = useRecipeStore.getState();
+            const node = makeNode('a', { duration: '5 min' });
+            store.mergeSnapshot(makeGraph([node]));
+
+            store.mergeSnapshot(makeGraph([{ ...node, duration: '10 min' }]));
+
+            assert.equal(useRecipeStore.getState().graph!.nodes[0].duration, '10 min');
+        });
+
+        it('(client-owned preserved) an x/y-only change keeps the existing reference (client owns position)', () => {
+            const store = useRecipeStore.getState();
+            const node = makeNode('a', { x: 5, y: 5 });
+            store.mergeSnapshot(makeGraph([node]));
+            const before = useRecipeStore.getState().graph!.nodes[0];
+
+            store.mergeSnapshot(makeGraph([{ ...node, x: 50, y: 50 }]));
+
+            assert.strictEqual(useRecipeStore.getState().graph!.nodes[0], before);
+        });
+
+        it('(shortlist index preserved) local shortlistIndex survives a merge when the shortlist key is unchanged', () => {
+            const store = useRecipeStore.getState();
+            const entries = [makeEntry('icon-1'), makeEntry('icon-2')];
+            const node = makeNode('a', { iconShortlist: entries, shortlistIndex: 0, status: 'pending' });
+            store.mergeSnapshot(makeGraph([node]));
+
+            // User cycles to index 1 locally.
+            store.cycleShortlist('a');
+            assert.equal(useRecipeStore.getState().graph!.nodes[0].shortlistIndex, 1);
+
+            // Server writes back a status change; shortlist is unchanged.
+            store.mergeSnapshot(makeGraph([{ ...node, status: 'failed' }]));
+
+            const after = useRecipeStore.getState().graph!.nodes[0];
+            assert.equal(after.status, 'failed', 'server change is reflected');
+            assert.equal(after.shortlistIndex, 1, 'local cycle position survives an unrelated server merge');
+        });
+
+        it('(shortlist regeneration resets index) a regenerated shortlist resets shortlistIndex to the incoming value', () => {
+            const store = useRecipeStore.getState();
+            const originalEntries = [makeEntry('icon-1')];
+            const node = makeNode('a', { iconShortlist: originalEntries, shortlistIndex: 0 });
+            store.mergeSnapshot(makeGraph([node]));
+            store.cycleShortlist('a');
+
+            const newEntries = [makeEntry('icon-99'), makeEntry('icon-1')];
+            store.mergeSnapshot(makeGraph([makeNode('a', { iconShortlist: newEntries, shortlistIndex: 0 })]));
+
+            assert.equal(useRecipeStore.getState().graph!.nodes[0].shortlistIndex, 0);
+        });
+
+        it('(x/y adoption) incoming x/y are adopted when the existing node has no local mirror', () => {
+            const store = useRecipeStore.getState();
+            const node = makeNode('a', { status: 'pending' });
+            store.mergeSnapshot(makeGraph([node])); // x/y undefined locally
+
+            store.mergeSnapshot(makeGraph([{ ...node, status: 'failed', x: 7, y: 8 }]));
+
+            const after = useRecipeStore.getState().graph!.nodes[0];
+            assert.equal(after.x, 7);
+            assert.equal(after.y, 8);
+        });
+    });
 });

@@ -45,6 +45,7 @@
 import { create } from 'zustand';
 import { RecipeGraph, RecipeNode, NodeLayout, IconStyleId, LineStyleId, LayoutModeId, BackgroundElementId, CanvasBackgroundId, ChatMessage } from '../recipe-lanes/types';
 import { getNodeShortlistKey, cycleShortlistNodes } from '../recipe-lanes/model-utils';
+import { STRUCTURAL_FIELDS, SERVER_FIELDS } from '../recipe-lanes/node-fields';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -256,58 +257,121 @@ interface RecipeActions {
 // Merge helpers
 // ---------------------------------------------------------------------------
 
+/** Shallow array equality: same length, `===` per element. undefined is treated as []. */
+function arraysShallowEqual(a: readonly unknown[] | undefined, b: readonly unknown[] | undefined): boolean {
+    const aArr = a ?? [];
+    const bArr = b ?? [];
+    if (aArr.length !== bArr.length) return false;
+    return aArr.every((v, i) => v === bArr[i]);
+}
+
+/**
+ * Value equality for fields too complex for `===` (objects / object arrays).
+ * JSON.stringify is a deliberately blunt instrument here: per the #220 spec,
+ * complex SERVER fields must err toward "equal" only when they truly are —
+ * a false "changed" only costs a spurious re-render, but a false "equal"
+ * reproduces the #220 bug (a real server change silently dropped).
+ * undefined and null are treated as equivalent "empty" states.
+ */
+function valuesEqual(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Assigns `source[field]` onto `target[field]` with the field's own type preserved. */
+function copyField<K extends keyof RecipeNode>(target: RecipeNode, source: RecipeNode, field: K) {
+    target[field] = source[field];
+}
+
+/** True when a single STRUCTURAL field differs between existing and incoming. */
+function structuralFieldChanged(field: keyof RecipeNode, existing: RecipeNode, incoming: RecipeNode): boolean {
+    if (field === 'inputs') {
+        return !arraysShallowEqual(existing.inputs, incoming.inputs);
+    }
+    return existing[field] !== incoming[field];
+}
+
+/**
+ * True when a single SERVER field differs between existing and incoming.
+ * `iconShortlist` is compared via the shared shortlist-key check (the
+ * canonical shortlist value-key) rather than by reference or by re-deriving
+ * its own key, so this stays consistent with `shortlistChanged` below.
+ */
+function serverFieldChanged(
+    field: keyof RecipeNode,
+    existing: RecipeNode,
+    incoming: RecipeNode,
+    shortlistChanged: boolean,
+): boolean {
+    switch (field) {
+        case 'iconShortlist':
+            return shortlistChanged;
+        case 'hydeQueries':
+            return !arraysShallowEqual(existing.hydeQueries, incoming.hydeQueries);
+        case 'fastMatches':
+            return !valuesEqual(existing.fastMatches, incoming.fastMatches);
+        case 'iconQuery':
+            return !valuesEqual(existing.iconQuery, incoming.iconQuery);
+        default:
+            return existing[field] !== incoming[field];
+    }
+}
+
 /**
  * Merges one incoming node with the locally-held version.
  * Returns the existing reference unchanged when nothing meaningful differs,
  * so Zustand selectors subscribed to that node do not re-render.
+ *
+ * Driven by the field ownership map (lib/recipe-lanes/node-fields.ts, #220):
+ * a STRUCTURAL or SERVER field change always wins and always triggers a
+ * merge (a server-only change like `status: 'pending' -> 'failed'` must
+ * never be silently dropped — that was #220). CLIENT fields (x/y, rotation,
+ * shortlistIndex, ...) are intentionally excluded from the "did anything
+ * change" check: the client is their source of truth, so a background
+ * snapshot differing only in those fields must neither break node identity
+ * (that would re-render every node on every icon write) nor clobber the
+ * client's local value.
  */
 function mergeNode(existing: RecipeNode, incoming: RecipeNode): RecipeNode {
-    const existingShortlistKey = getNodeShortlistKey(existing);
-    const incomingShortlistKey = getNodeShortlistKey(incoming);
-    const shortlistChanged = existingShortlistKey !== incomingShortlistKey;
+    const shortlistChanged = getNodeShortlistKey(existing) !== getNodeShortlistKey(incoming);
 
-    // x/y are CLIENT-owned: the store mirrors the rendered positions
-    // (syncNodePositions after every layout pass), so a background snapshot
-    // whose x/y differ must neither break node identity (that re-renders
-    // every node on every icon write) nor clobber the mirror (a later history
-    // snapshot would then capture coordinates the user never saw). Saved
-    // positions are restored via graph.layouts at load, not via node x/y.
-    const structurallyIdentical =
-        existing.text === incoming.text &&
-        existing.quantity === incoming.quantity &&
-        existing.unit === incoming.unit &&
-        existing.visualDescription === incoming.visualDescription;
+    const structuralChanged = STRUCTURAL_FIELDS.some(field =>
+        structuralFieldChanged(field, existing, incoming),
+    );
+    const serverChanged = SERVER_FIELDS.some(field =>
+        serverFieldChanged(field, existing, incoming, shortlistChanged),
+    );
 
-    // Fast path: nothing changed → keep exact reference.
-    if (!shortlistChanged && structurallyIdentical) {
+    // Fast path: no STRUCTURAL or SERVER field changed → keep exact
+    // reference. CLIENT-field differences (x/y, rotation, ...) are
+    // deliberately ignored here.
+    if (!structuralChanged && !serverChanged) {
         return existing;
     }
 
-    // Icons-only update (resolveRecipeIcons writes back shortlists without touching
-    // structure): preserve all local fields, splice in only the icon-related ones.
-    // This prevents a server write from overwriting local position/text state.
-    if (shortlistChanged && structurallyIdentical) {
-        return {
-            ...existing,
-            iconShortlist: incoming.iconShortlist,
-            shortlistIndex: incoming.shortlistIndex ?? 0,
-            status: incoming.status,
-        };
-    }
+    const merged: RecipeNode = { ...existing };
+    for (const field of STRUCTURAL_FIELDS) copyField(merged, incoming, field);
+    for (const field of SERVER_FIELDS) copyField(merged, incoming, field);
 
-    return {
-        ...incoming,
-        // Keep the client-owned position mirror once it exists (see above);
-        // adopt the incoming coordinates only when there is no local mirror
-        // yet (e.g. a node this client has never rendered).
-        x: existing.x !== undefined ? existing.x : incoming.x,
-        y: existing.y !== undefined ? existing.y : incoming.y,
-        // When the shortlist was regenerated (forge), the server resets index
-        // to 0. Otherwise preserve whatever the user has locally.
-        shortlistIndex: shortlistChanged
-            ? (incoming.shortlistIndex ?? 0)
-            : existing.shortlistIndex,
-    };
+    // CLIENT fields stay from existing, with two exceptions:
+    // - x/y: keep the client-owned position mirror once it exists; adopt the
+    //   incoming coordinates only when there is no local mirror yet (e.g. a
+    //   node this client has never rendered). Saved positions are restored
+    //   via graph.layouts at load, not via node x/y.
+    merged.x = existing.x !== undefined ? existing.x : incoming.x;
+    merged.y = existing.y !== undefined ? existing.y : incoming.y;
+    // - shortlistIndex: reset to the incoming/server value when the
+    //   shortlist itself was regenerated (forge); otherwise preserve
+    //   whatever the user has locally (they may have cycled).
+    merged.shortlistIndex = shortlistChanged
+        ? (incoming.shortlistIndex ?? 0)
+        : existing.shortlistIndex;
+    // shortlistCycled is client-owned and intentionally left as-is (already
+    // copied from existing above) — resetting it is out of scope for #220.
+
+    return merged;
 }
 
 function mergeNodes(

@@ -266,13 +266,17 @@ function mergeNode(existing: RecipeNode, incoming: RecipeNode): RecipeNode {
     const incomingShortlistKey = getNodeShortlistKey(incoming);
     const shortlistChanged = existingShortlistKey !== incomingShortlistKey;
 
+    // x/y are CLIENT-owned: the store mirrors the rendered positions
+    // (syncNodePositions after every layout pass), so a background snapshot
+    // whose x/y differ must neither break node identity (that re-renders
+    // every node on every icon write) nor clobber the mirror (a later history
+    // snapshot would then capture coordinates the user never saw). Saved
+    // positions are restored via graph.layouts at load, not via node x/y.
     const structurallyIdentical =
         existing.text === incoming.text &&
         existing.quantity === incoming.quantity &&
         existing.unit === incoming.unit &&
-        existing.visualDescription === incoming.visualDescription &&
-        existing.x === incoming.x &&
-        existing.y === incoming.y;
+        existing.visualDescription === incoming.visualDescription;
 
     // Fast path: nothing changed → keep exact reference.
     if (!shortlistChanged && structurallyIdentical) {
@@ -293,6 +297,11 @@ function mergeNode(existing: RecipeNode, incoming: RecipeNode): RecipeNode {
 
     return {
         ...incoming,
+        // Keep the client-owned position mirror once it exists (see above);
+        // adopt the incoming coordinates only when there is no local mirror
+        // yet (e.g. a node this client has never rendered).
+        x: existing.x !== undefined ? existing.x : incoming.x,
+        y: existing.y !== undefined ? existing.y : incoming.y,
         // When the shortlist was regenerated (forge), the server resets index
         // to 0. Otherwise preserve whatever the user has locally.
         shortlistIndex: shortlistChanged

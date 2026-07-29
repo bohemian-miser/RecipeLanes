@@ -96,5 +96,11 @@ test.describe('Issue #216 — single undo owner', () => {
     await expect(get_node(page, 'Mix')).toBeVisible();
     await expect(get_node(page, '2 Eggs')).toBeVisible();
     await expect(get_node(page, '100g Flour')).toBeVisible();
+
+    // ── 6. Ctrl+Shift+Z: redo restores the adjustment ───────────────────────
+    // (Regression: `e.key === 'z'` never matched the uppercase 'Z' the browser
+    // reports while Shift is held, so this chord was silently dead.)
+    await page.keyboard.press('Control+Shift+z');
+    await expect(get_node(page, 'Add sugar')).toBeVisible({ timeout: 10000 });
   });
 });

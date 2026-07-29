@@ -550,6 +550,40 @@ describe('useRecipeStore', () => {
             assert.equal(useRecipeStore.getState().historyVersion, v0 + 2);
         });
 
+        it('mergeSnapshot keeps node identity when only x/y differ (client-owned positions)', () => {
+            const store = useRecipeStore.getState();
+            store.mergeSnapshot(makeGraph([makeNode('a'), makeNode('b')]));
+            // The local mirror of rendered positions (syncNodePositions).
+            useRecipeStore.getState().syncNodePositions('dagre', [
+                { id: 'a', x: 111, y: 222 },
+                { id: 'b', x: 333, y: 444 },
+            ]);
+            const beforeA = useRecipeStore.getState().graph!.nodes.find(n => n.id === 'a')!;
+
+            // Background snapshot with different (server-side) coordinates.
+            store.mergeSnapshot(makeGraph([
+                makeNode('a', { x: 1, y: 2 }),
+                makeNode('b', { x: 3, y: 4 }),
+            ]));
+
+            const afterA = useRecipeStore.getState().graph!.nodes.find(n => n.id === 'a')!;
+            assert.equal(afterA, beforeA, 'node keeps identity — no re-render storm on icon writes');
+            assert.equal(afterA.x, 111, 'local position mirror survives the snapshot');
+        });
+
+        it('mergeSnapshot preserves the local position mirror through a structural change', () => {
+            const store = useRecipeStore.getState();
+            store.mergeSnapshot(makeGraph([makeNode('a')]));
+            useRecipeStore.getState().syncNodePositions('dagre', [{ id: 'a', x: 50, y: 60 }]);
+
+            // Server-side text edit arrives with stale/absent coordinates.
+            store.mergeSnapshot(makeGraph([makeNode('a', { text: 'Renamed a' })]));
+
+            const a = useRecipeStore.getState().graph!.nodes.find(n => n.id === 'a')!;
+            assert.equal(a.text, 'Renamed a', 'structural change is adopted');
+            assert.equal(a.x, 50, 'client-owned position mirror is kept');
+        });
+
         it('undo/redo are no-ops on empty stacks', () => {
             const store = useRecipeStore.getState();
             store.setGraph(makeGraph([makeNode('a')]));

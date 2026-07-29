@@ -665,6 +665,16 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             if (simulationRef.current) simulationRef.current.stop();
             if (wasLive) {
                 setIsDirty(true);
+                // Physics moved nodes only in ReactFlow state — mirror the
+                // post-simulation positions into the store, otherwise the next
+                // history snapshot (e.g. a drag commit) captures the stale
+                // pre-physics graph and one undo reverts the whole simulation.
+                syncNodePositions(
+                    mode as string,
+                    getNodes()
+                        .filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station')
+                        .map((n: any) => ({ id: n.id, x: n.position.x, y: n.position.y })),
+                );
             }
             return;
         }

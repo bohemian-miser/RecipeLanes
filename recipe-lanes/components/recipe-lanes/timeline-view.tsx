@@ -329,7 +329,11 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
       const m = new Map<string, { cx: number; cy: number }>();
       if (g?.layouts?.['timeline2']) {
         g.layouts['timeline2'].forEach(l => m.set(l.id, { cx: l.x + TL.NODE_R, cy: l.y + TL.NODE_R }));
-      } else if (g) {
+      } else if (g && g.layoutMode === 'timeline2') {
+        // Same guard as the mount initializer: node x/y only hold
+        // timeline-space coordinates when timeline2 is the saved mode —
+        // otherwise they mirror whichever ReactFlow mode rendered last and
+        // seeding from them scrambles the whole timeline.
         g.nodes.forEach(n => {
           if (n.x !== undefined && n.y !== undefined) m.set(n.id, { cx: n.x + TL.NODE_R, cy: n.y + TL.NODE_R });
         });
@@ -500,11 +504,15 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
       // Drag finished: one undoable history entry via the store (the commit
       // pushes the pre-move graph and updates nodes x/y + layouts.timeline2),
       // then persist the store's resulting graph.
+      // ONLY nodes with a position override are committed: overrides are
+      // guaranteed timeline-space (seeded from layouts.timeline2 or dragged
+      // here), whereas node x/y mirrors whichever mode rendered last —
+      // committing those would write foreign-mode coordinates into
+      // layouts.timeline2 and permanently scramble the saved layout.
       const positions = graphNodesRef.current
         .map(n => {
           const over = posOverridesRef.current.get(n.id);
-          if (over) return { id: n.id, x: over.cx - TL.NODE_R, y: over.cy - TL.NODE_R };
-          return n.x !== undefined && n.y !== undefined ? { id: n.id, x: n.x, y: n.y } : null;
+          return over ? { id: n.id, x: over.cx - TL.NODE_R, y: over.cy - TL.NODE_R } : null;
         })
         .filter((p): p is { id: string; x: number; y: number } => p !== null);
       commitNodePositions('timeline2', positions);

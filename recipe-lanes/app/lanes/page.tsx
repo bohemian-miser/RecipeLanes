@@ -110,10 +110,13 @@ function RecipeLanesContent() {
       const target = e.target as HTMLElement | null;
       if (target?.closest('input, textarea, [contenteditable="true"]')) return;
       const { undo: storeUndo, redo: storeRedo } = useRecipeStore.getState();
-      if (e.key === 'z') {
+      // toLowerCase: with Shift held the browser reports 'Z', and CapsLock
+      // uppercases plain presses — a bare === 'z' makes Ctrl+Shift+Z dead.
+      const key = e.key.toLowerCase();
+      if (key === 'z') {
         e.preventDefault();
         if (e.shiftKey) { storeRedo(); } else { storeUndo(); }
-      } else if (e.key === 'y') {
+      } else if (key === 'y') {
         e.preventDefault();
         storeRedo();
       }
@@ -1336,15 +1339,26 @@ const handleVisualize = async () => {
                     <TimelineView 
                         graph={graph} 
                         onSave={async (newGraph) => {
-                            // Update layouts map for consistency with ReactFlowDiagram
-                            const layouts = newGraph.layouts || {};
-                            layouts['timeline2'] = newGraph.nodes.map(n => ({ 
-                                id: n.id, 
-                                x: n.x ?? 0, 
-                                y: n.y ?? 0 
-                            }));
-                            const finalGraph = { ...newGraph, layouts };
-                            
+                            // The store maintains layouts['timeline2'] itself
+                            // (commitNodePositions on drag). Only fall back to
+                            // rebuilding from node x/y when no entry exists yet
+                            // AND the nodes actually carry timeline-space
+                            // coordinates — node x/y is a mirror of whichever
+                            // mode was rendered last, and rebuilding from
+                            // foreign-mode coordinates (or 0,0) permanently
+                            // scrambled saved timeline layouts.
+                            let finalGraph = newGraph;
+                            if (!newGraph.layouts?.['timeline2'] && newGraph.layoutMode === 'timeline2') {
+                                finalGraph = {
+                                    ...newGraph,
+                                    layouts: {
+                                        ...(newGraph.layouts || {}),
+                                        timeline2: newGraph.nodes
+                                            .filter(n => n.x !== undefined && n.y !== undefined)
+                                            .map(n => ({ id: n.id, x: n.x!, y: n.y! })),
+                                    },
+                                };
+                            }
                             setGraph(finalGraph);
                             if (user && isOwner && recipeId) {
                                 await saveRecipeAction(finalGraph, recipeId);

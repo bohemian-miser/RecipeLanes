@@ -160,6 +160,26 @@ export function clearNodeShortlist(node: RecipeNode): void {
 }
 
 /**
+ * Restores `serverNode`'s shortlist state (iconShortlist + shortlistIndex +
+ * shortlistCycled) onto `node` IN PLACE — but ONLY when `node` currently has
+ * no shortlist and `serverNode` has one. No-op otherwise.
+ *
+ * Used by saveRecipe's server-state reconciliation (issue #221): a stale
+ * client save whose node lost its shortlist must not erase the server's
+ * copy. When the client node DOES have a shortlist, this leaves it (and its
+ * index/cycled flag) completely alone — that path is owned by the client's
+ * own save data plus the impression/rejection delta logic above, not this
+ * restore.
+ */
+export function restoreNodeShortlistFromServer(node: RecipeNode, serverNode: RecipeNode): void {
+    if (getNodeShortlistLength(node) > 0) return;
+    if (getNodeShortlistLength(serverNode) === 0) return;
+    node.iconShortlist = serverNode.iconShortlist;
+    node.shortlistIndex = serverNode.shortlistIndex;
+    node.shortlistCycled = serverNode.shortlistCycled;
+}
+
+/**
  * Returns all ShortlistEntries the user has seen in the current cycle:
  * - If shortlistCycled is true: all entries in the shortlist
  * - Otherwise: entries 0 through shortlistIndex inclusive

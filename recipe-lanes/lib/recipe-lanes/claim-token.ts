@@ -52,3 +52,12 @@ export function claimHashForCreate(userId: string | undefined, claimToken: strin
 export function isValidClaim(userId: string | undefined, claimToken: string | undefined, storedHash: string | undefined): boolean {
     return !!userId && !!claimToken && !!storedHash && hashClaimToken(claimToken) === storedHash;
 }
+
+/**
+ * Update path: does this save prove the caller holds the claim token for an anon edit?
+ * Similar to isValidClaim but doesn't require a signed-in userId.
+ */
+export function isAuthorizedAnonEdit(claimToken: string | undefined, storedHash: string | undefined): boolean {
+    return !!claimToken && !!storedHash && hashClaimToken(claimToken) === storedHash;
+}
+

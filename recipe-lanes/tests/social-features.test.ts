@@ -185,13 +185,9 @@ describe('Social Features (Memory)', () => {
         assert.strictEqual(r?.visibility, 'public');
     });
 
-    it('should not let a signed-in save claim ownership of an anon-owned recipe (#151)', async () => {
+    it('should reject a signed-in save of an anon-owned recipe without a token (#289)', async () => {
         const id = await service.saveRecipe(mockGraph, undefined, undefined); // anon create -> public
-        await service.saveRecipe({ ...mockGraph, title: 'Edited by a visitor' }, id, 'user-1');
-        const r = await service.getRecipe(id);
-        assert.strictEqual(r?.ownerId, undefined, 'anon-owned recipe must stay unowned');
-        assert.strictEqual(r?.ownerName, 'Anon', 'display name must stay Anon');
-        assert.strictEqual(r?.graph.title, 'Edited by a visitor', 'the edit itself should still be saved');
+        await assert.rejects(() => service.saveRecipe({ ...mockGraph, title: 'Edited by a visitor' }, id, 'user-1'));
     });
 
     it('should reject an anonymous save attempt on someone else\'s recipe (#151)', async () => {
@@ -214,20 +210,14 @@ describe('Social Features (Memory)', () => {
         assert.strictEqual(r?.graph.title, 'Now mine');
     });
 
-    it('should not claim an anon recipe when the presented token is wrong (#151)', async () => {
+    it('should reject a save of an anon recipe when the presented token is wrong (#289)', async () => {
         const id = await service.saveRecipe(mockGraph, undefined, undefined, undefined, undefined, 'secret-token');
-        await service.saveRecipe({ ...mockGraph, title: 'Edited' }, id, 'user-1', undefined, 'Real Name', 'wrong-token');
-        const r = await service.getRecipe(id);
-        assert.strictEqual(r?.ownerId, undefined, 'wrong token must not transfer ownership');
-        assert.strictEqual(r?.ownerName, 'Anon');
-        assert.strictEqual(r?.graph.title, 'Edited', 'the edit itself should still be saved');
+        await assert.rejects(() => service.saveRecipe({ ...mockGraph, title: 'Edited' }, id, 'user-1', undefined, 'Real Name', 'wrong-token'));
     });
 
-    it('should not claim an anon recipe that was never given a claim token (#151)', async () => {
+    it('should reject a save of an anon recipe that was never given a claim token (#289)', async () => {
         const id = await service.saveRecipe(mockGraph, undefined, undefined); // no claimToken passed at creation
-        await service.saveRecipe({ ...mockGraph, title: 'Edited' }, id, 'user-1', undefined, 'Real Name', 'any-token');
-        const r = await service.getRecipe(id);
-        assert.strictEqual(r?.ownerId, undefined);
+        await assert.rejects(() => service.saveRecipe({ ...mockGraph, title: 'Edited' }, id, 'user-1', undefined, 'Real Name', 'any-token'));
     });
 
     it('should not let a claim token be used a second time after the recipe is claimed (#151)', async () => {

@@ -125,16 +125,26 @@ function RecipeLanesContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const isOwner = !ownerId || (!!user && user.uid === ownerId);
+  const [hasClaimToken, setHasClaimToken] = useState(false);
+  useEffect(() => {
+      const currentId = searchParams.get('id');
+      if (currentId && !ownerId) {
+          setHasClaimToken(!!(currentId ? getClaimToken(localStorage, currentId) : undefined));
+      } else {
+          setHasClaimToken(false);
+      }
+  }, [searchParams, ownerId]);
+
+  const isOwner = (!!user && user.uid === ownerId) || (!ownerId && hasClaimToken);
 
   // ... (Restore Last Recipe, Save Last ID, Sync JSON, Warning, Persistence) ...
 
   const handleEditAttempt = async () => {
+      if (isOwner) return;
       if (!user) {
           showNotification("Log in to save your changes.");
           return;
       }
-      if (isOwner) return;
       if (existingCopies === null) return; // Wait for check to complete
       if (isForking.current) return;
 
@@ -231,7 +241,7 @@ function RecipeLanesContent() {
           const results = await method.search(ingredients, 12);
           // Pass the anon claim token so anon creators can hydrate icons on the
           // recipe they own without signing in (server authorizes owner OR token).
-          const res = await applyIconSearchResultsAction(recipeId, results, getClaimToken(localStorage, recipeId));
+          const res = await applyIconSearchResultsAction(recipeId, results, (recipeId ? getClaimToken(localStorage, recipeId) : undefined));
           if (!res.success) throw new Error(res.error);
           console.log(`[batchIconSearch] applied ${res.applied} in ${res.elapsed}ms`);
           setIconSearchElapsed(res.elapsed);
@@ -263,7 +273,7 @@ function RecipeLanesContent() {
       try {
           const t0 = Date.now();
           const results = await hydrateClientSide(itemsToHydrate);
-          const res = await applyIconSearchResultsAction(recipeId, results, getClaimToken(localStorage, recipeId));
+          const res = await applyIconSearchResultsAction(recipeId, results, (recipeId ? getClaimToken(localStorage, recipeId) : undefined));
           if (!res.success) throw new Error(res.error);
           console.log(`[hydrateFastMatches] applied ${res.applied} in ${res.elapsed}ms (total: ${Date.now() - t0}ms)`);
           setIconSearchElapsed(res.elapsed);
@@ -308,7 +318,7 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
           showNotification("Saving a copy to your profile...");
       }
 
-      const res = await saveRecipeAction(graphToSave, targetId);
+      const res = await saveRecipeAction(graphToSave, targetId, undefined, (targetId ? getClaimToken(localStorage, targetId) : undefined));
       
       if (res.id) {
           const url = new URL(window.location.href);
@@ -588,11 +598,10 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
           const newGraph = { ...graph, title: newTitle };
           setGraph(newGraph);
 
-          const isOwner = user && user.uid === ownerId;
           const currentId = searchParams.get('id');
 
           if (isOwner && currentId) {
-               const res = await saveRecipeAction(newGraph, currentId);
+               const res = await saveRecipeAction(newGraph, currentId, undefined, (currentId ? getClaimToken(localStorage, currentId) : undefined));
                if (res.error) showNotification("Failed to save title: " + res.error);
           } else if (user) {
                showNotification("Saving a copy to your profile...");
@@ -623,7 +632,7 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
 
       setStatus('loading');
       const graphToSave = { ...graph, title: recipeTitle }; // Ensure title is current
-      const res = await saveRecipeAction(graphToSave);
+      const res = await saveRecipeAction(graphToSave, undefined, undefined, undefined);
       if (res.id) {
           const url = new URL(window.location.href);
           url.searchParams.set('id', res.id);
@@ -692,7 +701,7 @@ const handleVisualize = async () => {
                 setWarningDismissed(false);
 
                 // Fire-and-forget save — mirrors handleAdjust.
-                saveRecipeAction(res.graph, currentId).then(() => {
+                saveRecipeAction(res.graph, currentId, undefined, (currentId ? getClaimToken(localStorage, currentId) : undefined)).then(() => {
                     const allMessages = useRecipeStore.getState().messages;
                     localStorage.setItem(`chat_${currentId}`, JSON.stringify(allMessages));
                     saveChatHistoryAction(currentId, allMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })));
@@ -830,7 +839,7 @@ const handleVisualize = async () => {
           // Fire-and-forget — UI is already updated, don't block on the Firestore write
           const currentId = searchParams.get('id') || undefined;
           if (currentId) {
-              saveRecipeAction(res.graph, currentId).then(() => {
+              saveRecipeAction(res.graph, currentId, undefined, (currentId ? getClaimToken(localStorage, currentId) : undefined)).then(() => {
                   const allMessages = useRecipeStore.getState().messages;
                   localStorage.setItem(`chat_${currentId}`, JSON.stringify(allMessages));
                   saveChatHistoryAction(currentId, allMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })));
@@ -866,8 +875,8 @@ const handleVisualize = async () => {
                 const newGraph = { ...graph, layoutMode: mode, nodes: freshNodes };
                 setGraph(newGraph);
                 
-                if (user && isOwner && recipeId) {
-                    await saveRecipeAction(newGraph, recipeId);
+                if (isOwner && recipeId) {
+                    await saveRecipeAction(newGraph, recipeId, undefined, (recipeId ? getClaimToken(localStorage, recipeId) : undefined));
                 }
             }
         }
@@ -922,7 +931,7 @@ const handleVisualize = async () => {
                             <Pencil className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 opacity-0 group-hover:opacity-100" />
                         </div>
                     )}
-                    {ownerId && (
+                    {(ownerId || recipeId) && (
                         <span className="text-[9px] text-zinc-600 font-mono ml-2 inline-flex items-center gap-1">
                            by {resolveBylineName(ownerId, ownerName, isAnonymous, isOwner, user?.displayName)}
                            {/* Issue #146: anonymous toggle lives on the byline — an eye that
@@ -1360,8 +1369,8 @@ const handleVisualize = async () => {
                                 };
                             }
                             setGraph(finalGraph);
-                            if (user && isOwner && recipeId) {
-                                await saveRecipeAction(finalGraph, recipeId);
+                            if (isOwner && recipeId) {
+                                await saveRecipeAction(finalGraph, recipeId, undefined, (recipeId ? getClaimToken(localStorage, recipeId) : undefined));
                             }
                         }}
                     />

@@ -30,8 +30,8 @@
  * how it was at the start".
  *
  * These tests drive the store the same way the fixed component now does:
- *   delete  → setGraph(withoutNode) + markNodeDeleted(id) + persist via onSave
- *   undo    → setGraph(restored)    + unmarkNodesDeleted(restoredIds)
+ *   delete  → deleteNodeWithUndo(id)          + persist via onSave
+ *   undo    → store.undo() (single history, issue #216) — reconciles flags
  * and assert that a subsequent snapshot behaves correctly.
  */
 
@@ -57,12 +57,13 @@ function makeGraph(nodes: RecipeNode[]): RecipeGraph {
 
 const ids = (g: RecipeGraph | null) => (g?.nodes ?? []).map(n => n.id);
 
-/** Simulates the fixed notation-view `deleteNode` store side-effects. */
+/**
+ * Drives the store exactly as TimelineView's `deleteNode` now does (issue
+ * #216 unified this on the store): one action that removes the node, pushes a
+ * history entry and records the pending-delete flag.
+ */
 function notationDelete(nodeId: string) {
-    const store = useRecipeStore.getState();
-    const graph = store.graph!;
-    store.setGraph({ ...graph, nodes: graph.nodes.filter(n => n.id !== nodeId) });
-    store.markNodeDeleted(nodeId);
+    useRecipeStore.getState().deleteNodeWithUndo(nodeId);
 }
 
 describe('notation-view delete (issue #278)', () => {
@@ -120,11 +121,10 @@ describe('notation-view delete (issue #278)', () => {
             notationDelete('b');
             assert.deepEqual(useRecipeStore.getState().pendingDeletedIds, ['b']);
 
-            // Undo restores the prior 3-node graph AND clears the pending flags
-            // (fixed notation-view `undo`).
-            const restored = makeGraph([makeNode('a'), makeNode('b'), makeNode('c')]);
-            useRecipeStore.getState().setGraph(restored);
-            useRecipeStore.getState().unmarkNodesDeleted(restored.nodes.map(n => n.id));
+            // Undo restores the prior 3-node graph AND clears the pending
+            // flags (the store's single history — issue #216 — does the
+            // reconciliation the old view-local undo did by hand).
+            useRecipeStore.getState().undo();
             assert.deepEqual(useRecipeStore.getState().pendingDeletedIds, []);
 
             // A later snapshot updating the restored node must be applied, not suppressed.

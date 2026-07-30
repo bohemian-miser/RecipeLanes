@@ -43,8 +43,9 @@
  */
 
 import { create } from 'zustand';
-import { RecipeGraph, RecipeNode, IconStyleId, LineStyleId, LayoutModeId, BackgroundElementId, CanvasBackgroundId, ChatMessage } from '../recipe-lanes/types';
+import { RecipeGraph, RecipeNode, NodeLayout, IconStyleId, LineStyleId, LayoutModeId, BackgroundElementId, CanvasBackgroundId, ChatMessage } from '../recipe-lanes/types';
 import { getNodeShortlistKey, cycleShortlistNodes } from '../recipe-lanes/model-utils';
+import { STRUCTURAL_FIELDS, SERVER_FIELDS } from '../recipe-lanes/node-fields';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -72,7 +73,20 @@ interface RecipeState {
      * 1 = normal size; < 1 renders them smaller. Driven by a toolbar slider (#155).
      */
     leafNodeScale: number;
-    undoStack: RecipeGraph[];
+    /**
+     * Single undo/redo history for the whole /lanes page (issue #216).
+     * Entries are full graph snapshots (nodes with x/y + the layouts map), so
+     * one Ctrl+Z reverts exactly one user action — graph edits and node drags
+     * share one timeline instead of living in two divergent stacks.
+     */
+    undoPast: RecipeGraph[];
+    undoFuture: RecipeGraph[];
+    /**
+     * Bumped on every undo/redo. Views subscribe to this to re-apply node
+     * positions from the restored graph (a position-only change is otherwise
+     * deliberately ignored by the diagram's sync effect).
+     */
+    historyVersion: number;
     messages: ChatMessage[];
     /**
      * Node IDs deleted locally that have not yet been confirmed absent in a
@@ -133,8 +147,49 @@ interface RecipeActions {
      */
     setGraphWithUndo: (graph: RecipeGraph) => void;
 
-    /** Pops the last snapshot from the undo stack and restores it. */
+    /**
+     * Steps back one entry in the history. Nodes the step removes are added
+     * to pendingDeletedIds (so a background Firestore snapshot cannot
+     * resurrect them before the follow-up save lands); nodes it restores are
+     * cleared from pendingDeletedIds. Bumps historyVersion so views re-apply
+     * positions from the restored graph.
+     */
     undo: () => void;
+
+    /** Steps forward again after an undo. Same reconciliation as undo. */
+    redo: () => void;
+
+    /**
+     * Records the rendered node positions for a layout mode WITHOUT pushing a
+     * history entry or marking the recipe dirty. Called by views after every
+     * layout pass so the store graph always mirrors what is on screen — the
+     * precondition for history snapshots capturing correct positions.
+     */
+    syncNodePositions: (mode: string, positions: NodeLayout[]) => void;
+
+    /**
+     * User-initiated position change (drag stop): pushes a history entry with
+     * the pre-move graph, then applies the positions to graph.nodes x/y and
+     * graph.layouts[mode], and marks the recipe dirty.
+     */
+    commitNodePositions: (mode: string, positions: NodeLayout[]) => void;
+
+    /**
+     * Pushes a history entry of the current graph without changing anything
+     * else. For view-initiated wholesale position changes (layout reset,
+     * entering physics mode) where the new positions only exist in the view
+     * until the next syncNodePositions.
+     */
+    pushUndoSnapshot: () => void;
+
+    /**
+     * User-initiated node delete: pushes a history entry, removes the node,
+     * bridges its children onto its inputs (every consumer of the deleted
+     * node now consumes the node's own inputs — the model-level equivalent of
+     * calculateBridgeEdges), and records the id in pendingDeletedIds so
+     * background snapshots cannot resurrect it before the save propagates.
+     */
+    deleteNodeWithUndo: (nodeId: string) => void;
 
     /**
      * Applies a partial field patch to a single node, pushing the change onto
@@ -173,15 +228,6 @@ interface RecipeActions {
     unmarkNodesDeleted: (ids: string[]) => void;
 
     /**
-     * Restores nodes that were previously marked as deleted (e.g. on undo).
-     * Clears the node IDs from pendingDeletedIds and merges the nodes back into
-     * the graph, so that mergeSnapshot and the layout effect see a consistent state.
-     * rfNodes should be the ReactFlow node objects from the undo snapshot; their
-     * data fields are used to reconstruct the RecipeNode entries.
-     */
-    restoreNodes: (rfNodes: any[]) => void;
-
-    /**
      * Toggles the "done" tick on a node (#281). Purely local view state: it
      * leaves `graph` untouched, does not mark the recipe dirty, and is never
      * written to Firestore. Unknown node IDs are accepted — a tick simply has
@@ -211,49 +257,121 @@ interface RecipeActions {
 // Merge helpers
 // ---------------------------------------------------------------------------
 
+/** Shallow array equality: same length, `===` per element. undefined is treated as []. */
+function arraysShallowEqual(a: readonly unknown[] | undefined, b: readonly unknown[] | undefined): boolean {
+    const aArr = a ?? [];
+    const bArr = b ?? [];
+    if (aArr.length !== bArr.length) return false;
+    return aArr.every((v, i) => v === bArr[i]);
+}
+
+/**
+ * Value equality for fields too complex for `===` (objects / object arrays).
+ * JSON.stringify is a deliberately blunt instrument here: per the #220 spec,
+ * complex SERVER fields must err toward "equal" only when they truly are —
+ * a false "changed" only costs a spurious re-render, but a false "equal"
+ * reproduces the #220 bug (a real server change silently dropped).
+ * undefined and null are treated as equivalent "empty" states.
+ */
+function valuesEqual(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Assigns `source[field]` onto `target[field]` with the field's own type preserved. */
+function copyField<K extends keyof RecipeNode>(target: RecipeNode, source: RecipeNode, field: K) {
+    target[field] = source[field];
+}
+
+/** True when a single STRUCTURAL field differs between existing and incoming. */
+function structuralFieldChanged(field: keyof RecipeNode, existing: RecipeNode, incoming: RecipeNode): boolean {
+    if (field === 'inputs') {
+        return !arraysShallowEqual(existing.inputs, incoming.inputs);
+    }
+    return existing[field] !== incoming[field];
+}
+
+/**
+ * True when a single SERVER field differs between existing and incoming.
+ * `iconShortlist` is compared via the shared shortlist-key check (the
+ * canonical shortlist value-key) rather than by reference or by re-deriving
+ * its own key, so this stays consistent with `shortlistChanged` below.
+ */
+function serverFieldChanged(
+    field: keyof RecipeNode,
+    existing: RecipeNode,
+    incoming: RecipeNode,
+    shortlistChanged: boolean,
+): boolean {
+    switch (field) {
+        case 'iconShortlist':
+            return shortlistChanged;
+        case 'hydeQueries':
+            return !arraysShallowEqual(existing.hydeQueries, incoming.hydeQueries);
+        case 'fastMatches':
+            return !valuesEqual(existing.fastMatches, incoming.fastMatches);
+        case 'iconQuery':
+            return !valuesEqual(existing.iconQuery, incoming.iconQuery);
+        default:
+            return existing[field] !== incoming[field];
+    }
+}
+
 /**
  * Merges one incoming node with the locally-held version.
  * Returns the existing reference unchanged when nothing meaningful differs,
  * so Zustand selectors subscribed to that node do not re-render.
+ *
+ * Driven by the field ownership map (lib/recipe-lanes/node-fields.ts, #220):
+ * a STRUCTURAL or SERVER field change always wins and always triggers a
+ * merge (a server-only change like `status: 'pending' -> 'failed'` must
+ * never be silently dropped — that was #220). CLIENT fields (x/y, rotation,
+ * shortlistIndex, ...) are intentionally excluded from the "did anything
+ * change" check: the client is their source of truth, so a background
+ * snapshot differing only in those fields must neither break node identity
+ * (that would re-render every node on every icon write) nor clobber the
+ * client's local value.
  */
 function mergeNode(existing: RecipeNode, incoming: RecipeNode): RecipeNode {
-    const existingShortlistKey = getNodeShortlistKey(existing);
-    const incomingShortlistKey = getNodeShortlistKey(incoming);
-    const shortlistChanged = existingShortlistKey !== incomingShortlistKey;
+    const shortlistChanged = getNodeShortlistKey(existing) !== getNodeShortlistKey(incoming);
 
-    const structurallyIdentical =
-        existing.text === incoming.text &&
-        existing.quantity === incoming.quantity &&
-        existing.unit === incoming.unit &&
-        existing.visualDescription === incoming.visualDescription &&
-        existing.x === incoming.x &&
-        existing.y === incoming.y;
+    const structuralChanged = STRUCTURAL_FIELDS.some(field =>
+        structuralFieldChanged(field, existing, incoming),
+    );
+    const serverChanged = SERVER_FIELDS.some(field =>
+        serverFieldChanged(field, existing, incoming, shortlistChanged),
+    );
 
-    // Fast path: nothing changed → keep exact reference.
-    if (!shortlistChanged && structurallyIdentical) {
+    // Fast path: no STRUCTURAL or SERVER field changed → keep exact
+    // reference. CLIENT-field differences (x/y, rotation, ...) are
+    // deliberately ignored here.
+    if (!structuralChanged && !serverChanged) {
         return existing;
     }
 
-    // Icons-only update (resolveRecipeIcons writes back shortlists without touching
-    // structure): preserve all local fields, splice in only the icon-related ones.
-    // This prevents a server write from overwriting local position/text state.
-    if (shortlistChanged && structurallyIdentical) {
-        return {
-            ...existing,
-            iconShortlist: incoming.iconShortlist,
-            shortlistIndex: incoming.shortlistIndex ?? 0,
-            status: incoming.status,
-        };
-    }
+    const merged: RecipeNode = { ...existing };
+    for (const field of STRUCTURAL_FIELDS) copyField(merged, incoming, field);
+    for (const field of SERVER_FIELDS) copyField(merged, incoming, field);
 
-    return {
-        ...incoming,
-        // When the shortlist was regenerated (forge), the server resets index
-        // to 0. Otherwise preserve whatever the user has locally.
-        shortlistIndex: shortlistChanged
-            ? (incoming.shortlistIndex ?? 0)
-            : existing.shortlistIndex,
-    };
+    // CLIENT fields stay from existing, with two exceptions:
+    // - x/y: keep the client-owned position mirror once it exists; adopt the
+    //   incoming coordinates only when there is no local mirror yet (e.g. a
+    //   node this client has never rendered). Saved positions are restored
+    //   via graph.layouts at load, not via node x/y.
+    merged.x = existing.x !== undefined ? existing.x : incoming.x;
+    merged.y = existing.y !== undefined ? existing.y : incoming.y;
+    // - shortlistIndex: reset to the incoming/server value when the
+    //   shortlist itself was regenerated (forge); otherwise preserve
+    //   whatever the user has locally (they may have cycled).
+    merged.shortlistIndex = shortlistChanged
+        ? (incoming.shortlistIndex ?? 0)
+        : existing.shortlistIndex;
+    // shortlistCycled is client-owned and intentionally left as-is (already
+    // copied from existing above) — resetting it is out of scope for #220.
+
+    return merged;
 }
 
 function mergeNodes(
@@ -283,10 +401,103 @@ function mergeNodes(
 }
 
 // ---------------------------------------------------------------------------
-// Store
+// History helpers
 // ---------------------------------------------------------------------------
 
 const MAX_UNDO_DEPTH = 20;
+
+/**
+ * Snapshot a graph for the history stacks. Node arrays are immutably managed
+ * throughout the store, so sharing them is safe; the layouts map is shallow-
+ * cloned defensively because callers outside the store receive the live graph
+ * object and could mutate the map in place.
+ */
+function snapshotForHistory(graph: RecipeGraph): RecipeGraph {
+    return graph.layouts ? { ...graph, layouts: { ...graph.layouts } } : graph;
+}
+
+/** The undo-stack partial produced by every history-pushing mutation. */
+function pushHistory(state: RecipeState, graph: RecipeGraph | null) {
+    return graph
+        ? {
+              undoPast: [...state.undoPast.slice(-MAX_UNDO_DEPTH + 1), snapshotForHistory(graph)],
+              undoFuture: [] as RecipeGraph[],
+          }
+        : {};
+}
+
+/**
+ * Shared undo/redo transition: restore `restored` as the live graph and
+ * reconcile pendingDeletedIds — ids the step removes are suppressed from
+ * incoming snapshots (they would otherwise be resurrected by any background
+ * icon write until the follow-up save propagates); ids the step restores are
+ * un-suppressed.
+ */
+function historyTransition(state: RecipeState, restored: RecipeGraph) {
+    const restoredIds = new Set(restored.nodes.map(n => n.id));
+    const removedByStep = state.graph
+        ? state.graph.nodes.map(n => n.id).filter(id => !restoredIds.has(id))
+        : [];
+    const pendingDeletedIds = [
+        ...state.pendingDeletedIds.filter(id => !restoredIds.has(id)),
+        ...removedByStep.filter(id => !state.pendingDeletedIds.includes(id)),
+    ];
+    return {
+        graph: restored,
+        isDirty: true,
+        pendingDeletedIds,
+        historyVersion: state.historyVersion + 1,
+    };
+}
+
+/**
+ * Apply a set of rendered positions to graph.nodes x/y — and, for user
+ * commits, to graph.layouts[mode]. The passive sync path must NOT touch the
+ * layouts map: the diagram's "saved layouts just arrived" detection compares
+ * graph.layouts[mode] against null, and a passive mirror writing it would
+ * mask genuinely-saved layouts arriving in a later snapshot.
+ * Returns null when nothing actually changed so callers can no-op (keeping
+ * object references stable for selector subscriptions).
+ */
+function applyPositions(
+    graph: RecipeGraph,
+    mode: string,
+    positions: NodeLayout[],
+    includeLayouts: boolean,
+): RecipeGraph | null {
+    const posById = new Map(positions.map(p => [p.id, p]));
+    let nodesChanged = false;
+    const nodes = graph.nodes.map(n => {
+        const p = posById.get(n.id);
+        if (!p || (n.x === p.x && n.y === p.y)) return n;
+        nodesChanged = true;
+        return { ...n, x: p.x, y: p.y };
+    });
+    if (!includeLayouts) {
+        return nodesChanged ? { ...graph, nodes } : null;
+    }
+    const prev = graph.layouts?.[mode];
+    const layoutChanged =
+        !prev ||
+        prev.length !== positions.length ||
+        positions.some((p, i) => {
+            const q = prev[i];
+            return !q || q.id !== p.id || q.x !== p.x || q.y !== p.y;
+        });
+    if (!nodesChanged && !layoutChanged) return null;
+    return {
+        ...graph,
+        nodes: nodesChanged ? nodes : graph.nodes,
+        layouts: {
+            ...(graph.layouts || {}),
+            [mode]: positions.map(p => ({ id: p.id, x: p.x, y: p.y })),
+        },
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
 
 const initialState: RecipeState = {
     graph: null,
@@ -303,7 +514,9 @@ const initialState: RecipeState = {
     canvasBackground: 'default',
     activePresetId: 'classic',
     leafNodeScale: 1,
-    undoStack: [],
+    undoPast: [],
+    undoFuture: [],
+    historyVersion: 0,
     messages: [],
     pendingDeletedIds: [],
     completedNodeIds: [],
@@ -371,16 +584,76 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
     setGraphWithUndo: (graph) => set((state) => ({
         graph,
         isDirty: true,
-        undoStack: state.graph
-            ? [...state.undoStack.slice(-MAX_UNDO_DEPTH + 1), state.graph]
-            : state.undoStack,
+        ...pushHistory(state, state.graph),
     })),
 
     undo: () => set((state) => {
-        if (state.undoStack.length === 0) return {};
-        const undoStack = [...state.undoStack];
-        const graph = undoStack.pop()!;
-        return { graph, undoStack, isDirty: true };
+        if (state.undoPast.length === 0 || !state.graph) return {};
+        const restored = state.undoPast[state.undoPast.length - 1];
+        return {
+            ...historyTransition(state, restored),
+            undoPast: state.undoPast.slice(0, -1),
+            undoFuture: [snapshotForHistory(state.graph), ...state.undoFuture].slice(0, MAX_UNDO_DEPTH),
+        };
+    }),
+
+    redo: () => set((state) => {
+        if (state.undoFuture.length === 0 || !state.graph) return {};
+        const [restored, ...undoFuture] = state.undoFuture;
+        return {
+            ...historyTransition(state, restored),
+            undoFuture,
+            undoPast: [...state.undoPast.slice(-MAX_UNDO_DEPTH + 1), snapshotForHistory(state.graph)],
+        };
+    }),
+
+    syncNodePositions: (mode, positions) => set((state) => {
+        if (!state.graph) return {};
+        const next = applyPositions(state.graph, mode, positions, false);
+        // Passive mirror of the rendered layout: no history entry, no dirty
+        // flag — this runs after every layout pass, including for viewers.
+        return next ? { graph: next } : {};
+    }),
+
+    commitNodePositions: (mode, positions) => set((state) => {
+        if (!state.graph) return {};
+        const next = applyPositions(state.graph, mode, positions, true);
+        if (!next) return {};
+        return {
+            graph: next,
+            isDirty: true,
+            ...pushHistory(state, state.graph),
+        };
+    }),
+
+    pushUndoSnapshot: () => set((state) => pushHistory(state, state.graph)),
+
+    deleteNodeWithUndo: (nodeId) => set((state) => {
+        if (!state.graph) return {};
+        const victim = state.graph.nodes.find(n => n.id === nodeId);
+        if (!victim) return {};
+        const victimInputs = victim.inputs || [];
+        // Bridge children onto the deleted node's inputs (model-level
+        // calculateBridgeEdges: every consumer of the victim now consumes the
+        // victim's own inputs).
+        const nodes = state.graph.nodes
+            .filter(n => n.id !== nodeId)
+            .map(n => {
+                if (!n.inputs?.includes(nodeId)) return n;
+                const bridged = [
+                    ...n.inputs.filter(i => i !== nodeId),
+                    ...victimInputs.filter(i => i !== n.id && !n.inputs!.includes(i)),
+                ];
+                return { ...n, inputs: bridged };
+            });
+        return {
+            graph: { ...state.graph, nodes },
+            isDirty: true,
+            ...pushHistory(state, state.graph),
+            pendingDeletedIds: state.pendingDeletedIds.includes(nodeId)
+                ? state.pendingDeletedIds
+                : [...state.pendingDeletedIds, nodeId],
+        };
     }),
 
     updateNode: (nodeId, patch) => {
@@ -446,41 +719,12 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
             : { pendingDeletedIds: filtered };
     }),
 
-    restoreNodes: (rfNodes) => set((state) => {
-        if (!state.graph) return {};
-        const restoredIds = new Set(rfNodes.map((n: any) => n.id));
-        // Clear restored IDs from pendingDeletedIds.
-        const newPendingDeletedIds = state.pendingDeletedIds.filter(id => !restoredIds.has(id));
-        // Merge restored nodes back into graph: reconstruct RecipeNode from RF data,
-        // preserving any existing Zustand node if already present.
-        const existingById = new Map(state.graph.nodes.map(n => [n.id, n]));
-        const restoredGraphNodes = rfNodes
-            .filter((n: any) => restoredIds.has(n.id) && !existingById.has(n.id))
-            .map((n: any) => {
-                // n.data contains ...originalNode spread at snapshot time.
-                // Strip RF-only fields and reconstruct as a RecipeNode.
-                const { onDelete, onSetLongPress, textPos, depth, ...nodeData } = n.data || {};
-                return { ...nodeData, id: n.id } as any;
-            })
-            // Only restore genuine content nodes (issue #276). Undo snapshots also
-            // capture synthetic ReactFlow decoration — lane background bands
-            // (type:'lane') and notation station anchors (type:'notation-station') —
-            // which are never part of graph.nodes. Reconstructing those injected a
-            // typeless node into the model per lane, which then re-laid-out and
-            // rendered as an empty/"hollow" node (and persisted to Firestore).
-            // A real RecipeNode always carries type 'ingredient' | 'action'; anything
-            // lacking that is decoration and must not enter graph.nodes.
-            .filter((n: any) => n.type === 'ingredient' || n.type === 'action');
-        const newNodes = restoredGraphNodes.length > 0
-            ? [...state.graph.nodes, ...restoredGraphNodes]
-            : state.graph.nodes;
-        return {
-            pendingDeletedIds: newPendingDeletedIds,
-            graph: restoredGraphNodes.length > 0
-                ? { ...state.graph, nodes: newNodes }
-                : state.graph,
-        };
-    }),
+    // NOTE (issue #276/#277 heritage): the old RF-snapshot undo needed a
+    // `restoreNodes` action that reconstructed RecipeNodes from ReactFlow
+    // node data and had to filter out synthetic decoration (lane bands,
+    // notation stations). The single store-level history makes that entire
+    // class impossible: history entries are graph snapshots, and synthetic
+    // nodes never enter graph.nodes in the first place.
 
     toggleNodeCompleted: (nodeId) => set((state) => ({
         completedNodeIds: state.completedNodeIds.includes(nodeId)

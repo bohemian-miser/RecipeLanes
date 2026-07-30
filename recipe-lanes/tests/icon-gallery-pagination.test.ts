@@ -188,6 +188,22 @@ describe('getPagedIcons — unfiltered pagination (#280)', () => {
         assert.strictEqual(res.icons.length, 20);
         assert.strictEqual(res.total, 30);
     });
+
+    it('queries icon_index by impressions when sortBy is impressions', async () => {
+        const { service, calls } = serviceWith(makeDocs(100));
+
+        await service.getPagedIcons(1, 20, '', 'impressions');
+
+        assert.deepStrictEqual(calls.orderBy, [['impressions', 'desc']]);
+    });
+
+    it('queries icon_index by rejections when sortBy is rejections', async () => {
+        const { service, calls } = serviceWith(makeDocs(100));
+
+        await service.getPagedIcons(1, 20, '', 'rejections');
+
+        assert.deepStrictEqual(calls.orderBy, [['rejections', 'desc']]);
+    });
 });
 
 // ---------------------------------------------------------------------------

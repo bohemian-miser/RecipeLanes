@@ -475,9 +475,9 @@ export async function updateIconMetadataAction(iconUrl: string, ingredientName: 
 
 /* Old code below here */
 
-export async function getPagedIconsAction(page: number = 1, limit: number = 20, query?: string) {
+export async function getPagedIconsAction(page: number = 1, limit: number = 20, query?: string, sortBy: 'created_at' | 'impressions' | 'rejections' = 'created_at') {
     // Public access allowed for gallery
-    return getDataService().getPagedIcons(page, limit, query);
+    return getDataService().getPagedIcons(page, limit, query, sortBy);
 }
 
 export async function getAllStorageFilesAction() {

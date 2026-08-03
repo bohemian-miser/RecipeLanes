@@ -17,6 +17,7 @@
 
 import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry, SearchTerm, RecipeGraph, IconStyleId, RecipePatch } from './types';
 import { standardizeIngredientName } from '../utils';
+import { SERVER_FIELDS, CLIENT_FIELDS } from './node-fields';
 
 /**
  * Returns the canonical ingredient name for a node — used for icon lookup and standardisation.
@@ -177,6 +178,48 @@ export function restoreNodeShortlistFromServer(node: RecipeNode, serverNode: Rec
     node.iconShortlist = serverNode.iconShortlist;
     node.shortlistIndex = serverNode.shortlistIndex;
     node.shortlistCycled = serverNode.shortlistCycled;
+}
+
+// Reconciled onto every adjust/forge result below: SERVER fields (icon data,
+// written by the server while the LLM call is in flight) plus CLIENT fields
+// (position/UI, which the user may have changed in the same window).
+const ADJUST_RESTORE_FIELDS: readonly (keyof RecipeNode)[] = [...SERVER_FIELDS, ...CLIENT_FIELDS];
+
+function restoreField<K extends keyof RecipeNode>(target: RecipeNode, source: RecipeNode, field: K): void {
+    if (source[field] !== undefined) target[field] = source[field];
+}
+
+/**
+ * Reconciles an adjust/forge LLM result against the latest store graph (#219).
+ * The LLM is authoritative for STRUCTURAL fields only, so SERVER/CLIENT fields
+ * are restored from `latest`. Nodes new to `adjusted` are kept; nodes the
+ * adjust deleted stay deleted. Pure; preserves `adjusted`'s order.
+ */
+export function reconcileAdjustedGraph(
+    adjusted: RecipeGraph,
+    latest: RecipeGraph,
+    deletedIds: readonly string[] = [],
+): RecipeGraph {
+    const latestById = new Map(latest.nodes.map((n) => [n.id, n]));
+    // A node deleted mid-call is absent from latest but present in adjusted;
+    // without this it would resurrect (and pendingDeletedIds would then
+    // starve it of icon updates).
+    const deleted = new Set(deletedIds);
+
+    const nodes = adjusted.nodes.filter((n) => !deleted.has(n.id)).map((node) => {
+        const latestNode = latestById.get(node.id);
+        if (!latestNode) return node;
+
+        const merged: RecipeNode = { ...node };
+        for (const field of ADJUST_RESTORE_FIELDS) {
+            restoreField(merged, latestNode, field);
+        }
+        return merged;
+    });
+
+    // graph.layouts is client-owned too (a drag during the call writes
+    // latest.layouts[mode]); adjusted carries the stale pre-call copy.
+    return { ...adjusted, nodes, layouts: latest.layouts ?? adjusted.layouts };
 }
 
 /**

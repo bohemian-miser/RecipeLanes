@@ -17,6 +17,7 @@
 
 import { RecipeNode, IconStats, IconIndexEntry, ShortlistEntry, SearchTerm, RecipeGraph, IconStyleId, RecipePatch } from './types';
 import { standardizeIngredientName } from '../utils';
+import { SERVER_FIELDS, CLIENT_FIELDS } from './node-fields';
 
 /**
  * Returns the canonical ingredient name for a node — used for icon lookup and standardisation.
@@ -177,6 +178,38 @@ export function restoreNodeShortlistFromServer(node: RecipeNode, serverNode: Rec
     node.iconShortlist = serverNode.iconShortlist;
     node.shortlistIndex = serverNode.shortlistIndex;
     node.shortlistCycled = serverNode.shortlistCycled;
+}
+
+// Reconciled onto every adjust/forge result below: SERVER fields (icon data,
+// written by the server while the LLM call is in flight) plus CLIENT fields
+// (position/UI, which the user may have changed in the same window).
+const ADJUST_RESTORE_FIELDS: readonly (keyof RecipeNode)[] = [...SERVER_FIELDS, ...CLIENT_FIELDS];
+
+function restoreField<K extends keyof RecipeNode>(target: RecipeNode, source: RecipeNode, field: K): void {
+    if (source[field] !== undefined) target[field] = source[field];
+}
+
+/**
+ * Reconciles an adjust/forge LLM result against the latest store graph (#219).
+ * The LLM is authoritative for STRUCTURAL fields only, so SERVER/CLIENT fields
+ * are restored from `latest`. Nodes new to `adjusted` are kept; nodes the
+ * adjust deleted stay deleted. Pure; preserves `adjusted`'s order.
+ */
+export function reconcileAdjustedGraph(adjusted: RecipeGraph, latest: RecipeGraph): RecipeGraph {
+    const latestById = new Map(latest.nodes.map((n) => [n.id, n]));
+
+    const nodes = adjusted.nodes.map((node) => {
+        const latestNode = latestById.get(node.id);
+        if (!latestNode) return node;
+
+        const merged: RecipeNode = { ...node };
+        for (const field of ADJUST_RESTORE_FIELDS) {
+            restoreField(merged, latestNode, field);
+        }
+        return merged;
+    });
+
+    return { ...adjusted, nodes };
 }
 
 /**

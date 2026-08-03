@@ -33,7 +33,7 @@ import { standardizeIngredientName, resolveBylineName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
 import { TimelineView } from '@/components/recipe-lanes/timeline-view';
 import type { RecipeGraph, LayoutModeId, RecipeNode } from '@/lib/recipe-lanes/types';
-import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients, getNodeIcon, buildIngredientText } from '@/lib/recipe-lanes/model-utils';
+import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients, getNodeIcon, buildIngredientText, reconcileAdjustedGraph } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import { LayoutMode } from '@/lib/recipe-lanes/layout';
 import { Wand2, ChefHat, ArrowRight, Code, MessageSquare, Send, LayoutDashboard, Kanban, GitGraph, Columns, AlignCenter, Network, Sparkles, CircleDot, Share2, Sprout, Move, RotateCw, Orbit, Type, Play, Pause, Pencil, RotateCcw, Globe, Lock, Plus, LayoutGrid, Star, User, ShoppingBasket, HelpCircle, Github, Camera, Eye, EyeOff } from 'lucide-react';
@@ -684,7 +684,12 @@ const handleVisualize = async () => {
                 // user just forged — and so the post-save snapshot repopulates
                 // the input with the SAME text (leaving the input box untouched).
                 res.graph.originalText = recipeText;
-                setGraphWithUndo(res.graph);
+
+                // #219: same reconciliation as handleAdjust — see there.
+                const latest = useRecipeStore.getState().graph;
+                const merged = latest ? reconcileAdjustedGraph(res.graph, latest) : res.graph;
+
+                setGraphWithUndo(merged);
                 addMessage({ role: 'user', content: 'Applied recipe text edits.' });
                 addMessage({ role: 'assistant', content: (res as any).message || 'Recipe updated from your edits.' });
                 setShowChat(true);
@@ -692,7 +697,7 @@ const handleVisualize = async () => {
                 setWarningDismissed(false);
 
                 // Fire-and-forget save — mirrors handleAdjust.
-                saveRecipeAction(res.graph, currentId).then(() => {
+                saveRecipeAction(merged, currentId).then(() => {
                     const allMessages = useRecipeStore.getState().messages;
                     localStorage.setItem(`chat_${currentId}`, JSON.stringify(allMessages));
                     saveChatHistoryAction(currentId, allMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })));
@@ -822,7 +827,14 @@ const handleVisualize = async () => {
               throw new Error(res.error || 'Failed to adjust graph.');
           }
           res.graph.title = recipeTitle;
-          setGraphWithUndo(res.graph);
+
+          // #219: res.graph is derived from the pre-call graph, so it would erase
+          // icon data the server wrote during the round-trip. getState() reads the
+          // latest graph, not the stale `graph` closure.
+          const latest = useRecipeStore.getState().graph;
+          const merged = latest ? reconcileAdjustedGraph(res.graph, latest) : res.graph;
+
+          setGraphWithUndo(merged);
           addMessage({ role: 'assistant', content: (res as any).message || 'Done! The recipe has been updated.' });
           setShowChat(true);
           setStatus('complete');
@@ -830,7 +842,7 @@ const handleVisualize = async () => {
           // Fire-and-forget — UI is already updated, don't block on the Firestore write
           const currentId = searchParams.get('id') || undefined;
           if (currentId) {
-              saveRecipeAction(res.graph, currentId).then(() => {
+              saveRecipeAction(merged, currentId).then(() => {
                   const allMessages = useRecipeStore.getState().messages;
                   localStorage.setItem(`chat_${currentId}`, JSON.stringify(allMessages));
                   saveChatHistoryAction(currentId, allMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })));

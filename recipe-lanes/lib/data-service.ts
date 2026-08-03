@@ -26,7 +26,15 @@ import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/type
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES, ICON_GALLERY_PAGE_SIZE, ICON_SEARCH_SCAN_LIMIT } from './config';
 import { standardizeIngredientName, removeUndefined, computeStoredOwnerName } from './utils';
 // import { calculateWilsonLCB } from './utils';
-import { applyIconToNode, assignNodeShortlist, buildShortlistEntry, clearNodeShortlist, computeShortlistDelta, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getNodeShortlist, getNodeShortlistLength, getPendingImpressionIds, getPendingRejectionIds, getPendingImpressionTargets, getPendingRejectionTargets, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, markEntryImpressedAtIndex, markSeenEntriesImpressed, markSeenEntriesRejected, mutateNodesByIngredient, prependToShortlist, rankIconsByEmbedding, toRecipeIcon, setNodeStatusByIngredient, extractBatchIngredients } from './recipe-lanes/model-utils';
+import { applyIconToNode, assignNodeShortlist, buildShortlistEntry, clearNodeShortlist, computeShortlistDelta, getEntryIcon, getIconPath, getIconStoragePaths, getIconThumbPath, getIconUrl, getNodeHydeQueries, getNodeIconId, getNodeIconUrl, getNodeIngredientName, getNodeShortlist, getNodeShortlistLength, getPendingImpressionIds, getPendingRejectionIds, getPendingImpressionTargets, getPendingRejectionTargets, getSeenIconIds, hasNodeIcon, iconIndexEntryToStats, markEntryImpressedAtIndex, markSeenEntriesImpressed, markSeenEntriesRejected, mutateNodesByIngredient, prependToShortlist, rankIconsByEmbedding, restoreNodeShortlistFromServer, toRecipeIcon, setNodeStatusByIngredient, extractBatchIngredients } from './recipe-lanes/model-utils';
+import { SERVER_FIELDS } from './recipe-lanes/node-fields';
+
+// Issue #221: uniform server-owned scalar/cache fields reconciled onto every
+// saveRecipe update below. `iconShortlist` is excluded because it has its own,
+// more nuanced restore rule (see the reconciliation block in `saveRecipe`).
+// Derived from `SERVER_FIELDS` (lib/recipe-lanes/node-fields.ts) so a newly
+// added SERVER field is automatically protected here without a hand edit.
+const UNIFORM_SERVER_RECONCILE_FIELDS = SERVER_FIELDS.filter((f) => f !== 'iconShortlist');
 
 export interface DataService {
   getIngredientByName(name: string): Promise<{ id: string; data: any } | null>;
@@ -853,6 +861,49 @@ export class FirebaseDataService implements DataService {
               }
           });
           await Promise.allSettled(tasks);
+
+          // Issue #221: the client always saves the WHOLE graph, and the write
+          // below uses `set(..., { merge: true })`. Firestore's merge:true
+          // merges maps but replaces arrays wholesale, so `graph.nodes` is
+          // last-writer-wins. Meanwhile the server writes node fields in the
+          // background — `resolveRecipeIcons` sets `fastMatches`/`hydeQueries`/
+          // `iconQuery`/`iconShortlist`, `queueIconForGeneration` sets `status`.
+          // A client save built from a graph fetched before those background
+          // writes landed would otherwise silently erase them (e.g. clobbered
+          // `fastMatches` forces `handleHydrateFastMatches` back onto the
+          // expensive full search). Reconcile each node against the doc we
+          // just read — by definition the freshest server state — before the
+          // write. This must run AFTER the impression/rejection delta loop
+          // above: that loop early-returns for shortlist-less nodes, and the
+          // shortlist restore case here only fires for shortlist-less client
+          // nodes, so the two never fight over the same node.
+          (graph.nodes || []).forEach((n: any) => {
+              const oldNode = oldNodesById.get(n.id);
+              // A node new to this doc has no server state to reconcile against —
+              // the client is the only source of truth for it.
+              if (!oldNode) return;
+
+              // Uniform rule for server-owned scalar/cache fields: the doc's
+              // value wins whenever it's defined, since it was read moments ago
+              // in this same call and the client's copy may be stale.
+              for (const field of UNIFORM_SERVER_RECONCILE_FIELDS) {
+                  if (oldNode[field] !== undefined) {
+                      n[field] = oldNode[field];
+                  }
+              }
+
+              // iconShortlist is special: unlike the fields above, the client
+              // CAN be authoritative for it (the delta loop + assignNodeShortlist
+              // above own that path whenever the client node has a shortlist).
+              // Only restore the server's shortlist when the client node has
+              // none — i.e. the client graph is stale/never had one — and the
+              // server has one to offer. When the client does have a shortlist,
+              // leave iconShortlist/shortlistIndex/shortlistCycled untouched so
+              // the client-trusted index (per the comment above) keeps working.
+              // (restoreNodeShortlistFromServer is a no-op in that case.)
+              restoreNodeShortlistFromServer(n, oldNode);
+          });
+
           // Maybe allow a non-merging option?
           await db.collection(DB_COLLECTION_RECIPES).doc(existingId).set(removeUndefined(data), { merge: true });
           return existingId;

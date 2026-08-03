@@ -129,6 +129,16 @@ describe('reconcileAdjustedGraph (issue #219)', () => {
         assert.equal(result.nodes[0].text, 'edited', 'structural edit still applies');
     });
 
+    it('drops a node the user deleted mid-call (in deletedIds), but keeps genuinely new nodes', () => {
+        const latest = makeGraph([makeNode('a')]);
+        // 'b' was deleted during the call; 'c' is new from the LLM.
+        const adjusted = makeGraph([makeNode('a'), makeNode('b'), makeNode('c')]);
+
+        const result = reconcileAdjustedGraph(adjusted, latest, ['b']);
+
+        assert.deepEqual(result.nodes.map((n) => n.id), ['a', 'c']);
+    });
+
     it('falls back to the adjusted layouts when latest has none', () => {
         const latest = makeGraph([makeNode('a')]);
         const adjusted = makeGraph([makeNode('a')]);

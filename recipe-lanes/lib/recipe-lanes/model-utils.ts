@@ -195,10 +195,18 @@ function restoreField<K extends keyof RecipeNode>(target: RecipeNode, source: Re
  * are restored from `latest`. Nodes new to `adjusted` are kept; nodes the
  * adjust deleted stay deleted. Pure; preserves `adjusted`'s order.
  */
-export function reconcileAdjustedGraph(adjusted: RecipeGraph, latest: RecipeGraph): RecipeGraph {
+export function reconcileAdjustedGraph(
+    adjusted: RecipeGraph,
+    latest: RecipeGraph,
+    deletedIds: readonly string[] = [],
+): RecipeGraph {
     const latestById = new Map(latest.nodes.map((n) => [n.id, n]));
+    // A node deleted mid-call is absent from latest but present in adjusted;
+    // without this it would resurrect (and pendingDeletedIds would then
+    // starve it of icon updates).
+    const deleted = new Set(deletedIds);
 
-    const nodes = adjusted.nodes.map((node) => {
+    const nodes = adjusted.nodes.filter((n) => !deleted.has(n.id)).map((node) => {
         const latestNode = latestById.get(node.id);
         if (!latestNode) return node;
 

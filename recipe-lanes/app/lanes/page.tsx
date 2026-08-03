@@ -686,8 +686,8 @@ const handleVisualize = async () => {
                 res.graph.originalText = recipeText;
 
                 // #219: same reconciliation as handleAdjust — see there.
-                const latest = useRecipeStore.getState().graph;
-                const merged = latest ? reconcileAdjustedGraph(res.graph, latest) : res.graph;
+                const { graph: latest, pendingDeletedIds } = useRecipeStore.getState();
+                const merged = latest ? reconcileAdjustedGraph(res.graph, latest, pendingDeletedIds) : res.graph;
 
                 setGraphWithUndo(merged);
                 addMessage({ role: 'user', content: 'Applied recipe text edits.' });
@@ -831,8 +831,8 @@ const handleVisualize = async () => {
           // #219: res.graph is derived from the pre-call graph, so it would erase
           // icon data the server wrote during the round-trip. getState() reads the
           // latest graph, not the stale `graph` closure.
-          const latest = useRecipeStore.getState().graph;
-          const merged = latest ? reconcileAdjustedGraph(res.graph, latest) : res.graph;
+          const { graph: latest, pendingDeletedIds } = useRecipeStore.getState();
+          const merged = latest ? reconcileAdjustedGraph(res.graph, latest, pendingDeletedIds) : res.graph;
 
           setGraphWithUndo(merged);
           addMessage({ role: 'assistant', content: (res as any).message || 'Done! The recipe has been updated.' });

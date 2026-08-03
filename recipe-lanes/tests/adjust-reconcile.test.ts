@@ -114,4 +114,28 @@ describe('reconcileAdjustedGraph (issue #219)', () => {
 
         assert.equal(node.shortlistIndex, 2, 'shortlistIndex should survive reconciliation');
     });
+
+    it('takes graph.layouts from latest, not the stale adjusted copy', () => {
+        // A drag mid-call writes latest.layouts[mode]; adjusted still holds the
+        // pre-call positions, which would otherwise revert the drag on restore.
+        const latest = makeGraph([makeNode('a')]);
+        latest.layouts = { notation: [{ id: 'a', x: 500, y: 600 }] };
+        const adjusted = makeGraph([makeNode('a', { text: 'edited' })]);
+        adjusted.layouts = { notation: [{ id: 'a', x: 10, y: 20 }] };
+
+        const result = reconcileAdjustedGraph(adjusted, latest);
+
+        assert.deepEqual(result.layouts, { notation: [{ id: 'a', x: 500, y: 600 }] });
+        assert.equal(result.nodes[0].text, 'edited', 'structural edit still applies');
+    });
+
+    it('falls back to the adjusted layouts when latest has none', () => {
+        const latest = makeGraph([makeNode('a')]);
+        const adjusted = makeGraph([makeNode('a')]);
+        adjusted.layouts = { notation: [{ id: 'a', x: 10, y: 20 }] };
+
+        const result = reconcileAdjustedGraph(adjusted, latest);
+
+        assert.deepEqual(result.layouts, { notation: [{ id: 'a', x: 10, y: 20 }] });
+    });
 });

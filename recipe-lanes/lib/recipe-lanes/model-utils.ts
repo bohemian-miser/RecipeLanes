@@ -209,7 +209,9 @@ export function reconcileAdjustedGraph(adjusted: RecipeGraph, latest: RecipeGrap
         return merged;
     });
 
-    return { ...adjusted, nodes };
+    // graph.layouts is client-owned too (a drag during the call writes
+    // latest.layouts[mode]); adjusted carries the stale pre-call copy.
+    return { ...adjusted, nodes, layouts: latest.layouts ?? adjusted.layouts };
 }
 
 /**

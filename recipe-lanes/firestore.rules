@@ -46,5 +46,10 @@ service cloud.firestore {
     match /feedback/{feedbackId} {
       allow create: if true;
     }
+
+    // Icon credits (user_credits) are Admin-SDK-only, like icon_forge_usage:
+    // no rules block = default deny. Do NOT move balances onto users/{uid} —
+    // that doc is owner-writable, so a balance there would be self-editable.
+    // Reads go through the getIconCreditsAction server action instead.
   }
 }

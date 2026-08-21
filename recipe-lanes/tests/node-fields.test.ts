@@ -28,7 +28,7 @@ describe('node-fields ownership map (issue #220)', () => {
     it('classifies exactly the expected CLIENT fields', () => {
         assert.deepEqual(
             [...CLIENT_FIELDS].sort(),
-            ['rotation', 'shortlistCycled', 'shortlistIndex', 'textPos', 'x', 'y'].sort(),
+            ['rotation', 'shortlistCycled', 'shortlistIndex', 'shortlistSeenAll', 'textPos', 'x', 'y'].sort(),
         );
     });
 

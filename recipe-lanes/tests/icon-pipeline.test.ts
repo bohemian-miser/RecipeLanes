@@ -12,6 +12,7 @@ import { memoryStore } from '../lib/store';
 import { setAIService } from '../lib/ai-service';
 import { MockAIService } from '../lib/ai-service.mock';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
+import { setUserCreditsService, MemoryUserCreditsService } from '../lib/user-credits';
 import { buildShortlistEntry, getNodeIconUrl, getNodeIconId } from '../lib/recipe-lanes/model-utils';
 import type { IconStats, ShortlistEntry } from '../lib/recipe-lanes/types';
 
@@ -220,6 +221,8 @@ describe('forgeIconAction vs rejectIcon — searchFn wiring', () => {
         setDataService(spyService);
         setAIService(new MockAIService());
         setAuthService(new MockAuthService());
+        // forgeIconAction spends icon credits; keep the pure tier off Firestore.
+        setUserCreditsService(new MemoryUserCreditsService());
     });
 
     it('forgeIconAction calls rejectRecipeIcon WITHOUT searchFn', async () => {

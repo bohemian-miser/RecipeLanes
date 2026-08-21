@@ -61,3 +61,17 @@ The claim protocol itself is fine and was honoured by hand for #280: post the cl
 **For future runs:** if `agent-claim.mjs` exits 1 with a 401/403, do not treat it as "no claim needed" and do not skip the claim — fall back to staking it via MCP as above. Making the script proxy-aware (an undici `ProxyAgent`, or `NODE_USE_ENV_PROXY`) would only help if the proxy allowed `api.github.com` for this session, which it does not.
 
 **Confirmed independently on #281** (same day, different run): identical 401 from `agent-claim.mjs`, resolved the same way — claim staked by hand via MCP with the same marker. Two runs raced #281; the earliest claim comment won and the loser resigned, so the protocol worked as designed even with the script unusable.
+
+---
+
+## 2026-08-21 — Icon credits + icon editor modal (phase 1 of paid icon generation)
+
+**Feature (owner-directed).** First slice of the "users pay for icon generation" plan that `recipe-lanes/docs/icon-shortlist-plan.md` sketched ("Forge is the credit-gated upsell"). Two changes shipped together:
+
+1. **Icon credits.** New Admin-SDK-only collection `user_credits/{uid}` (`lib/user-credits.ts`): `balance` / `granted` / `spent`, with a lazy **starter grant** (`STARTER_ICON_CREDITS = 10`) seeded transactionally on first touch — no backfill. `forgeIconAction` now requires sign-in and spends `FORGE_CREDIT_COST = 1` per generation (transactional spend, refund if the enqueue fails, `creditsRemaining` returned to the UI). The daily cap (`checkForgeAllowed`) stays as an abuse backstop. Purchase flow is deliberately NOT built yet. **Placement rationale:** the balance must not live on `users/{uid}` — firestore.rules gives users full write access to their own user doc, so it would be self-editable; `user_credits` follows the `icon_forge_usage` no-rules-block precedent. Anonymous users can no longer forge regardless of `allowAnonForge` (credits need an account); `allowAnonForge` still governs the recipe-creation generation gates.
+
+2. **Icon editor modal replaces cycle+forge buttons.** The per-node reroll (`RefreshCw`) and forge (`Hammer`) buttons — on RF nodes, timeline nodes, the SVG timeline, and the ingredients sidebar — are replaced by a single pencil "Edit icon" button opening `components/icon-shortlist-modal.tsx`: the whole shortlist as a grid (click to pick — new store action `setShortlistIndex`), plus the credit-gated "Generate a new icon" button with the live balance. Modal state lives in the store (`iconEditorNodeId`) because the openers sit deep inside ReactFlow while the modal renders at page level.
+
+**Impression semantics.** Opening the modal shows every shortlist entry at once, so it must count as an impression for each — but NOT as a rejection (unlike cycling past). New client-owned node flag `shortlistSeenAll` (registered in the #220 ownership map): `stampShortlistFlags` now stamps `hasImpressed` on all entries when it is set, while rejections keep the existing selected-index contiguity rules. Existing `shortlistCycled` semantics are untouched. Selection/seen state still reaches Firestore only with the next save — per `STATE_AND_PERSISTENCE.md`, no per-interaction write was reintroduced.
+
+**Tests.** `tests/shortlist-seen-all.test.ts` + `tests/recipe-store-icon-editor.test.ts` (pure), `tests/user-credits.test.ts` (integration: starter grant, atomic spend/insufficient/refund, forge gate incl. refund-on-failure). Next phase (per owner): generation offers multiple options and a chosen icon becomes a named donation from the generating user.

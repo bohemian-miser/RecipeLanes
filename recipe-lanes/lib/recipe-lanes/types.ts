@@ -113,6 +113,10 @@ export interface RecipeNode {
   iconShortlist?: ShortlistEntry[];
   shortlistIndex?: number;   // current position in iconShortlist, 0-based
   shortlistCycled?: boolean; // true once the user has wrapped all the way around the shortlist
+  // True once the whole shortlist has been shown at once (icon editor modal).
+  // Save-time stamping records an impression for every entry, but — unlike
+  // shortlistCycled — no rejections for entries beyond the selected index.
+  shortlistSeenAll?: boolean;
   iconQuery?: {
     queryUsed: string;
     method: string;

@@ -149,14 +149,24 @@ export function setNodeIcon(node: RecipeNode, _icon: IconStats) {
  */
 export function assignNodeShortlist(node: RecipeNode, entries: ShortlistEntry[], index?: number): void {
     node.iconShortlist = entries;
-    if (index !== undefined) node.shortlistIndex = index;
+    if (index !== undefined) {
+        node.shortlistIndex = index;
+        // An explicit index means the shortlist CONTENTS changed (search
+        // apply, forge prepend) — the new list has not been fully shown or
+        // cycled, so the seen-everything flags must not leak onto entries the
+        // user never saw. The index-less call (saveRecipe persisting
+        // impression flags back) leaves them alone.
+        node.shortlistCycled = undefined;
+        node.shortlistSeenAll = undefined;
+    }
 }
 
-/** Clears all shortlist state from the node (shortlist, index, and cycled flag). */
+/** Clears all shortlist state from the node (shortlist, index, and seen flags). */
 export function clearNodeShortlist(node: RecipeNode): void {
     node.iconShortlist = undefined;
     node.shortlistIndex = undefined;
     node.shortlistCycled = undefined;
+    node.shortlistSeenAll = undefined;
 }
 
 /**
@@ -177,6 +187,7 @@ export function restoreNodeShortlistFromServer(node: RecipeNode, serverNode: Rec
     node.iconShortlist = serverNode.iconShortlist;
     node.shortlistIndex = serverNode.shortlistIndex;
     node.shortlistCycled = serverNode.shortlistCycled;
+    node.shortlistSeenAll = serverNode.shortlistSeenAll;
 }
 
 /**
@@ -323,10 +334,14 @@ export interface ShortlistDelta {
  * unchanged so their existing flags are preserved — cycling back should not
  * inadvertently clear rejections on icons the user hasn't reached yet.
  */
-function stampShortlistFlags(shortlist: ShortlistEntry[], shortlistIndex: number, shortlistCycled?: boolean): ShortlistEntry[] {
+function stampShortlistFlags(shortlist: ShortlistEntry[], shortlistIndex: number, shortlistCycled?: boolean, shortlistSeenAll?: boolean): ShortlistEntry[] {
     const upTo = shortlistCycled ? shortlist.length : shortlistIndex + 1;
     return shortlist.map((e, i) => {
-        if (i >= upTo) return e; // unseen: preserve as-is
+        if (i >= upTo) {
+            // Not cycled/selected past. Shown all at once in the icon editor
+            // modal → impression only; otherwise unseen: preserve as-is.
+            return shortlistSeenAll && !getEntryHasImpressed(e) ? { ...e, hasImpressed: true } : e;
+        }
         return {
             ...e,
             hasImpressed: true,
@@ -343,7 +358,7 @@ export function computeShortlistDelta(
     const empty: ShortlistDelta = { toImpres: [], toReject: [], toUnreject: [], updatedShortlist: rawShortlist ?? [] };
     if (!rawShortlist || rawShortlist.length === 0) return empty;
 
-    const newShortlist = stampShortlistFlags(rawShortlist, newNode.shortlistIndex ?? 0, newNode.shortlistCycled);
+    const newShortlist = stampShortlistFlags(rawShortlist, newNode.shortlistIndex ?? 0, newNode.shortlistCycled, newNode.shortlistSeenAll);
 
     const ingId = (icon: IconStats) =>
         icon.visualDescription ? standardizeIngredientName(icon.visualDescription) : "WTF";
@@ -477,6 +492,35 @@ export function cycleShortlistNodes(graph: RecipeGraph, nodeId: string): RecipeN
         if (length === 0) return n;
         const next = ((n.shortlistIndex ?? 0) + 1) % length;
         return { ...n, shortlistIndex: next };
+    });
+}
+
+/**
+ * Returns a new nodes array where the node with `nodeId` has its
+ * `shortlistIndex` set to `index` (icon editor modal pick). Out-of-bounds
+ * indices and unchanged picks are no-ops that keep every node reference.
+ */
+export function setShortlistIndexNodes(graph: RecipeGraph, nodeId: string, index: number): RecipeNode[] {
+    return graph.nodes.map(n => {
+        if (n.id !== nodeId) return n;
+        if (!Number.isInteger(index) || index < 0 || index >= getNodeShortlistLength(n)) return n;
+        if ((n.shortlistIndex ?? 0) === index) return n;
+        return { ...n, shortlistIndex: index };
+    });
+}
+
+/**
+ * Returns a new nodes array where the node with `nodeId` is flagged as having
+ * had its whole shortlist shown at once (icon editor modal opened). Save-time
+ * stamping turns this into an impression for every entry — see
+ * stampShortlistFlags. No-op (reference-preserving) when already flagged or
+ * the shortlist is empty.
+ */
+export function markShortlistSeenAllNodes(graph: RecipeGraph, nodeId: string): RecipeNode[] {
+    return graph.nodes.map(n => {
+        if (n.id !== nodeId) return n;
+        if (n.shortlistSeenAll || getNodeShortlistLength(n) === 0) return n;
+        return { ...n, shortlistSeenAll: true };
     });
 }
 

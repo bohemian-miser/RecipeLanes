@@ -33,7 +33,9 @@ import { db } from '@/lib/firebase-admin';
 import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
 import { unifiedIconSearch, serverBatchIconSearch } from '@/lib/search-orchestrator';
 import { getIconQueueConfig, setIconQueueConfig, getUserForgeCountToday, incrementUserForgeCount } from '@/lib/icon-queue-config';
+import { getUserCredits, spendIconCredits, refundIconCredits } from '@/lib/user-credits';
 import type { IconQueueConfig } from '@/lib/config';
+import { FORGE_CREDIT_COST, STARTER_ICON_CREDITS } from '@/lib/config';
 
 // Input Validation Schemas
 const IngredientSchema = z.string().min(1).max(100);
@@ -61,15 +63,59 @@ export async function forgeIconAction(recipeId: string, ingredientName: string, 
     try {
         const session = await getAuthService().verifyAuth();
         const userId = session?.uid;
+        // Generation costs icon credits, and credits belong to an account —
+        // anonymous forging is no longer possible regardless of allowAnonForge
+        // (which still governs the recipe-creation generation paths).
+        if (!userId) {
+            return {
+                success: false,
+                error: `Sign in to generate icons — new accounts get ${STARTER_ICON_CREDITS} free icon credits.`,
+            };
+        }
+        // Daily cap stays as an abuse backstop on top of the credit balance.
         const forgeBlock = await checkForgeAllowed(userId);
         if (forgeBlock) return { success: false, error: forgeBlock };
-        if (userId) incrementUserForgeCount(userId).catch(e =>
+
+        const spend = await spendIconCredits(userId, FORGE_CREDIT_COST);
+        if (!spend.ok) {
+            return {
+                success: false,
+                error: 'You are out of icon credits.',
+                creditsRemaining: spend.balance,
+            };
+        }
+        incrementUserForgeCount(userId).catch(e =>
             console.warn('[forgeIconAction] forge count increment failed (non-fatal):', e)
         );
         // Forge: reject current and queue brand-new generation (no index search — skip embedFn)
-        return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId);
+        const res = await getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId);
+        if (!res.success) {
+            // The generation never got enqueued — give the credit back.
+            await refundIconCredits(userId, FORGE_CREDIT_COST).catch(e =>
+                console.warn('[forgeIconAction] credit refund failed:', e)
+            );
+            return { ...res, creditsRemaining: spend.balance + FORGE_CREDIT_COST };
+        }
+        return { ...res, creditsRemaining: spend.balance };
     } catch (e: any) {
-        return { success: false, error: e.message };
+        return { success: false, error: e.message as string, creditsRemaining: undefined as number | undefined };
+    }
+}
+
+/**
+ * Returns the signed-in user's icon-credit balance, seeding the starter grant
+ * for accounts that have never touched credits. Anonymous callers get
+ * signedIn=false and a zero balance.
+ */
+export async function getIconCreditsAction(): Promise<{ signedIn: boolean; balance: number }> {
+    try {
+        const session = await getAuthService().verifyAuth();
+        if (!session?.uid) return { signedIn: false, balance: 0 };
+        const credits = await getUserCredits(session.uid);
+        return { signedIn: true, balance: credits.balance };
+    } catch (e) {
+        console.warn('[getIconCreditsAction] failed:', e);
+        return { signedIn: false, balance: 0 };
     }
 }
 

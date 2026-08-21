@@ -32,6 +32,7 @@ import { MockAIService } from '../lib/ai-service.mock';
 import { getDataService, setDataService, MemoryDataService } from '../lib/data-service';
 import { memoryStore } from '../lib/store';
 import { setAuthService, MockAuthService } from '../lib/auth-service';
+import { setUserCreditsService, MemoryUserCreditsService } from '../lib/user-credits';
 import { getNodeIconId } from '../lib/recipe-lanes/model-utils';
 
 /** Read the current icon id on a recipe node (synchronous — MemoryDataService resolves inline). */
@@ -47,6 +48,8 @@ describe('Recipe & Icon Lifecycle', () => {
         setDataService(new MemoryDataService());
         setAIService(new MockAIService());
         setAuthService(new MockAuthService());
+        // forgeIconAction spends icon credits; keep the pure tier off Firestore.
+        setUserCreditsService(new MemoryUserCreditsService());
     });
 
     it('should follow the full creation and icon-resolution flow', async () => {

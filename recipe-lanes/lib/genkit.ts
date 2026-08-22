@@ -36,7 +36,12 @@ if (projectId == "recipe-lanes" || projectId == "recipe-lanes-staging"
 }
 // Models defined as strings to avoid import issues
 // Using Vertex AI models which use ADC (no API Key required in Prod)
-export const imageModelName = 'vertexai/imagen-4.0-generate-001'; 
+// imagen-4.0-generate-001 was shut down by Google on 2026-08-17 (Vertex
+// migration deadline was 2026-06-30) — requests now 404. Google's published
+// replacement for the imagen-4.0 family is gemini-3.1-flash-image; the
+// genkit plugin routes any `gemini-*-image` id through its Gemini image
+// path, so no call-site changes are needed.
+export const imageModelName = 'vertexai/gemini-3.1-flash-image';
 export const embeddingModel = 'vertexai/text-embedding-004';
 export const textModel = 'vertexai/gemini-2.5-flash';
 

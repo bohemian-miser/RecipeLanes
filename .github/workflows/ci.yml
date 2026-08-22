@@ -154,6 +154,18 @@ jobs:
           npm install -g firebase-tools
           firebase experiments:enable webframeworks
 
+      # test-unit-integration.sh downloads the pinned Xenova/all-MiniLM-L6-v2
+      # embedding model from huggingface.co whenever model-cache is absent —
+      # on a fresh runner that was EVERY run, and one connection reset failed
+      # the whole job. Cache it like the Playwright browsers in the e2e job;
+      # bump the key if functions/scripts/download-model.js pins a new model.
+      - name: Cache functions embedding model
+        if: needs.changes.outputs.code == 'true'
+        uses: actions/cache@v4
+        with:
+          path: recipe-lanes/functions/src/vector-search/model-cache
+          key: hf-model-Xenova-all-MiniLM-L6-v2-fp32-v1
+
       - name: Build
         if: needs.changes.outputs.code == 'true'
         run: cd recipe-lanes && npm run build

@@ -52,6 +52,7 @@ export const INTEGRATION_TESTS = [
   'icon-queue-config.test.ts',
   'impression-rejection.test.ts',
   'save-reconciliation.test.ts',
+  'user-credits.test.ts',
 ];
 
 // tests/ lives one level up from scripts/. Resolve relative to THIS file so the

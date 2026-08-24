@@ -18,8 +18,8 @@
 /* eslint-disable @next/next/no-img-element */
 import React, { useState, useEffect, useRef } from 'react';
 import { RecipeGraph, RecipeNode } from '@/lib/recipe-lanes/types';
-import { ChefHat, X, Users, RefreshCw, Hammer } from 'lucide-react';
-import { getNodeIconUrl, getNodeShortlistLength, computeIngredientRowPatch } from '@/lib/recipe-lanes/model-utils';
+import { ChefHat, X, Users, Pencil } from 'lucide-react';
+import { getNodeIconUrl, computeIngredientRowPatch } from '@/lib/recipe-lanes/model-utils';
 
 interface IngredientsSidebarProps {
   graph: RecipeGraph;
@@ -27,12 +27,8 @@ interface IngredientsSidebarProps {
   onUpdateServes: (newServes: number) => void;
   /** Commit a partial field patch to an ingredient (undoable store write). */
   onEditNode?: (nodeId: string, patch: Partial<RecipeNode>) => void;
-  /** Advance the node's icon shortlist by one (no-op if the shortlist is empty). */
-  onCycleShortlist?: (nodeId: string) => void;
-  /** Reject the current icon and queue a brand-new AI icon for this ingredient. */
-  onForge?: (node: RecipeNode) => void;
-  /** Node ids with an in-flight forge request (drives the per-row spinner). */
-  forgingIds?: Set<string>;
+  /** Open the icon editor modal (shortlist picker + credit-gated generate). */
+  onEditIcon?: (nodeId: string) => void;
 }
 
 type Draft = { qty: string; unit: string; name: string };
@@ -51,9 +47,7 @@ export function IngredientsSidebar({
   onClose,
   onUpdateServes,
   onEditNode,
-  onCycleShortlist,
-  onForge,
-  forgingIds,
+  onEditIcon,
 }: IngredientsSidebarProps) {
   const serves = graph.serves || graph.baseServes || 1;
   const baseServes = graph.baseServes || 1;
@@ -135,39 +129,26 @@ export function IngredientsSidebar({
             {ingredientNodes.map(node => {
                 const displayQty = node.quantity != null ? Math.round(node.quantity * scale * 100) / 100 : '';
                 const iconUrl = getNodeIconUrl(node);
-                const isForging = forgingIds?.has(node.id) ?? false;
-                const canCycle = getNodeShortlistLength(node) > 0;
                 const label = node.canonicalName || node.text;
 
                 return (
                     <div key={node.id} className="flex items-start gap-3 group">
-                        {/* Left column: icon with the cycle / forge buttons stacked beneath it. */}
+                        {/* Left column: icon with the edit-icon button beneath it. */}
                         <div className="flex flex-col items-center gap-1 shrink-0 w-10">
                             {iconUrl ? (
                                 <img src={iconUrl} className="w-10 h-10 object-contain mix-blend-multiply bg-zinc-50 rounded-lg p-1 border border-zinc-100" alt="" />
                             ) : (
                                 <div className="w-10 h-10 flex items-center justify-center bg-zinc-100 rounded-lg text-xl">🥕</div>
                             )}
-                            {onCycleShortlist && (
+                            {onEditIcon && (
                                 <button
-                                    onClick={() => onCycleShortlist(node.id)}
-                                    disabled={!canCycle}
-                                    className="p-1 rounded hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
-                                    title={canCycle ? 'Cycle icon' : 'No other icons yet'}
-                                    aria-label={`Cycle icon for ${label}`}
+                                    onClick={() => onEditIcon(node.id)}
+                                    className="p-1 rounded hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700"
+                                    title="Edit icon"
+                                    aria-label={`Edit icon for ${label}`}
+                                    data-testid="sidebar-edit-icon"
                                 >
-                                    <RefreshCw className="w-3.5 h-3.5" />
-                                </button>
-                            )}
-                            {onForge && (
-                                <button
-                                    onClick={() => onForge(node)}
-                                    disabled={isForging}
-                                    className="p-1 rounded hover:bg-zinc-100 text-zinc-400 hover:text-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
-                                    title="Forge new icon"
-                                    aria-label={`Forge new icon for ${label}`}
-                                >
-                                    <Hammer className={`w-3.5 h-3.5 ${isForging ? 'animate-pulse' : ''}`} />
+                                    <Pencil className="w-3.5 h-3.5" />
                                 </button>
                             )}
                         </div>

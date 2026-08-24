@@ -83,6 +83,7 @@ export const NODE_FIELD_OWNERSHIP = {
     textPos: 'client',
     shortlistIndex: 'client',
     shortlistCycled: 'client',
+    shortlistSeenAll: 'client',
 } as const satisfies Record<keyof RecipeNode, FieldOwnership>;
 
 type NodeFieldOwnershipMap = typeof NODE_FIELD_OWNERSHIP;

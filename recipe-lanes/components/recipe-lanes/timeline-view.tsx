@@ -20,17 +20,15 @@
 import React, {
   useMemo, useState, useRef, useCallback, useEffect, useLayoutEffect, useTransition,
 } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { Play, Pause, RotateCcw, ZoomIn, ZoomOut, Maximize2, Undo2 } from 'lucide-react';
 import {
   buildTimelineLayout, TL,
   type TLNode, type TLEdge, type TLLane,
 } from '@/lib/recipe-lanes/timeline-layout';
 import {
-  getNodeIconUrlAt, getNodeIngredientName, getNodeIconId, getNodeShortlistKey, currentShortlistIndex,
+  getNodeIconUrlAt, currentShortlistIndex,
 } from '@/lib/recipe-lanes/model-utils';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
-import { forgeIconAction } from '@/app/actions';
 import type { RecipeGraph, RecipeNode } from '@/lib/recipe-lanes/types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -74,29 +72,22 @@ function spurPath(x1: number, y1: number, x2: number, y2: number): string {
   return `M ${x1} ${y1 + TL.NODE_R} L ${x2} ${y2 - TL.NODE_R}`;
 }
 
-// ── Node controls (↺ reroll, ⚒ forge, × delete) ───────────────────────────
-function NodeControls({ cx, cy, isForging, onReroll, onForge, onDelete }: {
-  cx: number; cy: number; isForging: boolean;
-  onReroll: (e: React.MouseEvent) => void;
-  onForge:  (e: React.MouseEvent) => void;
+// ── Node controls (✎ edit icon, × delete) ─────────────────────────────────
+function NodeControls({ cx, cy, onEditIcon, onDelete }: {
+  cx: number; cy: number;
+  onEditIcon: (e: React.MouseEvent) => void;
   onDelete: (e: React.MouseEvent) => void;
 }) {
   const y = cy - TL.NODE_R;
   return (
     <g onMouseDown={e => e.stopPropagation()}>
-      <g onClick={onReroll} style={{ cursor: 'pointer' }}>
-        <circle cx={cx - 18} cy={y} r={8} fill="#3b82f6" stroke="white" strokeWidth={1.5}/>
-        <text x={cx - 18} y={y} textAnchor="middle" dominantBaseline="middle" fontSize={11} fill="white">↺</text>
-      </g>
-      <g onClick={onForge} style={{ cursor: isForging ? 'not-allowed' : 'pointer' }}>
-        <circle cx={cx} cy={y} r={8} fill={isForging ? '#f59e0b' : '#92400e'} stroke="white" strokeWidth={1.5}/>
-        <text x={cx} y={y} textAnchor="middle" dominantBaseline="middle" fontSize={10} fill="white">
-          {isForging ? '…' : '⚒'}
-        </text>
+      <g onClick={onEditIcon} style={{ cursor: 'pointer' }} data-testid="node-edit-icon">
+        <circle cx={cx - 12} cy={y} r={8} fill="#3b82f6" stroke="white" strokeWidth={1.5}/>
+        <text x={cx - 12} y={y} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill="white">✎</text>
       </g>
       <g onClick={onDelete} style={{ cursor: 'pointer' }} data-testid="node-delete">
-        <circle cx={cx + 18} cy={y} r={8} fill="#ef4444" stroke="white" strokeWidth={1.5}/>
-        <text x={cx + 18} y={y} textAnchor="middle" dominantBaseline="middle" fontSize={11} fill="white">×</text>
+        <circle cx={cx + 12} cy={y} r={8} fill="#ef4444" stroke="white" strokeWidth={1.5}/>
+        <text x={cx + 12} y={y} textAnchor="middle" dominantBaseline="middle" fontSize={11} fill="white">×</text>
       </g>
     </g>
   );
@@ -106,17 +97,16 @@ function NodeControls({ cx, cy, isForging, onReroll, onForge, onDelete }: {
 interface NodeProps {
   node: TLNode; cx: number; cy: number;
   lineColor: string; playbackMin: number | null;
-  isHovered: boolean; isSelected: boolean; isForging: boolean;
+  isHovered: boolean; isSelected: boolean;
   onMouseDown:  (e: React.MouseEvent) => void;
   onMouseEnter: () => void; onMouseLeave: () => void;
-  onReroll: (e: React.MouseEvent) => void;
-  onForge:  (e: React.MouseEvent) => void;
+  onEditIcon: (e: React.MouseEvent) => void;
   onDelete: () => void;
 }
 
 // ── Action node ───────────────────────────────────────────────────────────────
-function ActionNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSelected, isForging,
-  onMouseDown, onMouseEnter, onMouseLeave, onReroll, onForge, onDelete }: NodeProps) {
+function ActionNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSelected,
+  onMouseDown, onMouseEnter, onMouseLeave, onEditIcon, onDelete }: NodeProps) {
   const { data } = node;
   const iconUrl = getNodeIconUrlAt(data, Math.max(0, currentShortlistIndex(data)));
   const clipId  = `tl-a-${node.id.replace(/\W/g, '')}`;
@@ -160,8 +150,8 @@ function ActionNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSelecte
         </text>
       )}
       {isHovered && (
-        <NodeControls cx={cx} cy={cy} isForging={isForging}
-          onReroll={onReroll} onForge={onForge}
+        <NodeControls cx={cx} cy={cy}
+          onEditIcon={onEditIcon}
           onDelete={e => { e.stopPropagation(); onDelete(); }}/>
       )}
     </g>
@@ -169,8 +159,8 @@ function ActionNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSelecte
 }
 
 // ── Ingredient node ───────────────────────────────────────────────────────────
-function IngredientNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSelected, isForging,
-  onMouseDown, onMouseEnter, onMouseLeave, onReroll, onForge, onDelete }: NodeProps) {
+function IngredientNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSelected,
+  onMouseDown, onMouseEnter, onMouseLeave, onEditIcon, onDelete }: NodeProps) {
   const { data } = node;
   const iconUrl = getNodeIconUrlAt(data, Math.max(0, currentShortlistIndex(data)));
   const clipId  = `tl-i-${node.id.replace(/\W/g, '')}`;
@@ -200,8 +190,8 @@ function IngredientNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSel
         textAnchor="middle" fontSize={8} fill="#52525b"
         fontFamily="ui-sans-serif, system-ui, sans-serif">{data.text}</text>
       {isHovered && (
-        <NodeControls cx={cx} cy={cy} isForging={isForging}
-          onReroll={onReroll} onForge={onForge}
+        <NodeControls cx={cx} cy={cy}
+          onEditIcon={onEditIcon}
           onDelete={e => { e.stopPropagation(); onDelete(); }}/>
       )}
     </g>
@@ -210,9 +200,7 @@ function IngredientNode({ node, cx, cy, lineColor, playbackMin, isHovered, isSel
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (graph: RecipeGraph) => void }) {
-  const searchParams   = useSearchParams();
-  const recipeId       = searchParams.get('id');
-  const cycleShortlist      = useRecipeStore(s => s.cycleShortlist);
+  const openIconEditor      = useRecipeStore(s => s.openIconEditor);
   const deleteNodeWithUndo  = useRecipeStore(s => s.deleteNodeWithUndo);
   const commitNodePositions = useRecipeStore(s => s.commitNodePositions);
 
@@ -250,44 +238,6 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
   // replacing the old local stack's unmarkNodesDeleted dance.
   const undo    = useRecipeStore(s => s.undo);
   const canUndo = useRecipeStore(s => s.undoPast.length > 0);
-
-  // ── Forge state ───────────────────────────────────────────────────────────
-  const [forgingIds, setForgingIds]   = useState<Set<string>>(new Set());
-  const forgingIdsRef                 = useRef(forgingIds);
-  const prevShortlistKeysRef          = useRef<Map<string, string>>(new Map());
-  useEffect(() => { forgingIdsRef.current = forgingIds; }, [forgingIds]);
-
-  // Clear forge when shortlist key changes (forge result arrived)
-  useEffect(() => {
-    const curr = forgingIdsRef.current;
-    if (!curr.size) return;
-    const toRemove: string[] = [];
-    for (const id of curr) {
-      const node   = graph.nodes.find(n => n.id === id);
-      const prev   = prevShortlistKeysRef.current.get(id);
-      const newKey = node ? getNodeShortlistKey(node) : 'gone';
-      if (prev !== undefined && prev !== newKey) toRemove.push(id);
-      if (node) prevShortlistKeysRef.current.set(id, newKey);
-    }
-    if (toRemove.length) {
-      queueMicrotask(() => {
-        setForgingIds(p => { const n = new Set(p); toRemove.forEach(id => n.delete(id)); return n; });
-      });
-    }
-  }, [graph.nodes]); // intentionally excludes forgingIds
-
-  const handleForge = useCallback(async (nodeId: string, data: RecipeNode) => {
-    if (forgingIdsRef.current.has(nodeId)) return;
-    prevShortlistKeysRef.current.set(nodeId, getNodeShortlistKey(data));
-    setForgingIds(p => new Set([...p, nodeId]));
-    try {
-      const res = await forgeIconAction(recipeId ?? '', getNodeIngredientName(data), getNodeIconId(data) ?? '');
-      if (res && !res.success)
-        setForgingIds(p => { const n = new Set(p); n.delete(nodeId); return n; });
-    } catch {
-      setForgingIds(p => { const n = new Set(p); n.delete(nodeId); return n; });
-    }
-  }, [recipeId]);
 
   // ── Selection ─────────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -700,12 +650,10 @@ export function TimelineView({ graph, onSave }: { graph: RecipeGraph, onSave?: (
                 node, cx: pos.cx, cy: pos.cy, lineColor: color, playbackMin,
                 isHovered:  hoveredNodeId === node.id,
                 isSelected: selectedIds.has(node.id),
-                isForging:  forgingIds.has(node.id),
                 onMouseDown:  e => onNodeMouseDown(e, node),
                 onMouseEnter: () => setHoveredNodeId(node.id),
                 onMouseLeave: () => setHoveredNodeId(id => id === node.id ? null : id),
-                onReroll: e => { e.stopPropagation(); cycleShortlist(node.id); },
-                onForge:  e => { e.stopPropagation(); handleForge(node.id, node.data); },
+                onEditIcon: e => { e.stopPropagation(); openIconEditor(node.id); },
                 onDelete: () => deleteNode(node.id),
               };
               return node.kind === 'ingredient'

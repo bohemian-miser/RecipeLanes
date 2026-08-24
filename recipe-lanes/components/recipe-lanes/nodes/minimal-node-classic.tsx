@@ -17,15 +17,13 @@
 
 import React from 'react';
 import { Handle, Position } from 'reactflow';
-import { RefreshCw, X, Hammer } from 'lucide-react';
+import { Pencil, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { getNodeIngredientName, getNodeIconStatus } from '../../../lib/recipe-lanes/model-utils';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
     selected?: boolean;
-    isRerolling: boolean;
-    isForging: boolean;
     /** Whether the cook has ticked this step off (#281). */
     isCompleted?: boolean;
     isPivotMode: boolean;
@@ -34,8 +32,7 @@ interface MinimalNodeViewProps {
     /** Whether the current shortlist entry was resolved via search rather than generation. */
     isSearchMatched: boolean;
     handlers: {
-        onReroll: (e: React.MouseEvent) => void;
-        onForge: (e: React.MouseEvent) => void;
+        onEditIcon: (e: React.MouseEvent) => void;
         onDelete: (e: React.MouseEvent) => void;
         onToggleCompleted: (e: React.MouseEvent) => void;
         onPointerDownCapture: (e: React.PointerEvent) => void;
@@ -46,7 +43,7 @@ interface MinimalNodeViewProps {
 }
 
 export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
-    data, selected, isRerolling, isForging, isCompleted, isPivotMode, iconUrl, isSearchMatched, handlers
+    data, selected, isCompleted, isPivotMode, iconUrl, isSearchMatched, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
     const textPos = data.textPos || 'bottom';
@@ -107,7 +104,7 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                     <img
                         src={iconUrl}
                         alt=""
-                        className={`${imageSize} object-contain drop-shadow-md mix-blend-multiply ${isRerolling ? 'opacity-50' : ''}`}
+                        className={`${imageSize} object-contain drop-shadow-md mix-blend-multiply`}
                         style={{ imageRendering: 'pixelated', ...(isCompleted ? { opacity: 0.45 } : {}) }}
                     />
                 ) : (
@@ -121,24 +118,14 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
                     )
                 )}
                 
-                {/* Reroll Button */}
+                {/* Edit Icon Button — opens the icon editor modal (shortlist + generate). */}
                 <button
-                    onClick={handlers.onReroll}
-                    disabled={isRerolling || isForging}
-                    className={`nodrag absolute -top-2 -right-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-blue-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isRerolling ? '!opacity-100 block cursor-not-allowed' : ''}`}
-                    title="Cycle shortlist"
+                    onClick={handlers.onEditIcon}
+                    className="nodrag absolute -top-2 -right-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-blue-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                    title="Edit icon"
+                    data-testid="node-edit-icon"
                 >
-                    <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin text-blue-500' : ''}`} />
-                </button>
-
-                {/* Forge Button */}
-                <button
-                    onClick={handlers.onForge}
-                    disabled={isRerolling || isForging}
-                    className={`nodrag absolute -bottom-2 -right-2 bg-zinc-100 rounded-full p-1 shadow-md border border-zinc-200 text-zinc-500 hover:text-amber-500 transition-all z-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${isForging ? '!opacity-100 block cursor-not-allowed' : ''}`}
-                    title="Forge new icon"
-                >
-                    <Hammer className={`w-3 h-3 ${isForging ? 'text-amber-500' : ''}`} />
+                    <Pencil className="w-3 h-3" />
                 </button>
 
                 {/* Delete Button */}

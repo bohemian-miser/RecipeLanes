@@ -81,3 +81,16 @@ export function withIconQueueConfigDefaults(raw: any): IconQueueConfig {
 export function dayKey(d: Date = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
+
+// --- Icon credits ---------------------------------------------------------
+// Per-user spendable balance that gates icon generation (forge). Purchasing
+// credits comes later; for now every account receives a free starter grant,
+// applied lazily on first read (see lib/user-credits.ts).
+
+export const DB_COLLECTION_USER_CREDITS = 'user_credits';
+
+/** Credits granted to every account the first time its balance is read. */
+export const STARTER_ICON_CREDITS = 10;
+
+/** Credits one icon generation (forge) costs. */
+export const FORGE_CREDIT_COST = 1;

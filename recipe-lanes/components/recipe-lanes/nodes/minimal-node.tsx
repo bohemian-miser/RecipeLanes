@@ -16,17 +16,11 @@
  */
 
 import React, { memo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { MinimalNodeClassic } from './minimal-node-classic';
 import { MinimalNodeModern } from './minimal-node-modern';
 import { CLASSIC_CONTAINER, MODERN_CONTAINER, getLeafScaleOrigin } from '../../../lib/recipe-lanes/edge-anchors';
-import { forgeIconAction } from '@/app/actions';
 import {
-    getNodeIngredientName,
     getNodeTheme,
-    getNodeIconId,
-    getNodeShortlistLength,
-    getNodeShortlistKey,
     getNodeIconUrlAt,
     isIconSearchMatchedAt,
     currentShortlistIndex,
@@ -36,7 +30,6 @@ import { useRecipeStore } from '@/lib/stores/recipe-store';
 export const MinimalNode: React.FC<any> = ({
     data, selected, isConnectable, id, dragging
 }) => {
-  const [isForging, setIsForging] = useState(false);
   const [isPivotMode, setIsPivotMode] = useState(false);
   const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -52,14 +45,11 @@ export const MinimalNode: React.FC<any> = ({
           }
       }
   }, [dragging, data]);
-  const searchParams = useSearchParams();
-  const recipeId = searchParams.get('id');
-
   // Subscribe to this node in the recipe store.
-  // cycleShortlist writes shortlistIndex directly onto graph.nodes[i], so this
-  // selector re-renders only when this specific node changes.
+  // setShortlistIndex writes shortlistIndex directly onto graph.nodes[i], so
+  // this selector re-renders only when this specific node changes.
   const storeNode = useRecipeStore(s => s.graph?.nodes.find(n => n.id === id));
-  const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
+  const openIconEditor = useRecipeStore(s => s.openIconEditor);
   // Global "leaf node size" setting (#155): scale leaf nodes (no incoming edge).
   // `data.isLeaf` is computed once during layout in react-flow-diagram.
   const leafNodeScale = useRecipeStore(s => s.leafNodeScale);
@@ -72,20 +62,9 @@ export const MinimalNode: React.FC<any> = ({
   const node = storeNode ?? data;
   const iconTheme = getNodeTheme(data);
 
-  const shortlistKey = getNodeShortlistKey(node);
   const currentIndex = Math.max(0, currentShortlistIndex(node));
   const iconUrl = getNodeIconUrlAt(node, currentIndex);
   const isSearchMatched = isIconSearchMatchedAt(node, currentIndex);
-
-  // ---------------------------------------------------------------------------
-  // Forge state: cleared when a forge result arrives via Firestore snapshot,
-  // which causes mergeSnapshot to reset shortlistIndex and update the store node.
-  // ---------------------------------------------------------------------------
-  const [prevShortlistKey, setPrevShortlistKey] = useState(shortlistKey);
-  if (shortlistKey !== prevShortlistKey) {
-      setPrevShortlistKey(shortlistKey);
-      if (isForging) setIsForging(false);
-  }
 
   const touchStartPos = React.useRef<{x: number, y: number} | null>(null);
 
@@ -125,9 +104,9 @@ export const MinimalNode: React.FC<any> = ({
       if (data.onDelete) data.onDelete();
   };
 
-  const handleReroll = (e: React.MouseEvent) => {
+  const handleEditIcon = (e: React.MouseEvent) => {
       e.stopPropagation();
-      cycleShortlist(id);
+      openIconEditor(id);
   };
 
   const handleToggleCompleted = (e: React.MouseEvent) => {
@@ -135,28 +114,8 @@ export const MinimalNode: React.FC<any> = ({
       toggleNodeCompleted(id);
   };
 
-  const handleForge = async (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setIsForging(true);
-      const ingredientName = getNodeIngredientName(data);
-      console.log(`[Forge] node="${data.text}" ingredientName="${ingredientName}" recipeId="${recipeId}"`);
-      try {
-          const result = await forgeIconAction(recipeId || '', ingredientName, getNodeIconId(data) || '');
-          if (result && !result.success) {
-              console.error("Forge failed:", result.error);
-              useRecipeStore.getState().addMessage({ role: 'assistant', content: `Forge failed: ${result.error}` });
-              setIsForging(false);
-          }
-      } catch (err: any) {
-          console.error("Forge exception:", err);
-          useRecipeStore.getState().addMessage({ role: 'assistant', content: `Forge error: ${err?.message ?? err}` });
-          setIsForging(false);
-      }
-  };
-
   const handlers = {
-      onReroll: handleReroll,
-      onForge: handleForge,
+      onEditIcon: handleEditIcon,
       onDelete: handleDelete,
       onToggleCompleted: handleToggleCompleted,
       onPointerDownCapture: handlePointerDown,
@@ -166,8 +125,8 @@ export const MinimalNode: React.FC<any> = ({
   };
 
   const inner = (iconTheme === 'modern' || iconTheme === 'modern_clean')
-      ? <MinimalNodeModern data={data} selected={selected} isRerolling={false} isForging={isForging} isCompleted={isCompleted} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />
-      : <MinimalNodeClassic data={data} selected={selected} isRerolling={false} isForging={isForging} isCompleted={isCompleted} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
+      ? <MinimalNodeModern data={data} selected={selected} isCompleted={isCompleted} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />
+      : <MinimalNodeClassic data={data} selected={selected} isCompleted={isCompleted} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
 
   // Scale leaf nodes down when the global slider is below 100%. The transform
   // origin is pinned to the HANDLE point (top-center of the icon container) so

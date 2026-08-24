@@ -24,13 +24,14 @@ import { useAuth } from '@/components/auth-provider';
 import { LogoutButton } from '@/components/logout-button';
 import ReactFlowDiagram, { ReactFlowDiagramHandle } from '@/components/recipe-lanes/react-flow-diagram';
 import { ReactFlowProvider } from 'reactflow';
-import { createVisualRecipeAction, createVisualRecipeFromImageAction, adjustRecipeAction, saveRecipeAction, saveChatHistoryAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction, forgeIconAction } from '@/app/actions';
+import { createVisualRecipeAction, createVisualRecipeFromImageAction, adjustRecipeAction, saveRecipeAction, saveChatHistoryAction, checkExistingCopiesAction, debugLogAction, applyIconSearchResultsAction, forgeIconAction, getIconCreditsAction } from '@/app/actions';
 import { ChatPanel } from '@/components/recipe-lanes/chat-panel';
 import { MAX_RECIPE_INPUT_CHARS, MAX_ADJUST_INSTRUCTION_CHARS } from '@/lib/recipe-lanes/limits';
 import { buildRecipeEditInstruction } from '@/lib/recipe-lanes/recipe-edit-diff';
 import { iconSearchMethods, defaultIconSearchMethod, hydrateClientSide } from '@/lib/icon-search-registry';
 import { standardizeIngredientName, resolveBylineName } from '@/lib/utils';
 import { IngredientsSidebar } from '@/components/recipe-lanes/ui/ingredients-sidebar';
+import { IconShortlistModal, IconCreditsInfo } from '@/components/icon-shortlist-modal';
 import { TimelineView } from '@/components/recipe-lanes/timeline-view';
 import type { RecipeGraph, LayoutModeId, RecipeNode } from '@/lib/recipe-lanes/types';
 import { hasNodeIcon, preserveNodeShortlist, getNodeShortlistLength, getNodeIngredientName, getNodeHydeQueries, extractBatchIngredients, getNodeIcon, buildIngredientText } from '@/lib/recipe-lanes/model-utils';
@@ -64,7 +65,8 @@ function RecipeLanesContent() {
   const graph = useRecipeStore(s => s.graph);
   const ownerId = useRecipeStore(s => s.ownerId);
   const ownerName = useRecipeStore(s => s.ownerName);
-  const { mergeSnapshot, setGraph, setGraphWithUndo, undo, updateNode, cycleShortlist, reset: resetRecipeStore, addMessage, clearMessages } = useRecipeStore.getState();
+  const { mergeSnapshot, setGraph, setGraphWithUndo, undo, updateNode, reset: resetRecipeStore, addMessage, clearMessages, openIconEditor, closeIconEditor, setShortlistIndex } = useRecipeStore.getState();
+  const iconEditorNodeId = useRecipeStore(s => s.iconEditorNodeId);
   const canUndo = useRecipeStore(s => s.undoPast.length > 0);
   const messageCount = useRecipeStore(s => s.messages.length);
   
@@ -78,6 +80,8 @@ function RecipeLanesContent() {
   const [showJson, setShowJson] = useState(false);
   const [forgingIds, setForgingIds] = useState<Set<string>>(new Set());
   const [showIngredients, setShowIngredients] = useState(false);
+  // Icon-credit balance shown in the icon editor modal; null until loaded.
+  const [iconCredits, setIconCredits] = useState<IconCreditsInfo | null>(null);
   const [iconSearchStatus, setIconSearchStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [iconSearchMethodId, setIconSearchMethodId] = useState(defaultIconSearchMethod.id);
   const [iconSearchElapsed, setIconSearchElapsed] = useState<number | null>(null);
@@ -355,16 +359,20 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
   };
 
   const handleForgeIcon = async (node: RecipeNode) => {
-      // Reject the current icon and queue a brand-new AI icon. Server-side
-      // checkForgeAllowed enforces the rate limit / anon gate; we surface its error.
+      // Spend a credit and queue a brand-new AI icon. Server-side the action
+      // enforces sign-in, the credit balance, and the daily cap; we surface
+      // its error and keep the displayed balance in sync from the response.
       if (!recipeId) {
-          showNotification('Save the recipe first to forge icons.');
+          showNotification('Save the recipe first to generate icons.');
           return;
       }
       setForgingIds(prev => new Set(prev).add(node.id));
       try {
           const res = await forgeIconAction(recipeId, getNodeIngredientName(node), getNodeIcon(node)?.id);
-          showNotification(res?.success ? 'Forging a new icon…' : (res?.error || 'Forge failed.'));
+          showNotification(res?.success ? 'Generating a new icon…' : (res?.error || 'Icon generation failed.'));
+          if (typeof res?.creditsRemaining === 'number') {
+              setIconCredits({ signedIn: true, balance: res.creditsRemaining });
+          }
       } finally {
           setForgingIds(prev => {
               const next = new Set(prev);
@@ -373,6 +381,14 @@ const saveAndHandleFork = async (graphToSave: RecipeGraph) => {
           });
       }
   };
+
+  // Load the credit balance whenever the icon editor opens or auth changes.
+  useEffect(() => {
+      if (!iconEditorNodeId) return;
+      let cancelled = false;
+      getIconCreditsAction().then(res => { if (!cancelled) setIconCredits(res); });
+      return () => { cancelled = true; };
+  }, [iconEditorNodeId, user]);
 
   const handleToggleJson = () => {
       if (!showJson && diagramRef.current) {
@@ -1327,11 +1343,27 @@ const handleVisualize = async () => {
                     onClose={() => setShowIngredients(false)}
                     onUpdateServes={handleUpdateServes}
                     onEditNode={handleEditNode}
-                    onCycleShortlist={cycleShortlist}
-                    onForge={handleForgeIcon}
-                    forgingIds={forgingIds}
+                    onEditIcon={openIconEditor}
                 />
             )}
+
+            {/* Icon editor modal — opened from node/sidebar pencil buttons via the store. */}
+            {(() => {
+                if (!iconEditorNodeId || !graph) return null;
+                const editorNode = graph.nodes.find(n => n.id === iconEditorNodeId);
+                if (!editorNode) return null;
+                return (
+                    <IconShortlistModal
+                        node={editorNode}
+                        onClose={closeIconEditor}
+                        onSelect={(index) => setShortlistIndex(iconEditorNodeId, index)}
+                        onGenerate={() => handleForgeIcon(editorNode)}
+                        isGenerating={forgingIds.has(iconEditorNodeId)}
+                        credits={iconCredits}
+                        onSignIn={signIn}
+                    />
+                );
+            })()}
 
             <div className="flex-1 relative">
                 <LoadingScreen phase={loadingPhase} />

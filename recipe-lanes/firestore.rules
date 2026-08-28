@@ -20,7 +20,7 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
-    function isOwner(userId) {
+    function isUser(userId) {
       return signedIn() && request.auth.uid == userId;
     }
 
@@ -61,10 +61,10 @@ service cloud.firestore {
     // through server actions, so display names shown publicly (e.g. future
     // icon attribution) can never be forged by a client write.
     match /users/{userId} {
-      allow read: if isOwner(userId);
+      allow read: if isUser(userId);
 
       match /stars/{starId} {
-        allow read: if isOwner(userId);
+        allow read: if isUser(userId);
       }
     }
 

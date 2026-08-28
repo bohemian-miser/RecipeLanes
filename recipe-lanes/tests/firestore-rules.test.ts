@@ -168,3 +168,102 @@ describe('feedback', () => {
         await assertFails(asOwner().collection('feedback').add({ text: 'hi' }));
     });
 });
+
+// ---------------------------------------------------------------------------
+// Bypass attempts. The blocks above assert the intended contract; these model
+// an attacker actively working around it. Each one is a route that has bitten
+// real Firestore deployments: collection LIST queries (rules gate each doc, so
+// an unfiltered list of a gated collection must fail wholesale), forged custom
+// claims, nested paths under a deny-by-default collection (rules do NOT cascade
+// to subcollections — an unmatched nested path is only denied because nothing
+// grants it), batched/transactional writes smuggled alongside legitimate ones,
+// and malformed docs that make a rule expression error out.
+// ---------------------------------------------------------------------------
+
+describe('bypass attempts', () => {
+    it('cannot LIST a gated collection to harvest other users\' data', async () => {
+        // Per-doc rules do not make a collection listable: an unfiltered list of
+        // recipes would expose private ones, so the whole query must fail.
+        await assertFails(asStranger().collection('recipes').get());
+        await assertFails(asAnon().collection('recipes').get());
+        // Nor can the query be aimed at someone else's private recipes.
+        await assertFails(
+            asStranger().collection('recipes').where('ownerId', '==', OWNER).get()
+        );
+        // A query constrained to what the rules allow does succeed.
+        await assertSucceeds(
+            asAnon().collection('recipes').where('visibility', '==', 'public').get()
+        );
+    });
+
+    it('cannot LIST users, user_credits, or icon_forge_usage', async () => {
+        await assertFails(asOwner().collection('users').get());
+        await assertFails(asOwner().collection('user_credits').get());
+        await assertFails(asOwner().collection('icon_forge_usage').get());
+        await assertFails(asAnon().collection('users').get());
+    });
+
+    it('forged custom claims grant nothing', async () => {
+        // No rule consults custom claims, so a token minted with admin-ish
+        // claims must be exactly as powerless as a plain one.
+        const forged = env
+            .authenticatedContext(STRANGER, { admin: true, role: 'admin', credits: 9999 })
+            .firestore();
+        await assertFails(forged.doc(`user_credits/${OWNER}`).get());
+        await assertFails(forged.doc(`user_credits/${STRANGER}`).set({ balance: 9999 }));
+        await assertFails(forged.doc(`users/${OWNER}`).get());
+        await assertFails(forged.doc('recipes/private1').get());
+        await assertFails(forged.doc('icon_queue/Free Lunch').set({ status: 'pending' }));
+    });
+
+    it('nested paths under closed collections stay closed', async () => {
+        // Rules do not cascade into subcollections; these paths match no rule,
+        // so writing "around" the closed doc must still fail.
+        await assertFails(asOwner().doc(`user_credits/${OWNER}/ledger/entry1`).set({ amount: 9999 }));
+        await assertFails(asOwner().doc(`user_credits/${OWNER}/ledger/entry1`).get());
+        await assertFails(asOwner().doc('icon_queue/Carrot/attempts/1').set({ status: 'pending' }));
+        await assertFails(asOwner().doc(`users/${OWNER}/stars/s1/notes/n1`).set({ text: 'x' }));
+    });
+
+    it('batched and transactional writes cannot smuggle a denied write', async () => {
+        // A batch is atomic: pairing a denied write with anything else still
+        // fails, so this is not a route around the per-doc rules.
+        const db = asOwner();
+        const batch = db.batch();
+        batch.set(db.doc(`user_credits/${OWNER}`), { balance: 9999 });
+        batch.set(db.doc('feedback/sneaky'), { text: 'hi' });
+        await assertFails(batch.commit());
+
+        await assertFails(
+            db.runTransaction(async (t: any) => {
+                t.set(db.doc(`user_credits/${OWNER}`), { balance: 9999 });
+            })
+        );
+    });
+
+    it('credit fields cannot be nudged by a partial update or merge', async () => {
+        // set({merge:true}) and update() are writes like any other — the
+        // deny-by-default collection has no update path to exploit.
+        const db = asOwner();
+        await assertFails(db.doc(`user_credits/${OWNER}`).update({ balance: 9999 }));
+        await assertFails(db.doc(`user_credits/${OWNER}`).set({ balance: 9999 }, { merge: true }));
+        await assertFails(db.doc(`user_credits/${OWNER}`).delete());
+    });
+
+    it('a recipe missing its visibility field is not readable by a stranger', async () => {
+        // The visibility comparison errors on a doc without the field; a rule
+        // that errors denies, and must not fall through to the owner clause.
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('recipes/malformed1').set({ ownerId: OWNER });
+        });
+        await assertFails(asStranger().doc('recipes/malformed1').get());
+        await assertFails(asAnon().doc('recipes/malformed1').get());
+        await assertSucceeds(asOwner().doc('recipes/malformed1').get());
+    });
+
+    it('one user cannot read or write another user\'s profile or stars', async () => {
+        await assertFails(asStranger().doc(`users/${OWNER}/stars/s1`).get());
+        await assertFails(asStranger().doc(`users/${OWNER}`).set({ displayName: 'Pwned' }));
+        await assertFails(asStranger().doc(`users/${OWNER}/stars/s2`).set({ recipeId: 'x' }));
+    });
+});

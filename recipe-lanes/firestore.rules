@@ -54,7 +54,7 @@ service cloud.firestore {
     match /recipes/{recipeId} {
       allow read: if resource.data.visibility == 'public'
                   || resource.data.visibility == 'unlisted'
-                  || (signedIn() && request.auth.uid == resource.data.ownerId);
+                  || isUser(resource.data.ownerId);
     }
 
     // User profiles & stars: owner-read only. Profile updates and starring go

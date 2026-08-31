@@ -2,16 +2,21 @@ rules_version = '2';
 
 // RecipeLanes security rules.
 //
-// Architecture invariant: ALL writes go through server actions / Cloud
-// Functions using the Admin SDK (which bypasses these rules). No client code
-// writes Firestore directly, so no rule below grants `write` — a client write
-// anywhere is either a bug or an attack. This matters because credits (and
-// eventually money) hang off these collections: integrity lives server-side,
-// and these rules only decide what clients may READ.
+// HISTORY / WARNING (2026-08-31): PR #318 tightened these to "clients read,
+// backend writes" on the belief that every write goes through the Admin SDK.
+// That belief was wrong — removing the client write grants broke production
+// (feedback submission among other things). These rules are back to the
+// permissions that production is known to work with.
+//
+// Do NOT re-tighten a grant below without first proving, with a test that
+// exercises the real app flow through RULES-ENFORCED access, that nothing
+// needs it. tests/firestore-rules-app-flows.test.ts is that harness: it
+// replays each Firestore operation the app performs as an ordinary client and
+// asserts it still SUCCEEDS. Admin-SDK integration tests cannot catch this —
+// the Admin SDK bypasses rules entirely, so a rules regression looks green.
 //
 // Collections with no match block are deny-by-default on purpose:
 //   user_credits     — credit balances; Admin-SDK-only (see lib/user-credits.ts)
-//   credit_ledger    — (planned) append-only credit audit trail; Admin-SDK-only
 //   icon_forge_usage — per-user daily forge counters; Admin-SDK-only
 //   config           — runtime config (icon queue abuse controls); server-read
 service cloud.firestore {
@@ -41,33 +46,37 @@ service cloud.firestore {
       allow read: if true;
     }
 
-    // Icon generation queue: public read for the live queue monitor
-    // (components/queue-monitor.tsx). Writes are Admin-SDK-only — the queue
-    // gates credit spends, so a client write here would bypass the credit
-    // charge in forgeIconAction.
-    match /icon_queue/{ingredient} {
-      allow read: if true;
-    }
-
     // Recipes: visibility-gated read (public listing, unlisted link-sharing,
-    // owner access). Saves go through server actions only.
+    // owner access). Saves go through server actions.
     match /recipes/{recipeId} {
       allow read: if resource.data.visibility == 'public'
                   || resource.data.visibility == 'unlisted'
                   || isUser(resource.data.ownerId);
     }
 
-    // User profiles & stars: owner-read only. Profile updates and starring go
-    // through server actions, so display names shown publicly (e.g. future
-    // icon attribution) can never be forged by a client write.
+    // User profiles & stars: owner read AND write.
     match /users/{userId} {
-      allow read: if isUser(userId);
+      allow read, write: if isUser(userId);
 
       match /stars/{starId} {
-        allow read: if isUser(userId);
+        allow read, write: if isUser(userId);
       }
     }
 
-    // Feedback: submitted via a server action (data-service). No client access.
+    // Icon generation queue: public read (queue monitor) and public write.
+    //
+    // KNOWN GAP: the open write lets a client enqueue generation without the
+    // credit spend in forgeIconAction. Closing it is the goal, but #318 showed
+    // it cannot be closed blind — prove the app never writes here from a
+    // rules-enforced context first (app-flow harness above), then close it.
+    match /icon_queue/{ingredient} {
+      allow read, write: if true;
+    }
+
+    // Feedback: create-only, unauthenticated (the feedback modal must work for
+    // logged-out visitors). Removing this in #318 broke feedback in production.
+    match /feedback/{feedbackId} {
+      allow create: if true;
+    }
   }
 }

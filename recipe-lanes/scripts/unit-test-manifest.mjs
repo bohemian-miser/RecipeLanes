@@ -44,6 +44,7 @@ export const INTEGRATION_TESTS = [
   'anonymous-publish-integration.test.ts',
   'data-helpers-transaction.test.ts',
   'firestore-rules.test.ts',
+  'firestore-rules-app-flows.test.ts',
   'forge-gate-regression.test.ts',
   'functions-metadata.test.ts',
   'hybrid-integration.test.ts',

@@ -15,12 +15,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Security-rules contract tests (emulator-backed). The architecture invariant
-// is "clients read, backend writes": every Firestore write goes through the
-// Admin SDK, so firestore.rules must deny ALL client writes and gate reads per
-// collection. These tests pin that contract — especially for the collections
-// credits/money hang off (user_credits, icon_queue) — so a future rules edit
-// that re-opens a write path fails CI instead of shipping.
+// Security-rules contract tests (emulator-backed). These pin what the DEPLOYED
+// rules allow and deny, so an unintended widening fails CI.
+//
+// They are deliberately paired with tests/firestore-rules-app-flows.test.ts,
+// which pins the other direction: the operations the app REQUIRES must keep
+// working. #318 tightened rules with only this half of the coverage and broke
+// production — a deny-only suite happily goes green while the app dies.
 //
 // Uses its own emulator project id ("rules-spec") so loading rules here cannot
 // affect the shared "local-project-id" data other integration tests use.
@@ -76,6 +77,7 @@ before(async () => {
         await db.doc(`users/${OWNER}`).set({ displayName: 'Owner' });
         await db.doc(`users/${OWNER}/stars/s1`).set({ recipeId: 'public1' });
         await db.doc(`user_credits/${OWNER}`).set({ balance: 10, granted: 10, spent: 0 });
+        await db.doc('feedback/seeded1').set({ message: 'seeded', url: 'https://x' });
     });
 });
 
@@ -99,13 +101,14 @@ describe('public catalog collections', () => {
     });
 });
 
-describe('icon_queue (credit-gated pipeline)', () => {
-    it('clients cannot create, update, or delete queue docs', async () => {
-        // A client queue write would bypass the credit spend in forgeIconAction.
-        await assertFails(asAnon().doc('icon_queue/Free Lunch').set({ status: 'pending' }));
-        await assertFails(asOwner().doc('icon_queue/Free Lunch').set({ status: 'pending' }));
-        await assertFails(asOwner().doc('icon_queue/Carrot').update({ status: 'failed' }));
-        await assertFails(asOwner().doc('icon_queue/Carrot').delete());
+describe('icon_queue', () => {
+    // KNOWN GAP, pinned rather than asserted-away: queue writes are currently
+    // open, so a client could enqueue generation without spending a credit.
+    // This test documents the live behaviour; when the gap is closed (with the
+    // app-flow harness proving nothing needs it) flip these to assertFails.
+    it('queue writes are currently open to any client', async () => {
+        await assertSucceeds(asAnon().doc('icon_queue/Rules Probe Anon').set({ status: 'pending' }));
+        await assertSucceeds(asOwner().doc('icon_queue/Carrot').update({ status: 'pending' }));
     });
 });
 
@@ -138,11 +141,15 @@ describe('user profiles & stars', () => {
         await assertFails(asAnon().doc(`users/${OWNER}`).get());
     });
 
-    it('even the owner cannot write their profile from a client', async () => {
-        // Display names may be shown publicly (icon attribution); they must
-        // only change via server actions.
-        await assertFails(asOwner().doc(`users/${OWNER}`).set({ displayName: 'Spoofed' }));
-        await assertFails(asOwner().doc(`users/${OWNER}/stars/s2`).set({ recipeId: 'x' }));
+    it('the owner can write their own profile and stars', async () => {
+        await assertSucceeds(asOwner().doc(`users/${OWNER}`).set({ displayName: 'Owner' }, { merge: true }));
+        await assertSucceeds(asOwner().doc(`users/${OWNER}/stars/s2`).set({ recipeId: 'x' }));
+    });
+
+    it('nobody can write ANOTHER user\'s profile or stars', async () => {
+        await assertFails(asStranger().doc(`users/${OWNER}`).set({ displayName: 'Pwned' }));
+        await assertFails(asStranger().doc(`users/${OWNER}/stars/s3`).set({ recipeId: 'x' }));
+        await assertFails(asAnon().doc(`users/${OWNER}`).set({ displayName: 'Pwned' }));
     });
 });
 
@@ -163,9 +170,16 @@ describe('money-adjacent collections are fully closed', () => {
 });
 
 describe('feedback', () => {
-    it('clients cannot create feedback directly (server action only)', async () => {
-        await assertFails(asAnon().collection('feedback').add({ text: 'hi' }));
-        await assertFails(asOwner().collection('feedback').add({ text: 'hi' }));
+    it('anyone, signed in or not, can create feedback', async () => {
+        await assertSucceeds(asAnon().collection('feedback').add({ message: 'hi' }));
+        await assertSucceeds(asOwner().collection('feedback').add({ message: 'hi' }));
+    });
+
+    it('feedback is not readable, updatable, or deletable by clients', async () => {
+        await assertFails(asAnon().collection('feedback').get());
+        await assertFails(asOwner().doc('feedback/seeded1').get());
+        await assertFails(asOwner().doc('feedback/seeded1').update({ message: 'edited' }));
+        await assertFails(asOwner().doc('feedback/seeded1').delete());
     });
 });
 
@@ -213,7 +227,9 @@ describe('bypass attempts', () => {
         await assertFails(forged.doc(`user_credits/${STRANGER}`).set({ balance: 9999 }));
         await assertFails(forged.doc(`users/${OWNER}`).get());
         await assertFails(forged.doc('recipes/private1').get());
-        await assertFails(forged.doc('icon_queue/Free Lunch').set({ status: 'pending' }));
+        // NB: icon_queue writes are open to everyone right now (known gap), so
+        // there is nothing for a forged claim to gain there — see the
+        // 'icon_queue' suite above.
     });
 
     it('nested paths under closed collections stay closed', async () => {
@@ -231,7 +247,7 @@ describe('bypass attempts', () => {
         const db = asOwner();
         const batch = db.batch();
         batch.set(db.doc(`user_credits/${OWNER}`), { balance: 9999 });
-        batch.set(db.doc('feedback/sneaky'), { text: 'hi' });
+        batch.set(db.doc(`users/${OWNER}`), { displayName: 'Owner' });
         await assertFails(batch.commit());
 
         await assertFails(
@@ -264,6 +280,6 @@ describe('bypass attempts', () => {
     it('one user cannot read or write another user\'s profile or stars', async () => {
         await assertFails(asStranger().doc(`users/${OWNER}/stars/s1`).get());
         await assertFails(asStranger().doc(`users/${OWNER}`).set({ displayName: 'Pwned' }));
-        await assertFails(asStranger().doc(`users/${OWNER}/stars/s2`).set({ recipeId: 'x' }));
+        await assertFails(asStranger().doc(`users/${OWNER}/stars/sX`).set({ recipeId: 'x' }));
     });
 });

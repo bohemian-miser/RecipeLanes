@@ -1,9 +1,30 @@
 rules_version = '2';
 
+// RecipeLanes security rules.
+//
+// Architecture invariant: ALL writes go through server actions / Cloud
+// Functions using the Admin SDK (which bypasses these rules). No client code
+// writes Firestore directly, so no rule below grants `write` — a client write
+// anywhere is either a bug or an attack. This matters because credits (and
+// eventually money) hang off these collections: integrity lives server-side,
+// and these rules only decide what clients may READ.
+//
+// Collections with no match block are deny-by-default on purpose:
+//   user_credits     — credit balances; Admin-SDK-only (see lib/user-credits.ts)
+//   credit_ledger    — (planned) append-only credit audit trail; Admin-SDK-only
+//   icon_forge_usage — per-user daily forge counters; Admin-SDK-only
+//   config           — runtime config (icon queue abuse controls); server-read
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Ingredients & Icons: Public Read (needed for cache display)
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isUser(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    // ---- Public read-only catalog data (icons & ingredients) ----
     match /ingredients/{ingredientId} {
       allow read: if true;
       match /icons/{iconId} {
@@ -20,36 +41,33 @@ service cloud.firestore {
       allow read: if true;
     }
 
-    // Recipes
-    match /recipes/{recipeId} {
-      // Allow read if public, unlisted (link sharing), or owned by user
-      allow read: if resource.data.visibility == 'public' 
-                  || resource.data.visibility == 'unlisted'
-                  || (request.auth != null && request.auth.uid == resource.data.ownerId);
+    // Icon generation queue: public read for the live queue monitor
+    // (components/queue-monitor.tsx). Writes are Admin-SDK-only — the queue
+    // gates credit spends, so a client write here would bypass the credit
+    // charge in forgeIconAction.
+    match /icon_queue/{ingredient} {
+      allow read: if true;
     }
-    
-    // User Profiles & Stars
+
+    // Recipes: visibility-gated read (public listing, unlisted link-sharing,
+    // owner access). Saves go through server actions only.
+    match /recipes/{recipeId} {
+      allow read: if resource.data.visibility == 'public'
+                  || resource.data.visibility == 'unlisted'
+                  || isUser(resource.data.ownerId);
+    }
+
+    // User profiles & stars: owner-read only. Profile updates and starring go
+    // through server actions, so display names shown publicly (e.g. future
+    // icon attribution) can never be forged by a client write.
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      
+      allow read: if isUser(userId);
+
       match /stars/{starId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read: if isUser(userId);
       }
     }
 
-    // Icon Generation Queue: Public Read (for monitor)
-    match /icon_queue/{ingredient} {
-      allow read, write: if true;
-    }
-
-    // Feedback
-    match /feedback/{feedbackId} {
-      allow create: if true;
-    }
-
-    // Icon credits (user_credits) are Admin-SDK-only, like icon_forge_usage:
-    // no rules block = default deny. Do NOT move balances onto users/{uid} —
-    // that doc is owner-writable, so a balance there would be self-editable.
-    // Reads go through the getIconCreditsAction server action instead.
+    // Feedback: submitted via a server action (data-service). No client access.
   }
 }

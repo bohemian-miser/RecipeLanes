@@ -166,6 +166,103 @@ describe('Layer A — buildGraphForSave', () => {
 });
 
 // ============================================================
+// LAYER A (issue #222) — buildGraphForSave must UNION, not intersect,
+// store nodes with rendered RF nodes, so an unrendered node isn't dropped.
+// ============================================================
+
+describe('Layer A (#222) — buildGraphForSave unions store nodes with rendered nodes', () => {
+
+    it('[A5] a store node absent from rfNodes survives, keeping its original x/y/inputs', () => {
+        const graph = makeGraph({
+            nodes: [
+                makeNode('n1', 0, 0),
+                { ...makeNode('n2', 100, 0), inputs: ['n1'] },
+                { ...makeNode('n3', 200, 0), inputs: ['n2'] }, // not rendered
+            ],
+        });
+
+        // Only n1 and n2 are currently mounted in ReactFlow; n3 is missing.
+        const result = buildGraphForSave(
+            graph,
+            'dagre',
+            [rfNode('n1', 10, 20), rfNode('n2', 30, 40)],
+            [{ source: 'n1', target: 'n2' }],
+        );
+
+        const n3 = result.nodes.find(n => n.id === 'n3');
+        assert.ok(n3, 'unrendered node n3 must survive in the saved graph');
+        assert.equal(n3?.x, 200, 'unrendered node keeps its original x');
+        assert.equal(n3?.y, 0, 'unrendered node keeps its original y');
+        assert.deepStrictEqual(n3?.inputs, ['n2'], 'unrendered node keeps its original inputs, not rfEdges-derived');
+    });
+
+    it('[A6] a rendered node still gets its RF position and rfEdges-derived inputs', () => {
+        const graph = makeGraph({
+            nodes: [
+                makeNode('n1', 0, 0),
+                { ...makeNode('n2', 100, 0), inputs: [] },
+                makeNode('n3', 200, 0),
+            ],
+        });
+
+        const result = buildGraphForSave(
+            graph,
+            'dagre',
+            [rfNode('n1', 10, 20), rfNode('n2', 30, 40)],
+            [{ source: 'n1', target: 'n2' }],
+        );
+
+        const n2 = result.nodes.find(n => n.id === 'n2');
+        assert.equal(n2?.x, 30, 'rendered node gets its RF x');
+        assert.equal(n2?.y, 40, 'rendered node gets its RF y');
+        assert.deepStrictEqual(n2?.inputs, ['n1'], 'rendered node inputs derived from rfEdges');
+    });
+
+    it('[A7] layouts[mode] contains ONLY the rendered nodes, not the unrendered one', () => {
+        const graph = makeGraph({
+            nodes: [makeNode('n1', 0, 0), makeNode('n2', 100, 0), makeNode('n3', 200, 0)],
+        });
+
+        const result = buildGraphForSave(
+            graph,
+            'dagre',
+            [rfNode('n1', 10, 20), rfNode('n2', 30, 40)],
+            [],
+        );
+
+        assert.deepStrictEqual(
+            result.layouts?.['dagre'],
+            [{ id: 'n1', x: 10, y: 20 }, { id: 'n2', x: 30, y: 40 }],
+            'layouts[mode] must only hold rendered nodes',
+        );
+        assert.ok(
+            !result.layouts?.['dagre'].some(l => l.id === 'n3'),
+            'unrendered node n3 must NOT appear in layouts[mode]',
+        );
+    });
+
+    it('[A8] node ordering in the result matches graph.nodes ordering', () => {
+        const graph = makeGraph({
+            nodes: [makeNode('n1', 0, 0), makeNode('n2', 100, 0), makeNode('n3', 200, 0)],
+        });
+
+        // n2 is unrendered this time — order must still follow graph.nodes.
+        const result = buildGraphForSave(
+            graph,
+            'dagre',
+            [rfNode('n1', 10, 20), rfNode('n3', 30, 40)],
+            [],
+        );
+
+        assert.deepStrictEqual(
+            result.nodes.map(n => n.id),
+            ['n1', 'n2', 'n3'],
+            'result.nodes ordering must match graph.nodes ordering',
+        );
+    });
+});
+
+// ============================================================
 // LAYER B — saveRecipeAction → getRecipe roundtrip
 // ============================================================
 

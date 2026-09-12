@@ -41,15 +41,16 @@ export function buildGraphForSave(
     const layouts = { ...(graph.layouts || {}) };
     layouts[mode] = currentNodes.map((n: any) => ({ id: n.id, x: n.position.x, y: n.position.y }));
 
-    const nodesWithPos = graph.nodes
-        .filter(n => currentNodes.some((rn: any) => rn.id === n.id))
-        .map(n => {
-            const rfn = currentNodes.find((rn: any) => rn.id === n.id)!;
-            const inputs = rfEdges
-                .filter((e: any) => e.target === n.id)
-                .map((e: any) => e.source);
-            return { ...n, x: rfn.position.x, y: rfn.position.y, inputs };
-        });
+    // Union, not intersect: a store node not currently rendered (in-flight
+    // adjust, not yet mounted) must survive the save unchanged, not be dropped.
+    const nodesWithPos = graph.nodes.map(n => {
+        const rfn = currentNodes.find((rn: any) => rn.id === n.id);
+        if (!rfn) return n;
+        const inputs = rfEdges
+            .filter((e: any) => e.target === n.id)
+            .map((e: any) => e.source);
+        return { ...n, x: rfn.position.x, y: rfn.position.y, inputs };
+    });
 
     return { ...graph, nodes: nodesWithPos, layouts, layoutMode: mode };
 }

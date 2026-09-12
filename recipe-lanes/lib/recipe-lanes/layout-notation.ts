@@ -332,11 +332,10 @@ export function calculateNotationLayout(graph: RecipeGraph): NotationLayoutGraph
   // ── Catch-all sweep: EVERY graph node must be placed exactly once ────────
   // The passes above cover actions and ingredient leaves, but an ingredient
   // node with in-degree > 0 (possible via applyPatch / hand-edited JSON) is
-  // neither — and a node missing from the layout doesn't just fail to render:
-  // buildGraphForSave intersects graph.nodes with the rendered RF nodes, so
-  // saving in Notation mode would PERMANENTLY DELETE it from the recipe.
-  // This sweep makes "every node appears exactly once" unconditional, no
-  // matter how the placement passes above evolve.
+  // neither, and would silently fail to render. (It is no longer at risk of
+  // being deleted on save — buildGraphForSave unions rather than intersects
+  // since #222 — but it must still be placed.) This sweep makes "every node
+  // appears exactly once" unconditional as the passes above evolve.
   for (const node of graph.nodes) {
     if (placedIds.has(node.id)) continue;
     placedIds.add(node.id);

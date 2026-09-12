@@ -60,6 +60,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@playwright/test": "^1.57.0",
     "@tailwindcss/postcss": "^4",
     "@types/jpeg-js": "^0.3.7",

@@ -28,6 +28,7 @@ import { assertInputWithinLimit, assertGraphWithinLimit, assertImageWithinLimit,
 import type { RecipeGraph, IconStats, FastMatch, RecipePatch } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
 import { hashClaimToken } from '@/lib/recipe-lanes/claim-token';
+import { toComparisonRecipe, canViewRecipeForComparison, MAX_COMPARISON_RECIPES, type ComparisonRecipe } from '@/lib/recipe-lanes/comparison-table';
 import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon, extractBatchIngredients, getNodeIngredientName, applyPatch, assignNodeShortlist } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
@@ -40,6 +41,8 @@ import { FORGE_CREDIT_COST, STARTER_ICON_CREDITS } from '@/lib/config';
 // Input Validation Schemas
 const IngredientSchema = z.string().min(1).max(100);
 const SeenUrlsSchema = z.array(z.string().url()).default([]);
+// Compare table: bounded so one request cannot fan out into an unbounded read.
+const ComparisonIdsSchema = z.array(z.string().min(1).max(200)).max(MAX_COMPARISON_RECIPES);
 /* New code */
 
 // --- Cloud Functions ---
@@ -673,6 +676,39 @@ export async function checkExistingCopiesAction(originalId: string): Promise<{ c
         return { copies };
     } catch (e: any) {
         return { copies: [], error: e.message };
+    }
+}
+
+/**
+ * Gallery "Compare" table: loads the ingredient lines of several recipes at
+ * once, already reduced to the slim shape the comparison table renders
+ * (`ComparisonRecipe`) so icon shortlists never cross the wire. Login is
+ * required (the feature is signed-in only) and each recipe is gated the same
+ * way the Firestore read rule gates the editor: public/unlisted, or owned by
+ * the caller. Recipes the caller may not see are silently dropped rather than
+ * failing the whole request.
+ */
+export async function getComparisonRecipesAction(recipeIds: string[]): Promise<{ recipes: ComparisonRecipe[]; error?: string }> {
+    try {
+        const session = await getAuthService().verifyAuth();
+        if (!session) return { recipes: [], error: 'Login required' };
+
+        const ids = ComparisonIdsSchema.parse(recipeIds);
+        const service = getDataService();
+        const loaded = await Promise.all(ids.map(async (id) => {
+            try {
+                const rec = await service.getRecipe(id);
+                if (!rec || !canViewRecipeForComparison(rec, session.uid)) return null;
+                return toComparisonRecipe(id, rec.graph.title, rec.graph);
+            } catch (e: any) {
+                // One unreadable id (deleted, malformed path) must not fail the whole batch.
+                console.warn('[getComparisonRecipesAction] skipping', id, e?.message);
+                return null;
+            }
+        }));
+        return { recipes: loaded.filter((r): r is ComparisonRecipe => r !== null) };
+    } catch (e: any) {
+        return { recipes: [], error: e.message };
     }
 }
 

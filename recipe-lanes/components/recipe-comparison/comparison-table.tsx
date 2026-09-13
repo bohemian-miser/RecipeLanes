@@ -188,11 +188,16 @@ export function RecipeComparisonTable() {
                 </div>
             )}
 
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse" data-testid="recipe-comparison-table">
-                    <thead>
-                        <tr className="bg-zinc-950/40">
-                            <th scope="col" className="sticky left-0 z-10 bg-zinc-900 text-left text-[10px] uppercase tracking-wider text-zinc-500 font-mono px-3 py-2 border-b border-r border-zinc-800 min-w-[12rem]">
+            {/* The table scrolls inside its own box (both axes) so the recipe
+                header row floats above the ingredient rows and the ingredient
+                column floats beside the cells, however long the list gets.
+                A page-level sticky header is impossible here: the horizontal
+                overflow wrapper is the nearest scroll container. */}
+            <div className="overflow-auto max-h-[min(70vh,44rem)] overscroll-contain">
+                <table className="w-full text-sm border-separate border-spacing-0" data-testid="recipe-comparison-table">
+                    <thead className="sticky top-0 z-20" data-testid="comparison-header">
+                        <tr>
+                            <th scope="col" className="sticky left-0 z-30 bg-zinc-900 text-left text-[10px] uppercase tracking-wider text-zinc-500 font-mono px-3 py-2 border-b border-r border-zinc-700 min-w-[12rem] align-bottom">
                                 Ingredient
                             </th>
                             {selectedIds.map((id, index) => {
@@ -208,8 +213,8 @@ export function RecipeComparisonTable() {
                                         onDragOver={onDragOver('col', index)}
                                         onDrop={onDrop('col', index)}
                                         onDragEnd={onDragEnd}
-                                        className={`align-top px-2 py-2 border-b border-zinc-800 min-w-[7rem] max-w-[10rem] font-normal transition-colors cursor-grab active:cursor-grabbing
-                                            ${isOver('col', index) ? 'bg-yellow-500/10 outline outline-1 outline-yellow-500/50' : ''}
+                                        className={`align-top px-2 py-2 border-b border-zinc-700 min-w-[7rem] max-w-[10rem] font-normal transition-colors cursor-grab active:cursor-grabbing
+                                            ${isOver('col', index) ? 'bg-yellow-500/15 outline outline-1 outline-yellow-500/50' : 'bg-zinc-900'}
                                             ${isDragging('col', index) ? 'opacity-40' : ''}`}
                                     >
                                         <div className="flex flex-col items-center gap-1.5">
@@ -251,8 +256,8 @@ export function RecipeComparisonTable() {
                                     </th>
                                 );
                             })}
-                            <th scope="col" className="text-right text-[10px] uppercase tracking-wider text-yellow-500/80 font-mono px-3 py-2 border-b border-l border-zinc-800 bg-yellow-500/5 min-w-[5rem] align-bottom">
-                                Total
+                            <th scope="col" className="text-right text-[10px] uppercase tracking-wider text-yellow-500/80 font-mono px-3 py-2 border-b border-l border-zinc-700 bg-zinc-900 min-w-[5rem] align-bottom">
+                                <span className="inline-block rounded bg-yellow-500/10 px-1.5 py-0.5">Total</span>
                             </th>
                         </tr>
                     </thead>
@@ -267,11 +272,15 @@ export function RecipeComparisonTable() {
                                 onDragOver={onDragOver('row', index)}
                                 onDrop={onDrop('row', index)}
                                 onDragEnd={onDragEnd}
-                                className={`group/row border-b border-zinc-800/60 transition-colors hover:bg-zinc-800/30
+                                className={`group/row transition-colors hover:bg-zinc-800/30
                                     ${isOver('row', index) ? 'bg-yellow-500/10 outline outline-1 outline-yellow-500/50' : ''}
                                     ${isDragging('row', index) ? 'opacity-40' : ''}`}
                             >
-                                <th scope="row" className="sticky left-0 z-10 bg-zinc-900 font-normal text-left px-2 py-1.5 border-r border-zinc-800">
+                                <th
+                                    scope="row"
+                                    className="sticky left-0 z-10 bg-zinc-900 font-normal text-left px-2 py-1.5 border-b border-r border-zinc-800/60"
+                                    title={row.sources.length ? `From: ${row.sources.join(' · ')}` : undefined}
+                                >
                                     <div className="flex items-center gap-2">
                                         <button
                                             type="button"
@@ -296,14 +305,14 @@ export function RecipeComparisonTable() {
                                 {selectedIds.map(id => (
                                     <td
                                         key={id}
-                                        className={`px-2 py-1.5 text-center font-mono tabular-nums ${row.cells[id] ? 'text-zinc-200' : 'text-zinc-700'}`}
+                                        className={`px-2 py-1.5 text-center font-mono tabular-nums border-b border-zinc-800/60 ${row.cells[id] ? 'text-zinc-200' : 'text-zinc-700'}`}
                                         title={row.cells[id]?.unquantified ? 'Listed without a quantity' : undefined}
                                     >
                                         {loaded[id] ? cellText(row.cells[id]) : ''}
                                     </td>
                                 ))}
                                 <td
-                                    className="px-3 py-1.5 text-right font-mono tabular-nums text-yellow-400 bg-yellow-500/5 border-l border-zinc-800"
+                                    className="px-3 py-1.5 text-right font-mono tabular-nums text-yellow-400 bg-yellow-500/5 border-b border-l border-zinc-800/60"
                                     data-testid="comparison-total"
                                     title={row.totalIsPartial ? 'Some recipes list this ingredient without a quantity' : undefined}
                                 >

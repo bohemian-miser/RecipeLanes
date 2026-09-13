@@ -32,10 +32,12 @@ import { standardizeIngredientName } from '../utils';
 
 /** One ingredient line from one recipe, already scaled to the recipe's current serves. */
 export interface ComparisonIngredient {
-    /** Row identity shared across recipes: standardized ingredient name + unit. */
+    /** Row identity shared across recipes: the standardized label + unit. */
     key: string;
     /** Human label (canonical name when the parser produced one, else the ingredient name). */
     label: string;
+    /** The recipe line the row came from (e.g. "1 rack of lamb"), for tooltips. */
+    text?: string;
     /** Normalised unit ('' when the ingredient is counted by piece or has no unit). */
     unit: string;
     iconUrl?: string;
@@ -65,6 +67,8 @@ export interface ComparisonRow {
     iconUrl?: string;
     /** Keyed by recipe id; absent when the recipe does not use the ingredient. */
     cells: Record<string, ComparisonCell>;
+    /** Distinct source lines behind this row, across recipes (tooltip). */
+    sources: string[];
     /** Sum of every numeric cell quantity. */
     total: number;
     /** True when some recipe lists the ingredient without a number, so `total` is a lower bound. */
@@ -99,12 +103,17 @@ export function normalizeUnit(unit: string | undefined): string {
 
 /**
  * Builds the row key for an ingredient. Two lines from different recipes land
- * on the same row iff they name the same ingredient (after the app's standard
+ * on the same row iff they carry the same label (after the app's standard
  * name normalisation) in the same unit — summing "2 cup flour" with "200 g
  * flour" would be meaningless, so units split rows.
+ *
+ * The key is derived from the *displayed* label, not from the node's icon
+ * description: the icon description is a per-recipe art prompt ("Salt
+ * shaker" vs "Sea salt") and keying on it produced two rows that both read
+ * "Salt · tsp". Whatever the user sees as one label is one row.
  */
-export function ingredientRowKey(ingredientName: string, unit: string | undefined): string {
-    return `${standardizeIngredientName(ingredientName).toLowerCase()}|${normalizeUnit(unit)}`;
+export function ingredientRowKey(label: string, unit: string | undefined): string {
+    return `${standardizeIngredientName(label).toLowerCase()}|${normalizeUnit(unit)}`;
 }
 
 /**
@@ -146,9 +155,12 @@ function ingredientFromNode(node: RecipeNode, scale: number): ComparisonIngredie
 
     const unit = normalizeUnit(node.unit);
     const hasQuantity = typeof node.quantity === 'number' && Number.isFinite(node.quantity);
+    const label = standardizeIngredientName(labelSource);
+    const text = (node.text ?? '').trim();
     return {
-        key: ingredientRowKey(ingredientName || labelSource, unit),
-        label: standardizeIngredientName(labelSource),
+        key: ingredientRowKey(label, unit),
+        label,
+        text: text || undefined,
         unit,
         iconUrl: getNodeIconUrl(node),
         quantity: hasQuantity ? roundQuantity((node.quantity as number) * scale) : undefined,
@@ -191,6 +203,7 @@ export function buildComparisonTable(recipes: ComparisonRecipe[], rowOrder?: str
                     unit: line.unit,
                     iconUrl: line.iconUrl,
                     cells: {},
+                    sources: [],
                     total: 0,
                     totalIsPartial: false,
                 };
@@ -199,6 +212,7 @@ export function buildComparisonTable(recipes: ComparisonRecipe[], rowOrder?: str
             } else if (!row.iconUrl && line.iconUrl) {
                 row.iconUrl = line.iconUrl;
             }
+            if (line.text && !row.sources.includes(line.text)) row.sources.push(line.text);
 
             const cell = row.cells[recipe.id] ?? { unquantified: false };
             if (line.quantity == null) {

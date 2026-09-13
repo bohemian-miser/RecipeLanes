@@ -22,8 +22,9 @@ import { useRecipeComparison } from './comparison-context';
 
 /**
  * The tick box on a gallery card that adds the recipe to the comparison
- * table. Renders nothing for signed-out visitors (no provider). Lives inside
- * the card's <Link>, so it must swallow the click.
+ * table. Always visible (a hover-revealed box was too easy to miss, and hover
+ * does not exist on touch). Renders nothing for signed-out visitors (no
+ * provider). Lives inside the card's <Link>, so it must swallow the click.
  */
 export function CompareToggle({ recipeId, title }: { recipeId: string; title: string }) {
     const compare = useRecipeComparison();
@@ -46,13 +47,19 @@ export function CompareToggle({ recipeId, title }: { recipeId: string; title: st
                 e.stopPropagation();
                 compare.toggle(recipeId);
             }}
-            className={`absolute top-2 left-2 z-10 flex h-7 w-7 items-center justify-center rounded-md border backdrop-blur-sm transition-all
+            className={`absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-bold uppercase tracking-wide shadow-md backdrop-blur-sm transition-colors
                 ${selected
-                    ? 'bg-yellow-500 border-yellow-400 text-black opacity-100'
-                    : 'bg-black/50 border-zinc-600 text-transparent hover:text-zinc-300 hover:border-zinc-400 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100'}
-                ${atCap ? 'cursor-not-allowed' : ''}`}
+                    ? 'bg-yellow-500 border-yellow-300 text-black hover:bg-yellow-400'
+                    : 'bg-zinc-950/85 border-zinc-500 text-zinc-200 hover:border-yellow-500 hover:text-yellow-400'}
+                ${atCap ? 'cursor-not-allowed opacity-60' : ''}`}
         >
-            <Check className="h-4 w-4" strokeWidth={3} />
+            <span
+                aria-hidden="true"
+                className={`flex h-4 w-4 items-center justify-center rounded-sm border-2 ${selected ? 'border-black bg-black text-yellow-400' : 'border-zinc-400 bg-transparent text-transparent'}`}
+            >
+                <Check className="h-3 w-3" strokeWidth={4} />
+            </span>
+            <span>{selected ? 'Comparing' : 'Compare'}</span>
         </button>
     );
 }

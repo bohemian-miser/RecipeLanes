@@ -53,8 +53,14 @@ test.describe('Gallery: multi-recipe comparison table', () => {
     await expect(page.getByTestId('recipe-comparison')).toHaveCount(0);
 
     // 3. Tick both cards — the table appears at the top with one column each.
-    await cardA.hover();
-    await cardA.getByTestId('compare-toggle').click();
+    //    The tick is a labelled pill that is visible without hovering (touch
+    //    has no hover), and flips its label once ticked.
+    const toggleA = cardA.getByTestId('compare-toggle');
+    await expect(toggleA).toBeVisible();
+    await expect(toggleA).toHaveCSS('opacity', '1');
+    await expect(toggleA).toHaveText(/Compare$/);
+    await toggleA.click();
+    await expect(toggleA).toHaveText(/Comparing/);
     const section = page.getByTestId('recipe-comparison');
     await expect(section).toBeVisible();
     await expect(section).toContainText('Comparing 1 recipe');
@@ -67,6 +73,8 @@ test.describe('Gallery: multi-recipe comparison table', () => {
     await expect(section).toContainText('Comparing 2 recipes');
 
     const table = page.getByTestId('recipe-comparison-table');
+    // The recipe header row floats above the rows while the table scrolls.
+    await expect(table.getByTestId('comparison-header')).toHaveCSS('position', 'sticky');
     const columns = table.getByTestId('comparison-column');
     const rows = table.getByTestId('comparison-row');
     await expect(columns).toHaveCount(2);

@@ -62,12 +62,24 @@ describe('comparison-table — ingredient extraction', () => {
         assert.equal(lines[0].unit, '');
     });
 
-    it('uses the canonical name for the label but the ingredient name for the row key', () => {
+    it('derives both the label and the row key from the canonical name', () => {
         const [line] = extractComparisonIngredients(graph([
-            ingredient('a', { visualDescription: 'Carrot', canonicalName: 'carrots', quantity: 3 }),
+            ingredient('a', { visualDescription: 'A carrot going into a grater', canonicalName: 'carrots', quantity: 3, text: '3 carrots' }),
         ]));
         assert.equal(line.label, 'Carrots');
-        assert.equal(line.key, ingredientRowKey('Carrot', ''));
+        assert.equal(line.key, ingredientRowKey('Carrots', ''));
+        assert.equal(line.text, '3 carrots');
+    });
+
+    it('merges lines with the same label even when their icon descriptions differ', () => {
+        // Seen on staging: "1 tsp salt" (icon "Salt") and "0.5 tsp salt" (icon
+        // "Salt shaker") rendered as two rows that both read "Salt · tsp".
+        const a = toComparisonRecipe('a', 'A', graph([ingredient('x', { visualDescription: 'Salt', canonicalName: 'salt', quantity: 1, unit: 'tsp', text: '1 tsp salt' })]));
+        const b = toComparisonRecipe('b', 'B', graph([ingredient('x', { visualDescription: 'Salt shaker', canonicalName: 'salt', quantity: 0.5, unit: 'tsp', text: '0.5 tsp salt' })]));
+        const table = buildComparisonTable([a, b]);
+        assert.equal(table.rows.length, 1);
+        assert.equal(table.rows[0].total, 1.5);
+        assert.deepEqual(table.rows[0].sources, ['1 tsp salt', '0.5 tsp salt']);
     });
 
     it('falls back to the ingredient name when there is no canonical name', () => {
@@ -181,14 +193,14 @@ describe('comparison-table — building the table', () => {
     it('honours a user row order and appends newly discovered rows', () => {
         const table = buildComparisonTable([pancakes, omelette], [
             ingredientRowKey('Milk', 'ml'),
-            ingredientRowKey('Egg', ''),
+            ingredientRowKey('Eggs', ''),
             'stale|key',
         ]);
         assert.deepEqual(table.rows.map(r => r.label), ['Milk', 'Eggs', 'Flour', 'Cheese']);
     });
 
     it('drops rows whose recipes were deselected', () => {
-        const table = buildComparisonTable([omelette], [ingredientRowKey('Flour', 'g'), ingredientRowKey('Egg', '')]);
+        const table = buildComparisonTable([omelette], [ingredientRowKey('Flour', 'g'), ingredientRowKey('Eggs', '')]);
         assert.deepEqual(table.rows.map(r => r.label), ['Eggs', 'Cheese']);
     });
 

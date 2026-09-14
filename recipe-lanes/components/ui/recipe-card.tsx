@@ -22,6 +22,8 @@ import { ChefHat, Calendar, GitGraph, Copy, Star, ThumbsUp, ThumbsDown, Trash2, 
 import { useState } from 'react';
 import { toggleStarAction, voteRecipeAction, copyRecipeAction, deleteRecipeAction, vetRecipeAction } from '@/app/actions';
 import { useRouter } from 'next/navigation';
+import { CompareToggle } from '@/components/recipe-comparison/compare-toggle';
+import { useRecipeComparison } from '@/components/recipe-comparison/comparison-context';
 
 interface RecipeCardProps {
   recipe: {
@@ -49,6 +51,8 @@ export function RecipeCard({ recipe, userId, isAdmin }: RecipeCardProps) {
   const [isDeleted, setIsDeleted] = useState(false);
   const [isVetting, setIsVetting] = useState(false);
   const [isVetted, setIsVetted] = useState(recipe.isVetted);
+  // Gallery compare table (signed-in only; null when no provider is mounted).
+  const isCompared = useRecipeComparison()?.isSelected(recipe.id) ?? false;
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -112,8 +116,15 @@ export function RecipeCard({ recipe, userId, isAdmin }: RecipeCardProps) {
 
   return (
     <Link href={`/lanes?id=${recipe.id}`} className="block group h-full">
-      <div className={`bg-zinc-900 border ${!isVetted && isAdmin ? 'border-orange-500/50' : 'border-zinc-800'} rounded-xl overflow-hidden hover:border-yellow-500/50 hover:shadow-xl hover:shadow-yellow-500/5 transition-all duration-300 h-full flex flex-col relative`}>
-        
+      <div
+        data-testid="recipe-card"
+        data-compared={isCompared ? 'true' : undefined}
+        className={`bg-zinc-900 border ${isCompared ? 'border-yellow-500 ring-1 ring-yellow-500/40' : !isVetted && isAdmin ? 'border-orange-500/50' : 'border-zinc-800'} rounded-xl overflow-hidden hover:border-yellow-500/50 hover:shadow-xl hover:shadow-yellow-500/5 transition-all duration-300 h-full flex flex-col relative`}
+      >
+
+        {/* Compare tick (top-left). Renders nothing for signed-out visitors. */}
+        <CompareToggle recipeId={recipe.id} title={recipe.title} />
+
         {/* Actions Overlay (Visible on Hover for Desktop, Always for Touch) */}
         <div className="absolute top-2 right-2 z-10 flex gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             {isAdmin && !isVetted && (

@@ -24,6 +24,8 @@ import { Login } from '@/components/login';
 import { FeedbackButton } from '@/components/feedback-button';
 import { LoginButton } from '@/components/login-button';
 import { LogoutButton } from '@/components/logout-button';
+import { RecipeComparisonProvider } from '@/components/recipe-comparison/comparison-context';
+import { RecipeComparisonTable } from '@/components/recipe-comparison/comparison-table';
 
 export const dynamic = 'force-dynamic';
 
@@ -138,8 +140,9 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
             </div>
         </header>
 
+      <ComparisonScope userId={session?.uid}>
       <div className="w-full max-w-7xl mx-auto p-6 space-y-8 flex-1">
-        
+
         {/* Page Header (Title, Search) - Filters moved to top bar */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-zinc-800 pb-6">
             <div>
@@ -148,6 +151,7 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
                 </h1>
                 <p className="text-zinc-500 text-sm mt-1">
                     {filter === 'mine' ? 'Recipes you created' : filter === 'source' ? 'Your copies of this recipe' : filter === 'starred' ? 'Your favorites' : 'Explore recipes visualized by the community'}
+                    {session && <span className="text-zinc-600"> · Tick recipes to compare their ingredients</span>}
                 </p>
             </div>
 
@@ -166,6 +170,9 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
                 )}
             </div>
         </div>
+
+        {/* Multi-recipe comparison table (signed-in only; renders nothing until a recipe is ticked) */}
+        {session && <RecipeComparisonTable />}
 
         {/* Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -186,6 +193,16 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
             )}
         </div>
       </div>
+      </ComparisonScope>
     </div>
   );
+}
+
+/**
+ * Mounts the comparison selection state only for signed-in users, so the
+ * card tick and the table (which read the context) stay hidden for guests.
+ */
+function ComparisonScope({ userId, children }: { userId?: string; children: React.ReactNode }) {
+    if (!userId) return <>{children}</>;
+    return <RecipeComparisonProvider userId={userId}>{children}</RecipeComparisonProvider>;
 }

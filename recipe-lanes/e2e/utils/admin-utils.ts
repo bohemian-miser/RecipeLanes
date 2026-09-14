@@ -144,6 +144,16 @@ export async function setRecipeTitle(recipeId: string, title: string) {
 }
 
 /**
+ * Publishes a recipe (public + vetted) straight through the admin SDK, so a
+ * spec can put a card in the public gallery without driving the admin vetting
+ * UI. Mirrors what `vetRecipe` + the visibility toggle would write.
+ */
+export async function publishRecipe(recipeId: string) {
+    const db = admin.firestore();
+    await db.collection('recipes').doc(recipeId).update({ visibility: 'public', isVetted: true, 'graph.visibility': 'public' });
+}
+
+/**
  * Clears the Firestore Emulator database.
  * Useful for tests that require a clean state (e.g. checking initial generation).
  */

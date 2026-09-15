@@ -16,53 +16,44 @@
  */
 
 /**
- * Ingredient taxonomy — the single source of truth for ingredient categories.
+ * Ingredient taxonomy — intended to be the single source of truth for
+ * ingredient categories.
  *
- * Pure, framework-free: no React, no Firebase, no I/O. It is imported by the
- * app, by server actions and by `scripts/*`, so it must stay dependency-free.
+ * Pure, framework-free: no React, no Firebase, no I/O, so that once the rest of
+ * the chain lands it can be shared by the app, by server actions and by
+ * `scripts/*` alike. Nothing imports it yet.
  *
- * `INGREDIENT_CATEGORIES` carries four things per category, and every consumer
- * reads them from here rather than restating them:
+ * `INGREDIENT_CATEGORIES` carries four things per category, and every future
+ * consumer is meant to read them from here rather than restating them:
  *  - `id`      the value stored on Firestore docs and compared in code,
  *  - `label`   the display name (group headers, legends),
- *  - `color`   the hex used by both the UMAP legend and the group header chips,
+ *  - `color`   the hex for both the UMAP legend and the group header chips,
  *  - `rules`   the boundary definition, embedded VERBATIM in the classifier
- *              prompt so the classifier and the code can never drift apart.
+ *              prompt so the classifier and the code cannot drift apart.
  *
  * Array order is display / grouping order, with `other` last as the fallback.
  */
 
-export type IngredientCategoryId =
-    | 'proteins' | 'aromatics' | 'vegetables' | 'fruits' | 'herbs_spices'
-    | 'fats_oils' | 'dairy_eggs' | 'grains_starches' | 'nuts_seeds'
-    | 'sweeteners' | 'condiments_liquids' | 'other';
-
-/** The extra id used only on `icon_index` docs — never on comparison rows. */
-export type IconOnlyCategoryId = 'action_or_state';
-
-/** Any id the classifier may return, depending on the corpus being classified. */
-export type ClassificationCategoryId = IngredientCategoryId | IconOnlyCategoryId;
-
-export interface IngredientCategory {
-    id: IngredientCategoryId;
-    /** Display name. */
+/**
+ * Structural shape of one category entry. Private: it exists so the literal
+ * tables below can be `satisfies`-checked without widening their id literals.
+ */
+interface CategoryDefinition {
+    id: string;
     label: string;
-    /** Hex, shared by the UMAP legend and the group header chips. */
     color: string;
-    /** Boundary definitions — embedded verbatim in the LLM prompt. */
     rules: string;
 }
 
-/** Same shape as `IngredientCategory`, but for the icon-only id. */
-export interface IconOnlyCategory extends Omit<IngredientCategory, 'id'> {
-    id: IconOnlyCategoryId;
-}
-
-/** Either kind of category, for code that renders both (e.g. the UMAP legend). */
-export type ClassificationCategory = IngredientCategory | IconOnlyCategory;
-
 /**
- * The closed comparison-side enum, in display order.
+ * The comparison-side category table, in display order.
+ *
+ * `as const satisfies` is load-bearing. `satisfies` type-checks every entry
+ * against `CategoryDefinition`, while `as const` keeps each `id` a literal
+ * type — which lets `IngredientCategoryId` be DERIVED from this array below
+ * instead of being a hand-maintained union that can silently drift out of sync
+ * with it. Adding a category here adds it to the type, the guards and the
+ * prompt in one edit.
  *
  * Colours are picked for separation on the app's zinc-900 surfaces rather than
  * for realism: twelve categories plus grey is at the top of what a categorical
@@ -71,7 +62,7 @@ export type ClassificationCategory = IngredientCategory | IconOnlyCategory;
  * tones because they are drawn ON dark backgrounds, as legend dots, UMAP rings
  * and group-header chips.
  */
-export const INGREDIENT_CATEGORIES: readonly IngredientCategory[] = [
+const CATEGORY_TABLE = [
     {
         id: 'proteins',
         label: 'Meat & Proteins',
@@ -144,25 +135,84 @@ export const INGREDIENT_CATEGORIES: readonly IngredientCategory[] = [
         color: '#71717a',
         rules: 'Fallback ONLY for genuinely unclassifiable labels ("dish", "white", garbled fragments). Non-English labels are NEVER dumped here — classify by meaning (survey nn-preliminary showed 33% of labels, mostly non-English, fell to \'other\' under embedding-NN; the multilingual LLM must fix exactly this).',
     },
-];
+] as const satisfies readonly CategoryDefinition[];
 
 /**
  * Categories that exist only for `icon_index` documents, whose "names" are
  * visual descriptions of an icon rather than ingredient labels. Kept out of
- * `INGREDIENT_CATEGORIES` so the comparison-side enum stays closed and no
- * comparison row can ever be assigned one of these.
+ * `CATEGORY_TABLE` so the comparison-side enum stays closed and no comparison
+ * row can ever be assigned one of these.
  */
-export const ICON_ONLY_CATEGORIES: readonly IconOnlyCategory[] = [
+const ICON_ONLY_TABLE = [
     {
         id: 'action_or_state',
         label: 'Actions & States',
         color: '#a1a1aa',
         rules: 'Cooking actions, processes, equipment states and other non-ingredient subjects ("Oven Preheating", "Whisking", "Simmering Pot"). Icon names only — an ingredient label is never this category.',
     },
+] as const satisfies readonly CategoryDefinition[];
+
+/** The closed comparison-side enum, derived from `CATEGORY_TABLE`. */
+export type IngredientCategoryId = (typeof CATEGORY_TABLE)[number]['id'];
+
+/** The extra id used only on `icon_index` docs — never on comparison rows. */
+export type IconOnlyCategoryId = (typeof ICON_ONLY_TABLE)[number]['id'];
+
+/** Any id the classifier may return, depending on the corpus being classified. */
+export type ClassificationCategoryId = IngredientCategoryId | IconOnlyCategoryId;
+
+export interface IngredientCategory {
+    id: IngredientCategoryId;
+    /** Display name. */
+    label: string;
+    /** Hex, shared by the UMAP legend and the group header chips. */
+    color: string;
+    /** Boundary definitions — embedded verbatim in the LLM prompt. */
+    rules: string;
+}
+
+/** Same shape as `IngredientCategory`, but for the icon-only id. */
+export interface IconOnlyCategory extends Omit<IngredientCategory, 'id'> {
+    id: IconOnlyCategoryId;
+}
+
+/** Either kind of category, for code that renders both (e.g. the UMAP legend). */
+export type ClassificationCategory = IngredientCategory | IconOnlyCategory;
+
+/** The twelve comparison-side categories, in display order. */
+export const INGREDIENT_CATEGORIES: readonly IngredientCategory[] = CATEGORY_TABLE;
+
+/** The icon-only categories, kept separate so the enum above stays closed. */
+export const ICON_ONLY_CATEGORIES: readonly IconOnlyCategory[] = ICON_ONLY_TABLE;
+
+/** Just the comparison-side ids, in display order. */
+export const COMPARISON_CATEGORY_IDS: readonly IngredientCategoryId[] =
+    CATEGORY_TABLE.map(c => c.id);
+
+/** Every id the classifier may return when icon categories are enabled. */
+export const ALL_CLASSIFICATION_IDS: readonly ClassificationCategoryId[] = [
+    ...COMPARISON_CATEGORY_IDS,
+    ...ICON_ONLY_TABLE.map(c => c.id),
 ];
 
 /** The fallback category every unclassified label falls back to. */
 export const FALLBACK_CATEGORY_ID: IngredientCategoryId = 'other';
+
+const CATEGORY_BY_ID: ReadonlyMap<string, IngredientCategory> = new Map(
+    INGREDIENT_CATEGORIES.map(c => [c.id, c]),
+);
+
+const RANK_BY_ID: ReadonlyMap<string, number> = new Map(
+    INGREDIENT_CATEGORIES.map((c, index) => [c.id, index]),
+);
+
+/**
+ * The rank every unrecognised id sorts at. Normally the index of `other`, which
+ * is last. The `??` is not dead code: if `other` were ever renamed or reordered
+ * this still yields a real rank past the end of the list, so `categoryRank`
+ * cannot return -1 and quietly sort unknowns to the TOP of the table.
+ */
+const FALLBACK_RANK: number = RANK_BY_ID.get(FALLBACK_CATEGORY_ID) ?? INGREDIENT_CATEGORIES.length;
 
 /**
  * Sort key for grouping: the category's index in `INGREDIENT_CATEGORIES`.
@@ -172,37 +222,60 @@ export const FALLBACK_CATEGORY_ID: IngredientCategoryId = 'other';
  * `other`, so grouping degrades to "shows up in Other" instead of throwing.
  */
 export function categoryRank(id: string | undefined): number {
-    const index = INGREDIENT_CATEGORIES.findIndex(c => c.id === id);
-    return index === -1
-        ? INGREDIENT_CATEGORIES.findIndex(c => c.id === FALLBACK_CATEGORY_ID)
-        : index;
+    if (id === undefined) return FALLBACK_RANK;
+    return RANK_BY_ID.get(id) ?? FALLBACK_RANK;
 }
 
 /** Type guard: is `v` one of the twelve comparison-side category ids? */
 export function isIngredientCategoryId(v: unknown): v is IngredientCategoryId {
-    return typeof v === 'string' && INGREDIENT_CATEGORIES.some(c => c.id === v);
+    return typeof v === 'string' && RANK_BY_ID.has(v);
 }
 
 /** Looks up a category by id; undefined for unknown ids. */
 export function getIngredientCategory(id: string | undefined): IngredientCategory | undefined {
-    return INGREDIENT_CATEGORIES.find(c => c.id === id);
+    return id === undefined ? undefined : CATEGORY_BY_ID.get(id);
 }
 
 // ---------------------------------------------------------------------------
 // Classification prompt + response parsing (pure; the transport lives elsewhere)
 // ---------------------------------------------------------------------------
 
-export interface BuildClassificationPromptOptions {
+/** Shared by the prompt builder and the parser so the two cannot disagree. */
+export interface ClassificationOptions {
     /** Include `action_or_state` — for the `icon_index` corpus only. */
     includeIconCategories?: boolean;
+}
+
+const COMPARISON_ID_SET: ReadonlySet<string> = new Set<string>(COMPARISON_CATEGORY_IDS);
+const ALL_ID_SET: ReadonlySet<string> = new Set<string>(ALL_CLASSIFICATION_IDS);
+
+/** The categories one set of options puts in play, in prompt order. */
+function categoriesFor(opts: ClassificationOptions): readonly ClassificationCategory[] {
+    return opts.includeIconCategories
+        ? [...INGREDIENT_CATEGORIES, ...ICON_ONLY_CATEGORIES]
+        : INGREDIENT_CATEGORIES;
+}
+
+/** The ids one set of options accepts. Derived, so it always matches the prompt. */
+function allowedIdsFor(opts: ClassificationOptions): ReadonlySet<string> {
+    return opts.includeIconCategories ? ALL_ID_SET : COMPARISON_ID_SET;
+}
+
+/** Distinct labels in first-seen order (a batch may repeat a label). */
+function distinctLabels(labels: readonly string[]): string[] {
+    return [...new Set(labels)];
 }
 
 /**
  * Builds the classification prompt for one batch of labels.
  *
- * Both callers (the backfill scripts and the classify-on-miss path in the
- * comparison action) use this one builder, so a taxonomy edit reaches every
- * classifier at once. Each category's `rules` string is embedded verbatim.
+ * Both intended callers (the backfill scripts and the classify-on-miss path in
+ * the comparison action) will use this one builder, so a taxonomy edit reaches
+ * every classifier at once. Each category's `rules` string is embedded verbatim.
+ *
+ * Repeated labels are collapsed before prompting — asking a model to key the
+ * same string twice cannot work in a JSON object anyway, and the "exactly N
+ * keys" instruction has to count what the model can actually return.
  *
  * The output contract is a bare JSON object keyed by the exact input label —
  * no markdown fences, no prose. `parseClassificationResponse` tolerates fences
@@ -210,11 +283,10 @@ export interface BuildClassificationPromptOptions {
  */
 export function buildClassificationPrompt(
     labels: string[],
-    opts: BuildClassificationPromptOptions = {},
+    opts: ClassificationOptions = {},
 ): string {
-    const categories: readonly ClassificationCategory[] = opts.includeIconCategories
-        ? [...INGREDIENT_CATEGORIES, ...ICON_ONLY_CATEGORIES]
-        : INGREDIENT_CATEGORIES;
+    const categories = categoriesFor(opts);
+    const unique = distinctLabels(labels);
 
     const categoryBlock = categories
         .map(c => `- ${c.id} (${c.label}): ${c.rules}`)
@@ -222,7 +294,7 @@ export function buildClassificationPrompt(
 
     // JSON.stringify the labels so quotes/newlines inside a label cannot break
     // the list, and so the model sees the exact key string it must echo back.
-    const labelBlock = labels.map(l => JSON.stringify(l)).join('\n');
+    const labelBlock = unique.map(l => JSON.stringify(l)).join('\n');
 
     return `You are classifying recipe ingredient labels into a fixed culinary taxonomy.
 
@@ -232,19 +304,19 @@ ${categoryBlock}
 LANGUAGE:
 The labels come from recipes in many languages — Polish, Lithuanian, Bulgarian, German, French, Spanish, Danish, Indonesian and Chinese all occur alongside English. Classify by MEANING, translating internally as needed. A label being non-English is never a reason to call it "${FALLBACK_CATEGORY_ID}"; use "${FALLBACK_CATEGORY_ID}" only when the label is genuinely unclassifiable in any language.
 
-LABELS TO CLASSIFY (${labels.length}):
+LABELS TO CLASSIFY (${unique.length}):
 ${labelBlock}
 
 OUTPUT:
 Return a single raw JSON object mapping every label above to exactly one category id, using each label as the key exactly as it appears above:
 {"<label>": "<category_id>"}
 Rules for the output:
-- Include every label — the object must have exactly ${labels.length} keys.
+- Include every label — the object must have exactly ${unique.length} keys.
 - Values must be one of: ${categories.map(c => c.id).join(', ')}.
 - No markdown code fences, no commentary, no trailing text. Output the JSON object and nothing else.`;
 }
 
-/** One response entry rejected because its category was not in the allowed set. */
+/** One response entry rejected because its category is not in this taxonomy. */
 export interface ClassificationRejection {
     label: string;
     /** The category value the model returned, as a string, for the log line. */
@@ -252,43 +324,65 @@ export interface ClassificationRejection {
 }
 
 export interface ClassificationResult {
-    /** label → category id, only for labels the model classified acceptably. */
+    /**
+     * label → category id, only for labels the model classified acceptably.
+     *
+     * A NULL-PROTOTYPE object: labels come from recipe text, so one of them can
+     * legitimately be `__proto__` or `constructor`, and on a plain `{}` those
+     * assignments either no-op or corrupt the object. Read it with bracket
+     * access / `Object.entries`, not with `in` against `Object.prototype`.
+     */
     assignments: Record<string, string>;
-    /** Input labels the response did not usably classify (absent or rejected). */
+    /** Distinct input labels the response did not usably classify. */
     missing: string[];
-    /** Entries whose category was not in `allowed` (also counted in `missing`). */
+    /** Entries whose category is not in this taxonomy (also counted in `missing`). */
     invalid: ClassificationRejection[];
 }
 
 /**
  * Parses a classification response against the labels that were asked about.
  *
+ * Takes the SAME options object as `buildClassificationPrompt` and derives the
+ * accepted id set from the constants, rather than trusting a hand-assembled set
+ * from the caller: the prompt and the validation are then guaranteed to agree
+ * about whether `action_or_state` is in play.
+ *
  * Never throws: a fenced, truncated or entirely non-JSON response comes back as
  * "everything is missing", which is exactly what callers need in order to retry
  * the batch or fall back to `other`. Keys the caller did not ask about are
- * ignored, and category values are matched case-insensitively after trimming.
+ * ignored, and category values are matched case-insensitively after trimming
+ * (the ids in this file are all lowercase, so normalising the value is enough).
  */
 export function parseClassificationResponse(
     raw: string,
     labels: string[],
-    allowed: Set<string>,
+    opts: ClassificationOptions = {},
 ): ClassificationResult {
-    const assignments: Record<string, string> = {};
+    const allowed = allowedIdsFor(opts);
+    const unique = distinctLabels(labels);
+    // Null prototype: a label may literally be "__proto__" (see the field doc).
+    const assignments = Object.create(null) as Record<string, string>;
     const invalid: ClassificationRejection[] = [];
     const parsed = parseJsonObject(raw);
 
     if (parsed) {
-        // Index the response by trimmed key so whitespace the model added around
-        // a label does not lose an otherwise good answer. Own enumerable keys
-        // only, so a label like "constructor" cannot pick up a prototype value.
+        // Two indexes over the response's own enumerable keys. The exact index
+        // wins, so a key that matches a label character-for-character is never
+        // displaced by some other key that happens to trim to the same string;
+        // within each index the FIRST occurrence wins, so a later duplicate
+        // cannot clobber an earlier good answer.
+        const byExactKey = new Map<string, unknown>();
         const byTrimmedKey = new Map<string, unknown>();
         for (const [key, value] of Object.entries(parsed)) {
-            byTrimmedKey.set(key.trim(), value);
+            if (!byExactKey.has(key)) byExactKey.set(key, value);
+            const trimmed = key.trim();
+            if (!byTrimmedKey.has(trimmed)) byTrimmedKey.set(trimmed, value);
         }
 
-        for (const label of labels) {
-            if (Object.prototype.hasOwnProperty.call(assignments, label)) continue;
-            const value = byTrimmedKey.get(label.trim());
+        for (const label of unique) {
+            const value = byExactKey.has(label)
+                ? byExactKey.get(label)
+                : byTrimmedKey.get(label.trim());
             if (value === undefined) continue;
 
             const category = typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -302,37 +396,76 @@ export function parseClassificationResponse(
 
     return {
         assignments,
-        missing: labels.filter(l => !Object.prototype.hasOwnProperty.call(assignments, l)),
+        missing: unique.filter(l => assignments[l] === undefined),
         invalid,
     };
 }
 
+/** Cap on how many candidate opening braces the prose fallback will try. */
+const MAX_BRACE_CANDIDATES = 50;
+
 /**
- * Best-effort extraction of a JSON object from a model response: strips a
- * markdown fence if present, otherwise falls back to the outermost braces so a
- * stray "Here you go:" preamble does not cost a whole batch. Returns null when
- * nothing parses as an object.
+ * Best-effort extraction of a JSON object from a model response, in three
+ * escalating attempts: the response as-is, then each fenced block, then a brace
+ * slice out of surrounding prose. Returns null when nothing parses as an object.
+ *
+ * Each stage falls through on failure rather than committing to its first
+ * candidate. That matters because the failure modes are real: models emit
+ * "```JSON" as often as "```json", sometimes put a non-JSON fence (an example,
+ * a restatement of the rules) before the answer, and sometimes wrap the object
+ * in prose that itself contains a brace, which poisons a naive
+ * first-`{`-to-last-`}` slice.
+ *
+ * NOTE: `parseRecipeGraph` in lib/recipe-lanes/parser.ts carries a sibling
+ * implementation of this same fence/brace extraction. They are deliberately
+ * left separate for now — unifying them changes existing parser behaviour and
+ * belongs in its own PR — but a future refactor should collapse the two.
  */
 function parseJsonObject(raw: string): Record<string, unknown> | null {
-    let text = (raw ?? '').trim();
+    const text = (raw ?? '').trim();
     if (!text) return null;
 
-    const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fence) {
-        text = fence[1].trim();
-    } else {
-        const start = text.indexOf('{');
-        const end = text.lastIndexOf('}');
-        if (start !== -1 && end > start) text = text.slice(start, end + 1);
+    // 1. The whole response — the happy path the prompt actually asks for.
+    const direct = tryParseObject(text);
+    if (direct) return direct;
+
+    // 2. Every fenced block, in order. The tag is matched case-insensitively,
+    //    and a fence whose body is not JSON does not disqualify the rest.
+    for (const match of text.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) {
+        const fenced = tryParseObject(match[1].trim());
+        if (fenced) return fenced;
     }
 
+    // 3. Unfenced object wrapped in prose. Try each opening brace in turn
+    //    against the last closing brace, so a stray brace in a preamble like
+    //    "use {one of} these ids" is skipped instead of poisoning the slice.
+    const end = text.lastIndexOf('}');
+    if (end !== -1) {
+        let tried = 0;
+        for (
+            let start = text.indexOf('{');
+            start !== -1 && start < end && tried < MAX_BRACE_CANDIDATES;
+            start = text.indexOf('{', start + 1)
+        ) {
+            tried++;
+            const sliced = tryParseObject(text.slice(start, end + 1));
+            if (sliced) return sliced;
+        }
+    }
+
+    return null;
+}
+
+/** JSON.parse restricted to plain objects; null for anything else. */
+function tryParseObject(text: string): Record<string, unknown> | null {
+    if (!text) return null;
     try {
         const parsed = JSON.parse(text);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
             return parsed as Record<string, unknown>;
         }
     } catch {
-        // Fall through: an unparseable response means "everything is missing".
+        // Not JSON — the caller moves on to the next candidate.
     }
     return null;
 }

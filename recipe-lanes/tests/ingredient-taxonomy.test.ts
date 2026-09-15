@@ -27,12 +27,17 @@ import {
     getIngredientCategory,
     isIngredientCategoryId,
     parseClassificationResponse,
+    ALL_CLASSIFICATION_IDS,
+    COMPARISON_CATEGORY_IDS,
     FALLBACK_CATEGORY_ID,
     ICON_ONLY_CATEGORIES,
     INGREDIENT_CATEGORIES,
 } from '../lib/recipe-lanes/ingredient-taxonomy';
 
-const ALL_IDS = new Set<string>(INGREDIENT_CATEGORIES.map(c => c.id));
+/** `assignments` is null-prototype by design; copy it before deep-comparing. */
+function plain(assignments: Record<string, string>): Record<string, string> {
+    return Object.fromEntries(Object.entries(assignments));
+}
 
 describe('ingredient-taxonomy — the category enum', () => {
     it('is exactly the twelve agreed categories, in display order', () => {
@@ -73,12 +78,27 @@ describe('ingredient-taxonomy — the category enum', () => {
         assert.equal(INGREDIENT_CATEGORIES.some(c => (c.id as string) === 'action_or_state'), false);
     });
 
+    it('derives the exported id lists from the category tables', () => {
+        assert.deepEqual([...COMPARISON_CATEGORY_IDS], INGREDIENT_CATEGORIES.map(c => c.id));
+        assert.deepEqual([...ALL_CLASSIFICATION_IDS], [
+            ...INGREDIENT_CATEGORIES.map(c => c.id),
+            ...ICON_ONLY_CATEGORIES.map(c => c.id),
+        ]);
+    });
+
     it('recognises every enum member and rejects anything else', () => {
         for (const category of INGREDIENT_CATEGORIES) {
             assert.equal(isIngredientCategoryId(category.id), true);
         }
         for (const bogus of ['Proteins', 'protein', 'veggies', '', undefined, null, 7, {}, ['other']]) {
             assert.equal(isIngredientCategoryId(bogus), false, `${String(bogus)} must not pass the guard`);
+        }
+    });
+
+    it('does not answer prototype keys as if they were categories', () => {
+        for (const key of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
+            assert.equal(isIngredientCategoryId(key), false, `${key} must not pass the guard`);
+            assert.equal(getIngredientCategory(key), undefined, `${key} must not resolve to a category`);
         }
     });
 
@@ -103,6 +123,18 @@ describe('ingredient-taxonomy — categoryRank', () => {
         assert.equal(categoryRank(''), otherRank);
         assert.equal(categoryRank('legumes'), otherRank, 'a stale id from an older taxonomy');
         assert.equal(categoryRank('action_or_state'), otherRank, 'an icon-only id must never outrank a real group');
+    });
+
+    it('never returns a rank that would sort an unknown id to the top', () => {
+        // -1 is the failure mode a findIndex-based implementation has: it sorts
+        // unclassified rows ABOVE every real group instead of into Other.
+        for (const id of [undefined, '', 'legumes', 'action_or_state', '__proto__', 'constructor']) {
+            assert.ok(categoryRank(id) >= 0, `${String(id)} produced a negative rank`);
+            assert.ok(
+                categoryRank(id) >= categoryRank('condiments_liquids'),
+                `${String(id)} outranked a real category`,
+            );
+        }
     });
 
     it('sorts an unclassified row to the end alongside Other', () => {
@@ -158,6 +190,17 @@ describe('ingredient-taxonomy — buildClassificationPrompt', () => {
         assert.ok(!prompt.includes('```'), 'the prompt itself must not contain a fence');
     });
 
+    it('collapses duplicate labels and counts only the distinct ones', () => {
+        // A JSON object cannot carry the same key twice, so demanding N keys for
+        // a batch with repeats is an instruction the model cannot satisfy.
+        const prompt = buildClassificationPrompt(['salt', 'onion', 'salt', 'onion', 'salt']);
+        assert.ok(prompt.includes('LABELS TO CLASSIFY (2)'));
+        assert.ok(prompt.includes('exactly 2 keys'));
+        assert.equal(prompt.split('"salt"').length - 1, 1, 'salt should be listed once');
+        // First-seen order is preserved.
+        assert.ok(prompt.indexOf('"salt"') < prompt.indexOf('"onion"'));
+    });
+
     it('omits the icon-only category unless it is asked for', () => {
         const [iconCategory] = ICON_ONLY_CATEGORIES;
         const forRows = buildClassificationPrompt(labels);
@@ -178,14 +221,19 @@ describe('ingredient-taxonomy — parseClassificationResponse', () => {
 
     it('accepts a clean JSON object', () => {
         const raw = '{"salt":"herbs_spices","onion":"aromatics","cebula":"aromatics"}';
-        const result = parseClassificationResponse(raw, labels, ALL_IDS);
-        assert.deepEqual(result.assignments, {
+        const result = parseClassificationResponse(raw, labels);
+        assert.deepEqual(plain(result.assignments), {
             salt: 'herbs_spices',
             onion: 'aromatics',
             cebula: 'aromatics',
         });
         assert.deepEqual(result.missing, []);
         assert.deepEqual(result.invalid, []);
+    });
+
+    it('returns a null-prototype assignments object', () => {
+        const result = parseClassificationResponse('{"salt":"herbs_spices"}', ['salt']);
+        assert.equal(Object.getPrototypeOf(result.assignments), null);
     });
 
     it('strips markdown fences and surrounding prose', () => {
@@ -196,52 +244,90 @@ describe('ingredient-taxonomy — parseClassificationResponse', () => {
             '```',
             'Hope that helps!',
         ].join('\n');
-        const result = parseClassificationResponse(raw, labels, ALL_IDS);
+        const result = parseClassificationResponse(raw, labels);
         assert.deepEqual(result.missing, []);
         assert.equal(result.assignments.salt, 'herbs_spices');
         assert.equal(result.assignments.cebula, 'aromatics');
     });
 
+    it('accepts an upper-case fence tag', () => {
+        // Models emit ```JSON about as readily as ```json; a case-sensitive
+        // match would drop the whole batch.
+        for (const tag of ['JSON', 'Json', 'json', '']) {
+            const raw = `\`\`\`${tag}\n{"salt":"herbs_spices","onion":"aromatics","cebula":"aromatics"}\n\`\`\``;
+            const result = parseClassificationResponse(raw, labels);
+            assert.deepEqual(result.missing, [], `fence tag "${tag}" was not recovered`);
+            assert.equal(result.assignments.onion, 'aromatics');
+        }
+    });
+
+    it('keeps looking when the first fenced block is not the answer', () => {
+        const raw = [
+            'First, the format I will use:',
+            '```text',
+            'label -> category',
+            '```',
+            'And the answer:',
+            '```json',
+            '{"salt":"herbs_spices","onion":"aromatics","cebula":"aromatics"}',
+            '```',
+        ].join('\n');
+        const result = parseClassificationResponse(raw, labels);
+        assert.deepEqual(result.missing, []);
+        assert.equal(result.assignments.salt, 'herbs_spices');
+    });
+
+    it('recovers an unfenced object from prose that contains a stray brace', () => {
+        // A first-brace-to-last-brace slice is poisoned by the "{one of}" here.
+        const raw = 'Sure — I used {one of} the allowed ids for each. Answer: '
+            + '{"salt":"herbs_spices","onion":"aromatics","cebula":"aromatics"}';
+        const result = parseClassificationResponse(raw, labels);
+        assert.deepEqual(result.missing, []);
+        assert.equal(result.assignments.cebula, 'aromatics');
+    });
+
     it('reports a label the response left out, keeping the ones it got', () => {
         const raw = '{"salt":"herbs_spices","onion":"aromatics"}';
-        const result = parseClassificationResponse(raw, labels, ALL_IDS);
+        const result = parseClassificationResponse(raw, labels);
         assert.deepEqual(result.missing, ['cebula']);
         assert.deepEqual(result.invalid, []);
         assert.equal(result.assignments.onion, 'aromatics');
-        assert.equal('cebula' in result.assignments, false);
+        assert.equal(result.assignments.cebula, undefined);
     });
 
     it('rejects a category id that is not in the enum', () => {
         const raw = '{"salt":"seasonings","onion":"aromatics","cebula":"AROMATICS "}';
-        const result = parseClassificationResponse(raw, labels, ALL_IDS);
+        const result = parseClassificationResponse(raw, labels);
         assert.deepEqual(result.invalid, [{ label: 'salt', value: 'seasonings' }]);
         assert.deepEqual(result.missing, ['salt'], 'a rejected label still needs re-classifying');
         // Case and stray whitespace around a real id are tolerated.
         assert.equal(result.assignments.cebula, 'aromatics');
     });
 
-    it('rejects an icon-only id when the caller only allows row categories', () => {
+    it('derives the allowed ids from the same options the prompt uses', () => {
         const raw = '{"salt":"action_or_state","onion":"aromatics","cebula":"aromatics"}';
-        const result = parseClassificationResponse(raw, labels, ALL_IDS);
-        assert.deepEqual(result.invalid, [{ label: 'salt', value: 'action_or_state' }]);
 
-        const iconAllowed = new Set<string>([...ALL_IDS, ...ICON_ONLY_CATEGORIES.map(c => c.id)]);
-        const forIcons = parseClassificationResponse(raw, labels, iconAllowed);
+        const forRows = parseClassificationResponse(raw, labels);
+        assert.deepEqual(forRows.invalid, [{ label: 'salt', value: 'action_or_state' }]);
+        assert.deepEqual(forRows.missing, ['salt']);
+
+        const forIcons = parseClassificationResponse(raw, labels, { includeIconCategories: true });
         assert.deepEqual(forIcons.invalid, []);
+        assert.deepEqual(forIcons.missing, []);
         assert.equal(forIcons.assignments.salt, 'action_or_state');
     });
 
     it('rejects non-string category values without throwing', () => {
         const raw = '{"salt":null,"onion":["aromatics"],"cebula":"aromatics"}';
-        const result = parseClassificationResponse(raw, labels, ALL_IDS);
+        const result = parseClassificationResponse(raw, labels);
         assert.deepEqual(result.invalid.map(i => i.label), ['salt', 'onion']);
         assert.deepEqual(result.missing, ['salt', 'onion']);
     });
 
     it('treats non-JSON garbage as "nothing classified" rather than throwing', () => {
         for (const raw of ['I am sorry, I cannot help with that.', '', '   ', '{"salt": ', '[1,2,3]']) {
-            const result = parseClassificationResponse(raw, labels, ALL_IDS);
-            assert.deepEqual(result.assignments, {}, `garbage response classified something: ${raw}`);
+            const result = parseClassificationResponse(raw, labels);
+            assert.deepEqual(plain(result.assignments), {}, `garbage response classified something: ${raw}`);
             assert.deepEqual(result.missing, labels);
             assert.deepEqual(result.invalid, []);
         }
@@ -249,16 +335,69 @@ describe('ingredient-taxonomy — parseClassificationResponse', () => {
 
     it('ignores labels the caller did not ask about', () => {
         const raw = '{"salt":"herbs_spices","onion":"aromatics","cebula":"aromatics","ketchup":"condiments_liquids"}';
-        const result = parseClassificationResponse(raw, labels, ALL_IDS);
-        assert.deepEqual(Object.keys(result.assignments).sort(), ['cebula', 'onion', 'salt']);
+        const result = parseClassificationResponse(raw, labels);
+        assert.deepEqual(Object.keys(plain(result.assignments)).sort(), ['cebula', 'onion', 'salt']);
         assert.deepEqual(result.missing, []);
     });
 
     it('matches a key the model padded with whitespace', () => {
         const raw = '{" salt ":"herbs_spices","onion":"aromatics","cebula":"aromatics"}';
-        const result = parseClassificationResponse(raw, labels, ALL_IDS);
+        const result = parseClassificationResponse(raw, labels);
         assert.deepEqual(result.missing, []);
         assert.equal(result.assignments.salt, 'herbs_spices');
+    });
+
+    it('prefers an exact key over a padded one that trims to the same label', () => {
+        const raw = '{" salt ":"other","salt":"herbs_spices","onion":"aromatics","cebula":"aromatics"}';
+        const result = parseClassificationResponse(raw, labels);
+        assert.equal(result.assignments.salt, 'herbs_spices');
+    });
+
+    it('lets the first of two padded duplicates win rather than the last', () => {
+        const raw = '{" salt ":"herbs_spices","salt  ":"other","onion":"aromatics","cebula":"aromatics"}';
+        const result = parseClassificationResponse(raw, labels);
+        assert.equal(result.assignments.salt, 'herbs_spices');
+        assert.deepEqual(result.invalid, []);
+    });
+
+    it('classifies a label that collides with an Object prototype key', () => {
+        // Recipe text really can produce these; on a plain {} the assignment
+        // either no-ops ("__proto__") or is masked by an inherited value.
+        const protoLabels = ['__proto__', 'constructor', 'toString', 'salt'];
+        // Written out rather than JSON.stringify'd: in an object literal
+        // `__proto__:` sets the prototype instead of creating an own key, so a
+        // stringified fixture would silently lose the interesting case.
+        const raw = '{"__proto__":"herbs_spices","constructor":"aromatics",'
+            + '"toString":"vegetables","salt":"herbs_spices"}';
+        const result = parseClassificationResponse(raw, protoLabels);
+        assert.deepEqual(result.missing, []);
+        assert.deepEqual(result.invalid, []);
+        assert.equal(result.assignments['__proto__'], 'herbs_spices');
+        assert.equal(result.assignments['constructor'], 'aromatics');
+        assert.equal(result.assignments['toString'], 'vegetables');
+        assert.deepEqual(Object.keys(plain(result.assignments)).sort(), [
+            '__proto__', 'constructor', 'salt', 'toString',
+        ]);
+    });
+
+    it('reports a prototype-key label as missing when the model skipped it', () => {
+        const result = parseClassificationResponse('{"salt":"herbs_spices"}', ['__proto__', 'toString', 'salt']);
+        assert.deepEqual(result.missing, ['__proto__', 'toString']);
+    });
+
+    it('collapses duplicate input labels into one result entry', () => {
+        const dupes = ['salt', 'onion', 'salt', 'salt'];
+
+        const ok = parseClassificationResponse('{"salt":"herbs_spices","onion":"aromatics"}', dupes);
+        assert.deepEqual(ok.missing, []);
+        assert.deepEqual(Object.keys(plain(ok.assignments)).sort(), ['onion', 'salt']);
+
+        const bad = parseClassificationResponse('{"onion":"aromatics"}', dupes);
+        assert.deepEqual(bad.missing, ['salt'], 'one missing entry per distinct label');
+
+        const rejected = parseClassificationResponse('{"salt":"seasonings","onion":"aromatics"}', dupes);
+        assert.deepEqual(rejected.invalid, [{ label: 'salt', value: 'seasonings' }]);
+        assert.deepEqual(rejected.missing, ['salt']);
     });
 
     it('round-trips the prompt contract: every prompted label is a parseable key', () => {
@@ -268,7 +407,7 @@ describe('ingredient-taxonomy — parseClassificationResponse', () => {
         for (const label of prompted) assert.ok(prompt.includes(JSON.stringify(label)));
 
         const raw = JSON.stringify({ Salt: 'herbs_spices', Zwiebel: 'aromatics', 'Ξηροί καρποί': 'nuts_seeds' });
-        const result = parseClassificationResponse(raw, prompted, ALL_IDS);
+        const result = parseClassificationResponse(raw, prompted);
         assert.deepEqual(result.missing, []);
         assert.equal(result.assignments['Ξηροί καρποί'], 'nuts_seeds');
     });

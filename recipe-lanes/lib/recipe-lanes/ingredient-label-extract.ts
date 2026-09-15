@@ -57,6 +57,36 @@ export function ingredientCategoryKey(label: string): string {
     return standardizeIngredientName(label).toLowerCase();
 }
 
+/** Firestore's hard limit on a document id, in UTF-8 bytes. */
+const MAX_DOC_ID_BYTES = 1500;
+
+/**
+ * The `ingredient_categories` document id for a label, or null when the label
+ * cannot legally be one.
+ *
+ * `encodeURIComponent` of the lookup key, per the data-model decision: labels
+ * can contain `/`, which is illegal in a Firestore id, and percent-encoding
+ * (rather than hashing) keeps the collection human-browsable.
+ *
+ * This is the whole join contract between the backfill that writes these docs
+ * and the comparison-table lookup that will read them, so it lives here — with
+ * the key derivation — rather than inside either caller.
+ *
+ * Returns null for the ids Firestore rejects outright: the empty string, `.`,
+ * `..`, anything matching `__*__` (a real ingredient label can be `__proto__`,
+ * which percent-encodes to itself), and anything past the length limit. Those
+ * are junk labels; callers are expected to report and skip them rather than
+ * discover the problem as a failed write. The encoded form is pure ASCII, so
+ * its character length IS its byte length.
+ */
+export function ingredientCategoryDocId(label: string): string | null {
+    const id = encodeURIComponent(ingredientCategoryKey(label));
+    if (!id || id === '.' || id === '..') return null;
+    if (/^__.*__$/.test(id)) return null;
+    if (id.length > MAX_DOC_ID_BYTES) return null;
+    return id;
+}
+
 /**
  * Streaming accumulator, so a caller paging a large collection never has to
  * hold every graph in memory at once.

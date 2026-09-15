@@ -24,6 +24,7 @@ import assert from 'node:assert/strict';
 import {
     collectIngredientLabels,
     createIngredientLabelCollector,
+    ingredientCategoryDocId,
     ingredientCategoryKey,
 } from '../lib/recipe-lanes/ingredient-label-extract';
 import { ingredientRowKey } from '../lib/recipe-lanes/comparison-table';
@@ -86,6 +87,58 @@ describe('ingredient-label-extract — the lookup key', () => {
         assert.equal(ingredientCategoryKey('OLIVE OIL'), 'olive oil');
         assert.equal(ingredientCategoryKey('  crème fraîche  '), 'creme fraiche');
         assert.equal(ingredientCategoryKey('   '), '');
+    });
+});
+
+describe('ingredient-label-extract — the Firestore document id', () => {
+    it('percent-encodes the key, so the id decodes back to the join key', () => {
+        for (const label of ['Olive Oil', 'crème fraîche', 'Salt/Pepper', '100% Cocoa']) {
+            const id = ingredientCategoryDocId(label);
+            assert.ok(id, `${label} should be addressable`);
+            assert.equal(decodeURIComponent(id!), ingredientCategoryKey(label));
+        }
+    });
+
+    it('encodes a multi-word label without leaving a raw space', () => {
+        assert.equal(ingredientCategoryDocId('Olive Oil'), 'olive%20oil');
+    });
+
+    it("encodes '/', which Firestore would otherwise read as a path separator", () => {
+        const id = ingredientCategoryDocId('Salt/Pepper');
+        assert.equal(id, 'salt%2Fpepper');
+        assert.equal(id!.includes('/'), false, 'a raw slash would split the document path');
+    });
+
+    it("rejects the ids Firestore reserves: '', '.', '..'", () => {
+        assert.equal(ingredientCategoryDocId(''), null);
+        assert.equal(ingredientCategoryDocId('   '), null);
+        assert.equal(ingredientCategoryDocId('.'), null);
+        assert.equal(ingredientCategoryDocId('..'), null);
+    });
+
+    it("rejects __*__ ids — '__proto__' is a label a recipe can really produce", () => {
+        assert.equal(ingredientCategoryDocId('__proto__'), null);
+        assert.equal(ingredientCategoryDocId('__FIRESTORE__'), null);
+        // Only the reserved *shape* is rejected, not any underscore.
+        assert.equal(ingredientCategoryDocId('__proto'), '__proto');
+        assert.equal(ingredientCategoryDocId('_under_score_'), '_under_score_');
+    });
+
+    it('rejects ids past the 1500-byte limit, measuring the ENCODED length', () => {
+        assert.equal(ingredientCategoryDocId('a'.repeat(1500))!.length, 1500);
+        assert.equal(ingredientCategoryDocId('a'.repeat(1501)), null);
+        // Spaces triple in length once encoded, so a much shorter label can
+        // still blow the limit — which is why the check is on the encoding.
+        const spacey = 'ab '.repeat(400).trim(); // 1199 chars in, 1999 encoded
+        assert.ok(spacey.length < 1500);
+        assert.equal(ingredientCategoryDocId(spacey), null);
+    });
+
+    it('keeps non-ASCII labels addressable rather than dropping them', () => {
+        const id = ingredientCategoryDocId('Крупа');
+        assert.equal(id, encodeURIComponent('крупа'));
+        assert.equal(decodeURIComponent(id!), 'крупа');
+        assert.equal(ingredientCategoryDocId('生姜'), encodeURIComponent('生姜'));
     });
 });
 

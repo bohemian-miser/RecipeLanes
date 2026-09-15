@@ -401,8 +401,11 @@ export function parseClassificationResponse(
     };
 }
 
-/** Cap on how many candidate opening braces the prose fallback will try. */
+/** Cap on how many candidate braces (each side) the prose fallback will try. */
 const MAX_BRACE_CANDIDATES = 50;
+
+/** Cap on total slice attempts, so the start×end search cannot blow up. */
+const MAX_BRACE_ATTEMPTS = 400;
 
 /**
  * Best-effort extraction of a JSON object from a model response, in three
@@ -436,24 +439,50 @@ function parseJsonObject(raw: string): Record<string, unknown> | null {
         if (fenced) return fenced;
     }
 
-    // 3. Unfenced object wrapped in prose. Try each opening brace in turn
-    //    against the last closing brace, so a stray brace in a preamble like
-    //    "use {one of} these ids" is skipped instead of poisoning the slice.
-    const end = text.lastIndexOf('}');
-    if (end !== -1) {
-        let tried = 0;
-        for (
-            let start = text.indexOf('{');
-            start !== -1 && start < end && tried < MAX_BRACE_CANDIDATES;
-            start = text.indexOf('{', start + 1)
-        ) {
-            tried++;
+    // 3. Unfenced object wrapped in prose. Both ends have to be searched, not
+    //    just the start: a brace in a PREAMBLE ("use {one of} these ids")
+    //    poisons a first-`{`-to-last-`}` slice, and so does a brace in a
+    //    TRAILER ("...} — let me know if {anything} needs changing"), which an
+    //    earlier version of this function could not recover from at all.
+    //    So: try each opening brace against each closing brace, outermost
+    //    first (earliest start, latest end), which finds the widest valid
+    //    object rather than some nested fragment of it. Bounded on both axes
+    //    and in total, because this runs on adversarial model output.
+    const starts = bracePositions(text, '{', MAX_BRACE_CANDIDATES);
+    const ends = bracePositions(text, '}', MAX_BRACE_CANDIDATES).reverse();
+
+    let attempts = 0;
+    for (const start of starts) {
+        for (const end of ends) {
+            if (end <= start) continue;
+            if (++attempts > MAX_BRACE_ATTEMPTS) return null;
             const sliced = tryParseObject(text.slice(start, end + 1));
             if (sliced) return sliced;
         }
     }
 
     return null;
+}
+
+/**
+ * Positions of up to `limit` occurrences of `brace`, in ascending order:
+ * the FIRST `limit` for an opening brace, the LAST `limit` for a closing one.
+ * Keeping the ends nearest the outside is what makes the bounded search above
+ * still find the outermost object in a long, brace-heavy response.
+ */
+function bracePositions(text: string, brace: '{' | '}', limit: number): number[] {
+    const found: number[] = [];
+    if (brace === '{') {
+        for (let i = text.indexOf(brace); i !== -1 && found.length < limit; i = text.indexOf(brace, i + 1)) {
+            found.push(i);
+        }
+        return found;
+    }
+    for (let i = text.lastIndexOf(brace); i !== -1 && found.length < limit; i = text.lastIndexOf(brace, i - 1)) {
+        found.push(i);
+        if (i === 0) break;
+    }
+    return found.reverse();
 }
 
 /** JSON.parse restricted to plain objects; null for anything else. */

@@ -238,17 +238,29 @@ function initFirebase(envName: Flags['envName']): Target {
 // Vertex Gemini (REST)
 // ---------------------------------------------------------------------------
 
-let cachedToken: string | null = null;
-let tokenExpiry = 0;
+/**
+ * One `GoogleAuth` for the whole run, built on first use.
+ *
+ * Lazily, because GoogleAuth resolves credentials when it is first *used*, and
+ * `initFirebase` has to have pinned `GOOGLE_APPLICATION_CREDENTIALS` by then.
+ * Once, because rebuilding it per token discards the library's own cache.
+ */
+let auth: GoogleAuth | null = null;
+
+/**
+ * Deliberately does NOT cache the token itself. `getAccessToken()` already
+ * caches and refreshes against the token's REAL expiry; a hand-rolled fixed
+ * one-hour TTL can only get that wrong, and it gets it wrong in the expensive
+ * direction — a token that expires early keeps being served, every Vertex call
+ * 401s, and the retry/backoff budget is burned on an auth problem that the
+ * error path reads as a model problem.
+ */
 async function getToken(): Promise<string> {
-    if (cachedToken && Date.now() < tokenExpiry - 60_000) return cachedToken;
-    const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+    auth ??= new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
     const client = await auth.getClient();
     const token = await client.getAccessToken();
     if (!token.token) throw new Error('GoogleAuth returned no access token');
-    cachedToken = token.token;
-    tokenExpiry = Date.now() + 3_600_000;
-    return cachedToken;
+    return token.token;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -380,16 +392,25 @@ async function classifyBatch(
             // A truncated answer is a size problem, not a luck problem: ask for
             // less instead of asking again. Each half gets its own full retry
             // budget, and the recursion is depth-capped.
-            if (e instanceof TruncatedResponseError && outstanding.length > 1 && depth < MAX_SPLIT_DEPTH) {
-                const mid = Math.ceil(outstanding.length / 2);
-                const halves = [outstanding.slice(0, mid), outstanding.slice(mid)];
-                log(`  attempt ${attempt}: ${e.message} — splitting ${outstanding.length} names into ${halves.map(h => h.length).join(' + ')}`);
-                for (const half of halves) {
-                    for (const [name, category] of await classifyBatch(projectId, half, log, depth + 1)) {
-                        resolved.set(name, category);
+            if (e instanceof TruncatedResponseError) {
+                if (outstanding.length > 1 && depth < MAX_SPLIT_DEPTH) {
+                    const mid = Math.ceil(outstanding.length / 2);
+                    const halves = [outstanding.slice(0, mid), outstanding.slice(mid)];
+                    log(`  attempt ${attempt}: ${e.message} — splitting ${outstanding.length} names into ${halves.map(h => h.length).join(' + ')}`);
+                    for (const half of halves) {
+                        for (const [name, category] of await classifyBatch(projectId, half, log, depth + 1)) {
+                            resolved.set(name, category);
+                        }
                     }
+                    // The halves consumed their own retries; nothing left to do here.
+                    break;
                 }
-                // The halves consumed their own retries; nothing left to do here.
+                // The request cannot get any smaller — a single name, or the
+                // split budget is spent. Looping would re-send a byte-identical
+                // request at temperature 0 and truncate at the identical place,
+                // so stop paying for attempts that cannot differ and let the
+                // caller's fallback path own these names.
+                log(`  attempt ${attempt}: ${e.message} — cannot split further (${outstanding.length} name(s), depth ${depth}); leaving them to the fallback`);
                 break;
             }
             log(`  attempt ${attempt} failed: ${e.message}`);
@@ -435,16 +456,50 @@ function table(headers: string[], rows: string[][]): string {
     return [line(headers), widths.map(w => '-'.repeat(w)).join('  '), ...rows.map(line)].join('\n');
 }
 
-function categoryCounts(classified: Classified[]): { category: string; label: string; count: number }[] {
-    return ICON_CATEGORIES.map(c => ({
-        category: c.id,
-        label: c.label,
-        count: classified.filter(x => x.category === c.id).length,
-    }));
+/**
+ * Everything the reporting and the JSON dump need, grouped in ONE pass.
+ *
+ * The naive shape of this stage re-scans the whole `classified` array for every
+ * question it asks — once per category for the counts, again per category for
+ * the examples, and again for each of the four places that want the fallbacks.
+ * That is ~30 linear scans of the same array to produce one report. Grouping
+ * once and sharing the result costs a single pass, and it also guarantees the
+ * printed tables and the dumped JSON describe the same grouping rather than two
+ * independently recomputed ones.
+ */
+interface Summary {
+    total: number;
+    /** category id -> its docs, in classification order. Categories with none are absent. */
+    byCategory: Map<string, Classified[]>;
+    /** Taxonomy-ordered counts, including the zeroes, for the table and the dump. */
+    counts: { category: string; label: string; count: number }[];
+    fallbacks: Classified[];
 }
 
-function printReport(classified: Classified[]): void {
-    const counts = categoryCounts(classified);
+function summarise(classified: Classified[]): Summary {
+    const byCategory = new Map<string, Classified[]>();
+    const fallbacks: Classified[] = [];
+
+    for (const entry of classified) {
+        const group = byCategory.get(entry.category);
+        if (group) group.push(entry);
+        else byCategory.set(entry.category, [entry]);
+        if (entry.source === 'fallback') fallbacks.push(entry);
+    }
+
+    // Driven by ICON_CATEGORIES, not by the map's keys, so the report keeps
+    // taxonomy order and still shows categories nothing landed in.
+    const counts = ICON_CATEGORIES.map(c => ({
+        category: c.id as string,
+        label: c.label,
+        count: byCategory.get(c.id)?.length ?? 0,
+    }));
+
+    return { total: classified.length, byCategory, counts, fallbacks };
+}
+
+function printReport(summary: Summary): void {
+    const { counts, total, byCategory, fallbacks } = summary;
 
     console.log('\n================ PER-CATEGORY COUNTS ================\n');
     console.log(table(
@@ -453,15 +508,15 @@ function printReport(classified: Classified[]): void {
             c.category,
             c.label,
             String(c.count),
-            `${((c.count / Math.max(classified.length, 1)) * 100).toFixed(1)}%`,
+            `${((c.count / Math.max(total, 1)) * 100).toFixed(1)}%`,
         ]),
     ));
-    console.log(`\ntotal icons classified: ${classified.length}`);
+    console.log(`\ntotal icons classified: ${total}`);
 
     console.log(`\n============ UP TO ${EXAMPLES_PER_CATEGORY} EXAMPLES PER CATEGORY ============`);
     for (const { category, label, count } of counts) {
         if (count === 0) continue;
-        const examples = classified.filter(c => c.category === category).slice(0, EXAMPLES_PER_CATEGORY);
+        const examples = (byCategory.get(category) ?? []).slice(0, EXAMPLES_PER_CATEGORY);
         console.log(`\n${label} (${category}) — ${count} icons`);
         console.log(table(
             ['icon name', 'src'],
@@ -469,13 +524,12 @@ function printReport(classified: Classified[]): void {
         ));
     }
 
-    const fallbacks = classified.filter(c => c.source === 'fallback');
     console.log('\n==================== FALLBACKS ====================\n');
     if (fallbacks.length === 0) {
         console.log('None — every icon was classified by the model.');
     } else {
         console.log(table(['icon id', 'icon name'], fallbacks.map(c => [c.id, c.name])));
-        console.log(`\n${fallbacks.length} of ${classified.length} (${((fallbacks.length / Math.max(classified.length, 1)) * 100).toFixed(1)}%).`);
+        console.log(`\n${fallbacks.length} of ${total} (${((fallbacks.length / Math.max(total, 1)) * 100).toFixed(1)}%).`);
         console.log('These are retried automatically on the next run — fallback docs are not treated as done.');
     }
 }
@@ -582,9 +636,12 @@ async function main(): Promise<void> {
         };
     });
 
-    const unresolvedCount = classified.filter(c => c.source === 'fallback').length;
+    // Grouped once here; the circuit-breaker, the report and the JSON dump all
+    // read this rather than re-scanning `classified` for the same answers.
+    const summary = summarise(classified);
+    const unresolvedCount = summary.fallbacks.length;
     if (unresolvedCount > 0) {
-        const names = [...new Set(classified.filter(c => c.source === 'fallback').map(c => c.name))];
+        const names = [...new Set(summary.fallbacks.map(c => c.name))];
         console.warn(`\n⚠️  ⚠️  ${unresolvedCount} doc(s) across ${names.length} name(s) survived ${MAX_RETRIES + 1} attempts unclassified and are being forced to '${FALLBACK_CATEGORY_ID}' with categorySource 'fallback':`);
         for (const name of names) console.warn(`      ${JSON.stringify(name)}`);
         console.warn('    These are retried automatically on the next run — fallback docs are not treated as done.\n');
@@ -644,7 +701,7 @@ async function main(): Promise<void> {
     }
 
     // --- 5. Evidence --------------------------------------------------------
-    printReport(classified);
+    printReport(summary);
 
     const dump = {
         env: flags.envName,
@@ -665,8 +722,8 @@ async function main(): Promise<void> {
         classifiedNow: classified.length,
         fallbackCount: unresolvedCount,
         docsWritten: written,
-        categoryCounts: categoryCounts(classified),
-        fallbacks: classified.filter(c => c.source === 'fallback').map(c => ({ id: c.id, name: c.name })),
+        categoryCounts: summary.counts,
+        fallbacks: summary.fallbacks.map(c => ({ id: c.id, name: c.name })),
         classifications: classified,
     };
     fs.writeFileSync(path.resolve(flags.outPath), JSON.stringify(dump, null, 2));

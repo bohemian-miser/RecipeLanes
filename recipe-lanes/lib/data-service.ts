@@ -1146,7 +1146,7 @@ export class FirebaseDataService implements DataService {
   }
 
   async setIngredientWithIcon(data: any, transaction?: any): Promise<void> {
-      const { iconId, iconData, ingredientName, embedding, embedding_minilm } = data;
+      const { iconId, iconData, ingredientName, embedding, embedding_minilm, createdBy } = data;
       const docRef = db.collection(DB_COLLECTION_ICON_INDEX).doc(iconId);
       const payload: any = {
           ...iconData,
@@ -1155,6 +1155,13 @@ export class FirebaseDataService implements DataService {
           created_at: FieldValue.serverTimestamp(),
           updated_at: FieldValue.serverTimestamp()
       };
+
+      // Icon creator (issue #283). Only written when the forge is attributable —
+      // this is a merge write, so omitting the field leaves any existing value
+      // intact instead of blanking it, and Firestore rejects undefined outright.
+      if (typeof createdBy === 'string' && createdBy) {
+          payload.createdBy = createdBy;
+      }
 
       if (embedding) {
           payload.embedding = FieldValue.vector(embedding);

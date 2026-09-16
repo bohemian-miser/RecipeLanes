@@ -22,6 +22,7 @@ import { getDataService } from '../../lib/data-service';
 import { getAIService } from '../../lib/ai-service';
 import { db } from '../../lib/firebase-admin';
 import { withSearchTerms } from '../../lib/recipe-lanes/model-utils';
+import { deriveIconOwners, pickIconCreator } from '../../lib/recipe-lanes/icon-creator';
 // import { calculateWilsonLCB } from '../../lib/utils';
 
 // --- Helper Functions ---
@@ -134,6 +135,7 @@ export const processIconTaskHandler = async (data: { ingredientName: string }, r
         let rawHydeQueries: string[] = [];
         let publishedRecipeCount = 0;
         let forgedRecipeIds: string[] = [];
+        let forgedOwners: string[] = [];
         const dataService = getDataService();
 
         // Find or Create Ingredient Group.
@@ -159,6 +161,23 @@ export const processIconTaskHandler = async (data: { ingredientName: string }, r
             rawHydeQueries = queueDocData?.hydeQueries || [];
             const iconWithTerms = withSearchTerms(icon, rawHydeQueries);
 
+            // Attribution (issue #283): resolve who this icon is forged for while we
+            // are still in the transaction's READ phase, so the UID can be stored on
+            // the icon doc below. Non-fatal — an icon that cannot be attributed is
+            // still worth publishing, so a lookup failure leaves it unattributed
+            // rather than aborting the forge.
+            forgedOwners = [];
+            try {
+                if (latestRecipeIds.length > 0) {
+                    const ownerRefs = latestRecipeIds.map(id => db.collection(DB_COLLECTION_RECIPES).doc(id));
+                    const ownerSnaps = await transaction.getAll(...ownerRefs);
+                    forgedOwners = deriveIconOwners(ownerSnaps.map((s: any) => s.data()));
+                }
+            } catch (e) {
+                console.warn(`[Queue-${ingredientName}] owner lookup failed (non-fatal):`, e);
+            }
+            const createdBy = pickIconCreator(forgedOwners);
+
             console.log(`[Queue-${ingredientName}] ✅ Success. Icon ID: ${icon.id}`);
 
             const recipeDataObj: Record<string, any> = {};
@@ -183,7 +202,7 @@ export const processIconTaskHandler = async (data: { ingredientName: string }, r
             // so we don't strictly need imagineIngredientWithIcon anymore for the DB update
             // However, we'll keep the call structure if it's used elsewhere or does side-effects.
             const ingredientData = await dataService.imagineIngredientWithIcon(ingredientDocId, ingredientName, iconWithTerms, transaction);
-            await dataService.setIngredientWithIcon(ingredientData, transaction);
+            await dataService.setIngredientWithIcon({ ...ingredientData, createdBy }, transaction);
 
             // Update all linked recipes using the atomic helper
             console.log(`[Queue-${ingredientName}] Updating ${processedRecipeIds.length} recipes...`);
@@ -202,21 +221,10 @@ export const processIconTaskHandler = async (data: { ingredientName: string }, r
         // Emitted ONLY here, after the publish transaction commits — i.e. genuine
         // success, never on retry/failure paths.
 
-        // Non-fatal owner lookup: read recipe docs in one batched call to get deduplicated
-        // owner UIDs for the forged icon. Anonymous recipes (no ownerId) are silently omitted.
-        // UID-only — no display names or emails (PII).
-        let forgedOwners: string[] = [];
-        try {
-            if (forgedRecipeIds.length > 0) {
-                const refs = forgedRecipeIds.map(id => db.collection(DB_COLLECTION_RECIPES).doc(id));
-                const snaps = await db.getAll(...refs);
-                const ownerIds: string[] = snaps.map((s: any) => s.data()?.ownerId).filter((x: any): x is string => typeof x === 'string');
-                forgedOwners = [...new Set(ownerIds)];
-            }
-        } catch (e) {
-            console.warn(`[icon_forged] owner lookup failed (non-fatal):`, e);
-        }
-
+        // Deduplicated owner UIDs for the forged icon, resolved inside the publish
+        // transaction above (issue #283) and reused here so the log signal and the
+        // icon doc's `createdBy` can never disagree. Anonymous recipes (no ownerId)
+        // are silently omitted. UID-only — no display names or emails (PII).
         console.log(JSON.stringify({
             event: 'icon_forged',
             ingredient: ingredientName,

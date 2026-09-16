@@ -37,6 +37,12 @@ export interface IconStats {
     score?: number;
     impressions?: number;
     rejections?: number;
+    /**
+     * UID of the user this icon was forged for — the owner of the recipe that
+     * queued it (issue #283). Absent for icons forged from anonymous recipes and
+     * for icons created before attribution existed.
+     */
+    createdBy?: string;
     metadata?: {
         center: { x: number, y: number };
         bbox: { x: number, y: number, w: number, h: number };

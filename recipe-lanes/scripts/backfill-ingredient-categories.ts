@@ -259,17 +259,29 @@ function initFirebase(envName: Flags['envName']): Target {
 // Vertex Gemini (REST) — same shape as backfill-icon-search-terms.ts
 // ---------------------------------------------------------------------------
 
-let cachedToken: string | null = null;
-let tokenExpiry = 0;
+/**
+ * One `GoogleAuth` for the whole run, built on first use.
+ *
+ * Lazily, because GoogleAuth resolves credentials when it is first *used*, and
+ * `initFirebase` has to have pinned `GOOGLE_APPLICATION_CREDENTIALS` by then.
+ * Once, because rebuilding it per token discards the library's own cache.
+ */
+let auth: GoogleAuth | null = null;
+
+/**
+ * Deliberately does NOT cache the token itself. `getAccessToken()` already
+ * caches and refreshes against the token's REAL expiry; a hand-rolled fixed
+ * one-hour TTL can only get that wrong, and it gets it wrong in the expensive
+ * direction — a token that expires early keeps being served, every Vertex call
+ * 401s, and the retry/backoff budget is burned on an auth problem that the
+ * error path reads as a model problem.
+ */
 async function getToken(): Promise<string> {
-    if (cachedToken && Date.now() < tokenExpiry - 60_000) return cachedToken;
-    const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+    auth ??= new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
     const client = await auth.getClient();
     const token = await client.getAccessToken();
     if (!token.token) throw new Error('GoogleAuth returned no access token');
-    cachedToken = token.token;
-    tokenExpiry = Date.now() + 3_600_000;
-    return cachedToken;
+    return token.token;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -401,16 +413,25 @@ async function classifyBatch(
             // A truncated answer is a size problem, not a luck problem: ask for
             // less instead of asking again. Each half gets its own full retry
             // budget, and the recursion is depth-capped.
-            if (e instanceof TruncatedResponseError && outstanding.length > 1 && depth < MAX_SPLIT_DEPTH) {
-                const mid = Math.ceil(outstanding.length / 2);
-                const halves = [outstanding.slice(0, mid), outstanding.slice(mid)];
-                log(`  attempt ${attempt}: ${e.message} — splitting ${outstanding.length} labels into ${halves.map(h => h.length).join(' + ')}`);
-                for (const half of halves) {
-                    for (const [label, category] of await classifyBatch(projectId, half, log, depth + 1)) {
-                        resolved.set(label, category);
+            if (e instanceof TruncatedResponseError) {
+                if (outstanding.length > 1 && depth < MAX_SPLIT_DEPTH) {
+                    const mid = Math.ceil(outstanding.length / 2);
+                    const halves = [outstanding.slice(0, mid), outstanding.slice(mid)];
+                    log(`  attempt ${attempt}: ${e.message} — splitting ${outstanding.length} labels into ${halves.map(h => h.length).join(' + ')}`);
+                    for (const half of halves) {
+                        for (const [label, category] of await classifyBatch(projectId, half, log, depth + 1)) {
+                            resolved.set(label, category);
+                        }
                     }
+                    // The halves consumed their own retries; nothing left to do here.
+                    break;
                 }
-                // The halves consumed their own retries; nothing left to do here.
+                // The request cannot get any smaller — a single label, or the
+                // split budget is spent. Looping would re-send a byte-identical
+                // request at temperature 0 and truncate at the identical place,
+                // so stop paying for attempts that cannot differ and let the
+                // caller's fallback path own these labels.
+                log(`  attempt ${attempt}: ${e.message} — cannot split further (${outstanding.length} label(s), depth ${depth}); leaving them to the fallback`);
                 break;
             }
             log(`  attempt ${attempt} failed: ${e.message}`);
@@ -491,14 +512,6 @@ function table(headers: string[], rows: string[][]): string {
     return [line(headers), widths.map(w => '-'.repeat(w)).join('  '), ...rows.map(line)].join('\n');
 }
 
-function categoryCounts(classified: Classified[]): { category: string; label: string; count: number }[] {
-    return COMPARISON_CATEGORY_IDS.map(id => ({
-        category: id,
-        label: getIngredientCategory(id)?.label ?? id,
-        count: classified.filter(c => c.category === id).length,
-    }));
-}
-
 function disagreements(classified: Classified[]): Disagreement[] {
     return classified
         .filter(c => c.nnScore >= NN_REPORT_THRESHOLD && c.nnCategory !== c.category)
@@ -506,36 +519,75 @@ function disagreements(classified: Classified[]): Disagreement[] {
         .map(c => ({ label: c.label, usageCount: c.usageCount, llm: c.category, nn: c.nnCategory, nnScore: c.nnScore }));
 }
 
-function printReport(classified: Classified[]): void {
-    const counts = categoryCounts(classified);
+/**
+ * Everything the reporting and the JSON dump need, grouped in ONE pass.
+ *
+ * The naive shape of this stage re-scans the whole `classified` array for every
+ * question it asks — once per category for the counts, again per category for
+ * the usage sum, again per category for the top-labels list, and again for the
+ * NN disagreements (computed separately for the printed table and the dump).
+ * That is ~50 linear scans of the same array to produce one report. Grouping
+ * once and sharing the result costs a single pass, and it also guarantees the
+ * printed tables and the dumped JSON describe the same grouping rather than
+ * independently recomputed ones.
+ */
+interface Summary {
+    total: number;
+    /** category id -> its docs, in classification order. Categories with none are absent. */
+    byCategory: Map<string, Classified[]>;
+    /** Taxonomy-ordered counts + usage sums, including the zeroes, for the table and the dump. */
+    counts: { category: string; label: string; count: number; usageCount: number }[];
+    /** NN disagreements, computed once; shared by the printed table and the dump. */
+    disagreements: Disagreement[];
+}
+
+function summarise(classified: Classified[]): Summary {
+    const byCategory = new Map<string, Classified[]>();
+
+    for (const entry of classified) {
+        const group = byCategory.get(entry.category);
+        if (group) group.push(entry);
+        else byCategory.set(entry.category, [entry]);
+    }
+
+    // Driven by COMPARISON_CATEGORY_IDS, not by the map's keys, so the report
+    // keeps taxonomy order and still shows categories nothing landed in.
+    const counts = COMPARISON_CATEGORY_IDS.map(id => {
+        const group = byCategory.get(id) ?? [];
+        return {
+            category: id,
+            label: getIngredientCategory(id)?.label ?? id,
+            count: group.length,
+            usageCount: group.reduce((n, x) => n + x.usageCount, 0),
+        };
+    });
+
+    return { total: classified.length, byCategory, counts, disagreements: disagreements(classified) };
+}
+
+function printReport(summary: Summary): void {
+    const { counts, total, byCategory, disagreements: rows } = summary;
 
     console.log('\n================ PER-CATEGORY COUNTS ================\n');
     console.log(table(
         ['category', 'display', 'labels', 'usages'],
-        counts.map(c => [
-            c.category,
-            c.label,
-            String(c.count),
-            String(classified.filter(x => x.category === c.category).reduce((n, x) => n + x.usageCount, 0)),
-        ]),
+        counts.map(c => [c.category, c.label, String(c.count), String(c.usageCount)]),
     ));
-    console.log(`\ntotal labels classified: ${classified.length}`);
+    console.log(`\ntotal labels classified: ${total}`);
 
     console.log(`\n============ TOP ${TOP_LABELS_PER_CATEGORY} LABELS BY USAGE, PER CATEGORY ============`);
-    for (const { category, label } of counts) {
-        const top = classified
-            .filter(c => c.category === category)
+    for (const { category, label, count } of counts) {
+        const top = [...(byCategory.get(category) ?? [])]
             .sort((a, b) => b.usageCount - a.usageCount || (a.key < b.key ? -1 : 1))
             .slice(0, TOP_LABELS_PER_CATEGORY);
         if (top.length === 0) continue;
-        console.log(`\n${label} (${category}) — ${classified.filter(c => c.category === category).length} labels`);
+        console.log(`\n${label} (${category}) — ${count} labels`);
         console.log(table(
             ['label', 'usage', 'nn', 'nnScore', 'src'],
             top.map(c => [c.label, String(c.usageCount), c.nnCategory, c.nnScore.toFixed(3), c.source === 'fallback' ? 'FALLBACK' : 'llm']),
         ));
     }
 
-    const rows = disagreements(classified);
     console.log(`\n====== NN DISAGREEMENTS (advisory; nnScore >= ${NN_REPORT_THRESHOLD}) ======\n`);
     if (rows.length === 0) {
         console.log('None.');
@@ -544,7 +596,7 @@ function printReport(classified: Classified[]): void {
             ['label', 'usage', 'llm', 'nn', 'score'],
             rows.map(r => [r.label, String(r.usageCount), r.llm, r.nn, r.nnScore.toFixed(3)]),
         ));
-        console.log(`\n${rows.length} disagreement(s) of ${classified.length} labels (${((rows.length / Math.max(classified.length, 1)) * 100).toFixed(1)}%).`);
+        console.log(`\n${rows.length} disagreement(s) of ${total} labels (${((rows.length / Math.max(total, 1)) * 100).toFixed(1)}%).`);
     }
 }
 
@@ -710,14 +762,18 @@ async function main(): Promise<void> {
         }
     }
 
+    // Grouped once here; the circuit-breaker, the report and the JSON dump all
+    // read this rather than re-scanning `classified` for the same answers.
+    const summary = summarise(classified);
+
     // --- 6. Fallback circuit-breaker ---------------------------------------
-    const fallbackFraction = classified.length > 0 ? unresolvedCount / classified.length : 0;
+    const fallbackFraction = summary.total > 0 ? unresolvedCount / summary.total : 0;
     const tooManyFallbacks = fallbackFraction > MAX_FALLBACK_FRACTION;
     let aborted = false;
     if (tooManyFallbacks && !flags.forceFallbacks) {
         aborted = true;
         console.error('\n########################################################');
-        console.error(`# ABORTING BEFORE WRITE: ${unresolvedCount}/${classified.length} labels (${(fallbackFraction * 100).toFixed(1)}%) fell back to`);
+        console.error(`# ABORTING BEFORE WRITE: ${unresolvedCount}/${summary.total} labels (${(fallbackFraction * 100).toFixed(1)}%) fell back to`);
         console.error(`# '${FALLBACK_CATEGORY_ID}', over the ${(MAX_FALLBACK_FRACTION * 100).toFixed(0)}% limit. That is an unhealthy classifier,`);
         console.error('# not a hard corpus, and writing it would poison the lookup collection.');
         console.error('#');
@@ -789,7 +845,7 @@ async function main(): Promise<void> {
     }
 
     // --- 8. Evidence --------------------------------------------------------
-    printReport(classified);
+    printReport(summary);
 
     const dump = {
         env: flags.envName,
@@ -806,13 +862,13 @@ async function main(): Promise<void> {
         distinctLabels: census.length,
         alreadyClassified: alreadyDone,
         fallbacksRetried: retriedFallbacks,
-        classifiedNow: classified.length,
+        classifiedNow: summary.total,
         fallbackCount: unresolvedCount,
         usageCountsRefreshed: staleCounts.length,
         skippedUnaddressable: unaddressable.map(u => u.label),
         docsWritten: written,
-        categoryCounts: categoryCounts(classified),
-        disagreements: disagreements(classified),
+        categoryCounts: summary.counts,
+        disagreements: summary.disagreements,
         classifications: classified,
     };
     fs.writeFileSync(path.resolve(flags.outPath), JSON.stringify(dump, null, 2));

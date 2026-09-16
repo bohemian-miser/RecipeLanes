@@ -84,6 +84,7 @@ import {
     COMPARISON_CATEGORY_IDS,
     FALLBACK_CATEGORY_ID,
     getIngredientCategory,
+    TAXONOMY_RULES_VERSION,
 } from '../lib/recipe-lanes/ingredient-taxonomy';
 import {
     createIngredientLabelCollector,
@@ -680,6 +681,7 @@ async function main(): Promise<void> {
 
     let alreadyDone = 0;
     let retriedFallbacks = 0;
+    let staleVersion = 0;
     let pending = addressable;
     // Docs that are staying as-is but whose usage numbers have moved on.
     const staleCounts: Addressable[] = [];
@@ -697,6 +699,11 @@ async function main(): Promise<void> {
                 // A fallback doc is a FAILURE that was parked in 'other', not a
                 // result. Treating it as done would make one bad run permanent.
                 if (data.source === 'fallback') { retriedFallbacks++; continue; }
+                // Classified against boundaries the taxonomy no longer states.
+                // Docs written before versioning have no field at all, which
+                // compares unequal and so gets picked up here too — exactly
+                // right, since they predate every clause added since.
+                if (data.categoryRulesVersion !== TAXONOMY_RULES_VERSION) { staleVersion++; continue; }
                 good.add(doc.id);
                 const usage = byId.get(doc.id);
                 if (usage && (data.usageCount !== usage.usageCount || data.recipeCount !== usage.recipeCount)) {
@@ -706,7 +713,11 @@ async function main(): Promise<void> {
         }
         pending = addressable.filter(u => !good.has(u.docId));
         alreadyDone = addressable.length - pending.length;
-        console.log(`Already classified: ${alreadyDone}   To classify: ${pending.length}${retriedFallbacks ? ` (incl. ${retriedFallbacks} earlier fallback(s) being retried)` : ''}`);
+        const reasons = [
+            retriedFallbacks ? `${retriedFallbacks} earlier fallback(s)` : '',
+            staleVersion ? `${staleVersion} classified under older rules (now v${TAXONOMY_RULES_VERSION})` : '',
+        ].filter(Boolean);
+        console.log(`Already classified: ${alreadyDone}   To classify: ${pending.length}${reasons.length ? ` (incl. ${reasons.join(', ')})` : ''}`);
         if (staleCounts.length > 0) {
             console.log(`Usage counts to refresh on existing docs: ${staleCounts.length}`);
         }
@@ -816,6 +827,11 @@ async function main(): Promise<void> {
                         nnCategory: entry.nnCategory,
                         nnScore: entry.nnScore,
                         classifiedAt,
+                        // Which boundary text produced this answer. The scan
+                        // above reclassifies anything stamped with a different
+                        // version, so a rules edit reaches old docs instead of
+                        // needing a blanket --force.
+                        categoryRulesVersion: TAXONOMY_RULES_VERSION,
                         // Usage numbers describe the LAST SCAN, not all time:
                         // a --limit run records what that subset saw.
                         usageCount: entry.usageCount,
@@ -867,8 +883,10 @@ async function main(): Promise<void> {
         recipesScanned: collector.recipesSeen,
         recipesSkipped: skippedGraphs,
         distinctLabels: census.length,
+        rulesVersion: TAXONOMY_RULES_VERSION,
         alreadyClassified: alreadyDone,
         fallbacksRetried: retriedFallbacks,
+        reclassifiedForRulesVersion: staleVersion,
         classifiedNow: classified.length,
         fallbackCount: unresolvedCount,
         usageCountsRefreshed: staleCounts.length,

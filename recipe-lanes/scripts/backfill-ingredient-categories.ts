@@ -59,10 +59,13 @@
  * (it still reads, classifies and embeds, which is the point: it is how the
  * classification quality gets reviewed before anything is persisted).
  *
- * NOTE (follow-up): the Vertex REST call + token cache, the `withConcurrency`
+ * NOTE (follow-up, issue #327): the Vertex REST call, the `withConcurrency`
  * helper and the MiniLM embedder setup below are near-duplicates of the ones
- * in `backfill-icon-search-terms.ts` / `backfill-embeddings.ts`. Extracting
- * them into `scripts/lib/` is worth doing, but it touches those scripts and
+ * in `backfill-icon-search-terms.ts` / `backfill-embeddings.ts`. THIS file is
+ * the up-to-date copy — the siblings still carry a fixed-1h-TTL token cache
+ * that ignores the token's real expiry, and have no MAX_TOKENS/truncation
+ * handling — so a future extraction into `scripts/lib/` should start from
+ * here rather than from them. Extracting touches those scripts too and
  * belongs in its own PR rather than riding along with this one.
  */
 
@@ -256,17 +259,12 @@ function initFirebase(envName: Flags['envName']): Target {
 }
 
 // ---------------------------------------------------------------------------
-// Vertex Gemini (REST) — same shape as backfill-icon-search-terms.ts
+// Vertex Gemini (REST). backfill-icon-search-terms.ts has the same shape but
+// is the outdated copy — see the NOTE at the top of this file (issue #327).
 // ---------------------------------------------------------------------------
 
-/**
- * One `GoogleAuth` for the whole run, built on first use.
- *
- * Lazily, because GoogleAuth resolves credentials when it is first *used*, and
- * `initFirebase` has to have pinned `GOOGLE_APPLICATION_CREDENTIALS` by then.
- * Once, because rebuilding it per token discards the library's own cache.
- */
-let auth: GoogleAuth | null = null;
+/** One `GoogleAuth` for the whole run, so it keeps its own token cache. */
+const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
 
 /**
  * Deliberately does NOT cache the token itself. `getAccessToken()` already
@@ -277,7 +275,6 @@ let auth: GoogleAuth | null = null;
  * error path reads as a model problem.
  */
 async function getToken(): Promise<string> {
-    auth ??= new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
     const client = await auth.getClient();
     const token = await client.getAccessToken();
     if (!token.token) throw new Error('GoogleAuth returned no access token');
@@ -391,6 +388,9 @@ async function classifyBatch(
 ): Promise<Map<string, string>> {
     const resolved = new Map<string, string>();
     let outstanding = labels;
+    // An unsplittable truncation (below) gets exactly one extra attempt before
+    // falling back — see the comment at that branch for why.
+    let unsplittableRetried = false;
 
     for (let attempt = 1; attempt <= MAX_RETRIES + 1 && outstanding.length > 0; attempt++) {
         if (attempt > 1) await sleep(backoffFor(attempt - 1));
@@ -427,11 +427,19 @@ async function classifyBatch(
                     break;
                 }
                 // The request cannot get any smaller — a single label, or the
-                // split budget is spent. Looping would re-send a byte-identical
-                // request at temperature 0 and truncate at the identical place,
-                // so stop paying for attempts that cannot differ and let the
-                // caller's fallback path own these labels.
-                log(`  attempt ${attempt}: ${e.message} — cannot split further (${outstanding.length} label(s), depth ${depth}); leaving them to the fallback`);
+                // split budget is spent. Vertex at temperature 0 is not
+                // bit-deterministic across serving replicas, and a MAX_TOKENS
+                // on a batch this small usually means a transient degenerate
+                // repetition loop rather than a genuinely oversized request —
+                // one retry tends to clear it. A second truncation means the
+                // retry didn't help, so only one extra attempt is spent here
+                // before handing these labels to the caller's fallback.
+                if (!unsplittableRetried) {
+                    unsplittableRetried = true;
+                    log(`  attempt ${attempt}: ${e.message} — cannot split further (${outstanding.length} label(s), depth ${depth}); retrying once before falling back`);
+                    continue;
+                }
+                log(`  attempt ${attempt}: ${e.message} — cannot split further (${outstanding.length} label(s), depth ${depth}) and the retry truncated too; leaving them to the fallback`);
                 break;
             }
             log(`  attempt ${attempt} failed: ${e.message}`);
@@ -762,18 +770,14 @@ async function main(): Promise<void> {
         }
     }
 
-    // Grouped once here; the circuit-breaker, the report and the JSON dump all
-    // read this rather than re-scanning `classified` for the same answers.
-    const summary = summarise(classified);
-
     // --- 6. Fallback circuit-breaker ---------------------------------------
-    const fallbackFraction = summary.total > 0 ? unresolvedCount / summary.total : 0;
+    const fallbackFraction = classified.length > 0 ? unresolvedCount / classified.length : 0;
     const tooManyFallbacks = fallbackFraction > MAX_FALLBACK_FRACTION;
     let aborted = false;
     if (tooManyFallbacks && !flags.forceFallbacks) {
         aborted = true;
         console.error('\n########################################################');
-        console.error(`# ABORTING BEFORE WRITE: ${unresolvedCount}/${summary.total} labels (${(fallbackFraction * 100).toFixed(1)}%) fell back to`);
+        console.error(`# ABORTING BEFORE WRITE: ${unresolvedCount}/${classified.length} labels (${(fallbackFraction * 100).toFixed(1)}%) fell back to`);
         console.error(`# '${FALLBACK_CATEGORY_ID}', over the ${(MAX_FALLBACK_FRACTION * 100).toFixed(0)}% limit. That is an unhealthy classifier,`);
         console.error('# not a hard corpus, and writing it would poison the lookup collection.');
         console.error('#');
@@ -845,6 +849,9 @@ async function main(): Promise<void> {
     }
 
     // --- 8. Evidence --------------------------------------------------------
+    // One pass here builds everything the report and the JSON dump need,
+    // instead of each of them re-scanning `classified` on their own.
+    const summary = summarise(classified);
     printReport(summary);
 
     const dump = {
@@ -862,7 +869,7 @@ async function main(): Promise<void> {
         distinctLabels: census.length,
         alreadyClassified: alreadyDone,
         fallbacksRetried: retriedFallbacks,
-        classifiedNow: summary.total,
+        classifiedNow: classified.length,
         fallbackCount: unresolvedCount,
         usageCountsRefreshed: staleCounts.length,
         skippedUnaddressable: unaddressable.map(u => u.label),

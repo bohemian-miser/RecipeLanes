@@ -286,6 +286,35 @@ describe('ingredient-taxonomy — parseClassificationResponse', () => {
         assert.equal(result.assignments.cebula, 'aromatics');
     });
 
+    it('recovers an unfenced object followed by prose that contains a brace', () => {
+        // Regression: the recovery used to slice from a candidate opening
+        // brace to the LAST '}' in the response, so any brace in a trailing
+        // sign-off swallowed the object and nothing parsed at all.
+        const raw = '{"salt":"herbs_spices","onion":"aromatics","cebula":"aromatics"}'
+            + ' — let me know if {anything} needs changing.';
+        const result = parseClassificationResponse(raw, labels);
+        assert.deepEqual(result.missing, []);
+        assert.equal(result.assignments.cebula, 'aromatics');
+    });
+
+    it('recovers an object braced by prose on BOTH sides', () => {
+        const raw = 'I picked {one of} the ids for each label. Here you go: '
+            + '{"salt":"herbs_spices","onion":"aromatics","cebula":"aromatics"}'
+            + ' Hope that helps — ping me if {any} look wrong.';
+        const result = parseClassificationResponse(raw, labels);
+        assert.deepEqual(result.missing, []);
+        assert.equal(result.assignments.salt, 'herbs_spices');
+        assert.equal(result.assignments.onion, 'aromatics');
+        assert.equal(result.assignments.cebula, 'aromatics');
+    });
+
+    it('prefers the outermost object when the answer itself nests braces', () => {
+        const raw = 'Result: {"salt":"herbs_spices","onion":"aromatics","cebula":"aromatics"}. Done {ok}.';
+        const result = parseClassificationResponse(raw, labels);
+        assert.deepEqual(result.missing, []);
+        assert.equal(Object.keys(plain(result.assignments)).length, 3);
+    });
+
     it('reports a label the response left out, keeping the ones it got', () => {
         const raw = '{"salt":"herbs_spices","onion":"aromatics"}';
         const result = parseClassificationResponse(raw, labels);

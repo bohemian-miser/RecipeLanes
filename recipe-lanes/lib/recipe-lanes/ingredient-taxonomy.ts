@@ -90,6 +90,15 @@ interface CategoryDefinition {
  * forms and then hands concentrated tomato paste back to condiments_liquids,
  * which claims it. Enumerating the forms rather than saying "fresh or
  * otherwise" is what keeps those two rules from both claiming the same jar.
+ *
+ * The last unruled boundary was the one the icon corpus kept tripping over:
+ * a plated composite dish has no single ingredient to be classified as, so
+ * "Simple Duck Sandwich On A Plate" drifted between `proteins`, `other` and
+ * `action_or_state` from run to run. The owner settled it on 2026-09-17 —
+ * a plated or assembled dish is a RESULT of cooking, so it belongs with the
+ * other process states — and the clause lives on `action_or_state` in
+ * ICON_ONLY_TABLE below. Every boundary call in this file is now owner-
+ * confirmed rather than a standing recommendation.
  */
 const CATEGORY_TABLE = [
     {
@@ -177,7 +186,7 @@ const ICON_ONLY_TABLE = [
         id: 'action_or_state',
         label: 'Actions & States',
         color: '#a1a1aa',
-        rules: 'Cooking actions, processes, equipment states and other non-ingredient subjects ("Oven Preheating", "Whisking", "Simmering Pot"). Icon names only — an ingredient label is never this category.',
+        rules: 'Cooking actions, processes, equipment states and other non-ingredient subjects ("Oven Preheating", "Whisking", "Simmering Pot"); plated, assembled, or served composite dishes ("Simple Duck Sandwich On A Plate", "Assembled Burger", "Finished Korma Garnished With Coriander") are process RESULTS, not ingredients — they belong here rather than in the category of whichever ingredient dominates them. Icon names only — an ingredient label is never this category.',
     },
 ] as const satisfies readonly CategoryDefinition[];
 
@@ -251,11 +260,12 @@ export const FALLBACK_CATEGORY_ID: IngredientCategoryId = 'other';
  * forces a blanket `--force` pass over the whole corpus.
  *
  * Version 1 is the pre-existing rules text; 2 adds the leavener, paste,
- * egg-part and culinary-vegetable boundaries. Cosmetic rewording that cannot
- * change an assignment does not need a bump — but when in doubt, bump: a
- * needless reclassification costs pennies, a missed one is invisible.
+ * egg-part and culinary-vegetable boundaries; 3 sends plated composite dishes
+ * to `action_or_state`. Cosmetic rewording that cannot change an assignment
+ * does not need a bump — but when in doubt, bump: a needless reclassification
+ * costs pennies, a missed one is invisible.
  */
-export const TAXONOMY_RULES_VERSION = 2;
+export const TAXONOMY_RULES_VERSION = 3;
 
 const CATEGORY_BY_ID: ReadonlyMap<string, IngredientCategory> = new Map(
     INGREDIENT_CATEGORIES.map(c => [c.id, c]),

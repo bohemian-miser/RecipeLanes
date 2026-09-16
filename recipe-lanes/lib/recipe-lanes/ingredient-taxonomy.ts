@@ -61,6 +61,15 @@ interface CategoryDefinition {
  * bands, grains vs nuts, are separated by lightness). They are mid-to-light
  * tones because they are drawn ON dark backgrounds, as legend dots, UMAP rings
  * and group-header chips.
+ *
+ * Some `rules` clauses exist because the classifier proved UNSTABLE without
+ * them. Diffing two temperature-0 dry runs of the label backfill showed 97.3%
+ * identical assignments, and the churn was concentrated on exactly the labels
+ * no rule covered: leaveners flipping other <-> herbs_spices, tomato paste
+ * flipping condiments_liquids <-> vegetables, "Whites" flipping dairy_eggs <->
+ * other. A label the rules do not reach is a coin toss, so the fix is to name
+ * the boundary rather than to hope — see the leavener, paste and egg-part
+ * clauses below.
  */
 const CATEGORY_TABLE = [
     {
@@ -103,13 +112,13 @@ const CATEGORY_TABLE = [
         id: 'dairy_eggs',
         label: 'Dairy & Eggs',
         color: '#93c5fd',
-        rules: 'Milk, cream, cheese, yogurt, sour cream — and eggs (merged per survey recommendation).',
+        rules: 'Milk, cream, cheese, yogurt, sour cream — and eggs (merged per survey recommendation); egg parts (whites, yolks).',
     },
     {
         id: 'grains_starches',
         label: 'Grains & Starches',
         color: '#d6b48a',
-        rules: 'Flour, rice, pasta, noodles, bread/breadcrumbs, oats, corn products — and potatoes (culinary starch role).',
+        rules: 'Flour, rice, pasta, noodles, bread/breadcrumbs, oats, corn products — and potatoes (culinary starch role); raising agents and leaveners (baking powder, baking soda/bicarbonate, yeast — including nutritional yeast).',
     },
     {
         id: 'nuts_seeds',
@@ -127,7 +136,7 @@ const CATEGORY_TABLE = [
         id: 'condiments_liquids',
         label: 'Sauces, Condiments & Liquids',
         color: '#2dd4bf',
-        rules: 'Soy/fish/hot sauces, mustard, vinegar, stock/broth, water, wine/beer/spirits, juices, coconut milk.',
+        rules: 'Soy/fish/hot sauces, mustard, vinegar, stock/broth, water, wine/beer/spirits, juices, coconut milk; concentrated pastes (tomato paste, curry paste, miso, tahini).',
     },
     {
         id: 'other',

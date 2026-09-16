@@ -168,6 +168,39 @@ describe('ingredient-taxonomy — buildClassificationPrompt', () => {
         }
     });
 
+    // These three boundaries were added because the classifier was measurably
+    // unstable without them: two temperature-0 dry runs of the label backfill
+    // agreed on 97.3% of assignments, and the disagreements clustered on the
+    // labels no rule covered. Assert the fragments individually so that a later
+    // edit to a `rules` string cannot silently drop a boundary back into the
+    // coin-toss zone while the generic "rules appear verbatim" test above
+    // still passes.
+    it('names the leavener boundary so raising agents cannot drift to Other', () => {
+        const prompt = buildClassificationPrompt(labels);
+        assert.ok(
+            prompt.includes(
+                'raising agents and leaveners (baking powder, baking soda/bicarbonate, yeast — including nutritional yeast)',
+            ),
+            'grains_starches must claim leaveners explicitly',
+        );
+    });
+
+    it('names the concentrated-paste boundary so tomato paste cannot drift to Vegetables', () => {
+        const prompt = buildClassificationPrompt(labels);
+        assert.ok(
+            prompt.includes('concentrated pastes (tomato paste, curry paste, miso, tahini)'),
+            'condiments_liquids must claim concentrated pastes explicitly',
+        );
+    });
+
+    it('names the egg-part boundary so "whites" cannot drift to Other', () => {
+        const prompt = buildClassificationPrompt(labels);
+        assert.ok(
+            prompt.includes('egg parts (whites, yolks)'),
+            'dairy_eggs must claim egg parts explicitly',
+        );
+    });
+
     it('lists every label to classify, JSON-quoted so odd labels stay intact', () => {
         const prompt = buildClassificationPrompt(['plain', 'has "quotes"', 'has\nnewline']);
         assert.ok(prompt.includes('"plain"'));

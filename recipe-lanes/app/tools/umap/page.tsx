@@ -1,9 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { FeedbackButton } from '@/components/feedback-button';
+import {
+    INGREDIENT_CATEGORIES,
+    ICON_ONLY_CATEGORIES,
+    getIngredientCategory,
+    type ClassificationCategory,
+} from '@/lib/recipe-lanes/ingredient-taxonomy';
 
 type IconPoint = {
     id: string;
@@ -11,11 +17,55 @@ type IconPoint = {
     x: number;
     y: number;
     imgUrl: string;
+    /** Taxonomy category written by scripts/backfill-icon-categories.ts. */
+    category?: string;
 };
 
 type Cam = { x: number; y: number; scale: number };
 
 const IMG_SIZE = 38;
+/** Ring radius: just outside the 38px icon box, so the art is never covered. */
+const RING_RADIUS = 22;
+const RING_WIDTH = 2;
+/** Icons the backfill has not reached yet (or that carry an unknown id). */
+const UNCLASSIFIED_COLOR = '#71717a';
+/** How much a non-selected category fades when a legend entry is picked. */
+const DIMMED_ALPHA = 0.25;
+
+/**
+ * Every category an icon may carry, in taxonomy display order. Icons get the
+ * twelve comparison categories plus `action_or_state` ("Oven Preheating"),
+ * which is why this concatenates rather than using INGREDIENT_CATEGORIES alone.
+ */
+const ICON_CATEGORIES = [...INGREDIENT_CATEGORIES, ...ICON_ONLY_CATEGORIES];
+
+// Keyed by plain `string`, not by the id union: the lookups below start from a
+// Firestore field, which is an arbitrary string until it has been recognised.
+const ICON_CATEGORY_BY_ID = new Map<string, ClassificationCategory>(
+    ICON_CATEGORIES.map(c => [c.id, c]),
+);
+
+/**
+ * Resolves a stored `category` string to its taxonomy entry.
+ *
+ * `getIngredientCategory` is the canonical accessor for the twelve comparison
+ * ids; the map adds the icon-only `action_or_state`. Anything else — no
+ * category field yet, or an id from an older taxonomy — resolves to undefined
+ * and is rendered grey, so "not classified" reads as absence rather than as a
+ * real group.
+ */
+function lookupCategory(category: string | undefined) {
+    if (category === undefined) return undefined;
+    return getIngredientCategory(category) ?? ICON_CATEGORY_BY_ID.get(category);
+}
+
+function categoryColor(category: string | undefined): string {
+    return lookupCategory(category)?.color ?? UNCLASSIFIED_COLOR;
+}
+
+function categoryLabel(category: string | undefined): string {
+    return lookupCategory(category)?.label ?? 'unclassified';
+}
 
 function iconUrl(id: string, name: string, bucket: string): string {
     const shortId = id.substring(0, 8);
@@ -56,6 +106,8 @@ export default function UmapPage() {
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
     const [cellGap, setCellGap] = useState(76);
     const cellGapRef = useRef(76);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const selectedCategoryRef = useRef<string | null>(null);
 
     const camera = useRef<Cam>({ x: 0, y: 0, scale: 1 });
     const dragging = useRef<{ startX: number; startY: number; camX: number; camY: number } | null>(null);
@@ -64,6 +116,18 @@ export default function UmapPage() {
     const pointsRef = useRef<IconPoint[]>([]);
 
     const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? 'recipe-lanes.firebasestorage.app';
+
+    // Counts over ALL points, not the LOD representatives: the legend is a
+    // census of the corpus, and it must not change as you zoom.
+    const categoryCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        let unclassified = 0;
+        for (const pt of points) {
+            if (pt.category === undefined) unclassified++;
+            else counts.set(pt.category, (counts.get(pt.category) ?? 0) + 1);
+        }
+        return { counts, unclassified };
+    }, [points]);
 
     function getOrLoadImg(url: string): HTMLImageElement | null {
         const cached = imgCache.current.get(url);
@@ -83,6 +147,7 @@ export default function UmapPage() {
         const ctx = canvas.getContext('2d')!;
         const cam = camera.current;
         const pts = pointsRef.current;
+        const selected = selectedCategoryRef.current;
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#ffffff';
@@ -113,20 +178,39 @@ export default function UmapPage() {
 
         for (const pt of reps) {
             const { sx, sy } = toScreen(pt.x, pt.y, cam);
+            const color = categoryColor(pt.category);
+            // With a category selected, everything else keeps its colour but
+            // fades back, so the selection reads against the real map rather
+            // than against an empty one.
+            const dimmed = selected !== null && pt.category !== selected;
+            ctx.globalAlpha = dimmed ? DIMMED_ALPHA : 1;
+
             const img = getOrLoadImg(pt.imgUrl);
             if (img) {
+                // Ring first, icon over it: the stroke sits proud of the 38px
+                // box, so the art stays fully visible inside a colour halo.
+                ctx.beginPath();
+                ctx.arc(sx, sy, RING_RADIUS, 0, Math.PI * 2);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = RING_WIDTH;
+                ctx.stroke();
                 ctx.drawImage(img, sx - half, sy - half, IMG_SIZE, IMG_SIZE);
             } else {
+                // Pre-load placeholder. Category-coloured too, so the map is
+                // already readable before a single thumbnail has arrived.
                 ctx.beginPath();
                 ctx.arc(sx, sy, 3, 0, Math.PI * 2);
-                ctx.fillStyle = '#d4d4d8';
+                ctx.fillStyle = color;
                 ctx.fill();
             }
         }
+
+        ctx.globalAlpha = 1;
     }
 
     useEffect(() => { pointsRef.current = points; }, [points]);
     useEffect(() => { cellGapRef.current = cellGap; draw(); }, [cellGap]);
+    useEffect(() => { selectedCategoryRef.current = selectedCategory; draw(); }, [selectedCategory]);
 
     function onWheel(e: WheelEvent) {
         e.preventDefault();
@@ -174,6 +258,9 @@ export default function UmapPage() {
                     x: d.umap_x,
                     y: d.umap_y,
                     imgUrl: iconUrl(doc.id, d.ingredient_name ?? doc.id, bucket),
+                    // Absent until the icon backfill has run against this env;
+                    // the whole view degrades to grey rings, never to an error.
+                    category: typeof d.category === 'string' ? d.category : undefined,
                 });
             });
             setPoints(pts);
@@ -245,6 +332,11 @@ export default function UmapPage() {
 
     function onMouseUp() { dragging.current = null; }
 
+    /** Click the selected entry again to clear the highlight. */
+    function toggleCategory(id: string) {
+        setSelectedCategory(current => (current === id ? null : id));
+    }
+
     return (
         <div className="w-screen h-screen bg-white flex flex-col">
             <div className="px-4 py-2 flex items-center gap-3 border-b border-zinc-200">
@@ -281,6 +373,48 @@ export default function UmapPage() {
                     onMouseLeave={onMouseUp}
                 />
 
+                {!loading && (
+                    <div className="absolute top-3 left-3 z-10 max-h-[calc(100%-1.5rem)] overflow-y-auto bg-white/95 border border-zinc-200 rounded-lg shadow-sm p-2">
+                        <p className="text-xs font-medium text-zinc-500 px-1 pb-1">category</p>
+                        {ICON_CATEGORIES.map(category => {
+                            const count = categoryCounts.counts.get(category.id) ?? 0;
+                            const active = selectedCategory === category.id;
+                            return (
+                                <button
+                                    key={category.id}
+                                    type="button"
+                                    onClick={() => toggleCategory(category.id)}
+                                    className={`w-full flex items-center gap-2 px-1 py-0.5 rounded text-left text-xs transition-colors ${
+                                        active ? 'bg-zinc-100 text-zinc-900 font-medium' : 'text-zinc-600 hover:bg-zinc-50'
+                                    }`}
+                                    aria-pressed={active}
+                                    title={category.rules}
+                                >
+                                    <span
+                                        className="w-3 h-3 rounded-full shrink-0"
+                                        style={{ backgroundColor: category.color }}
+                                    />
+                                    <span className="flex-1 truncate">{category.label}</span>
+                                    <span className="tabular-nums text-zinc-400">{count}</span>
+                                </button>
+                            );
+                        })}
+                        {/* Not a category — the count of icons the backfill has
+                            not reached. Deliberately not clickable: there is
+                            nothing to highlight, only something to go and run. */}
+                        {categoryCounts.unclassified > 0 && (
+                            <div className="w-full flex items-center gap-2 px-1 py-0.5 text-xs text-zinc-400 border-t border-zinc-100 mt-1 pt-1">
+                                <span
+                                    className="w-3 h-3 rounded-full shrink-0 opacity-40"
+                                    style={{ backgroundColor: UNCLASSIFIED_COLOR }}
+                                />
+                                <span className="flex-1 truncate">unclassified</span>
+                                <span className="tabular-nums">{categoryCounts.unclassified}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {hovered && (
                     <div
                         className="pointer-events-none fixed z-10 bg-white border border-zinc-200 rounded-lg p-2 shadow-lg"
@@ -292,6 +426,12 @@ export default function UmapPage() {
                             className="w-16 h-16 object-contain"
                         />
                         <p className="text-xs text-zinc-600 mt-1 max-w-32 text-center leading-tight">{hovered.name}</p>
+                        <p
+                            className="text-[10px] mt-0.5 text-center leading-tight"
+                            style={{ color: categoryColor(hovered.category) }}
+                        >
+                            {categoryLabel(hovered.category)}
+                        </p>
                     </div>
                 )}
             </div>

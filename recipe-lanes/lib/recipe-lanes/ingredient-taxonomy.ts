@@ -70,6 +70,16 @@ interface CategoryDefinition {
  * other. A label the rules do not reach is a coin toss, so the fix is to name
  * the boundary rather than to hope — see the leavener, paste and egg-part
  * clauses below.
+ *
+ * The vegetables/fruits clauses come from a different failure, seen in a 620
+ * label staging run: the classifier was not unstable there, it was confidently
+ * BOTANICAL. "Tomato (sliced)", "Cherry Tomatoes, Halved" and "Avocado,
+ * Sliced" all went to `fruits`, while canned/crushed tomatoes went to
+ * `vegetables` — so one ingredient split across two groups on preparation
+ * alone. This taxonomy is for cooks reading a comparison table, not for
+ * botanists, so `vegetables` claims these outright and `fruits` carries the
+ * mirroring exclusion. Both sides are stated because the model has to be told
+ * where the item goes AND that its other reading is wrong.
  */
 const CATEGORY_TABLE = [
     {
@@ -88,13 +98,13 @@ const CATEGORY_TABLE = [
         id: 'vegetables',
         label: 'Vegetables',
         color: '#4ade80',
-        rules: 'All vegetables not covered by aromatics. Mushrooms here. NOT potatoes (see grains_starches).',
+        rules: 'All vegetables not covered by aromatics. Mushrooms here. NOT potatoes (see grains_starches); culinary vegetables that are botanically fruit (tomato, avocado, cucumber, capsicum/bell pepper, zucchini, eggplant) belong here, fresh or otherwise.',
     },
     {
         id: 'fruits',
         label: 'Fruits',
         color: '#fb923c',
-        rules: 'Fresh/dried fruit, citrus zest, whole citrus. Citrus JUICE goes to condiments_liquids.',
+        rules: 'Fresh/dried fruit, citrus zest, whole citrus. Citrus JUICE goes to condiments_liquids; NOT culinary vegetables like tomato/avocado/cucumber (see vegetables).',
     },
     {
         id: 'herbs_spices',

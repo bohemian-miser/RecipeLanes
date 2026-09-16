@@ -201,6 +201,30 @@ describe('ingredient-taxonomy — buildClassificationPrompt', () => {
         );
     });
 
+    // A different failure from the three above: here the classifier was not
+    // unstable, it was confidently botanical — sliced tomato and avocado went to
+    // `fruits` while canned tomato went to `vegetables`, splitting one
+    // ingredient across two groups on preparation alone. Both halves of the
+    // boundary are asserted because the model needs telling where the item goes
+    // AND that its other reading is wrong.
+    it('claims botanically-fruit produce for Vegetables', () => {
+        const prompt = buildClassificationPrompt(labels);
+        assert.ok(
+            prompt.includes(
+                'culinary vegetables that are botanically fruit (tomato, avocado, cucumber, capsicum/bell pepper, zucchini, eggplant) belong here, fresh or otherwise',
+            ),
+            'vegetables must claim culinary vegetables that are botanically fruit',
+        );
+    });
+
+    it('excludes culinary vegetables from Fruits, mirroring the vegetables rule', () => {
+        const prompt = buildClassificationPrompt(labels);
+        assert.ok(
+            prompt.includes('NOT culinary vegetables like tomato/avocado/cucumber (see vegetables)'),
+            'fruits must carry the mirroring exclusion',
+        );
+    });
+
     it('lists every label to classify, JSON-quoted so odd labels stay intact', () => {
         const prompt = buildClassificationPrompt(['plain', 'has "quotes"', 'has\nnewline']);
         assert.ok(prompt.includes('"plain"'));

@@ -77,10 +77,11 @@ import { scanCollection } from './lib/db-tools';
 import {
     buildClassificationPrompt,
     parseClassificationResponse,
+    ALL_CLASSIFICATION_CATEGORIES,
     ALL_CLASSIFICATION_IDS,
     FALLBACK_CATEGORY_ID,
-    INGREDIENT_CATEGORIES,
     ICON_ONLY_CATEGORIES,
+    TAXONOMY_RULES_VERSION,
 } from '../lib/recipe-lanes/ingredient-taxonomy';
 
 // ---------------------------------------------------------------------------
@@ -113,15 +114,16 @@ const WRITE_BATCH_SIZE = 200;
 /** Example icon names shown per category in the report. */
 const EXAMPLES_PER_CATEGORY = 15;
 
-/**
- * Every category an icon may be assigned, in display order — the twelve
- * comparison categories plus `action_or_state`. Derived from the taxonomy
- * module rather than restated, so the report can never list a category the
- * classifier is not being offered (or miss one it is).
- */
-const ICON_CATEGORIES = [...INGREDIENT_CATEGORIES, ...ICON_ONLY_CATEGORIES];
-
 const CLASSIFY_OPTS = { includeIconCategories: true } as const;
+
+/**
+ * Only these fields are read off each `icon_index` doc.
+ *
+ * The docs also carry 768- and 384-dimension embedding vectors, which this
+ * script never looks at — fetching whole documents moved roughly a hundred
+ * times more data than the scan needs.
+ */
+const SCAN_FIELDS = ['ingredient_name', 'category', 'categorySource', 'categoryRulesVersion'];
 
 // ---------------------------------------------------------------------------
 // Flags
@@ -327,7 +329,15 @@ async function callGemini(projectId: string, prompt: string, backoffMs: number):
     });
 
     if (res.status === 429) {
-        const wait = Math.max(parseRetryAfter(res.headers.get('retry-after')), backoffMs, RATE_LIMIT_COOLDOWN_MS);
+        // A server-stated Retry-After is honoured as given: the endpoint knows
+        // when its quota frees up, and a SHORT value is information rather than
+        // an underestimate to be floored away. RATE_LIMIT_COOLDOWN_MS is only a
+        // guess for when the server said nothing at all, so it applies only
+        // then. Either way the per-attempt backoff is still respected.
+        const retryAfter = parseRetryAfter(res.headers.get('retry-after'));
+        const wait = retryAfter > 0
+            ? Math.max(retryAfter, backoffMs)
+            : Math.max(backoffMs, RATE_LIMIT_COOLDOWN_MS);
         cooldownUntil = Math.max(cooldownUntil, Date.now() + wait);
         throw new Error(`Vertex 429 rate limited — all workers cooling down ${Math.round(wait / 1000)}s`);
     }
@@ -447,7 +457,13 @@ interface Classified {
     id: string;
     name: string;
     category: string;
-    source: typeof MODEL | 'fallback';
+    /**
+     * HOW the category was decided, not by what. The model id is a separate
+     * field (`categoryModel`), so putting it here too meant the provenance flag
+     * changed value every time the model was upgraded — and any code testing it
+     * for "was this a real classification" had to know every model id ever used.
+     */
+    source: 'llm' | 'fallback';
 }
 
 function table(headers: string[], rows: string[][]): string {
@@ -487,9 +503,9 @@ function summarise(classified: Classified[]): Summary {
         if (entry.source === 'fallback') fallbacks.push(entry);
     }
 
-    // Driven by ICON_CATEGORIES, not by the map's keys, so the report keeps
-    // taxonomy order and still shows categories nothing landed in.
-    const counts = ICON_CATEGORIES.map(c => ({
+    // Driven by the taxonomy's own ordered list, not by the map's keys, so the
+    // report keeps taxonomy order and still shows categories nothing landed in.
+    const counts = ALL_CLASSIFICATION_CATEGORIES.map(c => ({
         category: c.id as string,
         label: c.label,
         count: byCategory.get(c.id)?.length ?? 0,
@@ -520,7 +536,7 @@ function printReport(summary: Summary): void {
         console.log(`\n${label} (${category}) — ${count} icons`);
         console.log(table(
             ['icon name', 'src'],
-            examples.map(c => [c.name, c.source === 'fallback' ? 'FALLBACK' : 'llm']),
+            examples.map(c => [c.name, c.source === 'fallback' ? 'FALLBACK' : c.source]),
         ));
     }
 
@@ -564,9 +580,10 @@ async function main(): Promise<void> {
     let scanned = 0;
     let alreadyDone = 0;
     let retriedFallbacks = 0;
+    let staleVersion = 0;
     let unnamed = 0;
 
-    for await (const doc of scanCollection(db, DB_COLLECTION_ICON_INDEX)) {
+    for await (const doc of scanCollection(db, DB_COLLECTION_ICON_INDEX, 500, SCAN_FIELDS)) {
         if (scanned >= flags.limit) break;
         scanned++;
         const data = doc.data() ?? {};
@@ -580,6 +597,12 @@ async function main(): Promise<void> {
             // rather than letting one bad run stay on the map forever.
             if (data.categorySource === 'fallback') {
                 retriedFallbacks++;
+            } else if (data.categoryRulesVersion !== TAXONOMY_RULES_VERSION) {
+                // Classified against boundaries the taxonomy no longer states.
+                // Docs written before versioning have no field at all, which
+                // compares unequal and so gets picked up here too — exactly
+                // right, since they predate every clause added since.
+                staleVersion++;
             } else {
                 alreadyDone++;
                 continue;
@@ -592,7 +615,11 @@ async function main(): Promise<void> {
     if (flags.force) {
         console.log(`--force: reclassifying every icon, already-categorised docs included.`);
     } else {
-        console.log(`Already classified: ${alreadyDone}   To classify: ${pending.length}${retriedFallbacks ? ` (incl. ${retriedFallbacks} earlier fallback(s) being retried)` : ''}`);
+        const reasons = [
+            retriedFallbacks ? `${retriedFallbacks} earlier fallback(s)` : '',
+            staleVersion ? `${staleVersion} classified under older rules (now v${TAXONOMY_RULES_VERSION})` : '',
+        ].filter(Boolean);
+        console.log(`Already classified: ${alreadyDone}   To classify: ${pending.length}${reasons.length ? ` (incl. ${reasons.join(', ')})` : ''}`);
     }
     console.log('');
 
@@ -603,13 +630,10 @@ async function main(): Promise<void> {
     // names are common (several renders of the same subject). Classifying a
     // name once and fanning the answer back out to its docs saves calls and
     // guarantees identical subjects get identical colours.
-    const namesByDoc = new Map<string, IconDoc[]>();
-    for (const doc of pending) {
-        const group = namesByDoc.get(doc.name);
-        if (group) group.push(doc);
-        else namesByDoc.set(doc.name, [doc]);
-    }
-    const distinctNames = [...namesByDoc.keys()];
+    // The answer is fanned back out via the `assignments` map keyed by name, so
+    // the distinct names are all this step needs — grouping the docs themselves
+    // built an index nothing ever read.
+    const distinctNames = [...new Set(pending.map(d => d.name))];
 
     const batches = chunk(distinctNames, BATCH_SIZE);
     console.log(`Classifying ${distinctNames.length} distinct name(s) for ${pending.length} doc(s) in ${batches.length} batch(es) of up to ${BATCH_SIZE} via ${MODEL}...`);
@@ -632,7 +656,7 @@ async function main(): Promise<void> {
             id: doc.id,
             name: doc.name,
             category: category ?? FALLBACK_CATEGORY_ID,
-            source: category ? MODEL : 'fallback',
+            source: category ? 'llm' : 'fallback',
         };
     });
 
@@ -670,10 +694,18 @@ async function main(): Promise<void> {
     const classifiedAt = new Date();
     let written = 0;
 
-    if (flags.dryRun) {
+    // The abort is checked FIRST, including under --dry-run. A dry run's job is
+    // to report what a live run would do, and a live run on this data would
+    // refuse to write — so printing "would update N docs" here would be exactly
+    // the wrong answer to the only question the dry run is being asked.
+    if (aborted) {
+        console.error(
+            flags.dryRun
+                ? `\nDRY RUN — a live run of this data would REFUSE to write: too many fallbacks, so all ${classified.length} classification(s) would be discarded.`
+                : `\nNo documents were written (${classified.length} classification(s) discarded).`,
+        );
+    } else if (flags.dryRun) {
         console.log(`\nDRY RUN — would update ${classified.length} doc(s) in ${DB_COLLECTION_ICON_INDEX}; nothing was written.`);
-    } else if (aborted) {
-        console.error(`No documents were written (${classified.length} classification(s) discarded).`);
     } else {
         console.log(`\nUpdating ${classified.length} doc(s) in ${DB_COLLECTION_ICON_INDEX}...`);
         for (const group of chunk(classified, WRITE_BATCH_SIZE)) {
@@ -681,7 +713,7 @@ async function main(): Promise<void> {
             for (const entry of group) {
                 // MERGE, emphatically: these docs are the icon gallery's own
                 // records (embeddings, umap coords, search terms). This script
-                // owns exactly the four category* fields and must not so much
+                // owns exactly the five category* fields and must not so much
                 // as graze the rest.
                 batch.set(
                     db.collection(DB_COLLECTION_ICON_INDEX).doc(entry.id),
@@ -690,6 +722,11 @@ async function main(): Promise<void> {
                         categorySource: entry.source,
                         categoryModel: MODEL,
                         categoryClassifiedAt: classifiedAt,
+                        // Which boundary text produced this answer. The scan
+                        // above reclassifies anything stamped with a different
+                        // version, so a rules edit reaches old docs instead of
+                        // needing a blanket --force.
+                        categoryRulesVersion: TAXONOMY_RULES_VERSION,
                     },
                     { merge: true },
                 );
@@ -716,8 +753,10 @@ async function main(): Promise<void> {
         generatedAt: classifiedAt.toISOString(),
         iconsScanned: scanned,
         iconsWithoutName: unnamed,
+        rulesVersion: TAXONOMY_RULES_VERSION,
         alreadyClassified: alreadyDone,
         fallbacksRetried: retriedFallbacks,
+        reclassifiedForRulesVersion: staleVersion,
         distinctNames: distinctNames.length,
         classifiedNow: classified.length,
         fallbackCount: unresolvedCount,

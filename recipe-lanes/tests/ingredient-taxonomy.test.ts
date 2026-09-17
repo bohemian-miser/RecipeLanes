@@ -27,16 +27,35 @@ import {
     getIngredientCategory,
     isIngredientCategoryId,
     parseClassificationResponse,
+    getClassificationCategory,
+    ALL_CLASSIFICATION_CATEGORIES,
     ALL_CLASSIFICATION_IDS,
     COMPARISON_CATEGORY_IDS,
     FALLBACK_CATEGORY_ID,
     ICON_ONLY_CATEGORIES,
     INGREDIENT_CATEGORIES,
+    TAXONOMY_RULES_VERSION,
+    UNCLASSIFIED_PRESENTATION,
 } from '../lib/recipe-lanes/ingredient-taxonomy';
 
 /** `assignments` is null-prototype by design; copy it before deep-comparing. */
 function plain(assignments: Record<string, string>): Record<string, string> {
     return Object.fromEntries(Object.entries(assignments));
+}
+
+/**
+ * The prompt's line for ONE category: `- <id> (<Label>): <rules>`.
+ *
+ * Boundary tests assert against this rather than against the whole prompt,
+ * because "the fragment appears somewhere in the prompt" stays true if the
+ * clause migrates to a different category — which is the exact regression these
+ * tests exist to catch. Throws rather than returning undefined so a missing
+ * category fails loudly instead of vacuously passing.
+ */
+function rulesLineFor(prompt: string, id: string): string {
+    const line = prompt.split('\n').find(l => l.startsWith(`- ${id} (`));
+    assert.ok(line, `prompt has no rules line for the category "${id}"`);
+    return line;
 }
 
 describe('ingredient-taxonomy — the category enum', () => {
@@ -84,6 +103,52 @@ describe('ingredient-taxonomy — the category enum', () => {
             ...INGREDIENT_CATEGORIES.map(c => c.id),
             ...ICON_ONLY_CATEGORIES.map(c => c.id),
         ]);
+    });
+
+    it('exports every classifiable category in display order, comparison ones first', () => {
+        assert.deepEqual(
+            ALL_CLASSIFICATION_CATEGORIES.map(c => c.id),
+            [...ALL_CLASSIFICATION_IDS],
+            'ALL_CLASSIFICATION_CATEGORIES must match ALL_CLASSIFICATION_IDS element for element',
+        );
+    });
+
+    it('resolves any classifiable id, and nothing else, through getClassificationCategory', () => {
+        for (const category of ALL_CLASSIFICATION_CATEGORIES) {
+            assert.equal(getClassificationCategory(category.id)?.label, category.label);
+        }
+        // The icon-only id is reachable here but NOT through the comparison-side
+        // accessor — that difference is the whole reason both exist.
+        assert.equal(getClassificationCategory('action_or_state')?.id, 'action_or_state');
+        assert.equal(getIngredientCategory('action_or_state'), undefined);
+
+        // Absent / unknown / empty all collapse to undefined for renderers.
+        assert.equal(getClassificationCategory(undefined), undefined);
+        assert.equal(getClassificationCategory(''), undefined);
+        assert.equal(getClassificationCategory('legacy_spices'), undefined);
+    });
+
+    it('keeps the unclassified presentation distinct from every real category colour', () => {
+        assert.ok(UNCLASSIFIED_PRESENTATION.label.length > 0);
+        assert.match(UNCLASSIFIED_PRESENTATION.color, /^#[0-9a-f]{6}$/);
+
+        const taken = new Set(ALL_CLASSIFICATION_CATEGORIES.map(c => c.color));
+        assert.ok(
+            !taken.has(UNCLASSIFIED_PRESENTATION.color),
+            `unclassified must not reuse a category colour (${UNCLASSIFIED_PRESENTATION.color}); ` +
+                "'other' and 'action_or_state' are the two it would be confused with",
+        );
+        // It is a presentation, not a category: never classifiable.
+        assert.equal(isIngredientCategoryId(UNCLASSIFIED_PRESENTATION.label), false);
+        assert.equal(getClassificationCategory(UNCLASSIFIED_PRESENTATION.label), undefined);
+    });
+
+    it('carries a positive integer rules version', () => {
+        assert.equal(typeof TAXONOMY_RULES_VERSION, 'number');
+        assert.ok(Number.isInteger(TAXONOMY_RULES_VERSION), 'rules version must be an integer');
+        assert.ok(TAXONOMY_RULES_VERSION > 0, 'rules version must be positive');
+        // Version 1 is the pre-existing text; this branch's boundaries are 2.
+        assert.ok(TAXONOMY_RULES_VERSION >= 2, 'the new boundary clauses are version 2 or later');
     });
 
     it('recognises every enum member and rejects anything else', () => {
@@ -166,6 +231,88 @@ describe('ingredient-taxonomy — buildClassificationPrompt', () => {
             assert.ok(prompt.includes(category.id), `prompt is missing the id ${category.id}`);
             assert.ok(prompt.includes(category.label), `prompt is missing the label for ${category.id}`);
         }
+    });
+
+    // These three boundaries were added because the classifier was measurably
+    // unstable without them: two temperature-0 dry runs of the label backfill
+    // agreed on 97.3% of assignments, and the disagreements clustered on the
+    // labels no rule covered. Assert the fragments individually so that a later
+    // edit to a `rules` string cannot silently drop a boundary back into the
+    // coin-toss zone while the generic "rules appear verbatim" test above
+    // still passes.
+    // Asserted against the OWNING CATEGORY'S line, not against the prompt as a
+    // whole: a fragment-anywhere check keeps passing if the clause is moved to
+    // another category, which is precisely the regression worth catching.
+    it('names the leavener boundary so raising agents cannot drift to Other', () => {
+        const line = rulesLineFor(buildClassificationPrompt(labels), 'grains_starches');
+        assert.ok(
+            line.includes(
+                'raising agents and leaveners (baking powder, baking soda/bicarbonate, yeast — including nutritional yeast)',
+            ),
+            'grains_starches must claim leaveners explicitly',
+        );
+    });
+
+    it('names the concentrated-paste boundary so tomato paste cannot drift to Vegetables', () => {
+        const line = rulesLineFor(buildClassificationPrompt(labels), 'condiments_liquids');
+        assert.ok(
+            line.includes('concentrated pastes (tomato paste, curry paste, miso, tahini)'),
+            'condiments_liquids must claim concentrated pastes explicitly',
+        );
+    });
+
+    it('names the egg-part boundary so "whites" cannot drift to Other', () => {
+        const line = rulesLineFor(buildClassificationPrompt(labels), 'dairy_eggs');
+        assert.ok(
+            line.includes('egg parts (whites, yolks)'),
+            'dairy_eggs must claim egg parts explicitly',
+        );
+    });
+
+    // A different failure from the three above: here the classifier was not
+    // unstable, it was confidently botanical — sliced tomato and avocado went to
+    // `fruits` while canned tomato went to `vegetables`, splitting one
+    // ingredient across two groups on preparation alone. Both halves of the
+    // boundary are asserted because the model needs telling where the item goes
+    // AND that its other reading is wrong.
+    it('claims botanically-fruit produce for Vegetables', () => {
+        const line = rulesLineFor(buildClassificationPrompt(labels), 'vegetables');
+        assert.ok(
+            line.includes(
+                'culinary vegetables that are botanically fruit (tomato, avocado, cucumber, capsicum/bell pepper, zucchini, eggplant) belong here in whole, cut, canned, or crushed forms',
+            ),
+            'vegetables must claim culinary vegetables that are botanically fruit',
+        );
+    });
+
+    it('excludes culinary vegetables from Fruits, mirroring the vegetables rule', () => {
+        const line = rulesLineFor(buildClassificationPrompt(labels), 'fruits');
+        assert.ok(
+            line.includes('NOT culinary vegetables like tomato/avocado/cucumber (see vegetables)'),
+            'fruits must carry the mirroring exclusion',
+        );
+    });
+
+    // The two clauses that both mention tomato have to agree about which of
+    // them owns the jar of paste, or the classifier is being handed a genuine
+    // contradiction rather than a boundary.
+    it('hands concentrated tomato paste to condiments_liquids, so the two tomato clauses do not collide', () => {
+        const prompt = buildClassificationPrompt(labels);
+        const vegetables = rulesLineFor(prompt, 'vegetables');
+
+        assert.ok(
+            vegetables.includes('concentrated tomato paste belongs in condiments_liquids'),
+            'the vegetables clause must yield concentrated tomato paste explicitly',
+        );
+        // The wording it replaced: "fresh or otherwise" swept paste in too.
+        assert.ok(
+            !vegetables.includes('fresh or otherwise'),
+            'vegetables must enumerate the forms it claims, not claim every form',
+        );
+        assert.ok(
+            rulesLineFor(prompt, 'condiments_liquids').includes('tomato paste'),
+            'condiments_liquids must still claim what vegetables just handed it',
+        );
     });
 
     it('lists every label to classify, JSON-quoted so odd labels stay intact', () => {

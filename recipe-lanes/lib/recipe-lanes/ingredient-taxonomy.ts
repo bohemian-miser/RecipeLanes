@@ -55,12 +55,41 @@ interface CategoryDefinition {
  * with it. Adding a category here adds it to the type, the guards and the
  * prompt in one edit.
  *
- * Colours are picked for separation on the app's zinc-900 surfaces rather than
+ * Colours are picked for separation on the app's dark zinc surfaces rather than
  * for realism: twelve categories plus grey is at the top of what a categorical
  * palette can carry, so each one sits in its own hue band (and the two brown
  * bands, grains vs nuts, are separated by lightness). They are mid-to-light
- * tones because they are drawn ON dark backgrounds, as legend dots, UMAP rings
- * and group-header chips.
+ * tones, which is a CONSTRAINT ON CONSUMERS, not a description of them: these
+ * hexes only separate against a dark ground. A light surface washes the lighter
+ * bands (vegetables, grains, dairy) out into each other — the UMAP view was
+ * built white and had exactly that problem, and was moved to a dark canvas
+ * rather than have the palette bent to fit it. Anything new that renders these
+ * — legend dots, UMAP rings, group-header chips — needs a dark backdrop too.
+ *
+ * Some `rules` clauses exist because the classifier proved UNSTABLE without
+ * them. Diffing two temperature-0 dry runs of the label backfill showed 97.3%
+ * identical assignments, and the churn was concentrated on exactly the labels
+ * no rule covered: leaveners flipping other <-> herbs_spices, tomato paste
+ * flipping condiments_liquids <-> vegetables, "Whites" flipping dairy_eggs <->
+ * other. A label the rules do not reach is a coin toss, so the fix is to name
+ * the boundary rather than to hope — see the leavener, paste and egg-part
+ * clauses below.
+ *
+ * The vegetables/fruits clauses come from a different failure, seen in a 620
+ * label staging run: the classifier was not unstable there, it was confidently
+ * BOTANICAL. "Tomato (sliced)", "Cherry Tomatoes, Halved" and "Avocado,
+ * Sliced" all went to `fruits`, while canned/crushed tomatoes went to
+ * `vegetables` — so one ingredient split across two groups on preparation
+ * alone. This taxonomy is for cooks reading a comparison table, not for
+ * botanists, so `vegetables` claims these outright and `fruits` carries the
+ * mirroring exclusion. Both sides are stated because the model has to be told
+ * where the item goes AND that its other reading is wrong.
+ *
+ * Note how the vegetables clause and the condiments_liquids clause fit
+ * together: vegetables claims tomato in "whole, cut, canned, or crushed"
+ * forms and then hands concentrated tomato paste back to condiments_liquids,
+ * which claims it. Enumerating the forms rather than saying "fresh or
+ * otherwise" is what keeps those two rules from both claiming the same jar.
  */
 const CATEGORY_TABLE = [
     {
@@ -79,13 +108,13 @@ const CATEGORY_TABLE = [
         id: 'vegetables',
         label: 'Vegetables',
         color: '#4ade80',
-        rules: 'All vegetables not covered by aromatics. Mushrooms here. NOT potatoes (see grains_starches).',
+        rules: 'All vegetables not covered by aromatics. Mushrooms here. NOT potatoes (see grains_starches); culinary vegetables that are botanically fruit (tomato, avocado, cucumber, capsicum/bell pepper, zucchini, eggplant) belong here in whole, cut, canned, or crushed forms — but concentrated tomato paste belongs in condiments_liquids.',
     },
     {
         id: 'fruits',
         label: 'Fruits',
         color: '#fb923c',
-        rules: 'Fresh/dried fruit, citrus zest, whole citrus. Citrus JUICE goes to condiments_liquids.',
+        rules: 'Fresh/dried fruit, citrus zest, whole citrus. Citrus JUICE goes to condiments_liquids; NOT culinary vegetables like tomato/avocado/cucumber (see vegetables).',
     },
     {
         id: 'herbs_spices',
@@ -103,13 +132,13 @@ const CATEGORY_TABLE = [
         id: 'dairy_eggs',
         label: 'Dairy & Eggs',
         color: '#93c5fd',
-        rules: 'Milk, cream, cheese, yogurt, sour cream — and eggs (merged per survey recommendation).',
+        rules: 'Milk, cream, cheese, yogurt, sour cream — and eggs (merged per survey recommendation); egg parts (whites, yolks).',
     },
     {
         id: 'grains_starches',
         label: 'Grains & Starches',
         color: '#d6b48a',
-        rules: 'Flour, rice, pasta, noodles, bread/breadcrumbs, oats, corn products — and potatoes (culinary starch role).',
+        rules: 'Flour, rice, pasta, noodles, bread/breadcrumbs, oats, corn products — and potatoes (culinary starch role); raising agents and leaveners (baking powder, baking soda/bicarbonate, yeast — including nutritional yeast).',
     },
     {
         id: 'nuts_seeds',
@@ -127,7 +156,7 @@ const CATEGORY_TABLE = [
         id: 'condiments_liquids',
         label: 'Sauces, Condiments & Liquids',
         color: '#2dd4bf',
-        rules: 'Soy/fish/hot sauces, mustard, vinegar, stock/broth, water, wine/beer/spirits, juices, coconut milk.',
+        rules: 'Soy/fish/hot sauces, mustard, vinegar, stock/broth, water, wine/beer/spirits, juices, coconut milk; concentrated pastes (tomato paste, curry paste, miso, tahini).',
     },
     {
         id: 'other',
@@ -189,6 +218,19 @@ export const ICON_ONLY_CATEGORIES: readonly IconOnlyCategory[] = ICON_ONLY_TABLE
 export const COMPARISON_CATEGORY_IDS: readonly IngredientCategoryId[] =
     CATEGORY_TABLE.map(c => c.id);
 
+/**
+ * Every category the classifier may return when icon categories are enabled,
+ * in display order: the twelve comparison categories then the icon-only ones.
+ *
+ * Exported because every consumer that renders "all of them" was otherwise
+ * writing this concat itself — and a page-local copy is exactly how a new
+ * icon-only category gets forgotten in one place and not another.
+ */
+export const ALL_CLASSIFICATION_CATEGORIES: readonly ClassificationCategory[] = [
+    ...CATEGORY_TABLE,
+    ...ICON_ONLY_TABLE,
+];
+
 /** Every id the classifier may return when icon categories are enabled. */
 export const ALL_CLASSIFICATION_IDS: readonly ClassificationCategoryId[] = [
     ...COMPARISON_CATEGORY_IDS,
@@ -197,6 +239,23 @@ export const ALL_CLASSIFICATION_IDS: readonly ClassificationCategoryId[] = [
 
 /** The fallback category every unclassified label falls back to. */
 export const FALLBACK_CATEGORY_ID: IngredientCategoryId = 'other';
+
+/**
+ * Bumped whenever ANY `rules` string changes in a way that could move labels
+ * between categories.
+ *
+ * Classification docs stamp the version they were produced under, so a backfill
+ * can tell a doc that is merely old from one that was classified against
+ * boundaries this file no longer states, and reclassify only the latter. Without
+ * it, a rules edit either silently leaves stale assignments in place forever or
+ * forces a blanket `--force` pass over the whole corpus.
+ *
+ * Version 1 is the pre-existing rules text; 2 adds the leavener, paste,
+ * egg-part and culinary-vegetable boundaries. Cosmetic rewording that cannot
+ * change an assignment does not need a bump — but when in doubt, bump: a
+ * needless reclassification costs pennies, a missed one is invisible.
+ */
+export const TAXONOMY_RULES_VERSION = 2;
 
 const CATEGORY_BY_ID: ReadonlyMap<string, IngredientCategory> = new Map(
     INGREDIENT_CATEGORIES.map(c => [c.id, c]),
@@ -235,6 +294,49 @@ export function isIngredientCategoryId(v: unknown): v is IngredientCategoryId {
 export function getIngredientCategory(id: string | undefined): IngredientCategory | undefined {
     return id === undefined ? undefined : CATEGORY_BY_ID.get(id);
 }
+
+const CLASSIFICATION_CATEGORY_BY_ID: ReadonlyMap<string, ClassificationCategory> = new Map(
+    ALL_CLASSIFICATION_CATEGORIES.map(c => [c.id, c]),
+);
+
+/**
+ * Looks up ANY category the classifier can produce — the twelve comparison ones
+ * and the icon-only ones — by an id that is just a string as far as the caller
+ * knows, because it came out of Firestore.
+ *
+ * Returns undefined for an unknown id, an empty string, or undefined, and those
+ * three cases are deliberately not distinguished: to a renderer they are all
+ * "this point has no category I can name", which is what
+ * `UNCLASSIFIED_PRESENTATION` is for. Use this rather than chaining
+ * `getIngredientCategory` with a second icon-only lookup.
+ */
+export function getClassificationCategory(
+    id: string | undefined,
+): ClassificationCategory | undefined {
+    return id ? CLASSIFICATION_CATEGORY_BY_ID.get(id) : undefined;
+}
+
+/**
+ * How to render something that has NO category — not classified yet, or
+ * carrying an id this taxonomy no longer knows.
+ *
+ * This is deliberately not a category: nothing is ever assigned it, it is never
+ * offered to the classifier, and it must not appear in a legend as a peer of
+ * the real ones. It exists so that every consumer draws "absent" the same way
+ * instead of inventing its own grey.
+ *
+ * The colour is distinct from EVERY category colour — including `other`'s
+ * #71717a and `action_or_state`'s #a1a1aa, the two it would otherwise be
+ * confused with. That distinction carries real meaning: `other` is a decision
+ * the classifier made ("genuinely unclassifiable"), while this is the absence
+ * of a decision, and a reviewer looking at a map of grey dots needs to know
+ * which of those they are looking at. Consumers are expected to reinforce it
+ * with a non-colour cue too (the UMAP view dashes the ring).
+ */
+export const UNCLASSIFIED_PRESENTATION: { label: string; color: string } = {
+    label: 'Unclassified',
+    color: '#52525b',
+};
 
 // ---------------------------------------------------------------------------
 // Classification prompt + response parsing (pure; the transport lives elsewhere)

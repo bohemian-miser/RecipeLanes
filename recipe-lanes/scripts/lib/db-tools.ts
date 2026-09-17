@@ -7,13 +7,25 @@ import type { Firestore, QueryDocumentSnapshot, DocumentReference } from 'fireba
  * @param db The Firestore instance
  * @param collectionName The name of the collection to scan
  * @param batchSize The number of documents to fetch per page (default: 500)
+ * @param fields Optional field mask. When given, only these fields are fetched
+ *   (`.select(...)`), and the yielded snapshots contain nothing else. Worth
+ *   passing whenever the collection stores large fields the caller does not
+ *   read — `icon_index` docs carry 768- and 384-dimension embedding vectors, so
+ *   a scan that only needs a name and a category moves ~100x less data without
+ *   it. Omit to fetch whole documents, which is the existing behaviour.
  */
 export async function* scanCollection(
     db: Firestore,
     collectionName: string,
-    batchSize: number = 500
+    batchSize: number = 500,
+    fields?: string[]
 ): AsyncGenerator<QueryDocumentSnapshot> {
-    let query = db.collection(collectionName).limit(batchSize);
+    const collectionRef = db.collection(collectionName);
+    // Paging uses startAfter(snapshot) against the default __name__ ordering,
+    // which a projected snapshot still carries — so the mask does not affect
+    // how the cursor walks the collection.
+    const base = fields && fields.length > 0 ? collectionRef.select(...fields) : collectionRef;
+    const query = base.limit(batchSize);
     let lastDoc: QueryDocumentSnapshot | null = null;
 
     while (true) {

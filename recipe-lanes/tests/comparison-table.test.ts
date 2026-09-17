@@ -31,6 +31,8 @@ import {
     servesScale,
     toComparisonRecipe,
     MAX_COMPARISON_RECIPES,
+    type ComparisonIngredient,
+    type ComparisonRecipe,
 } from '../lib/recipe-lanes/comparison-table';
 import { RecipeGraph, RecipeNode } from '../lib/recipe-lanes/types';
 
@@ -208,6 +210,63 @@ describe('comparison-table — building the table', () => {
         const table = buildComparisonTable([]);
         assert.deepEqual(table.columns, []);
         assert.deepEqual(table.rows, []);
+    });
+});
+
+describe('comparison-table — ingredient categories', () => {
+    /** A hand-built recipe payload, as the server action returns it. */
+    function recipe(id: string, ingredients: ComparisonIngredient[]): ComparisonRecipe {
+        return { id, title: id, ingredients };
+    }
+
+    function line(label: string, overrides: Partial<ComparisonIngredient> = {}): ComparisonIngredient {
+        return { key: ingredientRowKey(label, ''), label, unit: '', quantity: 1, ...overrides };
+    }
+
+    it('carries the category from the ingredient line onto the row', () => {
+        const table = buildComparisonTable([
+            recipe('a', [line('Eggs', { category: 'dairy_eggs' }), line('Garlic', { category: 'aromatics' })]),
+        ]);
+        assert.deepEqual(table.rows.map(r => r.category), ['dairy_eggs', 'aromatics']);
+    });
+
+    it('leaves the row category undefined when no line was classified', () => {
+        const table = buildComparisonTable([recipe('a', [line('Eggs')])]);
+        assert.equal(table.rows[0].category, undefined);
+        // Absent-not-null: the field has to survive server-action serialisation
+        // as "simply missing", which is what the table already does for iconUrl.
+        assert.equal('category' in JSON.parse(JSON.stringify(table.rows[0])), false);
+    });
+
+    it('takes the first category seen for a row (first-seen wins, like iconUrl)', () => {
+        const table = buildComparisonTable([
+            recipe('a', [line('Salt', { category: 'herbs_spices' })]),
+            recipe('b', [line('Salt', { category: 'condiments_liquids' })]),
+        ]);
+        assert.equal(table.rows.length, 1);
+        assert.equal(table.rows[0].category, 'herbs_spices');
+    });
+
+    it('fills a row category in from a later recipe when the first had none', () => {
+        const table = buildComparisonTable([
+            recipe('a', [line('Salt')]),
+            recipe('b', [line('Salt', { category: 'herbs_spices' })]),
+        ]);
+        assert.equal(table.rows[0].category, 'herbs_spices');
+    });
+
+    it('changes nothing else about a table built without categories', () => {
+        const withCategory = buildComparisonTable([recipe('a', [line('Flour', { category: 'grains_starches', quantity: 2 })])]);
+        const without = buildComparisonTable([recipe('a', [line('Flour', { quantity: 2 })])]);
+        assert.deepEqual(
+            { ...withCategory.rows[0], category: undefined },
+            { ...without.rows[0], category: undefined },
+        );
+    });
+
+    it('never invents a category for an extracted (not yet joined) ingredient', () => {
+        const [extracted] = extractComparisonIngredients(graph([ingredient('a', { visualDescription: 'Flour' })]));
+        assert.equal(extracted.category, undefined);
     });
 });
 

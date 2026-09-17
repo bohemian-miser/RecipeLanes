@@ -25,6 +25,13 @@ export const DB_COLLECTION_RECIPES = 'recipes';
 export const DB_COLLECTION_FEEDBACK = 'feedback';
 export const DB_COLLECTION_ICON_INDEX = 'icon_index';
 export const DB_COLLECTION_CONFIG = 'config';
+/**
+ * Label → taxonomy-category lookup, one doc per distinct standardized
+ * ingredient label. Server-side only (no firestore.rules block, so clients are
+ * denied by default); written by `scripts/backfill-ingredient-categories.ts`
+ * and by the classify-on-miss path in `lib/ingredient-category-lookup.ts`.
+ */
+export const DB_COLLECTION_INGREDIENT_CATEGORIES = 'ingredient_categories';
 
 /**
  * Icons per page in the shared icon gallery (/icon_overview). Shared by the

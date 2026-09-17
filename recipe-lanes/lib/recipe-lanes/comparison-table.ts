@@ -43,6 +43,13 @@ export interface ComparisonIngredient {
     iconUrl?: string;
     /** Scaled quantity; undefined when the recipe lists the ingredient without a number. */
     quantity?: number;
+    /**
+     * Taxonomy category id from the `ingredient_categories` lookup, stamped on
+     * by the server action (see `lib/ingredient-category-lookup.ts`). Optional
+     * by design: a label with no lookup doc simply has none, and everything
+     * downstream treats "no category" the same as `other`.
+     */
+    category?: string;
 }
 
 /** The slim, serialisable shape the server action returns per selected recipe. */
@@ -65,6 +72,12 @@ export interface ComparisonRow {
     label: string;
     unit: string;
     iconUrl?: string;
+    /**
+     * Taxonomy category id, carried over from the first contributing line that
+     * has one (same first-seen-wins rule as `iconUrl`). Undefined when no
+     * contributing line was classified — grouping treats that as `other`.
+     */
+    category?: string;
     /** Keyed by recipe id; absent when the recipe does not use the ingredient. */
     cells: Record<string, ComparisonCell>;
     /** Distinct source lines behind this row, across recipes (tooltip). */
@@ -202,6 +215,7 @@ export function buildComparisonTable(recipes: ComparisonRecipe[], rowOrder?: str
                     label: line.label,
                     unit: line.unit,
                     iconUrl: line.iconUrl,
+                    category: line.category,
                     cells: {},
                     sources: [],
                     total: 0,
@@ -209,8 +223,14 @@ export function buildComparisonTable(recipes: ComparisonRecipe[], rowOrder?: str
                 };
                 rowsByKey.set(line.key, row);
                 discovered.push(line.key);
-            } else if (!row.iconUrl && line.iconUrl) {
-                row.iconUrl = line.iconUrl;
+            } else {
+                if (!row.iconUrl && line.iconUrl) row.iconUrl = line.iconUrl;
+                // First-seen wins, like the icon: rows merge lines from several
+                // recipes and the category is a property of the LABEL, so every
+                // contributing line should agree — taking the first non-empty
+                // one keeps the row stable if one recipe's label was classified
+                // and another's (identical) label was not.
+                if (!row.category && line.category) row.category = line.category;
             }
             if (line.text && !row.sources.includes(line.text)) row.sources.push(line.text);
 

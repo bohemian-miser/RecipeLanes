@@ -29,6 +29,8 @@ import type { RecipeGraph, IconStats, FastMatch, RecipePatch } from '@/lib/recip
 import { standardizeIngredientName } from '@/lib/utils';
 import { hashClaimToken } from '@/lib/recipe-lanes/claim-token';
 import { toComparisonRecipe, canViewRecipeForComparison, MAX_COMPARISON_RECIPES, type ComparisonRecipe } from '@/lib/recipe-lanes/comparison-table';
+import { ingredientCategoryKey } from '@/lib/recipe-lanes/ingredient-label-extract';
+import { lookupIngredientCategories } from '@/lib/ingredient-category-lookup';
 import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon, extractBatchIngredients, getNodeIngredientName, applyPatch, assignNodeShortlist } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
@@ -706,9 +708,35 @@ export async function getComparisonRecipesAction(recipeIds: string[]): Promise<{
                 return null;
             }
         }));
-        return { recipes: loaded.filter((r): r is ComparisonRecipe => r !== null) };
+        const recipes = loaded.filter((r): r is ComparisonRecipe => r !== null);
+        await stampIngredientCategories(recipes);
+        return { recipes };
     } catch (e: any) {
         return { recipes: [], error: e.message };
+    }
+}
+
+/**
+ * Joins the taxonomy category onto every ingredient line, in place.
+ *
+ * Purely additive: an unclassified label keeps `category` undefined and the
+ * table renders exactly as it did before this existed. The lookup already
+ * swallows its own failures, but the try/catch stays anyway — a comparison must
+ * never fail because a category could not be resolved.
+ */
+async function stampIngredientCategories(recipes: ComparisonRecipe[]): Promise<void> {
+    try {
+        const labels = [...new Set(recipes.flatMap(r => r.ingredients.map(i => i.label)))];
+        if (labels.length === 0) return;
+        const byKey = await lookupIngredientCategories(labels);
+        for (const recipe of recipes) {
+            for (const line of recipe.ingredients) {
+                const category = byKey[ingredientCategoryKey(line.label)];
+                if (category) line.category = category;
+            }
+        }
+    } catch (e: any) {
+        console.warn('[getComparisonRecipesAction] category lookup failed', e?.message);
     }
 }
 

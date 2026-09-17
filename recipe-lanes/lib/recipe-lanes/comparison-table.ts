@@ -29,6 +29,7 @@
 import { RecipeGraph, RecipeNode } from './types';
 import { getNodeIconUrl, getNodeIngredientName } from './model-utils';
 import { standardizeIngredientName } from '../utils';
+import { categoryRank } from './ingredient-taxonomy';
 
 /** One ingredient line from one recipe, already scaled to the recipe's current serves. */
 export interface ComparisonIngredient {
@@ -196,8 +197,9 @@ export function toComparisonRecipe(id: string, title: string | undefined, graph:
  * Merges the selected recipes into table rows.
  *
  * - Columns follow `recipes` order (the caller owns column order).
- * - Rows: one per ingredient+unit key. When `rowOrder` is given, rows keep
- *   that order and any newly discovered keys are appended in first-seen order;
+ * - Rows: one per ingredient+unit key, ordered by ingredient category (taxonomy
+ *   order, uncategorised last) by default. When `rowOrder` is given, rows keep
+ *   that order instead and any newly discovered keys are appended after it;
  *   keys in `rowOrder` that no selected recipe uses any more are dropped.
  * - A row's total sums every numeric cell; `totalIsPartial` flags rows where
  *   some recipe lists the ingredient without a number.
@@ -255,7 +257,18 @@ export function buildComparisonTable(recipes: ComparisonRecipe[], rowOrder?: str
         row.totalIsPartial = partial;
     }
 
-    const orderedKeys = reconcileOrder(rowOrder ?? [], discovered);
+    // The table's *default* order groups the ingredients by category: a stable
+    // sort by taxonomy rank, so rows of one category keep their first-seen order
+    // and uncategorised rows fall in with `other`, at the end. This is an
+    // initial sort and nothing more — `reconcileOrder` still gives a
+    // hand-arranged `rowOrder` absolute priority, so once the user drags a row
+    // the table never re-sorts itself under them; newly discovered rows are
+    // appended as before, in category order rather than first-seen order.
+    const defaultOrder = [...discovered].sort(
+        (a, b) => categoryRank(rowsByKey.get(a)?.category) - categoryRank(rowsByKey.get(b)?.category),
+    );
+
+    const orderedKeys = reconcileOrder(rowOrder ?? [], defaultOrder);
     return {
         columns: recipes,
         rows: orderedKeys.map(k => rowsByKey.get(k)!),
@@ -282,6 +295,39 @@ export function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
     const [item] = next.splice(from, 1);
     next.splice(to, 0, item);
     return next;
+}
+
+/**
+ * Moves the item identified by `fromKey` to where `toKey` currently sits.
+ *
+ * Drag-and-drop must resolve positions by IDENTITY, at drop time, not by the
+ * indices captured at dragstart. The table rebuilds whenever an async recipe
+ * arrives (or a phantom one is unticked), and because the default row order is
+ * a category sort, a late arrival can INSERT rows above the one being dragged
+ * rather than only appending — so a stale index silently points at a different
+ * row by the time the drop lands, and the wrong arrangement gets pinned into
+ * `rowOrder` permanently. Returns null when either key has vanished from the
+ * list mid-drag, which the caller treats as "drop did nothing".
+ */
+export function moveItemByKey(list: readonly string[], fromKey: string, toKey: string): string[] | null {
+    const from = list.indexOf(fromKey);
+    const to = list.indexOf(toKey);
+    if (from < 0 || to < 0) return null;
+    return moveItem(list, from, to);
+}
+
+/**
+ * Moves the item identified by `key` `delta` places along the list — the
+ * keyboard equivalent of a drag, resolving the item's CURRENT position at
+ * keypress time for the same reason. Returns null when the key is gone or the
+ * move would leave the list.
+ */
+export function nudgeItemByKey(list: readonly string[], key: string, delta: number): string[] | null {
+    const from = list.indexOf(key);
+    if (from < 0) return null;
+    const to = from + delta;
+    if (to < 0 || to >= list.length) return null;
+    return moveItem(list, from, to);
 }
 
 /** Formats a quantity for a table cell: trims float noise, keeps up to 2 decimals. */

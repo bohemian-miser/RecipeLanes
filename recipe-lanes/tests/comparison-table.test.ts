@@ -27,6 +27,8 @@ import {
     formatQuantity,
     ingredientRowKey,
     moveItem,
+    moveItemByKey,
+    nudgeItemByKey,
     reconcileOrder,
     servesScale,
     toComparisonRecipe,
@@ -34,6 +36,7 @@ import {
     type ComparisonIngredient,
     type ComparisonRecipe,
 } from '../lib/recipe-lanes/comparison-table';
+import { COMPARISON_CATEGORY_IDS } from '../lib/recipe-lanes/ingredient-taxonomy';
 import { RecipeGraph, RecipeNode } from '../lib/recipe-lanes/types';
 
 function ingredient(id: string, overrides: Partial<RecipeNode> = {}): RecipeNode {
@@ -49,6 +52,16 @@ function ingredient(id: string, overrides: Partial<RecipeNode> = {}): RecipeNode
 
 function graph(nodes: RecipeNode[], overrides: Partial<RecipeGraph> = {}): RecipeGraph {
     return { lanes: [{ id: 'lane-1', label: 'Prep', type: 'prep' }], nodes, ...overrides };
+}
+
+/** A hand-built recipe payload, as the server action returns it. */
+function recipe(id: string, ingredients: ComparisonIngredient[]): ComparisonRecipe {
+    return { id, title: id, ingredients };
+}
+
+/** One ingredient line of such a payload; unit-less and quantified unless overridden. */
+function line(label: string, overrides: Partial<ComparisonIngredient> = {}): ComparisonIngredient {
+    return { key: ingredientRowKey(label, ''), label, unit: '', quantity: 1, ...overrides };
 }
 
 describe('comparison-table — ingredient extraction', () => {
@@ -214,20 +227,16 @@ describe('comparison-table — building the table', () => {
 });
 
 describe('comparison-table — ingredient categories', () => {
-    /** A hand-built recipe payload, as the server action returns it. */
-    function recipe(id: string, ingredients: ComparisonIngredient[]): ComparisonRecipe {
-        return { id, title: id, ingredients };
-    }
-
-    function line(label: string, overrides: Partial<ComparisonIngredient> = {}): ComparisonIngredient {
-        return { key: ingredientRowKey(label, ''), label, unit: '', quantity: 1, ...overrides };
-    }
-
     it('carries the category from the ingredient line onto the row', () => {
         const table = buildComparisonTable([
             recipe('a', [line('Eggs', { category: 'dairy_eggs' }), line('Garlic', { category: 'aromatics' })]),
         ]);
-        assert.deepEqual(table.rows.map(r => r.category), ['dairy_eggs', 'aromatics']);
+        // Keyed, not positional: row ORDER is the category sort's business (see
+        // the default-row-order suite), this is only about the field arriving.
+        assert.deepEqual(
+            Object.fromEntries(table.rows.map(r => [r.label, r.category])),
+            { Eggs: 'dairy_eggs', Garlic: 'aromatics' },
+        );
     });
 
     it('leaves the row category undefined when no line was classified', () => {
@@ -270,6 +279,76 @@ describe('comparison-table — ingredient categories', () => {
     });
 });
 
+describe('comparison-table — default row order (category sort)', () => {
+    const labels = (recipes: ComparisonRecipe[], rowOrder?: string[]) =>
+        buildComparisonTable(recipes, rowOrder).rows.map(r => r.label);
+
+    it('orders rows by taxonomy category, whatever order the recipes list them in', () => {
+        assert.deepEqual(
+            labels([recipe('a', [line('Sugar', { category: 'sweeteners' }), line('Garlic', { category: 'aromatics' }), line('Chicken', { category: 'proteins' })])]),
+            ['Chicken', 'Garlic', 'Sugar'],
+        );
+    });
+
+    it('sorts uncategorised rows last, alongside Other', () => {
+        assert.deepEqual(
+            labels([recipe('a', [line('Mystery'), line('Junk', { category: 'other' }), line('Chicken', { category: 'proteins' })])]),
+            ['Chicken', 'Mystery', 'Junk'],
+        );
+        // Uncategorised really does sort with 'other', which really is last.
+        assert.equal(COMPARISON_CATEGORY_IDS[COMPARISON_CATEGORY_IDS.length - 1], 'other');
+    });
+
+    it('is a stable sort: rows of one category keep their first-seen order', () => {
+        assert.deepEqual(
+            labels([recipe('a', [
+                line('Thyme', { category: 'herbs_spices' }),
+                line('Onion', { category: 'aromatics' }),
+                line('Salt', { category: 'herbs_spices' }),
+                line('Garlic', { category: 'aromatics' }),
+                line('Pepper', { category: 'herbs_spices' }),
+            ])]),
+            ['Onion', 'Garlic', 'Thyme', 'Salt', 'Pepper'],
+        );
+    });
+
+    it('sorts a stale or unrecognised category id with Other rather than to the top', () => {
+        assert.deepEqual(
+            labels([recipe('a', [line('Stale', { category: 'legumes_from_an_older_taxonomy' }), line('Chicken', { category: 'proteins' })])]),
+            ['Chicken', 'Stale'],
+        );
+    });
+
+    it('keeps first-seen order when nothing is classified (unchanged behaviour)', () => {
+        assert.deepEqual(
+            labels([recipe('a', [line('Eggs'), line('Flour'), line('Butter')])]),
+            ['Eggs', 'Flour', 'Butter'],
+        );
+    });
+
+    it('never re-sorts a table the user has arranged by hand', () => {
+        const recipes = [recipe('a', [line('Sugar', { category: 'sweeteners' }), line('Chicken', { category: 'proteins' })])];
+        // Dragging Sugar above Chicken must survive a rebuild, category or not.
+        const dragged = [ingredientRowKey('Sugar', ''), ingredientRowKey('Chicken', '')];
+        assert.deepEqual(labels(recipes, dragged), ['Sugar', 'Chicken']);
+    });
+
+    it('appends rows discovered later after the user order, in category order', () => {
+        const first = [recipe('a', [line('Chicken', { category: 'proteins' })])];
+        const arranged = buildComparisonTable(first).rows.map(r => r.key);
+        const withMore = [
+            recipe('a', [line('Chicken', { category: 'proteins' })]),
+            recipe('b', [line('Sugar', { category: 'sweeteners' }), line('Garlic', { category: 'aromatics' })]),
+        ];
+        assert.deepEqual(labels(withMore, arranged), ['Chicken', 'Garlic', 'Sugar']);
+    });
+
+    it('drops rows whose recipes were deselected, category sort or not', () => {
+        const arranged = [ingredientRowKey('Gone', ''), ingredientRowKey('Chicken', '')];
+        assert.deepEqual(labels([recipe('a', [line('Chicken', { category: 'proteins' })])], arranged), ['Chicken']);
+    });
+});
+
 describe('comparison-table — ordering helpers (drag and drop)', () => {
     it('moveItem relocates an element and returns a new array', () => {
         const list = ['a', 'b', 'c', 'd'];
@@ -290,6 +369,43 @@ describe('comparison-table — ordering helpers (drag and drop)', () => {
         assert.deepEqual(reconcileOrder(['c', 'a', 'gone'], ['a', 'b', 'c']), ['c', 'a', 'b']);
         assert.deepEqual(reconcileOrder([], ['x', 'y']), ['x', 'y']);
         assert.deepEqual(reconcileOrder(['y', 'x'], []), []);
+    });
+
+    it('moveItemByKey relocates by identity, not by a captured position', () => {
+        assert.deepEqual(moveItemByKey(['a', 'b', 'c', 'd'], 'a', 'c'), ['b', 'c', 'a', 'd']);
+        assert.deepEqual(moveItemByKey(['a', 'b'], 'a', 'a'), ['a', 'b']);
+    });
+
+    it('moveItemByKey survives rows shifting under a drag', () => {
+        // The race the key-based drag exists to close: a recipe lands mid-drag
+        // and the category sort INSERTS 'new' above the dragged row, so every
+        // index captured at dragstart now points at the wrong row. Resolving
+        // both ends by key at drop time still moves exactly what was grabbed.
+        const atDragStart = ['a', 'b', 'c'];
+        const atDrop = ['new', 'a', 'b', 'c'];
+        assert.deepEqual(moveItem(atDragStart, 0, 2), ['b', 'c', 'a']);
+        assert.deepEqual(moveItemByKey(atDrop, 'a', 'c'), ['new', 'b', 'c', 'a']);
+    });
+
+    it('moveItemByKey returns null when either end vanished mid-drag', () => {
+        // Dropping onto a row whose recipe was just unticked must do nothing at
+        // all, rather than pin a wrong arrangement into the saved row order.
+        assert.equal(moveItemByKey(['a', 'b'], 'gone', 'a'), null);
+        assert.equal(moveItemByKey(['a', 'b'], 'a', 'gone'), null);
+        assert.equal(moveItemByKey([], 'a', 'b'), null);
+    });
+
+    it('nudgeItemByKey steps an item along the list by its current position', () => {
+        assert.deepEqual(nudgeItemByKey(['a', 'b', 'c'], 'c', -1), ['a', 'c', 'b']);
+        assert.deepEqual(nudgeItemByKey(['a', 'b', 'c'], 'a', 1), ['b', 'a', 'c']);
+        // Resolved now, not when the handle was focused.
+        assert.deepEqual(nudgeItemByKey(['new', 'a', 'b'], 'a', -1), ['a', 'new', 'b']);
+    });
+
+    it('nudgeItemByKey returns null at the ends and for a vanished key', () => {
+        assert.equal(nudgeItemByKey(['a', 'b'], 'a', -1), null);
+        assert.equal(nudgeItemByKey(['a', 'b'], 'b', 1), null);
+        assert.equal(nudgeItemByKey(['a', 'b'], 'gone', 1), null);
     });
 });
 

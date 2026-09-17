@@ -81,7 +81,9 @@ test.describe('Gallery: multi-recipe comparison table', () => {
     await expect(columns.nth(0)).toHaveAttribute('data-recipe-id', idA);
     await expect(columns.nth(1)).toHaveAttribute('data-recipe-id', idB);
 
-    // Rows follow first-seen order across the selected recipes.
+    // Rows follow first-seen order across the selected recipes. (Rows are
+    // initially sorted by ingredient category, but the mock AI classifies
+    // nothing, so every row here is uncategorised and the sort is a no-op.)
     await expect(rows).toHaveCount(3);
     await expect(rows.nth(0)).toContainText('Eggs');
     await expect(rows.nth(1)).toContainText('Flour');

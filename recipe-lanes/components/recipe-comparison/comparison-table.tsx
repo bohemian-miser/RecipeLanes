@@ -34,20 +34,42 @@ import { getComparisonRecipesAction } from '@/app/actions';
 import {
     buildComparisonTable,
     formatQuantity,
-    moveItem,
+    moveItemByKey,
+    nudgeItemByKey,
     type ComparisonCell,
     type ComparisonRecipe,
     type ComparisonRow,
 } from '@/lib/recipe-lanes/comparison-table';
+import { getIngredientCategory } from '@/lib/recipe-lanes/ingredient-taxonomy';
 import { useRecipeComparison } from './comparison-context';
 
 type DragKind = 'row' | 'col';
-interface DragRef { kind: DragKind; index: number }
+/** Identifies the dragged/hovered item by key (row key, or recipe id for a column). */
+interface DragRef { kind: DragKind; key: string }
 
 function cellText(cell: ComparisonCell | undefined): string {
     if (!cell) return '—';
     if (cell.quantity == null) return '✓';
     return cell.unquantified ? `${formatQuantity(cell.quantity)}+` : formatQuantity(cell.quantity);
+}
+
+/**
+ * The taxonomy colour dot beside an ingredient label. Rows arrive sorted by
+ * category, so the dot is what makes the runs of colour legible as groups
+ * without spending a header row on each. Unclassified rows get no dot.
+ */
+function CategoryDot({ category }: { category?: string }) {
+    const meta = getIngredientCategory(category);
+    if (!meta) return null;
+    return (
+        <span
+            data-testid="comparison-category-dot"
+            data-category={meta.id}
+            title={meta.label}
+            className="w-2 h-2 rounded-full shrink-0"
+            style={{ backgroundColor: meta.color }}
+        />
+    );
 }
 
 /** Total column text: "5", "5+" when some recipe gave no number, "✓" when none did. */
@@ -104,52 +126,69 @@ export function RecipeComparisonTable() {
     const rowKeys = useMemo(() => table.rows.map(r => r.key), [table]);
     const isLoading = selectedIds.some(id => !loaded[id]);
 
-    const moveRow = useCallback((from: number, to: number) => {
-        if (to < 0 || to >= rowKeys.length) return;
-        setRowOrder(moveItem(rowKeys, from, to));
+    // Every move resolves against the CURRENT list, by key. An async recipe can
+    // land (or a phantom one be unticked) between dragstart and drop, and the
+    // category sort means a late arrival can insert rows above the dragged one
+    // — so positions captured at dragstart go stale. A vanished key is a silent
+    // no-op rather than a wrong move pinned into `rowOrder`.
+    const moveRow = useCallback((fromKey: string, toKey: string) => {
+        const next = moveItemByKey(rowKeys, fromKey, toKey);
+        if (next) setRowOrder(next);
     }, [rowKeys]);
 
-    const moveColumn = useCallback((from: number, to: number) => {
-        if (!setSelectedIds || to < 0 || to >= selectedIds.length) return;
-        setSelectedIds(moveItem(selectedIds, from, to));
+    const nudgeRow = useCallback((key: string, delta: number) => {
+        const next = nudgeItemByKey(rowKeys, key, delta);
+        if (next) setRowOrder(next);
+    }, [rowKeys]);
+
+    const moveColumn = useCallback((fromId: string, toId: string) => {
+        if (!setSelectedIds) return;
+        const next = moveItemByKey(selectedIds, fromId, toId);
+        if (next) setSelectedIds(next);
+    }, [selectedIds, setSelectedIds]);
+
+    const nudgeColumn = useCallback((id: string, delta: number) => {
+        if (!setSelectedIds) return;
+        const next = nudgeItemByKey(selectedIds, id, delta);
+        if (next) setSelectedIds(next);
     }, [selectedIds, setSelectedIds]);
 
     // --- Drag and drop (native) -------------------------------------------
-    const onDragStart = (kind: DragKind, index: number) => (e: React.DragEvent) => {
+    const onDragStart = (kind: DragKind, key: string) => (e: React.DragEvent) => {
         e.dataTransfer.effectAllowed = 'move';
         // Firefox refuses to start a drag without payload.
-        e.dataTransfer.setData('text/plain', `${kind}:${index}`);
-        setDrag({ kind, index });
+        e.dataTransfer.setData('text/plain', `${kind}:${key}`);
+        setDrag({ kind, key });
     };
-    const onDragOver = (kind: DragKind, index: number) => (e: React.DragEvent) => {
+    const onDragOver = (kind: DragKind, key: string) => (e: React.DragEvent) => {
         if (!drag || drag.kind !== kind) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
-        if (!over || over.kind !== kind || over.index !== index) setOver({ kind, index });
+        if (!over || over.kind !== kind || over.key !== key) setOver({ kind, key });
     };
-    const onDrop = (kind: DragKind, index: number) => (e: React.DragEvent) => {
+    const onDrop = (kind: DragKind, key: string) => (e: React.DragEvent) => {
         if (!drag || drag.kind !== kind) return;
         e.preventDefault();
-        if (kind === 'row') moveRow(drag.index, index); else moveColumn(drag.index, index);
+        if (kind === 'row') moveRow(drag.key, key); else moveColumn(drag.key, key);
         setDrag(null);
         setOver(null);
     };
     const onDragEnd = () => { setDrag(null); setOver(null); };
 
     // Keyboard fallback on the grip handles (native DnD is mouse/touch only).
-    const onRowKey = (index: number) => (e: React.KeyboardEvent) => {
-        if (e.key === 'ArrowUp') { e.preventDefault(); moveRow(index, index - 1); }
-        if (e.key === 'ArrowDown') { e.preventDefault(); moveRow(index, index + 1); }
+    const onRowKey = (key: string) => (e: React.KeyboardEvent) => {
+        if (e.key === 'ArrowUp') { e.preventDefault(); nudgeRow(key, -1); }
+        if (e.key === 'ArrowDown') { e.preventDefault(); nudgeRow(key, 1); }
     };
-    const onColKey = (index: number) => (e: React.KeyboardEvent) => {
-        if (e.key === 'ArrowLeft') { e.preventDefault(); moveColumn(index, index - 1); }
-        if (e.key === 'ArrowRight') { e.preventDefault(); moveColumn(index, index + 1); }
+    const onColKey = (id: string) => (e: React.KeyboardEvent) => {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); nudgeColumn(id, -1); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); nudgeColumn(id, 1); }
     };
 
     if (!compare || selectedIds.length === 0) return null;
 
-    const isOver = (kind: DragKind, index: number) => over?.kind === kind && over.index === index && drag?.index !== index;
-    const isDragging = (kind: DragKind, index: number) => drag?.kind === kind && drag.index === index;
+    const isOver = (kind: DragKind, key: string) => over?.kind === kind && over.key === key && drag?.key !== key;
+    const isDragging = (kind: DragKind, key: string) => drag?.kind === kind && drag.key === key;
 
     return (
         <section
@@ -200,7 +239,7 @@ export function RecipeComparisonTable() {
                             <th scope="col" className="sticky left-0 z-30 bg-zinc-900 text-left text-[10px] uppercase tracking-wider text-zinc-500 font-mono px-3 py-2 border-b border-r border-zinc-700 min-w-[12rem] align-bottom">
                                 Ingredient
                             </th>
-                            {selectedIds.map((id, index) => {
+                            {selectedIds.map(id => {
                                 const recipe = loaded[id];
                                 return (
                                     <th
@@ -209,13 +248,13 @@ export function RecipeComparisonTable() {
                                         draggable
                                         data-testid="comparison-column"
                                         data-recipe-id={id}
-                                        onDragStart={onDragStart('col', index)}
-                                        onDragOver={onDragOver('col', index)}
-                                        onDrop={onDrop('col', index)}
+                                        onDragStart={onDragStart('col', id)}
+                                        onDragOver={onDragOver('col', id)}
+                                        onDrop={onDrop('col', id)}
                                         onDragEnd={onDragEnd}
                                         className={`align-top px-2 py-2 border-b border-zinc-700 min-w-[7rem] max-w-[10rem] font-normal transition-colors cursor-grab active:cursor-grabbing
-                                            ${isOver('col', index) ? 'bg-yellow-500/15 outline outline-1 outline-yellow-500/50' : 'bg-zinc-900'}
-                                            ${isDragging('col', index) ? 'opacity-40' : ''}`}
+                                            ${isOver('col', id) ? 'bg-yellow-500/15 outline outline-1 outline-yellow-500/50' : 'bg-zinc-900'}
+                                            ${isDragging('col', id) ? 'opacity-40' : ''}`}
                                     >
                                         <div className="flex flex-col items-center gap-1.5">
                                             <div className="flex items-center gap-1 self-stretch justify-between">
@@ -223,7 +262,7 @@ export function RecipeComparisonTable() {
                                                     type="button"
                                                     aria-label={`Move column ${recipe?.title ?? ''}: use left and right arrow keys`}
                                                     title="Drag to reorder (or use ← →)"
-                                                    onKeyDown={onColKey(index)}
+                                                    onKeyDown={onColKey(id)}
                                                     className="text-zinc-600 hover:text-zinc-300 focus:text-yellow-500 focus:outline-none cursor-grab"
                                                 >
                                                     <GripHorizontal className="w-4 h-4" />
@@ -262,19 +301,19 @@ export function RecipeComparisonTable() {
                         </tr>
                     </thead>
                     <tbody>
-                        {table.rows.map((row, index) => (
+                        {table.rows.map(row => (
                             <tr
                                 key={row.key}
                                 draggable
                                 data-testid="comparison-row"
                                 data-row-key={row.key}
-                                onDragStart={onDragStart('row', index)}
-                                onDragOver={onDragOver('row', index)}
-                                onDrop={onDrop('row', index)}
+                                onDragStart={onDragStart('row', row.key)}
+                                onDragOver={onDragOver('row', row.key)}
+                                onDrop={onDrop('row', row.key)}
                                 onDragEnd={onDragEnd}
                                 className={`group/row transition-colors hover:bg-zinc-800/30
-                                    ${isOver('row', index) ? 'bg-yellow-500/10 outline outline-1 outline-yellow-500/50' : ''}
-                                    ${isDragging('row', index) ? 'opacity-40' : ''}`}
+                                    ${isOver('row', row.key) ? 'bg-yellow-500/10 outline outline-1 outline-yellow-500/50' : ''}
+                                    ${isDragging('row', row.key) ? 'opacity-40' : ''}`}
                             >
                                 <th
                                     scope="row"
@@ -286,7 +325,7 @@ export function RecipeComparisonTable() {
                                             type="button"
                                             aria-label={`Move row ${row.label}: use up and down arrow keys`}
                                             title="Drag to reorder (or use ↑ ↓)"
-                                            onKeyDown={onRowKey(index)}
+                                            onKeyDown={onRowKey(row.key)}
                                             className="text-zinc-600 hover:text-zinc-300 focus:text-yellow-500 focus:outline-none cursor-grab shrink-0"
                                         >
                                             <GripVertical className="w-4 h-4" />
@@ -298,6 +337,7 @@ export function RecipeComparisonTable() {
                                                 <ChefHat className="w-3.5 h-3.5 text-zinc-700" />
                                             )}
                                         </div>
+                                        <CategoryDot category={row.category} />
                                         <span className="text-zinc-200 truncate" title={row.label}>{row.label}</span>
                                         {row.unit && <span className="text-[10px] font-mono text-zinc-500 shrink-0">{row.unit}</span>}
                                     </div>

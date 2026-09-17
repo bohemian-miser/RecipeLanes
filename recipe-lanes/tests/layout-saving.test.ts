@@ -102,6 +102,34 @@ describe('Layer A — buildGraphForSave', () => {
         assert.equal(result.nodes.find(n => n.id === 'n1')?.y, 200, 'node y must reflect drag position');
     });
 
+    it('[A1b] drops the notation station spine stub instead of persisting it as an input', () => {
+        // The notation layout draws a render-only "spine stub" edge from each
+        // station badge to its row's first step so the badge reads as the row
+        // anchor. Station badges are synthetic (not in graph.nodes), so letting
+        // that edge reach the inputs derivation would write a dangling
+        // `notation-station-<laneId>` reference into the saved recipe.
+        const graph = makeGraph();
+        const rfNodes = [
+            { id: 'notation-station-l1', type: 'notation-station', position: { x: 44, y: 100 } },
+            rfNode('n1', 200, 120),
+            rfNode('n2', 320, 120),
+        ];
+        const rfEdges = [
+            { id: 'notation-station-l1->n1', source: 'notation-station-l1', target: 'n1' },
+            { id: 'n1->n2', source: 'n1', target: 'n2' },
+        ];
+
+        const result = buildGraphForSave(graph, 'notation', rfNodes, rfEdges);
+
+        assert.deepStrictEqual(result.nodes.find(n => n.id === 'n1')?.inputs, [], 'n1 must not inherit the station stub');
+        assert.deepStrictEqual(result.nodes.find(n => n.id === 'n2')?.inputs, ['n1'], 'real inputs must survive');
+        assert.deepStrictEqual(
+            result.layouts?.['notation']?.map(l => l.id),
+            ['n1', 'n2'],
+            'station badges must not be persisted as layout rows',
+        );
+    });
+
     it('[A2] preserves moved coordinates when graph.layouts already has an entry for this mode', () => {
         // Simulates the SECOND save — graph already has layouts from the first save
         const graph = makeGraph({

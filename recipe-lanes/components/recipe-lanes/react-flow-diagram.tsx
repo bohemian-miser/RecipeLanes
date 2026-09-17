@@ -35,7 +35,11 @@ import { forceSimulation, forceLink, forceManyBody, forceCollide, forceY, forceX
 
 import { calculateLayout, LayoutMode } from '../../lib/recipe-lanes/layout';
 import { calculateRepulsiveCurvesLayout } from '../../lib/recipe-lanes/layout-force';
-import { calculateNotationLayout } from '../../lib/recipe-lanes/layout-notation';
+import {
+    calculateNotationLayout,
+    reanchorNotationStations,
+    NOTATION_STATION_TYPE,
+} from '../../lib/recipe-lanes/layout-notation';
 import { getLeafNodeIds } from '../../lib/recipe-lanes/leaf-nodes';
 import { RecipeGraph } from '../../lib/recipe-lanes/types';
 import { getNodeIconUrl, getNodeIconId, preserveNodeShortlist, getNodeShortlistLength } from '../../lib/recipe-lanes/model-utils';
@@ -103,6 +107,54 @@ const INITIAL_EDGE_TYPES = {
     timeline: TimelineEdge,
     notation: NotationEdge,
 };
+
+/**
+ * Notation nodes always label BELOW the icon.
+ *
+ * The toolbar's text-position select is a global preference, but 'left'/'right'
+ * widen a MinimalNode wrapper from 100/120px to 140/180px. The notation layout
+ * spaces by the 100/120px contract (and the edge anchors derive from it), so
+ * letting the preference through detaches every label and every edge in the
+ * view. Other layout modes are unaffected.
+ */
+const NOTATION_TEXT_POS = 'bottom' as const;
+
+/**
+ * The text position a node should actually render with. ONE function, used by
+ * both the node-build spread and the textPos effect, so the notation pin cannot
+ * half-apply (it did: the effect re-broadcast the raw preference onto nodes the
+ * build had just pinned).
+ */
+function effectiveTextPos(
+    mode: string,
+    textPos: 'bottom' | 'top' | 'left' | 'right',
+): 'bottom' | 'top' | 'left' | 'right' {
+    return mode === 'notation' ? NOTATION_TEXT_POS : textPos;
+}
+
+/**
+ * True for the render-only "spine stub" edge the notation layout draws from a
+ * station badge to its row's first step.
+ *
+ * Reads the marker the LAYOUT set at the single place it mints that edge (see
+ * NotationVisualEdge.synthetic), carried through into the RF edge's `data`.
+ * Deriving it here instead — from an id prefix, or even from the source node's
+ * type — is how this went wrong twice: recipe node ids are unconstrained
+ * strings, so a real node called `notation-station-prep` matched, and its real
+ * edges were dropped from the save.
+ *
+ * Every edge walker (ancestor selection, pivot drag, the physics sim, the save
+ * path) must agree, or the "fixed" badge gets dragged/simulated away with
+ * nothing to restore it.
+ *
+ * The two ancestor walks below are deliberately left inline in the component
+ * rather than extracted into one function: hoisting them out changes what the
+ * React Compiler lint can analyse in this file and surfaces two unrelated
+ * pre-existing violations, which belong in their own PR.
+ */
+function isSyntheticStationEdge(edge: { data?: { synthetic?: boolean } }): boolean {
+    return edge.data?.synthetic === true;
+}
 
 // Fire `diagram_interacted` at most once per recipe per page load, regardless
 // of how many times the diagram component itself mounts/unmounts.
@@ -223,7 +275,11 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         const getAncestors = (id: string, visited = new Set<string>()): string[] => {
             if (visited.has(id)) return [];
             visited.add(id);
-            const incoming = edges.filter((e: any) => e.target === id);
+            // Skip the synthetic station stub: a station badge is not an
+            // ancestor of its row's first step (see isSyntheticStationEdge).
+            const incoming = edges.filter(
+                (e: any) => e.target === id && !isSyntheticStationEdge(e),
+            );
             const parents = incoming.map((e: any) => e.source);
             return [...parents, ...parents.flatMap((p: any) => getAncestors(p, visited))];
         };
@@ -327,6 +383,12 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                         return saved ? { ...n, x: saved.x, y: saved.y } : n;
                     }),
                 };
+                // …but a badge left on the freshly-computed row pitch while its
+                // row's real nodes jumped to saved ys is a DETACHED badge with a
+                // diagonal stub edge climbing to it — which is what every
+                // recipe saved before the dynamic row pitch would now render.
+                // Put each badge back on its row's actual line.
+                layout = reanchorNotationStations(layout);
             }
         } else if (canPreserve) {
             const safeMode = (['swimlanes', 'dagre', 'dagre-lr', 'timeline'].includes(mode as string)) ? (mode as LayoutMode) : 'dagre';
@@ -373,7 +435,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
              const originalNode = graph.nodes.find(gn => gn.id === n.id);
              const role = (n as any).role as ('leaf' | 'verb' | 'state' | 'station' | undefined);
              const nodeType = isNotation
-                 ? (role === 'station' ? 'notation-station' : role === 'verb' ? 'notation-verb' : 'minimal')
+                 ? (role === 'station' ? NOTATION_STATION_TYPE : role === 'verb' ? 'notation-verb' : 'minimal')
                  : (isTimeline ? 'timeline-node' : 'minimal');
              newNodes.push({
                  id: n.id,
@@ -382,8 +444,16 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                  data: {
                      ...originalNode, ...n.data,
                      ...(isTimeline ? { lineColor: (n as any).lineColor } : {}),
-                     textPos, depth: (n as any).depth,
+                     textPos: effectiveTextPos(mode as string, textPos),
+                     depth: (n as any).depth,
                      isLeaf: isNotation ? role === 'leaf' : leafIds.has(n.id),
+                     // "This node is being rendered inside the notation
+                     // view." Three rendering decisions hang off it, all of
+                     // them things the notation layout reserved space for:
+                     // the label line clamp, nowrap chips, and the classic
+                     // renderer (see minimal-node.tsx). Strictly gated —
+                     // every other view renders exactly as before.
+                     ...(isNotation ? { isNotationView: true } : {}),
                      onDelete: () => handleDeleteNode(n.id),
                      onSetLongPress: setLongPress,
                      iconTheme,
@@ -416,7 +486,10 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                     source: e.sourceId,
                     target: e.targetId,
                     type: 'notation',
-                    data: { kind: (e as any).kind },
+                    // Carry the layout's synthetic marker into RF edge data —
+                    // every consumer downstream (save path, edge walkers, the
+                    // physics sim) identifies the station stub by this alone.
+                    data: { kind: (e as any).kind, synthetic: (e as any).synthetic === true },
                     style: {},
                 };
             }
@@ -460,7 +533,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         syncNodePositions(
             mode as string,
             newNodes
-                .filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station')
+                .filter((n: any) => n.type !== 'lane' && n.type !== NOTATION_STATION_TYPE)
                 .map((n: any) => ({ id: n.id, x: n.position.x, y: n.position.y })),
         );
 
@@ -567,7 +640,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
             // (autosave echoes, icon writes …) and snapping user drags back.
             const currentRFNodeIds = new Set(
                 getNodes()
-                    .filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station')
+                    .filter((n: any) => n.type !== 'lane' && n.type !== NOTATION_STATION_TYPE)
                     .map((n: any) => n.id)
             );
             const incomingIds = graph.nodes.map(n => n.id);
@@ -653,13 +726,24 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         if (isOwner) scheduleAutosave();
     }, [historyVersion, runLayout, isOwner, scheduleAutosave]);
 
-    // Text Position Update Effect
+    // Text Position Update Effect. Notation pins the label below the icon —
+    // see effectiveTextPos (a 'left'/'right' wrapper is 40-60px wider and
+    // breaks the layout's spacing and the edge anchors).
+    //
+    // Depending on `mode` means this now fires on every layout switch, so it
+    // returns the SAME array when nothing actually changes (the same guard the
+    // graph-sync effect above uses). Otherwise every mode switch handed
+    // ReactFlow a fresh object for every node and re-rendered the whole canvas
+    // for nothing.
     useEffect(() => {
-        setNodes(nds => nds.map(n => ({
-            ...n,
-            data: { ...n.data, textPos }
-        })));
-    }, [textPos, setNodes]);
+        const wanted = effectiveTextPos(mode as string, textPos);
+        setNodes(nds => {
+            if (nds.every(n => n.data?.textPos === wanted)) return nds;
+            return nds.map(n => (
+                n.data?.textPos === wanted ? n : { ...n, data: { ...n.data, textPos: wanted } }
+            ));
+        });
+    }, [textPos, mode, setNodes]);
 
     // Edge Style Update Effect
     useEffect(() => {
@@ -687,7 +771,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                 syncNodePositions(
                     mode as string,
                     getNodes()
-                        .filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station')
+                        .filter((n: any) => n.type !== 'lane' && n.type !== NOTATION_STATION_TYPE)
                         .map((n: any) => ({ id: n.id, x: n.position.x, y: n.position.y })),
                 );
             }
@@ -699,15 +783,24 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         // so one undo restores the pre-physics arrangement.
         if (!wasLive) pushUndoSnapshot();
 
-        const d3Nodes = nodes.filter((n: any) => n.type !== 'lane').map((n: any) => ({ 
-            id: n.id, 
-            x: n.position.x, 
-            y: n.position.y,
-            width: n.width || 100,
-            depth: n.data.depth || 0
-        }));
-        
-        const d3Links = edges.map((e: any) => ({ source: e.source, target: e.target }));
+        // Station badges are fixed row anchors, not bodies: the sim would
+        // scatter them and the stop-sync below (which skips notation-station on
+        // purpose, since they are not graph nodes) has nothing to restore them
+        // with. Their stub edges leave with them, or forceLink would resolve a
+        // source id that is no longer a simulation node.
+        const d3Nodes = nodes
+            .filter((n: any) => n.type !== 'lane' && n.type !== NOTATION_STATION_TYPE)
+            .map((n: any) => ({
+                id: n.id,
+                x: n.position.x,
+                y: n.position.y,
+                width: n.width || 100,
+                depth: n.data.depth || 0
+            }));
+
+        const d3Links = edges
+            .filter((e: any) => !isSyntheticStationEdge(e))
+            .map((e: any) => ({ source: e.source, target: e.target }));
 
         const sim = forceSimulation(d3Nodes as any)
             .force("link", forceLink(d3Links).id((d: any) => d.id).distance(100 * spacing))
@@ -801,20 +894,30 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
     const initPivotDrag = (node: Node) => {
         longPressTriggered.current = false; // Reset immediately
         const allNodes = getNodes();
-        const outgoing = edges.find((e: any) => e.source === node.id);
+        // The synthetic station stub is not a real parent/child relationship:
+        // rotating a branch through it would move the (undraggable, un-restored)
+        // station badge off its row.
+        const outgoing = edges.find(
+            (e: any) => e.source === node.id && !isSyntheticStationEdge(e),
+        );
         const child = outgoing ? allNodes.find((n: any) => n.id === outgoing.target) : null;
 
         if (child) {
+            // Same walk as selectBranch, and it must apply the same synthetic
+            // filter: a pivot rotation that pulled the station badge in would
+            // move a node that is not draggable and never gets restored.
             const getAncestors = (id: string, visited = new Set<string>()): string[] => {
                 if (visited.has(id)) return [];
                 visited.add(id);
-                const incoming = edges.filter((e: any) => e.target === id);
+                const incoming = edges.filter(
+                    (e: any) => e.target === id && !isSyntheticStationEdge(e),
+                );
                 const parents = incoming.map((e: any) => e.source);
                 return [...parents, ...parents.flatMap((p: any) => getAncestors(p, visited))];
             };
-            
+
             const ancestors = getAncestors(node.id);
-            
+
             const initialPositions: Record<string, { x: number, y: number }> = {};
             const candidates = [node.id, ...ancestors];
             candidates.forEach((id: any) => {
@@ -925,7 +1028,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
         commitNodePositions(
             mode as string,
             getNodes()
-                .filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station')
+                .filter((n: any) => n.type !== 'lane' && n.type !== NOTATION_STATION_TYPE)
                 .map((n: any) => ({ id: n.id, x: n.position.x, y: n.position.y })),
         );
         if (isOwner) {

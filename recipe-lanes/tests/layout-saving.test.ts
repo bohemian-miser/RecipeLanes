@@ -102,6 +102,112 @@ describe('Layer A — buildGraphForSave', () => {
         assert.equal(result.nodes.find(n => n.id === 'n1')?.y, 200, 'node y must reflect drag position');
     });
 
+    it('[A1b] drops the notation station spine stub instead of persisting it as an input', () => {
+        // The notation layout draws a render-only "spine stub" edge from each
+        // station badge to its row's first step so the badge reads as the row
+        // anchor. Station badges are synthetic (not in graph.nodes), so letting
+        // that edge reach the inputs derivation would write a dangling
+        // `notation-station-<laneId>` reference into the saved recipe.
+        const graph = makeGraph();
+        const rfNodes = [
+            { id: 'notation-station-l1', type: 'notation-station', position: { x: 44, y: 100 } },
+            rfNode('n1', 200, 120),
+            rfNode('n2', 320, 120),
+        ];
+        // `data.synthetic` is the marker the layout sets at the ONE place it
+        // mints this edge; the save path must key on it and nothing else.
+        const rfEdges = [
+            { id: 'stub->n1', source: 'notation-station-l1', target: 'n1', data: { kind: 'spine', synthetic: true } },
+            { id: 'n1->n2', source: 'n1', target: 'n2', data: { kind: 'spine', synthetic: false } },
+        ];
+
+        const result = buildGraphForSave(graph, 'notation', rfNodes, rfEdges);
+
+        assert.deepStrictEqual(result.nodes.find(n => n.id === 'n1')?.inputs, [], 'n1 must not inherit the station stub');
+        assert.deepStrictEqual(result.nodes.find(n => n.id === 'n2')?.inputs, ['n1'], 'real inputs must survive');
+        assert.deepStrictEqual(
+            result.layouts?.['notation']?.map(l => l.id),
+            ['n1', 'n2'],
+            'station badges must not be persisted as layout rows',
+        );
+    });
+
+    it('[A1c] keeps the edges of a REAL node whose id starts with notation-station-', () => {
+        // The stub filter must key on the layout's `synthetic` marker, not on
+        // the shape of an id. `notation-station-cleanup` is a perfectly legal
+        // recipe node id (they come from the LLM as unconstrained strings), and
+        // dropping its edges by prefix is silent data loss for every consumer
+        // of it — in EVERY layout mode.
+        const graph: RecipeGraph = {
+            lanes: [{ id: 'l1', label: 'Lane 1', type: 'prep' }],
+            nodes: [
+                { id: 'notation-station-cleanup', laneId: 'l1', type: 'action', text: 'Clean the station', visualDescription: '' },
+                { id: 'n2', laneId: 'l1', type: 'action', text: 'Serve', visualDescription: '', inputs: ['notation-station-cleanup'] },
+            ],
+        };
+        const rfNodes = [
+            { id: 'notation-station-cleanup', type: 'minimal', position: { x: 100, y: 100 } },
+            rfNode('n2', 300, 100),
+        ];
+        const rfEdges = [
+            { id: 'e1', source: 'notation-station-cleanup', target: 'n2' },
+        ];
+
+        const result = buildGraphForSave(graph, 'swimlanes', rfNodes, rfEdges);
+
+        assert.deepStrictEqual(
+            result.nodes.find(n => n.id === 'n2')?.inputs,
+            ['notation-station-cleanup'],
+            'a real node whose id happens to start with the synthetic prefix must keep its edges',
+        );
+        assert.ok(
+            result.nodes.some(n => n.id === 'notation-station-cleanup'),
+            'the real node itself must survive the save',
+        );
+    });
+
+    it('[A1d] keeps a real node called notation-station-<existing lane> intact in NOTATION mode', () => {
+        // The repro: in notation mode, with a station badge on screen for lane
+        // `l1`, a real recipe node called `notation-station-l1` used to be
+        // indistinguishable from the badge — its edges were dropped from the
+        // save and its layout row was attributed to the badge. Only the
+        // per-edge marker and the rendered node type tell them apart.
+        const EVIL = 'notation-station-l1';
+        const graph: RecipeGraph = {
+            lanes: [{ id: 'l1', label: 'Lane 1', type: 'prep' }],
+            nodes: [
+                { id: EVIL, laneId: 'l1', type: 'action', text: 'Clean down the station', visualDescription: '' },
+                { id: 'n2', laneId: 'l1', type: 'action', text: 'Serve', visualDescription: '', inputs: [EVIL] },
+            ],
+        };
+        const rfNodes = [
+            // The badge: same lane, distinct id, station TYPE.
+            { id: '§notation-station-l1', type: 'notation-station', position: { x: 44, y: 100 } },
+            { id: EVIL, type: 'minimal', position: { x: 200, y: 100 } },
+            rfNode('n2', 400, 100),
+        ];
+        const rfEdges = [
+            { id: 'stub', source: '§notation-station-l1', target: EVIL, data: { kind: 'spine', synthetic: true } },
+            { id: 'real', source: EVIL, target: 'n2', data: { kind: 'spine', synthetic: false } },
+        ];
+
+        const result = buildGraphForSave(graph, 'notation', rfNodes, rfEdges);
+
+        assert.deepStrictEqual(
+            result.nodes.find(n => n.id === 'n2')?.inputs, [EVIL],
+            'the real node s edge must survive alongside the badge',
+        );
+        assert.deepStrictEqual(
+            result.nodes.find(n => n.id === EVIL)?.inputs, [],
+            'the stub must not become an input of the real node',
+        );
+        assert.ok(result.nodes.some(n => n.id === EVIL), 'the real node must survive the save');
+        assert.deepStrictEqual(
+            result.layouts?.['notation']?.map(l => l.id), [EVIL, 'n2'],
+            'the badge must not be persisted as a layout row, and must not displace the real node',
+        );
+    });
+
     it('[A2] preserves moved coordinates when graph.layouts already has an entry for this mode', () => {
         // Simulates the SECOND save — graph already has layouts from the first save
         const graph = makeGraph({

@@ -20,6 +20,7 @@ import { Handle, Position } from 'reactflow';
 import { Pencil, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { getNodeIngredientName, getNodeTheme } from '../../../lib/recipe-lanes/model-utils';
+import { notationClampStyle, LEAF_LABEL_MAX_LINES } from '../../../lib/recipe-lanes/notation-metrics';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
@@ -56,6 +57,13 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 }) => {
     const isIngredient = data.type === 'ingredient';
     const themeVariant = getNodeTheme(data) === 'modern_clean' ? 'modern_clean' : 'modern';
+    // Injected by the notation branch of node building in react-flow-diagram;
+    // never set in any other view. Bounds the label to the number of lines the
+    // notation row pitch reserves. `undefined` spreads to nothing, so the
+    // non-notation render is byte-identical to before.
+    const clampStyle = (data as { isNotationView?: boolean }).isNotationView === true
+        ? notationClampStyle(LEAF_LABEL_MAX_LINES)
+        : undefined;
 
     // Compact size for ingredients (80px), full size for actions/others (120px)
     const containerSize = isIngredient ? { width: 80, height: 80 } : { width: 120, height: 120 };
@@ -138,7 +146,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 
                     {/* Pill Text (Name Only) - Wrapped */}
                     <div className="relative z-50 -mt-5 bg-white/90 backdrop-blur-sm border border-white/50 shadow-sm rounded-xl px-2 py-0.5 pointer-events-none w-max max-w-[160px] text-center">
-                        <span className="text-[9px] font-bold text-zinc-800 uppercase tracking-wide leading-tight whitespace-normal block">
+                        <span className="text-[9px] font-bold text-zinc-800 uppercase tracking-wide leading-tight whitespace-normal block" style={clampStyle}>
                             {parsed.name}
                         </span>
                     </div>
@@ -218,7 +226,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                                     <span className="text-zinc-400 ml-1">×</span>
                                 </span>
                             )}
-                            <span className="text-zinc-800 uppercase tracking-wide whitespace-normal">
+                            <span className="text-zinc-800 uppercase tracking-wide whitespace-normal" style={clampStyle}>
                                 {parsed.name}
                             </span>
                         </div>
@@ -239,7 +247,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
               {/* Text Bubble (Left) */}
               <div className="absolute right-[55%] top-1/2 -translate-y-1/2 w-36 flex flex-col items-end text-right z-50 pointer-events-none opacity-90 hover:opacity-100 transition-opacity">
                   <div className="bg-white/90 backdrop-blur-sm border border-zinc-200 shadow-md px-2 py-1.5 rounded-lg">
-                      <span className="text-[10px] font-semibold text-zinc-800 leading-snug block whitespace-normal">
+                      <span className="text-[10px] font-semibold text-zinc-800 leading-snug block whitespace-normal" style={clampStyle}>
                           {data.text}
                       </span>
                       {(data.duration || data.temperature) && (

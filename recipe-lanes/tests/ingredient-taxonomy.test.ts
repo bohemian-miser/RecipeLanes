@@ -293,6 +293,27 @@ describe('ingredient-taxonomy — buildClassificationPrompt', () => {
         );
     });
 
+    // The icon corpus's last unruled boundary. A plated composite dish has no
+    // single ingredient to be classified as, so names like "Simple Duck
+    // Sandwich On A Plate" drifted between proteins, other and action_or_state
+    // from run to run. Owner-settled 2026-09-17: a plated dish is a result of
+    // cooking, so it sits with the other process states.
+    it('sends plated composite dishes to action_or_state, not to their dominant ingredient', () => {
+        // action_or_state only exists in the icon variant of the prompt.
+        const line = rulesLineFor(
+            buildClassificationPrompt(labels, { includeIconCategories: true }),
+            'action_or_state',
+        );
+        assert.ok(
+            line.includes('plated, assembled, or served composite dishes'),
+            'action_or_state must claim plated composite dishes',
+        );
+        assert.ok(
+            line.includes('they belong here rather than in the category of whichever ingredient dominates them'),
+            'the clause must say the dominant ingredient does NOT win',
+        );
+    });
+
     // The two clauses that both mention tomato have to agree about which of
     // them owns the jar of paste, or the classifier is being handed a genuine
     // contradiction rather than a boundary.

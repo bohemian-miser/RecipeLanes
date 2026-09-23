@@ -51,6 +51,19 @@ export interface ComparisonIngredient {
      * downstream treats "no category" the same as `other`.
      */
     category?: string;
+    /**
+     * The pantry item this line was bought as, from the same lookup doc — the
+     * label with this recipe's own prep stripped off ("Carrot, Chopped" →
+     * "Carrot"), so that two recipes phrasing one ingredient differently can
+     * be totalled on one row.
+     *
+     * Optional in the same way `category` is, and absence means IDENTITY: the
+     * line is its own raw ingredient and keeps the row it has today. Nothing
+     * reads this field yet — the row-keying change that consumes it is a
+     * separate change, so a line carrying a raw name currently behaves exactly
+     * like one without.
+     */
+    raw?: string;
 }
 
 /** The slim, serialisable shape the server action returns per selected recipe. */

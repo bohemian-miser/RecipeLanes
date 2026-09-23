@@ -495,9 +495,10 @@ export interface ClassificationOptions {
      * `label -> {category, raw}`.
      *
      * Defaults to false, and false must stay BYTE-IDENTICAL to the prompt that
-     * existed before raw extraction: the icon backfill and the classify-on-miss
-     * path share this builder and have no use for a raw name, so they must not
-     * pay for one in tokens or in output-shape risk.
+     * existed before raw extraction: the icon backfill shares this builder and
+     * has no use for a raw name, so it must not pay for one in tokens or in
+     * output-shape risk. The two comparison-table callers (the category
+     * backfill and the classify-on-miss path) both set it.
      */
     includeRaw?: boolean;
 }
@@ -539,8 +540,8 @@ function distinctLabels(labels: readonly string[]): string[] {
  *
  * `includeRaw` adds a second field per label and switches the values from a
  * bare id to an object. Without it the prompt is byte-for-byte the one that
- * predates raw extraction, which is what lets the icon backfill and the
- * classify-on-miss path keep their existing behaviour untouched.
+ * predates raw extraction, which is what lets the icon backfill keep its
+ * existing behaviour untouched.
  */
 export function buildClassificationPrompt(
     labels: string[],
@@ -649,8 +650,16 @@ const LINE_BREAK_CHARS = /[\r\n\u2028\u2029]/;
  * makes the answer unusable, but a bad raw only costs the merge. The label
  * still gets its category, and callers fall back to identity (raw = label),
  * which is the conservative outcome `RAW_INGREDIENT_RULES` already documents.
+ *
+ * Exported so the READ side shares this exact definition rather than keeping
+ * a looser copy of it. Every writer is bounded today — the model's answers by
+ * this function, the identity fallback by `boundRawIngredientName` — but a
+ * lookup collection outlives the code that filled it: docs written before
+ * those bounds existed are still there, and docs get hand-edited. A value
+ * that escapes becomes a comparison row label, so the check is applied where
+ * the value is USED, not only where it was produced.
  */
-function validRawIngredient(value: unknown): string | undefined {
+export function validRawIngredient(value: unknown): string | undefined {
     if (typeof value !== 'string') return undefined;
     const trimmed = value.trim();
     if (!trimmed || trimmed.length > MAX_RAW_INGREDIENT_LENGTH) return undefined;

@@ -15,8 +15,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// The comparison table's label → category join: cache hits, the bounded
-// classify-on-miss call, its write-through, and every degradation path.
+// The comparison table's label → {category, raw ingredient} join: cache hits,
+// the bounded classify-on-miss call, its write-through, and every degradation
+// path.
 //
 // Pure tier: Firestore, Genkit and the clock are all injected, so nothing here
 // touches an emulator or a model. (Importing the module must not reach them
@@ -32,12 +33,32 @@ import {
     type ClassifierResponse,
     type IngredientCategoryDoc,
     type IngredientCategoryWrite,
+    type IngredientLookupEntry,
 } from '../lib/ingredient-category-lookup';
+import {
+    MAX_RAW_INGREDIENT_LENGTH,
+    RAW_INGREDIENT_RULES,
+    RAW_RULES_VERSION,
+} from '../lib/recipe-lanes/ingredient-taxonomy';
 import { ingredientCategoryDocId, ingredientCategoryKey } from '../lib/recipe-lanes/ingredient-label-extract';
 
 /** The lookup returns a null-prototype object; deep-equality needs a plain one. */
-function plain(result: Record<string, string>): Record<string, string> {
+function plain(
+    result: Record<string, IngredientLookupEntry>,
+): Record<string, IngredientLookupEntry> {
     return Object.fromEntries(Object.entries(result));
+}
+
+/**
+ * One entry of the pretend collection. A bare value is shorthand for a doc
+ * carrying only that category — the shape most of these tests care about — and
+ * an object is the doc's fields verbatim, so a test can store a raw ingredient
+ * (or a deliberately broken one) alongside.
+ */
+function storedDoc(id: string, value: unknown): IngredientCategoryDoc {
+    return typeof value === 'object' && value !== null
+        ? { id, ...(value as Omit<IngredientCategoryDoc, 'id'>) }
+        : { id, category: value };
 }
 
 /**
@@ -60,9 +81,7 @@ function harness(options: {
     const deps = {
         readCategories: options.readCategories ?? (async (docIds: string[]) => {
             reads.push(docIds);
-            return docIds
-                .filter(id => id in stored)
-                .map(id => ({ id, category: stored[id] }));
+            return docIds.filter(id => id in stored).map(id => storedDoc(id, stored[id]));
         }),
         classify: async (prompt: string): Promise<ClassifierResponse> => {
             prompts.push(prompt);
@@ -80,15 +99,30 @@ function harness(options: {
     return { deps, prompts, writes, reads, writeSettled };
 }
 
-/** A classifier that answers every label it was asked about with `category`. */
-function answersEverythingWith(category: string) {
+/**
+ * A classifier that answers every label it was asked about with `category`.
+ *
+ * With no `rawFor` it answers in the bare-id shape, which is what a model that
+ * ignored the object contract would send. With one it answers in the object
+ * shape the `includeRaw` prompt asks for; a `rawFor` returning undefined omits
+ * the field entirely, the way a model that had no name for a label would.
+ */
+function answersEverythingWith(category: string, rawFor?: (label: string) => unknown) {
     return async (prompt: string): Promise<ClassifierResponse> => {
-        const labels = [...prompt.matchAll(/^"(.*)"$/gm)].map(m => JSON.parse(`"${m[1]}"`) as string);
+        const labels = promptLabels(prompt);
         return {
-            text: JSON.stringify(Object.fromEntries(labels.map(l => [l, category]))),
+            text: JSON.stringify(Object.fromEntries(labels.map(l => [
+                l,
+                rawFor ? { category, raw: rawFor(l) } : category,
+            ]))),
             model: 'test-model',
         };
     };
+}
+
+/** The labels a prompt asked about — one JSON string per line in its label block. */
+function promptLabels(prompt: string): string[] {
+    return [...prompt.matchAll(/^"(.*)"$/gm)].map(m => JSON.parse(`"${m[1]}"`) as string);
 }
 
 describe('ingredient-category-lookup — cache hits', () => {
@@ -100,9 +134,121 @@ describe('ingredient-category-lookup — cache hits', () => {
             },
         });
         const result = await lookupIngredientCategories(['Olive Oil', 'Garlic'], h.deps);
-        assert.deepEqual(plain(result), { 'olive oil': 'fats_oils', garlic: 'aromatics' });
+        assert.deepEqual(plain(result), {
+            'olive oil': { category: 'fats_oils' },
+            garlic: { category: 'aromatics' },
+        });
         assert.deepEqual(h.prompts, []);
         assert.deepEqual(h.writes, []);
+    });
+
+    it('returns the stored raw ingredient alongside the category', async () => {
+        const h = harness({
+            stored: {
+                [ingredientCategoryDocId('Carrot, Chopped')!]: {
+                    category: 'vegetables',
+                    rawIngredient: 'Carrot',
+                },
+            },
+        });
+        const result = await lookupIngredientCategories(['Carrot, Chopped'], h.deps);
+        assert.deepEqual(plain(result), {
+            'carrot, chopped': { category: 'vegetables', raw: 'Carrot' },
+        });
+        assert.deepEqual(h.prompts, [], 'a complete doc is a hit, not a miss');
+    });
+
+    it('leaves raw absent on a doc the pre-raw backfill wrote', async () => {
+        // The entire production corpus looks like this until the raw pass runs:
+        // a perfectly good category and no rawIngredient field at all. Absence
+        // must read as identity, not as a reason to re-classify.
+        const h = harness({ stored: { [ingredientCategoryDocId('Garlic')!]: 'aromatics' } });
+        const result = await lookupIngredientCategories(['Garlic'], h.deps);
+        assert.deepEqual(plain(result), { garlic: { category: 'aromatics' } });
+        assert.equal('raw' in result['garlic'], false, 'absent, not undefined');
+        assert.deepEqual(h.prompts, []);
+    });
+
+    it('ignores a stored raw ingredient that is not a usable name', async () => {
+        // The bound is the parser's, applied to the DATABASE too: every
+        // writer bounds what it stores today, but docs written before those
+        // bounds existed are still there and docs get hand-edited, and
+        // whatever survives here becomes a row label.
+        //
+        // Over-long values are REJECTED rather than truncated — see the read
+        // site for why an over-merge on a shared 80-character prefix is the
+        // worse trade than keeping the row where it already is.
+        for (const rawIngredient of [
+            '',
+            '   ',
+            42,
+            null,
+            { name: 'Carrot' },
+            ['Carrot'],
+            'C'.repeat(MAX_RAW_INGREDIENT_LENGTH + 1),
+            'Carrot\nStick',
+            'Carrot\u2028Stick',
+        ]) {
+            const h = harness({
+                stored: {
+                    [ingredientCategoryDocId('Carrot, Chopped')!]: {
+                        category: 'vegetables',
+                        rawIngredient,
+                    },
+                },
+            });
+            const result = await lookupIngredientCategories(['Carrot, Chopped'], h.deps);
+            // The category survives — a bad raw only costs the merge.
+            assert.deepEqual(
+                plain(result),
+                { 'carrot, chopped': { category: 'vegetables' } },
+                `raw ${JSON.stringify(rawIngredient)} must be dropped`,
+            );
+        }
+    });
+
+    it('keeps a stored raw ingredient exactly at the bound', async () => {
+        const name = 'C'.repeat(MAX_RAW_INGREDIENT_LENGTH);
+        const h = harness({
+            stored: {
+                [ingredientCategoryDocId('Carrot, Chopped')!]: {
+                    category: 'vegetables',
+                    rawIngredient: name,
+                },
+            },
+        });
+        const result = await lookupIngredientCategories(['Carrot, Chopped'], h.deps);
+        assert.equal(result['carrot, chopped'].raw, name, 'the cap is inclusive');
+    });
+
+    it('trims a stored raw ingredient', async () => {
+        const h = harness({
+            stored: {
+                [ingredientCategoryDocId('Carrot, Chopped')!]: {
+                    category: 'vegetables',
+                    rawIngredient: '  Carrot  ',
+                },
+            },
+        });
+        const result = await lookupIngredientCategories(['Carrot, Chopped'], h.deps);
+        assert.equal(result['carrot, chopped'].raw, 'Carrot');
+    });
+
+    it('drops the whole entry when the category is unusable, raw and all', async () => {
+        // A doc with a dead category is a miss: the classifier re-answers both
+        // fields, so keeping half of the stale doc would only confuse the row.
+        const h = harness({
+            stored: {
+                [ingredientCategoryDocId('Carrot, Chopped')!]: {
+                    category: 'legacy_bucket',
+                    rawIngredient: 'Carrot',
+                },
+            },
+            classify: async () => ({ text: '{}', model: 'test-model' }),
+        });
+        const result = await lookupIngredientCategories(['Carrot, Chopped'], h.deps);
+        assert.deepEqual(plain(result), {});
+        assert.equal(h.prompts.length, 1, 'it is re-classified, not half-kept');
     });
 
     it('reads each distinct label once, in chunks of at most 100 refs', async () => {
@@ -141,9 +287,9 @@ describe('ingredient-category-lookup — classify on miss', () => {
         });
         const result = await lookupIngredientCategories(['Garlic', 'Kohlrabi', 'Salsify'], h.deps);
         assert.deepEqual(plain(result), {
-            garlic: 'aromatics',
-            kohlrabi: 'vegetables',
-            salsify: 'vegetables',
+            garlic: { category: 'aromatics' },
+            kohlrabi: { category: 'vegetables' },
+            salsify: { category: 'vegetables' },
         });
         assert.equal(h.prompts.length, 1);
         // Only the misses are prompted about.
@@ -151,14 +297,60 @@ describe('ingredient-category-lookup — classify on miss', () => {
         assert.ok(!h.prompts[0].includes('"Garlic"'));
     });
 
+    it('asks for the raw ingredient in that same one call', async () => {
+        // One round trip answers both fields: a miss already pays for a model
+        // call, and asking separately would make it two.
+        const h = harness({ classify: answersEverythingWith('vegetables', () => 'Carrot') });
+        const result = await lookupIngredientCategories(['Carrot, Chopped'], h.deps);
+        assert.equal(h.prompts.length, 1);
+        assert.ok(h.prompts[0].includes('RAW INGREDIENT:'), 'includeRaw prompt');
+        assert.ok(h.prompts[0].includes(RAW_INGREDIENT_RULES), 'the rules verbatim');
+        assert.deepEqual(plain(result), {
+            'carrot, chopped': { category: 'vegetables', raw: 'Carrot' },
+        });
+    });
+
+    it('standardizes the casing of the raw name the model returned', async () => {
+        // The backfill stores `standardizeIngredientName(raw)`; if this path
+        // stored the model's casing instead, the two writers would disagree
+        // about the same doc's rawIngredient.
+        const h = harness({ classify: answersEverythingWith('vegetables', () => 'cARROT') });
+        const result = await lookupIngredientCategories(['Carrot, Chopped'], h.deps);
+        assert.equal(result['carrot, chopped'].raw, 'Carrot');
+    });
+
+    // Executable version of the arithmetic in MAX_CLASSIFY_ON_MISS's doc
+    // comment. Asking for a raw name took an entry from roughly 10 output
+    // tokens to roughly 25, and the user is waiting on the generation, so the
+    // cap and the timeout are one decision — raising either alone reopens the
+    // regression where a full batch always loses the race and every label
+    // renders in `other`. This fails if a later change moves one without the
+    // other.
+    it('keeps a full on-miss batch inside the latency budget', () => {
+        const OUTPUT_TOKENS_PER_LABEL = 25;
+        const TOKENS_PER_SECOND = 100; // conservative end of Flash's range
+        // Whatever this leaves unspent is the allowance for connection setup
+        // and prefill, which a flat token rate does not model.
+        const budget = (CLASSIFY_TIMEOUT_MS / 1000) * TOKENS_PER_SECOND;
+        assert.ok(
+            MAX_CLASSIFY_ON_MISS * OUTPUT_TOKENS_PER_LABEL <= budget,
+            `${MAX_CLASSIFY_ON_MISS} labels need `
+            + `~${MAX_CLASSIFY_ON_MISS * OUTPUT_TOKENS_PER_LABEL} output tokens, `
+            + `but ${CLASSIFY_TIMEOUT_MS}ms buys only ~${budget}`,
+        );
+    });
+
     it(`caps one request at ${MAX_CLASSIFY_ON_MISS} labels`, async () => {
         const labels = Array.from({ length: MAX_CLASSIFY_ON_MISS + 5 }, (_, i) => `Mystery ${i}`);
-        const h = harness({ classify: answersEverythingWith('other') });
+        const h = harness({ classify: answersEverythingWith('other', label => label) });
         const result = await lookupIngredientCategories(labels, h.deps);
         assert.equal(h.prompts.length, 1);
+        assert.equal(promptLabels(h.prompts[0]).length, MAX_CLASSIFY_ON_MISS);
         assert.equal(Object.keys(plain(result)).length, MAX_CLASSIFY_ON_MISS);
         // The overflow is left uncategorised for a later view, not dropped.
-        assert.equal(result[ingredientCategoryKey('Mystery 44')], undefined);
+        assert.equal(result[ingredientCategoryKey(labels[labels.length - 1])], undefined);
+        await h.writeSettled;
+        assert.equal(h.writes[0].length, MAX_CLASSIFY_ON_MISS, 'the write is capped too');
     });
 
     it('writes the classified labels through to the lookup collection', async () => {
@@ -175,11 +367,55 @@ describe('ingredient-category-lookup — classify on miss', () => {
         }]]);
     });
 
+    it('writes the raw name through with its own rules version stamp', async () => {
+        const h = harness({ classify: answersEverythingWith('vegetables', () => 'Carrot') });
+        await lookupIngredientCategories(['Carrot, Chopped'], h.deps);
+        await h.writeSettled;
+        assert.deepEqual(h.writes, [[{
+            docId: ingredientCategoryDocId('Carrot, Chopped')!,
+            label: 'Carrot, Chopped',
+            category: 'vegetables',
+            rawIngredient: 'Carrot',
+            rawRulesVersion: RAW_RULES_VERSION,
+            source: ON_MISS_SOURCE,
+            model: 'test-model',
+            classifiedAt: new Date('2026-09-16T00:00:00.000Z'),
+        }]]);
+    });
+
+    it('writes neither raw field when the model gave no usable name', async () => {
+        // A stamp with no value would make the backfill read the doc as done
+        // and never fill the raw name in — the rollout gap the separate
+        // version counter exists to close. Absent means absent, both fields.
+        for (const bad of [undefined, '', '   ', 'a'.repeat(200), 'Carrot\nStick', 7]) {
+            const h = harness({ classify: answersEverythingWith('vegetables', () => bad) });
+            const result = await lookupIngredientCategories(['Carrot, Chopped'], h.deps);
+            await h.writeSettled;
+            assert.deepEqual(
+                plain(result),
+                { 'carrot, chopped': { category: 'vegetables' } },
+                `raw ${JSON.stringify(bad)} must be dropped`,
+            );
+            assert.deepEqual(Object.keys(h.writes[0][0]).sort(), [
+                'category', 'classifiedAt', 'docId', 'label', 'model', 'source',
+            ]);
+        }
+    });
+
     it('returns the categories even when the write-through fails', async () => {
         const h = harness({ classify: answersEverythingWith('fruits') });
         h.deps.writeCategories = async () => { throw new Error('firestore down'); };
         const result = await lookupIngredientCategories(['Feijoa'], h.deps);
-        assert.equal(result[ingredientCategoryKey('Feijoa')], 'fruits');
+        assert.deepEqual(result[ingredientCategoryKey('Feijoa')], { category: 'fruits' });
+    });
+
+    it('keeps a category whose entry came back in the bare-id shape', async () => {
+        // The option governs what we ASK for, not what arrives: a model that
+        // ignores the object contract still contributes its categories, it
+        // just contributes no merge hints.
+        const h = harness({ classify: answersEverythingWith('fruits') });
+        const result = await lookupIngredientCategories(['Feijoa'], h.deps);
+        assert.deepEqual(plain(result), { feijoa: { category: 'fruits' } });
     });
 
     it('drops labels the model answered with a bogus category', async () => {
@@ -207,7 +443,7 @@ describe('ingredient-category-lookup — degradation', () => {
         });
         const started = Date.now();
         const result = await lookupIngredientCategories(['Garlic', 'Kohlrabi'], h.deps);
-        assert.deepEqual(plain(result), { garlic: 'aromatics' });
+        assert.deepEqual(plain(result), { garlic: { category: 'aromatics' } });
         // Bounded by the injected timeout (50ms), not by the model.
         assert.ok(Date.now() - started < CLASSIFY_TIMEOUT_MS);
         assert.deepEqual(h.writes, []);
@@ -235,7 +471,7 @@ describe('ingredient-category-lookup — degradation', () => {
             classify: async () => { throw new Error('vertex 503'); },
         });
         assert.deepEqual(plain(await lookupIngredientCategories(['Garlic', 'Kohlrabi'], h.deps)), {
-            garlic: 'aromatics',
+            garlic: { category: 'aromatics' },
         });
     });
 
@@ -276,7 +512,9 @@ describe('ingredient-category-lookup — mock AI', () => {
         });
         const result = await lookupIngredientCategories(['Garlic', 'Kohlrabi'], h.deps);
         // Cache hits still resolve; only the unclassifiable miss drops out.
-        assert.deepEqual(plain(result), { garlic: 'aromatics' });
+        assert.deepEqual(plain(result), { garlic: { category: 'aromatics' } });
         assert.deepEqual(h.writes, []);
+        // And no raw name either — the unmerged path e2e exercises today.
+        assert.equal(result['garlic'].raw, undefined);
     });
 });

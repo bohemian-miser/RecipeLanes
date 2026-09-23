@@ -19,6 +19,7 @@ import React, { memo, useCallback } from 'react';
 import { useStore } from 'reactflow';
 import { CLASSIC_CONTAINER, MODERN_CONTAINER } from '../../../lib/recipe-lanes/edge-anchors';
 import { getNodeTheme } from '../../../lib/recipe-lanes/model-utils';
+import { CROSS_EDGE_CHANNEL_OFFSET } from '../../../lib/recipe-lanes/notation-metrics';
 import { useRecipeStore } from '../../../lib/stores/recipe-store';
 
 const SPINE_INK = '#3a362f';
@@ -26,6 +27,19 @@ const LEAF_LINE = '#a39a88';
 const SPINE_W = 3.5;
 const DROP_W = 1.4;
 const CROSS_RADIUS = 24;
+/**
+ * Horizontal run a cross edge makes before it turns off its source, so the
+ * departure reads as its own line instead of as a thickening of the spine it
+ * is leaving.
+ */
+const CROSS_STUB = 24;
+/**
+ * Below this vertical separation a channel route has no room to be one — the
+ * channel would land on or past the target — so the plain elbow is used. Rows
+ * are never this close, but nodes in notation are DRAGGABLE, so the geometry
+ * has to stay sane for arbitrary positions.
+ */
+const CROSS_CHANNEL_MIN_DY = CROSS_EDGE_CHANNEL_OFFSET + 20;
 
 interface NotationEdgeProps {
   id: string;
@@ -58,9 +72,10 @@ function center(node: any, scale = 1): { x: number; y: number } {
   return { x: p.x + w / 2, y: p.y + h / 2 };
 }
 
-// Elbow path with a rounded corner, used for 'cross' edges (different lanes).
-// Goes horizontal from the source, then a quarter-circle-ish rounded corner,
-// then vertical/horizontal into the target.
+// Elbow path with a single rounded corner: horizontal from the source, a
+// quarter-circle-ish corner, then vertical into the target. Used by 'spine'
+// edges whose endpoints are not perfectly level, and as the fallback for a
+// 'cross' edge whose endpoints are too close vertically to fit a channel.
 function elbowPath(sx: number, sy: number, ex: number, ey: number): string {
   if (Math.abs(sy - ey) < 1) return `M ${sx} ${sy} L ${ex} ${ey}`;
   const r = Math.min(CROSS_RADIUS, Math.abs(ex - sx) / 2, Math.abs(ey - sy) / 2) || 1;
@@ -75,9 +90,96 @@ function straightPath(sx: number, sy: number, ex: number, ey: number): string {
   return `M ${sx} ${sy} L ${ex} ${ey}`;
 }
 
+interface Pt { x: number; y: number }
+
+/**
+ * Draw an axis-aligned polyline with rounded corners.
+ *
+ * Each corner eats at most half of each segment it touches, so adjacent
+ * corners on a short segment can never overrun each other; a corner with no
+ * room left degenerates to a sharp one rather than to an invalid arc.
+ * Sweep flag: in SVG's y-down space a turn is clockwise (sweep 1) exactly when
+ * the 2D cross product of the incoming and outgoing directions is positive.
+ *
+ * Only RIGHT angles are rounded, and that restriction is load-bearing rather
+ * than a simplification: stepping `r` back along each leg and joining them
+ * with a radius-`r` arc is the correct fillet at 90° and at no other angle. As
+ * the joint flattens, that same construction's chord grows towards 2r, so it
+ * draws a near-semicircular bulge (which flips sides as the path crosses
+ * straight) where a corner should be. The near-duplicate filter below can
+ * MANUFACTURE such a joint out of a properly axis-aligned path by dropping a
+ * sub-pixel point from the middle of it — `channelPath` does exactly that when
+ * its two endpoints are within a pixel horizontally — so anything that is not
+ * square falls back to a plain line join. For the same reason the filter
+ * measures against the last point it KEPT, not the original predecessor.
+ */
+function roundedPolyline(points: Pt[], radius: number): string {
+  if (points.length === 0) return '';
+  const pts: Pt[] = [];
+  for (const p of points) {
+    const last = pts[pts.length - 1];
+    if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 0.5) pts.push(p);
+  }
+  if (pts.length < 2) return `M ${pts[0].x} ${pts[0].y}`;
+
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const prev = pts[i - 1], cur = pts[i], next = pts[i + 1];
+    const inLen = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+    const outLen = Math.hypot(next.x - cur.x, next.y - cur.y);
+    const r = Math.min(radius, inLen / 2, outLen / 2);
+    const inUx = (cur.x - prev.x) / inLen, inUy = (cur.y - prev.y) / inLen;
+    const outUx = (next.x - cur.x) / outLen, outUy = (next.y - cur.y) / outLen;
+    // |cross| is sin(turn angle): 1 at a right angle, 0 straight through.
+    const cross = inUx * outUy - inUy * outUx;
+    // No room for an arc, or not a right angle to round.
+    if (r < 2 || Math.abs(Math.abs(cross) - 1) > 1e-3) { d += ` L ${cur.x} ${cur.y}`; continue; }
+
+    d += ` L ${cur.x - inUx * r} ${cur.y - inUy * r}`;
+    d += ` A ${r} ${r} 0 0 ${cross > 0 ? 1 : 0} ${cur.x + outUx * r} ${cur.y + outUy * r}`;
+  }
+  d += ` L ${pts[pts.length - 1].x} ${pts[pts.length - 1].y}`;
+  return d;
+}
+
+/**
+ * Three-segment channel route for a 'cross' edge (see the notation layout
+ * plan, §2.7): stub horizontally off the source, drop to a horizontal channel
+ * running in the inter-row gap, then descend into the target.
+ *
+ * The single-corner `elbowPath` it replaces ran the long horizontal leg at the
+ * SOURCE's own y — i.e. within a few px of the spine it was leaving, for
+ * hundreds of px — so a cross edge and a spine read as one thick line, and the
+ * run cut straight through that row's below-spine labels.
+ *
+ * The channel is placed `CROSS_EDGE_CHANNEL_OFFSET` below the UPPER of the two
+ * endpoints, never below the source specifically: for an upward edge the
+ * source's own "gap" is its leaf fan, whereas the upper (target) row's
+ * below-spine gap is free either way. Expressed as `min(sy, ey) + offset`, it
+ * is the same band in both directions and always strictly between the rows.
+ */
+function channelPath(sx: number, sy: number, ex: number, ey: number): string {
+  const hx = Math.sign(ex - sx) || 1;
+  // Never stub past the target: a cross edge whose endpoints are nearly
+  // vertically aligned would otherwise double back on itself.
+  const stub = Math.min(CROSS_STUB, Math.abs(ex - sx) / 2);
+  const channelY = Math.min(sy, ey) + CROSS_EDGE_CHANNEL_OFFSET;
+  return roundedPolyline(
+    [
+      { x: sx, y: sy },
+      { x: sx + hx * stub, y: sy },
+      { x: sx + hx * stub, y: channelY },
+      { x: ex, y: channelY },
+      { x: ex, y: ey },
+    ],
+    CROSS_RADIUS,
+  );
+}
+
 // Notation edges: 'spine' (thick, same-lane action->action), 'drop' (thin,
-// leaf->action, ending in a filled dot, no arrowhead), 'cross' (thick, rounded
-// elbow between lanes). Positions come straight from ReactFlow's node store —
+// leaf->action, ending in a filled dot, no arrowhead), 'cross' (thick,
+// three-segment channel route between lanes — see channelPath). Positions come
+// straight from ReactFlow's node store —
 // same absolute-position pattern as TimelineEdge, since layout-notation.ts
 // already computes final x/y rather than relying on handle anchoring.
 function NotationEdge({ id, source, target, data }: NotationEdgeProps) {
@@ -104,7 +206,10 @@ function NotationEdge({ id, source, target, data }: NotationEdgeProps) {
   }
 
   if (kind === 'cross') {
-    const d = elbowPath(s.x, s.y, t.x, t.y);
+    // Rows are always far enough apart for a channel; a dragged node may not be.
+    const d = Math.abs(t.y - s.y) >= CROSS_CHANNEL_MIN_DY
+      ? channelPath(s.x, s.y, t.x, t.y)
+      : elbowPath(s.x, s.y, t.x, t.y);
     // Small arrowhead at the target end, pointing in the final (vertical)
     // approach direction. Drawn as a plain polygon (rather than an SVG
     // <marker>) so multiple cross edges don't collide on a shared marker id.

@@ -160,6 +160,41 @@ export const MINIMAL_CHIP_PADDING_X = 5;
 /** Duration chip under a verb label. */
 export const VERB_CHIP_HEIGHT = 18;
 
+// ── Cross-edge channel (notation-edge.tsx) ──────────────────────────────────
+/**
+ * How deep a VERB spine item's ink reaches BELOW its row's spine line.
+ *
+ * The glyph is centred on the line, and the lowest thing the node owns is the
+ * bottom of its duration chip — which sits further down than even a fully
+ * clamped three-line label (`VERB_LABEL_TOP_OFFSET + 3 × 9 × 1.25` ≈ 67 vs
+ * `VERB_CHIP_TOP_OFFSET + VERB_CHIP_HEIGHT` = 86, both measured from the box
+ * top). Every notation row has verbs on it, so this is the below-spine band
+ * that is always occupied.
+ */
+export const VERB_BELOW_SPINE_EXTENT =
+  VERB_CHIP_TOP_OFFSET + VERB_CHIP_HEIGHT - VERB_GLYPH_SIZE / 2;
+
+/**
+ * Depth below the UPPER of the two rows a cross edge joins at which its long
+ * horizontal run is placed — the "channel".
+ *
+ * Bounded from both sides, which is why it is derived rather than tuned:
+ *  - it must be at least `VERB_BELOW_SPINE_EXTENT`, or the run is drawn
+ *    straight through that row's verb labels and duration chips;
+ *  - it must not exceed that row's below-spine extent plus
+ *    `NOTATION.ROW_BREATHING` (30), or the run drops into the NEXT row's leaf
+ *    icons. The shallowest a row's below-extent ever gets is a short verb with
+ *    no chip (~42px, set by the station label), which still leaves the channel
+ *    inside the guaranteed gap at this depth.
+ * Landing exactly on the verb extent is deliberate: erring shallow clips the
+ * bottom border of a duration chip (cosmetic), erring deep ploughs through the
+ * next row's ingredient icons (not).
+ *
+ * This is NOT a router: there is one channel per edge, no crossing
+ * minimisation, and two cross edges spanning the same row pair share a line.
+ */
+export const CROSS_EDGE_CHANNEL_OFFSET = VERB_BELOW_SPINE_EXTENT;
+
 // ── Station badges (notation-station-node.tsx) ──────────────────────────────
 /** Badge circle diameter (`SIZE` in notation-station-node.tsx). */
 export const STATION_BADGE_SIZE = 52;

@@ -20,6 +20,7 @@ import { Handle, Position } from 'reactflow';
 import { Pencil, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { getNodeIngredientName, getNodeIconStatus } from '../../../lib/recipe-lanes/model-utils';
+import { notationClampStyle, LEAF_LABEL_MAX_LINES } from '../../../lib/recipe-lanes/notation-metrics';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
@@ -48,6 +49,11 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
     const isIngredient = data.type === 'ingredient';
     const textPos = data.textPos || 'bottom';
     const isVertical = textPos === 'top' || textPos === 'bottom';
+    // Injected by the notation branch of node building in react-flow-diagram.
+    // Never set in any other view — see the clamp on the text container below.
+    const isNotationView = (data as { isNotationView?: boolean }).isNotationView === true;
+    // Empty string outside notation, so the rendered class list is unchanged.
+    const chipNowrap = isNotationView ? ' whitespace-nowrap' : '';
   
     const flexClass = {
         bottom: 'flex-col',
@@ -163,15 +169,28 @@ export const MinimalNodeClassic: React.FC<MinimalNodeViewProps> = ({
             </div>
 
             {/* Text Container - Scaled Up */}
-            <div 
-                className={`text-xs leading-tight text-center font-medium text-zinc-800 break-words px-1 z-20 ${isVertical ? 'w-full mt-[-4px]' : 'w-28'}`} 
+            <div
+                className={`text-xs leading-tight text-center font-medium text-zinc-800 break-words px-1 z-20 ${isVertical ? 'w-full mt-[-4px]' : 'w-28'}`}
                 style={{ textShadow: '0 0 4px rgba(255,255,255,0.8), 0 0 2px rgba(255,255,255,1)' }}
             >
-                {data.text}
+                {/* In NOTATION only, the label is clamped to the line budget the
+                    row pitch reserves — an unclamped long name bleeds into the
+                    row below. The clamp goes on the text alone so the chips
+                    underneath stay visible, and every other view keeps rendering
+                    the bare string exactly as before. Full name: wrapper title. */}
+                {isNotationView
+                    ? <span className="block" style={notationClampStyle(LEAF_LABEL_MAX_LINES)}>{data.text}</span>
+                    : data.text}
+                {/* In NOTATION the chips must not wrap: the row pitch reserves
+                    ONE line per chip, and a long LLM duration ("1 hour 30
+                    minutes, plus resting") wrapped to three and pushed into the
+                    row below. Nowrap trades that height for width, which the
+                    layout DOES account for (see minimalChipWidth). Other views
+                    keep the wrapping chips they have always had. */}
                 {(data.temperature || data.duration) && (
                     <div className="flex flex-col items-center mt-1 space-y-0.5 opacity-80">
-                        {data.temperature && <span className="text-[9px] bg-red-100/80 px-1 rounded text-red-800 border border-red-200">{data.temperature}</span>}
-                        {data.duration && <span className="text-[9px] bg-blue-100/80 px-1 rounded text-blue-800 border border-blue-200">{data.duration}</span>}
+                        {data.temperature && <span className={`text-[9px] bg-red-100/80 px-1 rounded text-red-800 border border-red-200${chipNowrap}`}>{data.temperature}</span>}
+                        {data.duration && <span className={`text-[9px] bg-blue-100/80 px-1 rounded text-blue-800 border border-blue-200${chipNowrap}`}>{data.duration}</span>}
                     </div>
                 )}
             </div>

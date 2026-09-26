@@ -20,8 +20,23 @@
 import React, { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { classifyVerb } from '../../../lib/recipe-lanes/verbs';
+import {
+    notationClampStyle,
+    LABEL_LINE_HEIGHT,
+    VERB_CHIP_FONT_PX,
+    VERB_CHIP_PADDING_X,
+    VERB_CHIP_PADDING_Y,
+    VERB_CHIP_TOP_OFFSET,
+    VERB_GLYPH_SIZE,
+    VERB_LABEL_FONT_PX,
+    VERB_LABEL_MAX_LINES,
+    VERB_LABEL_TOP_OFFSET,
+    VERB_LABEL_WIDTH,
+} from '../../../lib/recipe-lanes/notation-metrics';
 
-const SIZE = 30;
+// Geometry lives in notation-metrics.ts because the layout reserves space by
+// these exact numbers; a local copy here is how the two silently drift apart.
+const SIZE = VERB_GLYPH_SIZE;
 const SPINE_INK = '#3a362f';
 const CHIP_BG = '#fdf3d3';
 const CHIP_INK = '#7c5b06';
@@ -65,16 +80,19 @@ const NotationVerbNode: React.FC<any> = ({ data, selected }) => {
                 {glyph}
             </div>
 
-            {/* Label underneath */}
+            {/* Label underneath. Clamped to VERB_LABEL_MAX_LINES: the layout
+                reserves exactly that many lines of row height, so an unclamped
+                5-line label bleeds through the next row's spine. Full text
+                stays reachable via the glyph's title tooltip above. */}
             <div
                 style={{
                     position: 'absolute',
-                    top: SIZE + 3,
+                    top: VERB_LABEL_TOP_OFFSET,
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    width: 130,
-                    fontSize: 9,
-                    lineHeight: 1.25,
+                    width: VERB_LABEL_WIDTH,
+                    fontSize: VERB_LABEL_FONT_PX,
+                    lineHeight: LABEL_LINE_HEIGHT,
                     fontFamily: 'ui-sans-serif, system-ui, sans-serif',
                     color: '#2a2724',
                     textAlign: 'center',
@@ -82,6 +100,7 @@ const NotationVerbNode: React.FC<any> = ({ data, selected }) => {
                     wordBreak: 'break-word',
                     pointerEvents: 'none',
                     textShadow: '0 0 3px rgba(255,255,255,0.9), 0 0 3px rgba(255,255,255,0.9)',
+                    ...notationClampStyle(VERB_LABEL_MAX_LINES),
                 }}
             >
                 {data?.text}
@@ -92,14 +111,14 @@ const NotationVerbNode: React.FC<any> = ({ data, selected }) => {
                 <div
                     style={{
                         position: 'absolute',
-                        top: SIZE + 38,
+                        top: VERB_CHIP_TOP_OFFSET,
                         left: '50%',
                         transform: 'translateX(-50%)',
                         background: CHIP_BG,
                         color: CHIP_INK,
-                        fontSize: 9,
+                        fontSize: VERB_CHIP_FONT_PX,
                         lineHeight: 1,
-                        padding: '3px 7px',
+                        padding: `${VERB_CHIP_PADDING_Y}px ${VERB_CHIP_PADDING_X}px`,
                         borderRadius: 7,
                         whiteSpace: 'nowrap',
                         pointerEvents: 'none',

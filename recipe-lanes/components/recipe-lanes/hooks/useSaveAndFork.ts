@@ -18,6 +18,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { RecipeGraph } from '../../../lib/recipe-lanes/types';
+import { NOTATION_STATION_TYPE } from '../../../lib/recipe-lanes/layout-notation';
 import { saveRecipeAction } from '@/app/actions';
 import { getClaimToken, clearClaimToken } from '@/lib/recipe-lanes/claim-token-client';
 import { track } from '@/lib/analytics';
@@ -37,7 +38,20 @@ export function buildGraphForSave(
     // badges (row anchors that exist only in the layout, not in graph.nodes).
     // Without this, saving in notation mode writes phantom
     // `notation-station-<laneId>` rows into layouts[mode] forever.
-    const currentNodes = rfNodes.filter((n: any) => n.type !== 'lane' && n.type !== 'notation-station');
+    const currentNodes = rfNodes.filter(
+        (n: any) => n.type !== 'lane' && n.type !== NOTATION_STATION_TYPE,
+    );
+    // ...and the synthetic edges that hang off them. The notation layout draws a
+    // render-only "spine stub" from each station badge to its row's first step;
+    // since `inputs` below is derived from the RENDERED edges, letting that stub
+    // through would persist a dangling reference to a node that does not exist
+    // in graph.nodes.
+    //
+    // Identified by the marker the layout set when it MINTED the edge, never by
+    // the shape of an id: recipe node ids are unconstrained strings, and a real
+    // node called `notation-station-<something>` had its edges silently stripped
+    // on save — data loss in EVERY layout mode, not just notation.
+    const currentEdges = rfEdges.filter((e: any) => e?.data?.synthetic !== true);
     const layouts = { ...(graph.layouts || {}) };
     layouts[mode] = currentNodes.map((n: any) => ({ id: n.id, x: n.position.x, y: n.position.y }));
 
@@ -45,7 +59,7 @@ export function buildGraphForSave(
         .filter(n => currentNodes.some((rn: any) => rn.id === n.id))
         .map(n => {
             const rfn = currentNodes.find((rn: any) => rn.id === n.id)!;
-            const inputs = rfEdges
+            const inputs = currentEdges
                 .filter((e: any) => e.target === n.id)
                 .map((e: any) => e.source);
             return { ...n, x: rfn.position.x, y: rfn.position.y, inputs };

@@ -124,7 +124,17 @@ export const MinimalNode: React.FC<any> = ({
       onPointerCancelCapture: handlePointerUpOrCancel
   };
 
-  const inner = (iconTheme === 'modern' || iconTheme === 'modern_clean')
+  // NOTATION always renders classic, whatever the icon-theme preference says —
+  // the same pin as textPos (see effectiveTextPos in react-flow-diagram.tsx).
+  // The notation layout reserves space from the CLASSIC geometry (56/80px
+  // containers, label centred below); the modern theme draws 80/120px
+  // containers and hangs a ~144px text bubble off an action's LEFT side, none
+  // of which the layout knows about, so picking "Modern" in notation overlapped
+  // every step with its neighbour. Modern-theme notation is future work: it
+  // needs its own reserved geometry in notation-metrics.ts.
+  const useModern =
+      (iconTheme === 'modern' || iconTheme === 'modern_clean') && !data.isNotationView;
+  const inner = useModern
       ? <MinimalNodeModern data={data} selected={selected} isCompleted={isCompleted} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />
       : <MinimalNodeClassic data={data} selected={selected} isCompleted={isCompleted} isPivotMode={isPivotMode} iconUrl={iconUrl} isSearchMatched={isSearchMatched} handlers={handlers} />;
 
@@ -134,8 +144,7 @@ export const MinimalNode: React.FC<any> = ({
   // transforms don't trigger re-measurement, and scaling about the node center
   // used to drag the icon (and every edge ending) downward. See edge-anchors.ts.
   if (data.isLeaf && leafNodeScale < 1) {
-      const isModern = iconTheme === 'modern' || iconTheme === 'modern_clean';
-      const containerSize = isModern
+      const containerSize = useModern
           ? MODERN_CONTAINER[data.type === 'ingredient' ? 'ingredient' : 'action']
           : CLASSIC_CONTAINER[data.type === 'ingredient' ? 'ingredient' : 'action'];
       const origin = getLeafScaleOrigin(data.textPos || 'bottom', containerSize);

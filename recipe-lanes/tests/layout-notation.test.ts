@@ -11,6 +11,7 @@ import {
     type NotationVisualNode,
 } from '../lib/recipe-lanes/layout-notation';
 import {
+    CROSS_EDGE_CHANNEL_OFFSET,
     estimateLabel,
     LABEL_LINE_HEIGHT,
     LEAF_LABEL_MAX_LINES,
@@ -678,6 +679,106 @@ describe('notation verb duration chip', () => {
         );
         // …and the chip ink really is wider than the glyph it hangs off.
         assert.ok(notationLabelBox(chill).width > chill.width);
+    });
+});
+
+// ── Cross-edge channel depth ─────────────────────────────────────────────────
+// `notation-edge.tsx` runs a cross edge's long horizontal leg in a channel
+// CROSS_EDGE_CHANNEL_OFFSET below the upper of its two rows, instead of along
+// the source's own spine. That depth is squeezed from both sides by the layout
+// this file owns, and nothing in the component can see either bound — so they
+// are asserted here, against the real fixtures, rather than trusted.
+describe('notation cross-edge channel depth', () => {
+    // Every placed spine item and leaf records how far below its own top its
+    // row's line ran, which is the only way to recover "which row is this on"
+    // for a leaf whose consumer lives in a different lane. Rounded before it is
+    // used as a key: the layout stores `y = rowY - k` and `spineOffset = k`, so
+    // `y + spineOffset` is only equal to rowY up to float rounding. One row
+    // splitting into two keys 1 ULP apart would make the upper-bound test below
+    // compare a row against ITSELF and fail for a reason that isn't real.
+    const rowKey = (n: NotationVisualNode) => Math.round((n.y + n.spineOffset!) * 1000) / 1000;
+    const rowLines = (layout: Layout): number[] => {
+        const ys = new Set<number>();
+        for (const n of layout.nodes) {
+            if (n.spineOffset !== undefined) ys.add(rowKey(n));
+        }
+        return [...ys].sort((a, b) => a - b);
+    };
+    const onRow = (layout: Layout, y: number) =>
+        layout.nodes.filter(n => n.spineOffset !== undefined && rowKey(n) === y);
+
+    const fixtures: Array<[string, RecipeGraph]> = [
+        ['standard fixture', buildGraph()],
+        ['torture fixture', buildTortureGraph()],
+    ];
+
+    for (const [name, graph] of fixtures) {
+        const layout = calculateNotationLayout(graph);
+        const rows = rowLines(layout);
+
+        // Lower bound: the channel must clear the ink a VERB owns below the
+        // spine — its clamped label and, further down, its nowrap duration
+        // chip. (A non-verb state node's chips can reach deeper; the channel
+        // deliberately does not clear those, see CROSS_EDGE_CHANNEL_OFFSET.)
+        it(`${name}: channel clears every verb's below-spine ink`, () => {
+            let checked = 0;
+            for (const y of rows) {
+                for (const n of onRow(layout, y)) {
+                    if (n.role !== 'verb') continue;
+                    const box = occupiedBox(n);
+                    checked++;
+                    assert.ok(
+                        y + CROSS_EDGE_CHANNEL_OFFSET + EPS >= box.y2,
+                        `${n.id}: verb ink reaches ${(box.y2 - y).toFixed(1)}px below its spine, ` +
+                        `past the ${CROSS_EDGE_CHANNEL_OFFSET}px channel`,
+                    );
+                }
+            }
+            assert.ok(checked > 0, 'fixture has no verbs — the bound is untested');
+        });
+
+        // Upper bound: a channel deeper than the row gap would be drawn
+        // through the NEXT row's leaf icons, which is worse than what it
+        // replaces.
+        it(`${name}: channel stays above the next row's ink`, () => {
+            let checked = 0;
+            for (let i = 0; i < rows.length - 1; i++) {
+                const channelY = rows[i] + CROSS_EDGE_CHANNEL_OFFSET;
+                for (const n of onRow(layout, rows[i + 1])) {
+                    const box = occupiedBox(n);
+                    checked++;
+                    assert.ok(
+                        channelY < box.y1,
+                        `channel at +${CROSS_EDGE_CHANNEL_OFFSET} below row ${i} reaches ` +
+                        `${n.id} on row ${i + 1} (ink starts ${(box.y1 - rows[i]).toFixed(1)}px below)`,
+                    );
+                }
+            }
+            // A single-row fixture would sail through the loop above having
+            // asserted precisely nothing.
+            assert.ok(checked > 0, 'fixture has only one row — the bound is untested');
+        });
+    }
+
+    // The lower bound is DERIVED from the duration chip, which
+    // `notationLabelBox` only includes when the node actually has a duration —
+    // so a fixture whose verbs carry none (the standard one) exercises the
+    // label bound and never the chip. Pin the case the constant was written
+    // for explicitly rather than hoping a fixture happens to cover it.
+    it('the bound is exercised by verbs that really carry a duration chip', () => {
+        const layout = calculateNotationLayout(buildTortureGraph());
+        const chipVerbs = layout.nodes.filter(
+            n => n.role === 'verb' && (n.data as RecipeNode).duration,
+        );
+        assert.ok(chipVerbs.length > 0, 'torture fixture has no verb with a duration chip');
+        for (const n of chipVerbs) {
+            const y = n.y + n.spineOffset!;
+            const box = occupiedBox(n);
+            assert.ok(
+                y + CROSS_EDGE_CHANNEL_OFFSET + EPS >= box.y2,
+                `${n.id}: duration chip reaches ${(box.y2 - y).toFixed(1)}px below its spine`,
+            );
+        }
     });
 });
 

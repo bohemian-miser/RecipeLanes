@@ -9,18 +9,13 @@
 
 'use client';
 
-import React, { memo, useState } from 'react';
+import React, { memo } from 'react';
 import { Handle, Position } from 'reactflow';
-import { useSearchParams } from 'next/navigation';
 import { useRecipeStore } from '@/lib/stores/recipe-store';
 import {
-    getNodeIngredientName,
-    getNodeIconId,
-    getNodeShortlistKey,
     getNodeIconUrlAt,
     currentShortlistIndex,
 } from '@/lib/recipe-lanes/model-utils';
-import { forgeIconAction } from '@/app/actions';
 
 const NODE_R   = 20;              // must match TL.NODE_R
 const DIAMETER = NODE_R * 2;     // 40px
@@ -43,12 +38,8 @@ const BTN: React.CSSProperties = {
 };
 
 const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
-    const [isForging, setIsForging]   = useState(false);
-    const searchParams                = useSearchParams();
-    const recipeId                    = searchParams.get('id');
-
     const storeNode      = useRecipeStore(s => s.graph?.nodes.find(n => n.id === id));
-    const cycleShortlist = useRecipeStore(s => s.cycleShortlist);
+    const openIconEditor = useRecipeStore(s => s.openIconEditor);
     const leafNodeScale  = useRecipeStore(s => s.leafNodeScale);
     // "Tick off" steps (#281): whether this node has been marked done by the cook.
     const isCompleted         = useRecipeStore(s => s.completedNodeIds.includes(id));
@@ -57,38 +48,14 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
 
     const currentIndex = Math.max(0, currentShortlistIndex(node));
     const iconUrl      = getNodeIconUrlAt(node, currentIndex);
-    const shortlistKey = getNodeShortlistKey(node);
-
-    // Clear forge state when the shortlist key changes (forge result arrived)
-    const [prevKey, setPrevKey] = useState(shortlistKey);
-    if (shortlistKey !== prevKey) {
-        setPrevKey(shortlistKey);
-        if (isForging) setIsForging(false);
-    }
 
     const isIngredient = data.type === 'ingredient';
     const lineColor    = data.lineColor ?? '#D4D4D8';
     const borderColor  = selected ? '#6366f1' : lineColor;
 
-    const handleReroll = (e: React.MouseEvent) => {
+    const handleEditIcon = (e: React.MouseEvent) => {
         e.stopPropagation();
-        cycleShortlist(id);
-    };
-
-    const handleForge = async (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (isForging) return;
-        setIsForging(true);
-        try {
-            const res = await forgeIconAction(
-                recipeId ?? '',
-                getNodeIngredientName(data),
-                getNodeIconId(data) ?? '',
-            );
-            if (res && !res.success) setIsForging(false);
-        } catch {
-            setIsForging(false);
-        }
+        openIconEditor(id);
     };
 
     const handleDelete = (e: React.MouseEvent) => {
@@ -198,27 +165,14 @@ const TimelineNode: React.FC<any> = ({ data, selected, id }) => {
                 )}
             </div>
 
-            {/* Hover buttons — reroll (↺), forge (⚒), delete (×) */}
+            {/* Hover buttons — edit icon (✎), delete (×) */}
             <button
-                onClick={handleReroll}
+                onClick={handleEditIcon}
                 className="nodrag opacity-0 group-hover:opacity-100 transition-opacity"
                 style={{ ...BTN, top: -9, left: -9, background: '#3b82f6' }}
-                title="Cycle shortlist"
-            >↺</button>
-
-            <button
-                onClick={handleForge}
-                className="nodrag opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{
-                    ...BTN,
-                    top: -9,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    background: isForging ? '#f59e0b' : '#92400e',
-                    cursor: isForging ? 'not-allowed' : 'pointer',
-                }}
-                title="Forge new icon"
-            >{isForging ? '…' : '⚒'}</button>
+                title="Edit icon"
+                data-testid="node-edit-icon"
+            >✎</button>
 
             <button
                 onClick={handleDelete}

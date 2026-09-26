@@ -17,15 +17,14 @@
 
 import React from 'react';
 import { Handle, Position } from 'reactflow';
-import { RefreshCw, X, Hammer } from 'lucide-react';
+import { Pencil, X } from 'lucide-react';
 import { RecipeNode } from '../../../lib/recipe-lanes/types';
 import { getNodeIngredientName, getNodeTheme } from '../../../lib/recipe-lanes/model-utils';
+import { notationClampStyle, LEAF_LABEL_MAX_LINES } from '../../../lib/recipe-lanes/notation-metrics';
 
 interface MinimalNodeViewProps {
     data: RecipeNode;
     selected?: boolean;
-    isRerolling: boolean;
-    isForging: boolean;
     /** Whether the cook has ticked this step off (#281). */
     isCompleted?: boolean;
     isPivotMode: boolean;
@@ -34,8 +33,7 @@ interface MinimalNodeViewProps {
     /** Whether the current shortlist entry was resolved via search rather than generation. */
     isSearchMatched: boolean;
     handlers: {
-        onReroll: (e: React.MouseEvent) => void;
-        onForge: (e: React.MouseEvent) => void;
+        onEditIcon: (e: React.MouseEvent) => void;
         onDelete: (e: React.MouseEvent) => void;
         onToggleCompleted: (e: React.MouseEvent) => void;
         onPointerDownCapture: (e: React.PointerEvent) => void;
@@ -55,10 +53,17 @@ const parseNodeText = (text: string) => {
 };
 
 export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
-    data, selected, isRerolling, isForging, isCompleted, isPivotMode, iconUrl, isSearchMatched, handlers
+    data, selected, isCompleted, isPivotMode, iconUrl, isSearchMatched, handlers
 }) => {
     const isIngredient = data.type === 'ingredient';
     const themeVariant = getNodeTheme(data) === 'modern_clean' ? 'modern_clean' : 'modern';
+    // Injected by the notation branch of node building in react-flow-diagram;
+    // never set in any other view. Bounds the label to the number of lines the
+    // notation row pitch reserves. `undefined` spreads to nothing, so the
+    // non-notation render is byte-identical to before.
+    const clampStyle = (data as { isNotationView?: boolean }).isNotationView === true
+        ? notationClampStyle(LEAF_LABEL_MAX_LINES)
+        : undefined;
 
     // Compact size for ingredients (80px), full size for actions/others (120px)
     const containerSize = isIngredient ? { width: 80, height: 80 } : { width: 120, height: 120 };
@@ -89,7 +94,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                                         {iconUrl ? (
                                             <img
                                                 src={iconUrl}
-                                                alt=""                                className={`w-full h-full object-contain drop-shadow-md rendering-pixelated ${isRerolling ? 'opacity-50' : ''}`}
+                                                alt=""                                className={`w-full h-full object-contain drop-shadow-md rendering-pixelated`}
                                 style={{ imageRendering: 'pixelated', ...(isCompleted ? { opacity: 0.45 } : {}) }}
                             />
                         ) : (
@@ -106,11 +111,8 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 
                         {/* Controls */}
                         <div className="absolute -top-2 -right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                            <button onClick={handlers.onReroll} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500">
-                                <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin' : ''}`} />
-                            </button>
-                            <button onClick={handlers.onForge} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-amber-500" title="Forge new icon">
-                                <Hammer className={`w-3 h-3 ${isForging ? 'text-amber-500' : ''}`} />
+                            <button onClick={handlers.onEditIcon} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500" title="Edit icon" data-testid="node-edit-icon">
+                                <Pencil className="w-3 h-3" />
                             </button>
                             <button onClick={handlers.onDelete} className="bg-white/80 rounded-full p-1 shadow hover:text-red-500">
                                 <X className="w-3 h-3" />
@@ -144,7 +146,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 
                     {/* Pill Text (Name Only) - Wrapped */}
                     <div className="relative z-50 -mt-5 bg-white/90 backdrop-blur-sm border border-white/50 shadow-sm rounded-xl px-2 py-0.5 pointer-events-none w-max max-w-[160px] text-center">
-                        <span className="text-[9px] font-bold text-zinc-800 uppercase tracking-wide leading-tight whitespace-normal block">
+                        <span className="text-[9px] font-bold text-zinc-800 uppercase tracking-wide leading-tight whitespace-normal block" style={clampStyle}>
                             {parsed.name}
                         </span>
                     </div>
@@ -172,7 +174,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                             <img
                                 src={iconUrl}
                                 alt=""
-                                className={`w-full h-full object-contain drop-shadow-md rendering-pixelated ${isRerolling ? 'opacity-50' : ''}`}
+                                className={`w-full h-full object-contain drop-shadow-md rendering-pixelated`}
                                 style={{ imageRendering: 'pixelated', ...(isCompleted ? { opacity: 0.45 } : {}) }}
                             />
                         ) : (
@@ -181,11 +183,8 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 
                         {/* Controls */}
                         <div className="absolute -top-2 -right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                            <button onClick={handlers.onReroll} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500">
-                                <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin' : ''}`} />
-                            </button>
-                            <button onClick={handlers.onForge} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-amber-500" title="Forge new icon">
-                                <Hammer className={`w-3 h-3 ${isForging ? 'text-amber-500' : ''}`} />
+                            <button onClick={handlers.onEditIcon} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500" title="Edit icon" data-testid="node-edit-icon">
+                                <Pencil className="w-3 h-3" />
                             </button>
                             <button onClick={handlers.onDelete} className="bg-white/80 rounded-full p-1 shadow hover:text-red-500">
                                 <X className="w-3 h-3" />
@@ -227,7 +226,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                                     <span className="text-zinc-400 ml-1">×</span>
                                 </span>
                             )}
-                            <span className="text-zinc-800 uppercase tracking-wide whitespace-normal">
+                            <span className="text-zinc-800 uppercase tracking-wide whitespace-normal" style={clampStyle}>
                                 {parsed.name}
                             </span>
                         </div>
@@ -248,7 +247,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
               {/* Text Bubble (Left) */}
               <div className="absolute right-[55%] top-1/2 -translate-y-1/2 w-36 flex flex-col items-end text-right z-50 pointer-events-none opacity-90 hover:opacity-100 transition-opacity">
                   <div className="bg-white/90 backdrop-blur-sm border border-zinc-200 shadow-md px-2 py-1.5 rounded-lg">
-                      <span className="text-[10px] font-semibold text-zinc-800 leading-snug block whitespace-normal">
+                      <span className="text-[10px] font-semibold text-zinc-800 leading-snug block whitespace-normal" style={clampStyle}>
                           {data.text}
                       </span>
                       {(data.duration || data.temperature) && (
@@ -281,7 +280,7 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
                       <img
                           src={iconUrl}
                           alt=""
-                          className={`w-full h-full object-contain drop-shadow-xl rendering-pixelated ${isRerolling ? 'opacity-50' : ''}`}
+                          className={`w-full h-full object-contain drop-shadow-xl rendering-pixelated`}
                           style={{ imageRendering: 'pixelated', ...(isCompleted ? { opacity: 0.45 } : {}) }}
                       />
                   ) : (
@@ -290,11 +289,8 @@ export const MinimalNodeModern: React.FC<MinimalNodeViewProps> = ({
 
                   {/* Controls */}
                   <div className="absolute top-0 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                      <button onClick={handlers.onReroll} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500" title="Cycle shortlist">
-                          <RefreshCw className={`w-3 h-3 ${isRerolling ? 'animate-spin' : ''}`} />
-                      </button>
-                      <button onClick={handlers.onForge} disabled={isRerolling || isForging} className="bg-white/80 rounded-full p-1 shadow hover:text-amber-500" title="Forge new icon">
-                          <Hammer className={`w-3 h-3 ${isForging ? 'text-amber-500' : ''}`} />
+                      <button onClick={handlers.onEditIcon} className="bg-white/80 rounded-full p-1 shadow hover:text-blue-500" title="Edit icon" data-testid="node-edit-icon">
+                          <Pencil className="w-3 h-3" />
                       </button>
                       <button onClick={handlers.onDelete} className="bg-white/80 rounded-full p-1 shadow hover:text-red-500">
                           <X className="w-3 h-3" />

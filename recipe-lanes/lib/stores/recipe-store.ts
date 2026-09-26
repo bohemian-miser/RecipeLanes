@@ -44,7 +44,7 @@
 
 import { create } from 'zustand';
 import { RecipeGraph, RecipeNode, NodeLayout, IconStyleId, LineStyleId, LayoutModeId, BackgroundElementId, CanvasBackgroundId, ChatMessage } from '../recipe-lanes/types';
-import { getNodeShortlistKey, cycleShortlistNodes } from '../recipe-lanes/model-utils';
+import { getNodeShortlistKey, cycleShortlistNodes, setShortlistIndexNodes, markShortlistSeenAllNodes } from '../recipe-lanes/model-utils';
 import { STRUCTURAL_FIELDS, SERVER_FIELDS } from '../recipe-lanes/node-fields';
 
 // ---------------------------------------------------------------------------
@@ -105,6 +105,12 @@ interface RecipeState {
      * to everyone else viewing a shared recipe.
      */
     completedNodeIds: string[];
+    /**
+     * Node ID whose icon editor modal is open, or null. Local UI state only —
+     * lives here (not in page state) because the open buttons sit on deeply
+     * nested node components while the modal renders at page level.
+     */
+    iconEditorNodeId: string | null;
 }
 
 interface RecipeActions {
@@ -134,6 +140,24 @@ interface RecipeActions {
      * All other nodes keep their existing object reference.
      */
     cycleShortlist: (nodeId: string) => void;
+
+    /**
+     * Sets shortlistIndex on the named node to a specific position (icon
+     * editor pick). Same locality/no-dirty semantics as cycleShortlist:
+     * no undo entry, no autosave — impressions flow to Firestore with the
+     * next save, exactly like cycling.
+     */
+    setShortlistIndex: (nodeId: string, index: number) => void;
+
+    /**
+     * Opens the icon editor modal for a node. Showing the whole shortlist at
+     * once counts as an impression for every entry, so this also stamps
+     * shortlistSeenAll on the node (recorded server-side at next save).
+     */
+    openIconEditor: (nodeId: string) => void;
+
+    /** Closes the icon editor modal. */
+    closeIconEditor: () => void;
 
     /**
      * Applies a local graph mutation (serves scaling, JSON edit, etc.).
@@ -368,6 +392,12 @@ function mergeNode(existing: RecipeNode, incoming: RecipeNode): RecipeNode {
     merged.shortlistIndex = shortlistChanged
         ? (incoming.shortlistIndex ?? 0)
         : existing.shortlistIndex;
+    // - shortlistSeenAll: same rule — a regenerated shortlist (forge/search)
+    //   has NOT been fully shown, so adopt the incoming value (the server
+    //   clears it on reassignment); otherwise keep the local flag.
+    merged.shortlistSeenAll = shortlistChanged
+        ? incoming.shortlistSeenAll
+        : existing.shortlistSeenAll;
     // shortlistCycled is client-owned and intentionally left as-is (already
     // copied from existing above) — resetting it is out of scope for #220.
 
@@ -520,6 +550,7 @@ const initialState: RecipeState = {
     messages: [],
     pendingDeletedIds: [],
     completedNodeIds: [],
+    iconEditorNodeId: null,
 };
 
 export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => ({
@@ -685,6 +716,34 @@ export const useRecipeStore = create<RecipeState & RecipeActions>((set, get) => 
 
         set({ graph: { ...state.graph, nodes } });
     },
+
+    setShortlistIndex: (nodeId, index) => {
+        const state = get();
+        if (!state.graph) return;
+
+        const nodes = setShortlistIndexNodes(state.graph, nodeId, index);
+        if (nodes.every((n, i) => n === state.graph!.nodes[i])) return;
+
+        set({ graph: { ...state.graph, nodes } });
+    },
+
+    openIconEditor: (nodeId) => {
+        const state = get();
+        // Opening shows every shortlist entry at once — flag the node so the
+        // next save records an impression for each entry (stampShortlistFlags).
+        if (state.graph) {
+            const nodes = markShortlistSeenAllNodes(state.graph, nodeId);
+            const changed = nodes.some((n, i) => n !== state.graph!.nodes[i]);
+            set({
+                iconEditorNodeId: nodeId,
+                ...(changed && { graph: { ...state.graph, nodes } }),
+            });
+            return;
+        }
+        set({ iconEditorNodeId: nodeId });
+    },
+
+    closeIconEditor: () => set({ iconEditorNodeId: null }),
 
     addMessage: ({ role, content }) => set((state) => ({
         messages: [...state.messages, {

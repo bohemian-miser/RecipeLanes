@@ -25,6 +25,13 @@ export const DB_COLLECTION_RECIPES = 'recipes';
 export const DB_COLLECTION_FEEDBACK = 'feedback';
 export const DB_COLLECTION_ICON_INDEX = 'icon_index';
 export const DB_COLLECTION_CONFIG = 'config';
+/**
+ * Label → taxonomy-category lookup, one doc per distinct standardized
+ * ingredient label. Server-side only (no firestore.rules block, so clients are
+ * denied by default); written by `scripts/backfill-ingredient-categories.ts`
+ * and by the classify-on-miss path in `lib/ingredient-category-lookup.ts`.
+ */
+export const DB_COLLECTION_INGREDIENT_CATEGORIES = 'ingredient_categories';
 
 /**
  * Icons per page in the shared icon gallery (/icon_overview). Shared by the
@@ -81,3 +88,16 @@ export function withIconQueueConfigDefaults(raw: any): IconQueueConfig {
 export function dayKey(d: Date = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
+
+// --- Icon credits ---------------------------------------------------------
+// Per-user spendable balance that gates icon generation (forge). Purchasing
+// credits comes later; for now every account receives a free starter grant,
+// applied lazily on first read (see lib/user-credits.ts).
+
+export const DB_COLLECTION_USER_CREDITS = 'user_credits';
+
+/** Credits granted to every account the first time its balance is read. */
+export const STARTER_ICON_CREDITS = 10;
+
+/** Credits one icon generation (forge) costs. */
+export const FORGE_CREDIT_COST = 1;

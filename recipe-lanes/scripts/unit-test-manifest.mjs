@@ -43,6 +43,8 @@ export const INTEGRATION_TESTS = [
   'admin-security.test.ts',
   'anonymous-publish-integration.test.ts',
   'data-helpers-transaction.test.ts',
+  'firestore-rules.test.ts',
+  'firestore-rules-app-flows.test.ts',
   'forge-gate-regression.test.ts',
   'functions-metadata.test.ts',
   'hybrid-integration.test.ts',
@@ -52,6 +54,7 @@ export const INTEGRATION_TESTS = [
   'icon-queue-config.test.ts',
   'impression-rejection.test.ts',
   'save-reconciliation.test.ts',
+  'user-credits.test.ts',
 ];
 
 // tests/ lives one level up from scripts/. Resolve relative to THIS file so the

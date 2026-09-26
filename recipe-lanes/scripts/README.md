@@ -53,6 +53,12 @@ npx tsx scripts/backfill-search-terms.ts --staging
 
 # Backfill ingredient name metadata
 npx tsx scripts/backfill-names.ts --staging
+
+# Classify every distinct recipe ingredient label into the taxonomy and write
+# the `ingredient_categories` lookup collection. --staging/--prod is REQUIRED
+# (it writes); --dry-run classifies and reports without writing anything.
+npx tsx scripts/backfill-ingredient-categories.ts --prod --dry-run --limit 150
+npx tsx scripts/backfill-ingredient-categories.ts --staging [--force] [--out report.json]
 ```
 
 ## Recipe / Adjust debugging

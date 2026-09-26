@@ -28,16 +28,23 @@ import { assertInputWithinLimit, assertGraphWithinLimit, assertImageWithinLimit,
 import type { RecipeGraph, IconStats, FastMatch, RecipePatch } from '@/lib/recipe-lanes/types';
 import { standardizeIngredientName } from '@/lib/utils';
 import { hashClaimToken } from '@/lib/recipe-lanes/claim-token';
+import { toComparisonRecipe, canViewRecipeForComparison, MAX_COMPARISON_RECIPES, type ComparisonRecipe } from '@/lib/recipe-lanes/comparison-table';
+import { ingredientCategoryKey } from '@/lib/recipe-lanes/ingredient-label-extract';
+import { lookupIngredientCategories } from '@/lib/ingredient-category-lookup';
 import { cosineSimilarity, getIconThumbUrl, getNodeIconUrl, getShortlistIconAt, preserveNodeShortlist, buildShortlistEntry, mutateNodesByIngredient, markEntryImpressedAtIndex, getEntryIcon, extractBatchIngredients, getNodeIngredientName, applyPatch, assignNodeShortlist } from '@/lib/recipe-lanes/model-utils';
 import { db } from '@/lib/firebase-admin';
 import { DB_COLLECTION_RECIPES, DB_COLLECTION_QUEUE } from '@/lib/config';
 import { unifiedIconSearch, serverBatchIconSearch } from '@/lib/search-orchestrator';
 import { getIconQueueConfig, setIconQueueConfig, getUserForgeCountToday, incrementUserForgeCount } from '@/lib/icon-queue-config';
+import { getUserCredits, spendIconCredits, refundIconCredits } from '@/lib/user-credits';
 import type { IconQueueConfig } from '@/lib/config';
+import { FORGE_CREDIT_COST, STARTER_ICON_CREDITS } from '@/lib/config';
 
 // Input Validation Schemas
 const IngredientSchema = z.string().min(1).max(100);
 const SeenUrlsSchema = z.array(z.string().url()).default([]);
+// Compare table: bounded so one request cannot fan out into an unbounded read.
+const ComparisonIdsSchema = z.array(z.string().min(1).max(200)).max(MAX_COMPARISON_RECIPES);
 /* New code */
 
 // --- Cloud Functions ---
@@ -61,15 +68,59 @@ export async function forgeIconAction(recipeId: string, ingredientName: string, 
     try {
         const session = await getAuthService().verifyAuth();
         const userId = session?.uid;
+        // Generation costs icon credits, and credits belong to an account —
+        // anonymous forging is no longer possible regardless of allowAnonForge
+        // (which still governs the recipe-creation generation paths).
+        if (!userId) {
+            return {
+                success: false,
+                error: `Sign in to generate icons — new accounts get ${STARTER_ICON_CREDITS} free icon credits.`,
+            };
+        }
+        // Daily cap stays as an abuse backstop on top of the credit balance.
         const forgeBlock = await checkForgeAllowed(userId);
         if (forgeBlock) return { success: false, error: forgeBlock };
-        if (userId) incrementUserForgeCount(userId).catch(e =>
+
+        const spend = await spendIconCredits(userId, FORGE_CREDIT_COST);
+        if (!spend.ok) {
+            return {
+                success: false,
+                error: 'You are out of icon credits.',
+                creditsRemaining: spend.balance,
+            };
+        }
+        incrementUserForgeCount(userId).catch(e =>
             console.warn('[forgeIconAction] forge count increment failed (non-fatal):', e)
         );
         // Forge: reject current and queue brand-new generation (no index search — skip embedFn)
-        return getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId);
+        const res = await getDataService().rejectRecipeIcon(recipeId, ingredientName, currentIconId, userId);
+        if (!res.success) {
+            // The generation never got enqueued — give the credit back.
+            await refundIconCredits(userId, FORGE_CREDIT_COST).catch(e =>
+                console.warn('[forgeIconAction] credit refund failed:', e)
+            );
+            return { ...res, creditsRemaining: spend.balance + FORGE_CREDIT_COST };
+        }
+        return { ...res, creditsRemaining: spend.balance };
     } catch (e: any) {
-        return { success: false, error: e.message };
+        return { success: false, error: e.message as string, creditsRemaining: undefined as number | undefined };
+    }
+}
+
+/**
+ * Returns the signed-in user's icon-credit balance, seeding the starter grant
+ * for accounts that have never touched credits. Anonymous callers get
+ * signedIn=false and a zero balance.
+ */
+export async function getIconCreditsAction(): Promise<{ signedIn: boolean; balance: number }> {
+    try {
+        const session = await getAuthService().verifyAuth();
+        if (!session?.uid) return { signedIn: false, balance: 0 };
+        const credits = await getUserCredits(session.uid);
+        return { signedIn: true, balance: credits.balance };
+    } catch (e) {
+        console.warn('[getIconCreditsAction] failed:', e);
+        return { signedIn: false, balance: 0 };
     }
 }
 
@@ -627,6 +678,71 @@ export async function checkExistingCopiesAction(originalId: string): Promise<{ c
         return { copies };
     } catch (e: any) {
         return { copies: [], error: e.message };
+    }
+}
+
+/**
+ * Gallery "Compare" table: loads the ingredient lines of several recipes at
+ * once, already reduced to the slim shape the comparison table renders
+ * (`ComparisonRecipe`) so icon shortlists never cross the wire. Login is
+ * required (the feature is signed-in only) and each recipe is gated the same
+ * way the Firestore read rule gates the editor: public/unlisted, or owned by
+ * the caller. Recipes the caller may not see are silently dropped rather than
+ * failing the whole request.
+ */
+export async function getComparisonRecipesAction(recipeIds: string[]): Promise<{ recipes: ComparisonRecipe[]; error?: string }> {
+    try {
+        const session = await getAuthService().verifyAuth();
+        if (!session) return { recipes: [], error: 'Login required' };
+
+        const ids = ComparisonIdsSchema.parse(recipeIds);
+        const service = getDataService();
+        const loaded = await Promise.all(ids.map(async (id) => {
+            try {
+                const rec = await service.getRecipe(id);
+                if (!rec || !canViewRecipeForComparison(rec, session.uid)) return null;
+                return toComparisonRecipe(id, rec.graph.title, rec.graph);
+            } catch (e: any) {
+                // One unreadable id (deleted, malformed path) must not fail the whole batch.
+                console.warn('[getComparisonRecipesAction] skipping', id, e?.message);
+                return null;
+            }
+        }));
+        const recipes = loaded.filter((r): r is ComparisonRecipe => r !== null);
+        await stampIngredientCategories(recipes);
+        return { recipes };
+    } catch (e: any) {
+        return { recipes: [], error: e.message };
+    }
+}
+
+/**
+ * Joins the taxonomy category and the raw ingredient name onto every
+ * ingredient line, in place, from one lookup pass.
+ *
+ * Purely additive: an unclassified label keeps both fields undefined and the
+ * table renders exactly as it did before this existed. The lookup already
+ * swallows its own failures, but the try/catch stays anyway — a comparison must
+ * never fail because a category could not be resolved.
+ */
+async function stampIngredientCategories(recipes: ComparisonRecipe[]): Promise<void> {
+    try {
+        const labels = [...new Set(recipes.flatMap(r => r.ingredients.map(i => i.label)))];
+        if (labels.length === 0) return;
+        const byKey = await lookupIngredientCategories(labels);
+        for (const recipe of recipes) {
+            for (const line of recipe.ingredients) {
+                const entry = byKey[ingredientCategoryKey(line.label)];
+                if (!entry) continue;
+                if (entry.category) line.category = entry.category;
+                // Absent = the line is its own raw ingredient; leaving the
+                // field undefined is exactly that, so there is nothing to
+                // stamp for the identity case.
+                if (entry.raw) line.raw = entry.raw;
+            }
+        }
+    } catch (e: any) {
+        console.warn('[getComparisonRecipesAction] category lookup failed', e?.message);
     }
 }
 

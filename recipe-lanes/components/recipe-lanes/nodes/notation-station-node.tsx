@@ -19,8 +19,16 @@
 
 import React, { memo } from 'react';
 import { Handle, Position } from 'reactflow';
+import {
+    STATION_BADGE_SIZE,
+    STATION_LABEL_FONT_PX,
+    STATION_LABEL_MAX_WIDTH,
+    STATION_LABEL_TOP_OFFSET,
+} from '../../../lib/recipe-lanes/notation-metrics';
 
-const SIZE = 52;
+// Geometry lives in notation-metrics.ts — the layout reserves the badge's row
+// band and its label's clearance from these exact numbers.
+const SIZE = STATION_BADGE_SIZE;
 
 // Ring colour by lane/station type, mirroring the mockup's "ring color = heat"
 // convention (pans get a warm ring, pots a cool one, serve the brand ring).
@@ -59,22 +67,33 @@ const NotationStationNode: React.FC<any> = ({ data }) => {
                     fontSize: 24,
                     lineHeight: 1,
                 }}
+                /* The label below is capped + ellipsised and cannot take a
+                   tooltip (pointer-events: none), so the badge carries it. */
+                title={data?.label}
             >
                 {data?.glyph ?? '🍳'}
             </div>
 
+            {/* Station name. `nowrap` means this ink is unbounded to the left
+                and right of the badge, so it is capped at
+                STATION_LABEL_MAX_WIDTH with an ellipsis — the layout reserves
+                exactly that much room before the row's first step. */}
             <div
                 style={{
                     position: 'absolute',
-                    top: SIZE + 4,
+                    top: STATION_LABEL_TOP_OFFSET,
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    fontSize: 10,
+                    maxWidth: STATION_LABEL_MAX_WIDTH,
+                    fontSize: STATION_LABEL_FONT_PX,
                     letterSpacing: '0.04em',
                     textTransform: 'uppercase',
                     fontFamily: 'ui-sans-serif, system-ui, sans-serif',
                     color: '#6f6a61',
                     whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    textAlign: 'center',
                     pointerEvents: 'none',
                 }}
             >

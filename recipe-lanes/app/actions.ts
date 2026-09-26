@@ -717,9 +717,10 @@ export async function getComparisonRecipesAction(recipeIds: string[]): Promise<{
 }
 
 /**
- * Joins the taxonomy category onto every ingredient line, in place.
+ * Joins the taxonomy category and the raw ingredient name onto every
+ * ingredient line, in place, from one lookup pass.
  *
- * Purely additive: an unclassified label keeps `category` undefined and the
+ * Purely additive: an unclassified label keeps both fields undefined and the
  * table renders exactly as it did before this existed. The lookup already
  * swallows its own failures, but the try/catch stays anyway — a comparison must
  * never fail because a category could not be resolved.
@@ -731,8 +732,13 @@ async function stampIngredientCategories(recipes: ComparisonRecipe[]): Promise<v
         const byKey = await lookupIngredientCategories(labels);
         for (const recipe of recipes) {
             for (const line of recipe.ingredients) {
-                const category = byKey[ingredientCategoryKey(line.label)];
-                if (category) line.category = category;
+                const entry = byKey[ingredientCategoryKey(line.label)];
+                if (!entry) continue;
+                if (entry.category) line.category = entry.category;
+                // Absent = the line is its own raw ingredient; leaving the
+                // field undefined is exactly that, so there is nothing to
+                // stamp for the identity case.
+                if (entry.raw) line.raw = entry.raw;
             }
         }
     } catch (e: any) {

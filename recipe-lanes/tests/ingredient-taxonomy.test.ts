@@ -165,6 +165,14 @@ describe('ingredient-taxonomy — the category enum', () => {
         assert.ok(RAW_RULES_VERSION > 0, 'raw rules version must be positive');
     });
 
+    // v2 = the code guard on raw names + the narrow rehydration clause. Both
+    // change which labels merge, so the backfill must see every v1 doc as
+    // stale and re-derive it; neither moves a category boundary.
+    it('moves the raw rules version for the ambiguous-word guard', () => {
+        assert.equal(RAW_RULES_VERSION, 2, 'the guard and rehydration clause change merges, so raw is 2');
+        assert.equal(TAXONOMY_RULES_VERSION, 3, 'and they move no category boundary');
+    });
+
     it('does not move the category rules version for a raw-only change', () => {
         // Adding raw extraction changed no category boundary, so this stays
         // where the plated-dishes PR left it. If a later PR does move a
@@ -595,6 +603,59 @@ Rules for the output:
         );
         for (const label of ['Whites', 'Leaves', 'Cheesecloth']) {
             assert.ok(prompt.includes(label), `the residue examples must name ${label}`);
+        }
+    });
+
+    // The prod dry-run flagged "Chillies, Soaked & Deseeded" merged with
+    // "Fresh Chilli, To Taste": the only evidence of a dried product was the
+    // verb. The clause is fenced by three review findings — only three verbs,
+    // only items genuinely sold both ways, and no qualifier added to a name
+    // that already means the dried form.
+    it('reads a rehydration verb as a dried product, narrowly', () => {
+        const prompt = buildClassificationPrompt(labels, { includeRaw: true });
+
+        assert.ok(
+            prompt.includes(
+                'REHYDRATION: "soaked", "rehydrated" or "reconstituted" shows an item was bought DRIED only when that item is commonly sold both dried and fresh or canned — mushrooms, beans, pulses, chillies.',
+            ),
+            'the clause must name the verbs AND the condition that limits them',
+        );
+        for (const example of [
+            '"Porcini, Soaked" → "Dried Porcini"',
+            '"Chickpeas, Soaked Overnight" → "Dried Chickpea"',
+            '("Rice, Soaked" → "Rice")',
+            '("Raisins, Soaked" → "Raisin", never "Dried Raisin")',
+        ]) {
+            assert.ok(prompt.includes(example), `the rehydration clause is missing: ${example}`);
+        }
+
+        // You steep fresh mint and bloom ground spice in fat — not dried
+        // signals — and gelatine/saffron examples fabricated product specs.
+        for (const banned of ['steeped', 'bloomed', 'gelatine', 'saffron']) {
+            assert.ok(!RAW_INGREDIENT_RULES.includes(banned), `${banned} must not be in the rules`);
+        }
+        assert.ok(
+            RAW_INGREDIENT_RULES.indexOf('REHYDRATION') > RAW_INGREDIENT_RULES.indexOf('KEEP DISTINCT'),
+            'the clause follows the dried-vs-fresh boundary it refines',
+        );
+    });
+
+    // Homonyms are settled in CODE (raw-ingredient-guard.ts), not prose. The
+    // prose attempts — canonical names, a sense ladder, a default, and a
+    // no-strip exception for residue — could not survive string-equality
+    // merging and were removed; this pins that they stay removed, so the
+    // model is never told to emit names the guard would then contradict.
+    it('leaves homonyms to the code guard rather than prose', () => {
+        for (const removed of [
+            'AMBIGUOUS WORDS',
+            'PREP-STRIPPING IS OFF',
+            'DEFAULT',
+            'Bell Pepper',
+            'Garlic Clove',
+            'Zwarte Peper',
+            'Dried Chilli',
+        ]) {
+            assert.ok(!RAW_INGREDIENT_RULES.includes(removed), `"${removed}" belongs to the removed homonym prose`);
         }
     });
 

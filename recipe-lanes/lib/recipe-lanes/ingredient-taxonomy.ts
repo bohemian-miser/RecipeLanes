@@ -259,6 +259,9 @@ export const FALLBACK_CATEGORY_ID: IngredientCategoryId = 'other';
  * it, a rules edit either silently leaves stale assignments in place forever or
  * forces a blanket `--force` pass over the whole corpus.
  *
+ * Scoped to CATEGORY semantics only. Raw-ingredient extraction carries its own
+ * `RAW_RULES_VERSION` — see the note there for why the two are not one number.
+ *
  * Version 1 is the pre-existing rules text; 2 adds the leavener, paste,
  * egg-part and culinary-vegetable boundaries; 3 sends plated composite dishes
  * to `action_or_state`. Cosmetic rewording that cannot change an assignment
@@ -266,6 +269,32 @@ export const FALLBACK_CATEGORY_ID: IngredientCategoryId = 'other';
  * costs pennies, a missed one is invisible.
  */
 export const TAXONOMY_RULES_VERSION = 3;
+
+/**
+ * Bumped whenever `RAW_INGREDIENT_RULES` changes in a way that could move a
+ * label to a different raw ingredient. Stamped by raw-consuming backfills as
+ * `rawRulesVersion`, beside the `categoryRulesVersion` stamp.
+ *
+ * A SEPARATE counter from `TAXONOMY_RULES_VERSION`, not the single shared one
+ * the plan first called for, because the two enrichments have genuinely
+ * independent lifecycles and folding them together is wrong in both directions:
+ *
+ *  - Raw rules do not affect category semantics, so tightening a merge boundary
+ *    would otherwise force every `icon_index` doc to be reclassified — an
+ *    entire corpus that has no raw ingredient and never will.
+ *  - Worse, a shared counter opens a rollout gap. Any backfill that runs after
+ *    the rules land but before the raw-writing pass ships stamps the new
+ *    version onto docs that carry NO `rawIngredient`, and those docs then read
+ *    as current forever. Splitting the counters closes it.
+ *
+ * Staleness for raw is therefore two conditions, not one: a `rawRulesVersion`
+ * behind this constant, OR no `rawIngredient` field at all. The second half is
+ * what makes a missed doc self-healing rather than permanently invisible.
+ *
+ * The stamping and the staleness query live in the backfill script (the next PR
+ * in this chain); nothing writes this yet.
+ */
+export const RAW_RULES_VERSION = 1;
 
 const CATEGORY_BY_ID: ReadonlyMap<string, IngredientCategory> = new Map(
     INGREDIENT_CATEGORIES.map(c => [c.id, c]),
@@ -352,10 +381,120 @@ export const UNCLASSIFIED_PRESENTATION: { label: string; color: string } = {
 // Classification prompt + response parsing (pure; the transport lives elsewhere)
 // ---------------------------------------------------------------------------
 
+/**
+ * The merge boundary for raw-ingredient extraction, embedded VERBATIM in the
+ * prompt when `includeRaw` is set — the same contract `rules` has above: the
+ * prose here IS the specification, so the classifier and the code cannot drift.
+ *
+ * The problem it solves: comparison rows key on the label, so "Carrot" and
+ * "Carrot, Chopped" split into two rows that never add up. The raw ingredient
+ * is the shared pantry item both lines came from, and rows keyed on it merge.
+ *
+ * Why the litmus is stated before any list: the lists can only ever be
+ * examples, and the model will meet labels no example covers. "Produced in the
+ * kitchen" vs "exists at purchase" is the test that generalises — everything
+ * below it is that test worked out for the cases we have actually seen.
+ *
+ * Why it leans conservative: the two failure directions are NOT symmetric.
+ * Under-merging leaves two rows where one would read better — cosmetic, and
+ * visibly so. Over-merging silently adds unrelated quantities together (a
+ * teaspoon of tomato paste folded into 400g of tinned tomatoes) and the
+ * resulting number looks perfectly reasonable. So identity — raw = label — is
+ * the documented safe answer whenever the boundary is unclear, and the KEEP
+ * DISTINCT list is deliberately the longer of the two.
+ *
+ * Two clarifications the rules state explicitly because leaving them implicit
+ * produced real contradictions:
+ *
+ *  - IDENTITY IS NOT VERBATIM. "Never guess" governs product identity; it does
+ *    not license skipping normalization. An unsure label still gets made
+ *    singular and stripped of quantities, so "Whole Peeled Tomatoes" falls back
+ *    to "Whole Peeled Tomato" — never to "tomato", and never to the label as
+ *    typed. Without this the litmus's "singular" mandate and its "keep the
+ *    label" fallback pull in opposite directions.
+ *
+ *  - CRUSHED IS TWO DIFFERENT WORDS. Crushing a garlic clove is prep; "Crushed
+ *    Tomatoes" is a tin off a shelf, and the label usually omits "canned". A
+ *    blanket "crushed is prep" rule merges that tin into fresh tomato, which is
+ *    precisely the worst-case over-merge this spec exists to prevent — so the
+ *    processed-tomato products are named on the KEEP DISTINCT side.
+ *
+ *  - RESIDUE IS NOT AN INGREDIENT. The corpus contains parser debris — bare
+ *    colours, dangling fragments, equipment — and the rules say outright that
+ *    such a label is its own raw ingredient. This one is evidence-driven: the
+ *    backfill's cross-category collision report on a prod dry-run flagged four
+ *    merges, and the one genuine error was "Whites" (dairy_eggs) pulled in with
+ *    "White" (other). Neither is a food; merging them fabricates an ingredient
+ *    no recipe contains, and the shape of the mistake — debris resembling a
+ *    real ingredient closely enough to attract it — generalises well past that
+ *    one pair, so it is stated as a rule rather than patched per label.
+ */
+export const RAW_INGREDIENT_RULES = `The raw ingredient is the label's pre-processed pantry form: the item as a shopper would buy it, before this recipe's own prep. Strip a qualifier only when the difference is PRODUCED IN THE KITCHEN by prep; keep it when the difference EXISTS AT PURCHASE as a different shelf product. When unsure, keep the label as its own raw ingredient — never guess a merge. Return the raw name in the SAME LANGUAGE as the label, singular, no quantities, no prep words.
+
+PRECEDENCE: "never guess" governs PRODUCT IDENTITY only. Grammatical normalization ALWAYS applies, including to a label you are unsure about — make it singular, drop quantities and counts, and drop only unambiguously pure-prep words. So an unsure "Whole Peeled Tomatoes" becomes "Whole Peeled Tomato": the same product, normalized. Never "tomato", and never the label copied out verbatim. The raw name is always singular even when it reads awkwardly ("pea", "oat", "breadcrumb") — it is a merge key first, display text second.
+
+MERGE (prep, not product): cut/size prep (chopped, diced, sliced, minced, grated, shredded, julienned, cubed, halved, quartered, torn, cut into X); kitchen state (melted, softened, room-temperature, chilled, cold, warm, beaten, whisked, sifted, peeled, seeded, cored, stemmed, trimmed, rinsed, drained, thawed); crushing a whole item in the kitchen (crushed garlic clove → garlic clove, crushed ice → ice); cooked-in-recipe states (cooked rice → rice, toasted nuts → nut, hard-boiled egg → egg); "fresh" as qualifier (fresh basil → basil); fresh vs frozen same item (frozen peas → pea); size adjectives (large egg → egg); plural → singular.
+
+KEEP DISTINCT (different purchasable products): dried vs fresh (dried oregano, sun-dried tomato, dried mushrooms); smoked/cured/preserved (smoked paprika, smoked salmon); processed tomato products (crushed tomatoes, whole peeled tomatoes, diced tomatoes in the canned-product sense, canned/tinned tomatoes) ≠ fresh tomato — these are shelf products EVEN WHEN the label omits "canned" or "tinned", so "Crushed Tomatoes" becomes "Crushed Tomato" and never "tomato"; concentrates/derivatives (tomato paste, passata, ketchup, lemon juice, lemon zest, coconut milk/cream — never the parent); ground vs whole spice (ground cumin ≠ cumin seeds); butchery/part-of-animal (ground beef ≠ beef; chicken breast ≠ thigh ≠ whole; egg yolk ≠ egg white ≠ egg); product-spec qualifiers (unsalted butter ≠ butter; extra-virgin olive oil ≠ olive oil; whole milk ≠ milk); named varieties (red onion, cherry tomato, basmati rice, all-purpose flour ≠ bread flour); sugars/flours/salts by type (powdered/granulated/brown sugar distinct; sea salt ≠ salt).
+
+NOT-A-FOOD residue: some labels are parser debris rather than ingredients — bare colours or adjectives ("White", "Whites", "Green"), bare fragments ("Leaves", "Of Lamb", "(halved)", "(finely chopped)"), or equipment ("Cheesecloth", "Sharp Knife"). For any label that is not recognisably a food or drink item, the raw ingredient is the label itself, normalized — never merge it with another label, and never merge it with a real ingredient it happens to resemble ("Whites" is NOT "egg white", "Leaves" is NOT "bay leaf"). Residue labels are individually harmless; merging them invents ingredients that no recipe contains.
+
+Over-merging is silent data corruption; under-merging is cosmetic. Identity (raw = label, normalized) is always safe.`;
+
+/**
+ * Cap on an accepted raw ingredient name, in characters after trimming.
+ *
+ * A pantry item's name is a few words; anything longer is the model having
+ * written a sentence, an explanation or a whole ingredient line into the field,
+ * and that value would become a comparison row label.
+ *
+ * Interpolated into the prompt rather than restated there, so "the bound the
+ * model is told is the bound the parser enforces" is true by construction
+ * instead of being a comment somebody has to remember to update.
+ */
+const MAX_RAW_INGREDIENT_LENGTH = 80;
+
+/**
+ * The wire field names of the `includeRaw` response object.
+ *
+ * Shared by the prompt (which tells the model to emit them) and the parser
+ * (which reads them back) for the usual reason everything else in this file is
+ * shared: renaming one side alone is a silent failure, not a loud one. The
+ * parser would simply find no `raw` on any entry, `rawAssignments` would come
+ * back empty, and every label would fall back to identity — a merge feature
+ * that quietly stops merging while every test about categories still passes.
+ */
+const RAW_WIRE = {
+    category: 'category',
+    raw: 'raw',
+} as const;
+
+/**
+ * The two output rules that are identical in both prompt variants. Extracted
+ * so the shapes cannot drift apart in the half that does not change — the
+ * fence instruction in particular is load-bearing for every response.
+ */
+const noFencesRule =
+    '- No markdown code fences, no commentary, no trailing text. Output the JSON object and nothing else.';
+
+const everyLabelRule = (count: number): string =>
+    `- Include every label — the object must have exactly ${count} keys.`;
+
 /** Shared by the prompt builder and the parser so the two cannot disagree. */
 export interface ClassificationOptions {
     /** Include `action_or_state` — for the `icon_index` corpus only. */
     includeIconCategories?: boolean;
+    /**
+     * Also extract a raw ingredient name per label (see `RAW_INGREDIENT_RULES`),
+     * which switches the response contract from `label -> id` to
+     * `label -> {category, raw}`.
+     *
+     * Defaults to false, and false must stay BYTE-IDENTICAL to the prompt that
+     * existed before raw extraction: the icon backfill and the classify-on-miss
+     * path share this builder and have no use for a raw name, so they must not
+     * pay for one in tokens or in output-shape risk.
+     */
+    includeRaw?: boolean;
 }
 
 const COMPARISON_ID_SET: ReadonlySet<string> = new Set<string>(COMPARISON_CATEGORY_IDS);
@@ -392,6 +531,11 @@ function distinctLabels(labels: readonly string[]): string[] {
  * The output contract is a bare JSON object keyed by the exact input label —
  * no markdown fences, no prose. `parseClassificationResponse` tolerates fences
  * anyway, because models add them regardless of instructions.
+ *
+ * `includeRaw` adds a second field per label and switches the values from a
+ * bare id to an object. Without it the prompt is byte-for-byte the one that
+ * predates raw extraction, which is what lets the icon backfill and the
+ * classify-on-miss path keep their existing behaviour untouched.
  */
 export function buildClassificationPrompt(
     labels: string[],
@@ -408,24 +552,42 @@ export function buildClassificationPrompt(
     // the list, and so the model sees the exact key string it must echo back.
     const labelBlock = unique.map(l => JSON.stringify(l)).join('\n');
 
+    const idList = categories.map(c => c.id).join(', ');
+
+    // Sits between LANGUAGE and the label list so the rules are read before the
+    // labels, and contributes NOTHING (not even a blank line) when unasked for.
+    const rawSection = opts.includeRaw
+        ? `\n\nRAW INGREDIENT:\nAlongside the category, return each label's raw ingredient — the pantry item that comparison rows for this label should be totalled under.\n${RAW_INGREDIENT_RULES}`
+        : '';
+
+    const outputBlock = opts.includeRaw
+        ? `Return a single raw JSON object mapping every label above to an object carrying its category id and its raw ingredient, using each label as the key exactly as it appears above:
+{"<label>": {"${RAW_WIRE.category}": "<category_id>", "${RAW_WIRE.raw}": "<raw_ingredient>"}}
+Rules for the output:
+${everyLabelRule(unique.length)}
+- "${RAW_WIRE.category}" must be one of: ${idList}.
+- "${RAW_WIRE.raw}" must be a non-empty single-line name of at most ${MAX_RAW_INGREDIENT_LENGTH} characters, in the same language as the label. When the boundary rules above do not clearly call for a merge, repeat the label itself, normalized.
+${noFencesRule}`
+        : `Return a single raw JSON object mapping every label above to exactly one category id, using each label as the key exactly as it appears above:
+{"<label>": "<category_id>"}
+Rules for the output:
+${everyLabelRule(unique.length)}
+- Values must be one of: ${idList}.
+${noFencesRule}`;
+
     return `You are classifying recipe ingredient labels into a fixed culinary taxonomy.
 
 CATEGORIES (use the id exactly as written; these boundary rules are authoritative and override your own intuition):
 ${categoryBlock}
 
 LANGUAGE:
-The labels come from recipes in many languages — Polish, Lithuanian, Bulgarian, German, French, Spanish, Danish, Indonesian and Chinese all occur alongside English. Classify by MEANING, translating internally as needed. A label being non-English is never a reason to call it "${FALLBACK_CATEGORY_ID}"; use "${FALLBACK_CATEGORY_ID}" only when the label is genuinely unclassifiable in any language.
+The labels come from recipes in many languages — Polish, Lithuanian, Bulgarian, German, French, Spanish, Danish, Indonesian and Chinese all occur alongside English. Classify by MEANING, translating internally as needed. A label being non-English is never a reason to call it "${FALLBACK_CATEGORY_ID}"; use "${FALLBACK_CATEGORY_ID}" only when the label is genuinely unclassifiable in any language.${rawSection}
 
 LABELS TO CLASSIFY (${unique.length}):
 ${labelBlock}
 
 OUTPUT:
-Return a single raw JSON object mapping every label above to exactly one category id, using each label as the key exactly as it appears above:
-{"<label>": "<category_id>"}
-Rules for the output:
-- Include every label — the object must have exactly ${unique.length} keys.
-- Values must be one of: ${categories.map(c => c.id).join(', ')}.
-- No markdown code fences, no commentary, no trailing text. Output the JSON object and nothing else.`;
+${outputBlock}`;
 }
 
 /** One response entry rejected because its category is not in this taxonomy. */
@@ -445,10 +607,72 @@ export interface ClassificationResult {
      * access / `Object.entries`, not with `in` against `Object.prototype`.
      */
     assignments: Record<string, string>;
+    /**
+     * label → raw ingredient name, for the subset of `assignments` where the
+     * model returned a usable one. Null-prototype, for the same reason.
+     *
+     * A PARALLEL record rather than a richer `assignments` value, deliberately:
+     * every existing caller reads `assignments` as `Record<string, string>`,
+     * and widening that value to an object would break all of them at once for
+     * a field only the raw backfill wants. Sparse by design — absence is the
+     * normal case (no `includeRaw`, or a raw that failed validation) and means
+     * "treat the label as its own raw ingredient", never "unknown".
+     */
+    rawAssignments: Record<string, string>;
     /** Distinct input labels the response did not usably classify. */
     missing: string[];
     /** Entries whose category is not in this taxonomy (also counted in `missing`). */
     invalid: ClassificationRejection[];
+}
+
+/**
+ * Every character that makes a value more than one line. CR and LF are the
+ * obvious two; U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR are the
+ * ones that get through — `String.prototype.trim` strips them, JSON carries
+ * them literally, and they break a line in most renderers while looking like
+ * nothing at all in a log.
+ */
+const LINE_BREAK_CHARS = /[\r\n\u2028\u2029]/;
+
+/**
+ * Validates one raw ingredient value: a non-empty, single-line string of at
+ * most `MAX_RAW_INGREDIENT_LENGTH` characters once trimmed. Anything else —
+ * absent, wrong type, empty, multi-line, oversized — yields undefined, and the
+ * label simply keeps no raw name.
+ *
+ * Dropping the field rather than the whole entry is the point: a bad category
+ * makes the answer unusable, but a bad raw only costs the merge. The label
+ * still gets its category, and callers fall back to identity (raw = label),
+ * which is the conservative outcome `RAW_INGREDIENT_RULES` already documents.
+ */
+function validRawIngredient(value: unknown): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length > MAX_RAW_INGREDIENT_LENGTH) return undefined;
+    // Single-line AFTER trimming, so trailing newlines the model padded the
+    // value with are forgiven while an actual two-line answer is not.
+    if (LINE_BREAK_CHARS.test(trimmed)) return undefined;
+    return trimmed;
+}
+
+/**
+ * Splits one response value into its category and raw parts, accepting both
+ * shapes in both modes: `"aromatics"` (the pre-raw contract) and
+ * `{"category": "aromatics", "raw": "Onion"}`.
+ *
+ * Both are accepted regardless of `includeRaw` because the option controls what
+ * we ASK for, not what arrives: a model told to return objects still sometimes
+ * returns bare strings, and being strict about it would throw away a perfectly
+ * good category over a missing merge hint.
+ */
+function splitEntry(value: unknown): { category: unknown; raw: unknown } {
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        const entry = value as Record<string, unknown>;
+        // Keyed off the same constants the prompt asks for, so a rename moves
+        // both sides at once instead of silently emptying `rawAssignments`.
+        return { category: entry[RAW_WIRE.category], raw: entry[RAW_WIRE.raw] };
+    }
+    return { category: value, raw: undefined };
 }
 
 /**
@@ -464,6 +688,11 @@ export interface ClassificationResult {
  * the batch or fall back to `other`. Keys the caller did not ask about are
  * ignored, and category values are matched case-insensitively after trimming
  * (the ids in this file are all lowercase, so normalising the value is enough).
+ *
+ * Both response shapes are accepted whatever the options say — see
+ * `splitEntry` — and the two fields are validated INDEPENDENTLY: an
+ * unrecognised category invalidates the whole entry as it always has, while an
+ * unusable raw name is merely dropped (see `validRawIngredient`).
  */
 export function parseClassificationResponse(
     raw: string,
@@ -474,6 +703,7 @@ export function parseClassificationResponse(
     const unique = distinctLabels(labels);
     // Null prototype: a label may literally be "__proto__" (see the field doc).
     const assignments = Object.create(null) as Record<string, string>;
+    const rawAssignments = Object.create(null) as Record<string, string>;
     const invalid: ClassificationRejection[] = [];
     const parsed = parseJsonObject(raw);
 
@@ -497,17 +727,35 @@ export function parseClassificationResponse(
                 : byTrimmedKey.get(label.trim());
             if (value === undefined) continue;
 
-            const category = typeof value === 'string' ? value.trim().toLowerCase() : '';
+            const entry = splitEntry(value);
+            const category =
+                typeof entry.category === 'string' ? entry.category.trim().toLowerCase() : '';
             if (category && allowed.has(category)) {
                 assignments[label] = category;
+                const raw = validRawIngredient(entry.raw);
+                if (raw !== undefined) rawAssignments[label] = raw;
             } else {
-                invalid.push({ label, value: typeof value === 'string' ? value : JSON.stringify(value) });
+                // Report the category value when it actually says something, so
+                // an object-shaped entry logs `seasonings` rather than the
+                // whole JSON blob. An absent, non-string, empty or
+                // all-whitespace category says nothing, and logging it would
+                // print an empty field where the operator needs a clue — so
+                // those fall back to the blob, as the pre-raw code did for
+                // every non-string.
+                invalid.push({
+                    label,
+                    value:
+                        typeof entry.category === 'string' && entry.category.trim()
+                            ? entry.category
+                            : JSON.stringify(value),
+                });
             }
         }
     }
 
     return {
         assignments,
+        rawAssignments,
         missing: unique.filter(l => assignments[l] === undefined),
         invalid,
     };

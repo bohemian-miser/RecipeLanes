@@ -34,6 +34,8 @@ import {
     FALLBACK_CATEGORY_ID,
     ICON_ONLY_CATEGORIES,
     INGREDIENT_CATEGORIES,
+    RAW_INGREDIENT_RULES,
+    RAW_RULES_VERSION,
     TAXONOMY_RULES_VERSION,
     UNCLASSIFIED_PRESENTATION,
 } from '../lib/recipe-lanes/ingredient-taxonomy';
@@ -149,6 +151,29 @@ describe('ingredient-taxonomy — the category enum', () => {
         assert.ok(TAXONOMY_RULES_VERSION > 0, 'rules version must be positive');
         // Version 1 is the pre-existing text; this branch's boundaries are 2.
         assert.ok(TAXONOMY_RULES_VERSION >= 2, 'the new boundary clauses are version 2 or later');
+    });
+
+    // Two counters, not one. Raw rules do not move labels between categories,
+    // so bumping the category version for a raw-only edit would reclassify the
+    // whole icon corpus (which has no raw ingredient and never will) — and,
+    // worse, any backfill running between a raw-rules change and the
+    // raw-writing pass would stamp the new category version onto docs carrying
+    // no rawIngredient, which would then read as current forever.
+    it('versions raw extraction separately from the category rules', () => {
+        assert.equal(typeof RAW_RULES_VERSION, 'number');
+        assert.ok(Number.isInteger(RAW_RULES_VERSION), 'raw rules version must be an integer');
+        assert.ok(RAW_RULES_VERSION > 0, 'raw rules version must be positive');
+    });
+
+    it('does not move the category rules version for a raw-only change', () => {
+        // Adding raw extraction changed no category boundary, so this stays
+        // where the plated-dishes PR left it. If a later PR does move a
+        // category boundary, bump this and the constant together.
+        assert.equal(
+            TAXONOMY_RULES_VERSION,
+            3,
+            'raw extraction must not force a reclassification of the category corpus',
+        );
     });
 
     it('recognises every enum member and rejects anything else', () => {
@@ -367,6 +392,270 @@ describe('ingredient-taxonomy — buildClassificationPrompt', () => {
         assert.equal(prompt.split('"salt"').length - 1, 1, 'salt should be listed once');
         // First-seen order is preserved.
         assert.ok(prompt.indexOf('"salt"') < prompt.indexOf('"onion"'));
+    });
+
+    // The pre-raw OUTPUT block, copied verbatim out of the version of the
+    // builder that predates raw extraction (with the label count substituted).
+    // Held here as the byte-level baseline for "includeRaw defaults to off and
+    // changes nothing": the icon backfill and the classify-on-miss path share
+    // this builder, and a stray word added to their prompt is a silent
+    // reclassification risk for a feature neither of them uses.
+    const PRE_RAW_OUTPUT_BLOCK = `OUTPUT:
+Return a single raw JSON object mapping every label above to exactly one category id, using each label as the key exactly as it appears above:
+{"<label>": "<category_id>"}
+Rules for the output:
+- Include every label — the object must have exactly 3 keys.
+- Values must be one of: ${INGREDIENT_CATEGORIES.map(c => c.id).join(', ')}.
+- No markdown code fences, no commentary, no trailing text. Output the JSON object and nothing else.`;
+
+    it('leaves the default prompt byte-identical to the one that predates raw extraction', () => {
+        const prompt = buildClassificationPrompt(labels);
+
+        assert.ok(
+            prompt.endsWith(`\n\n${PRE_RAW_OUTPUT_BLOCK}`),
+            'the default output contract must be the pre-raw one, word for word',
+        );
+        // Nothing inserted between the LANGUAGE section and the label list
+        // either — that is where the raw rules go when they are asked for.
+        assert.ok(
+            prompt.includes(
+                'genuinely unclassifiable in any language.\n\nLABELS TO CLASSIFY (3):',
+            ),
+            'no section may be spliced in ahead of the label list by default',
+        );
+        assert.ok(!prompt.includes('RAW INGREDIENT'), 'the raw section must be absent by default');
+        assert.ok(!prompt.includes('raw ingredient'), 'no raw-extraction wording may leak in');
+
+        // And the option is genuinely off by default, not merely absent here.
+        assert.equal(prompt, buildClassificationPrompt(labels, { includeRaw: false }));
+    });
+
+    it('embeds the raw-ingredient rules verbatim, master litmus first', () => {
+        const prompt = buildClassificationPrompt(labels, { includeRaw: true });
+        assert.ok(prompt.includes(RAW_INGREDIENT_RULES), 'the rules must be embedded verbatim');
+
+        // The lists can only ever be examples; the litmus is the test that
+        // generalises to a label no example covers, so it must be read first.
+        assert.ok(
+            RAW_INGREDIENT_RULES.startsWith(
+                "The raw ingredient is the label's pre-processed pantry form: the item as a shopper would buy it, before this recipe's own prep.",
+            ),
+            'the master litmus must be the first thing the rules say',
+        );
+        for (const clause of [
+            'Strip a qualifier only when the difference is PRODUCED IN THE KITCHEN by prep',
+            'keep it when the difference EXISTS AT PURCHASE as a different shelf product',
+            'When unsure, keep the label as its own raw ingredient — never guess a merge',
+            'Return the raw name in the SAME LANGUAGE as the label, singular, no quantities, no prep words',
+            'Over-merging is silent data corruption; under-merging is cosmetic. Identity (raw = label, normalized) is always safe.',
+        ]) {
+            assert.ok(RAW_INGREDIENT_RULES.includes(clause), `the litmus is missing: ${clause}`);
+        }
+        assert.ok(
+            RAW_INGREDIENT_RULES.indexOf('MERGE (prep, not product)')
+                > RAW_INGREDIENT_RULES.indexOf('PRODUCED IN THE KITCHEN'),
+            'the litmus must precede the example lists',
+        );
+    });
+
+    // Every example named in the plan's merge boundary. Asserted one by one
+    // rather than as a blob: these are the cases the boundary was actually
+    // argued over, and losing one to a rewrite is how the classifier quietly
+    // goes back to guessing on it.
+    it('names every MERGE example, so prep qualifiers are stripped', () => {
+        const prompt = buildClassificationPrompt(labels, { includeRaw: true });
+        for (const example of [
+            'chopped', 'diced', 'sliced', 'minced', 'grated', 'shredded', 'julienned',
+            'cubed', 'halved', 'quartered', 'torn', 'cut into X',
+            'melted', 'softened', 'room-temperature', 'chilled', 'cold', 'warm', 'beaten',
+            'whisked', 'sifted', 'peeled', 'seeded', 'cored', 'stemmed', 'trimmed',
+            'rinsed', 'drained', 'thawed',
+            'cooked rice → rice', 'toasted nuts → nut', 'hard-boiled egg → egg',
+            '"fresh" as qualifier (fresh basil → basil)',
+            'fresh vs frozen same item (frozen peas → pea)',
+            'size adjectives (large egg → egg)',
+            'plural → singular',
+            // Crushing is prep only when a whole item is crushed in the
+            // kitchen; the tin is handled on the KEEP DISTINCT side.
+            'crushing a whole item in the kitchen (crushed garlic clove → garlic clove, crushed ice → ice)',
+        ]) {
+            assert.ok(prompt.includes(example), `the MERGE list is missing: ${example}`);
+        }
+    });
+
+    // The MERGE examples must obey the rule they teach. "toasted nuts → nuts"
+    // and "frozen peas → peas" told the model to emit a plural while the litmus
+    // demanded singular, so the same pantry item could key as "pea" from one
+    // label and "peas" from another — two rows that never merge, which is the
+    // exact bug raw extraction exists to fix.
+    it('keeps every MERGE example arrow pointing at a singular raw name', () => {
+        for (const plural of ['→ nuts', '→ peas', '→ tomatoes', '→ eggs', '→ carrots']) {
+            assert.ok(
+                !RAW_INGREDIENT_RULES.includes(plural),
+                `a MERGE example emits a plural raw name (${plural}), contradicting the singular rule`,
+            );
+        }
+        assert.ok(
+            RAW_INGREDIENT_RULES.includes(
+                'The raw name is always singular even when it reads awkwardly ("pea", "oat", "breadcrumb") — it is a merge key first, display text second.',
+            ),
+            'the rules must say outright that singular wins over readability',
+        );
+    });
+
+    // "Never guess a merge" and "return it singular" read as a contradiction
+    // for an unsure label: one says keep the label, the other says change it.
+    // The precedence clause settles it — identity means the same PRODUCT, not
+    // the same characters.
+    it('states that normalization still applies to a label it is unsure about', () => {
+        const prompt = buildClassificationPrompt(labels, { includeRaw: true });
+        for (const clause of [
+            'PRECEDENCE: "never guess" governs PRODUCT IDENTITY only.',
+            'Grammatical normalization ALWAYS applies, including to a label you are unsure about',
+            'make it singular, drop quantities and counts, and drop only unambiguously pure-prep words',
+            'So an unsure "Whole Peeled Tomatoes" becomes "Whole Peeled Tomato": the same product, normalized. Never "tomato", and never the label copied out verbatim.',
+        ]) {
+            assert.ok(prompt.includes(clause), `the precedence rule is missing: ${clause}`);
+        }
+        // The closing line has to agree with it rather than re-licensing a
+        // verbatim copy of the label.
+        assert.ok(
+            RAW_INGREDIENT_RULES.includes('Identity (raw = label, normalized) is always safe.'),
+            'the safe-fallback line must say "normalized" too',
+        );
+    });
+
+    // The longer half on purpose: over-merging silently sums unrelated
+    // quantities, under-merging only leaves two rows where one would read
+    // better. Each of these is a product the shopper buys separately.
+    it('names every KEEP DISTINCT example, so shelf products are not merged', () => {
+        const prompt = buildClassificationPrompt(labels, { includeRaw: true });
+        for (const example of [
+            'dried oregano', 'sun-dried tomato', 'dried mushrooms',
+            'smoked paprika', 'smoked salmon',
+            'crushed tomatoes', 'whole peeled tomatoes',
+            'diced tomatoes in the canned-product sense', 'canned/tinned tomatoes',
+            'tomato paste', 'passata', 'ketchup', 'lemon juice', 'lemon zest',
+            'coconut milk/cream — never the parent',
+            'ground cumin ≠ cumin seeds',
+            'ground beef ≠ beef', 'chicken breast ≠ thigh ≠ whole',
+            'egg yolk ≠ egg white ≠ egg',
+            'unsalted butter ≠ butter', 'extra-virgin olive oil ≠ olive oil',
+            'whole milk ≠ milk',
+            'red onion', 'cherry tomato', 'basmati rice',
+            'all-purpose flour ≠ bread flour',
+            'powdered/granulated/brown sugar distinct', 'sea salt ≠ salt',
+        ]) {
+            assert.ok(prompt.includes(example), `the KEEP DISTINCT list is missing: ${example}`);
+        }
+    });
+
+    // The spec's own worst-case over-merge, and it was hiding in the MERGE
+    // list: "crushed-as-prep" textually matches "Crushed Tomatoes", which is a
+    // tin off a shelf whose label almost never says "canned". Merging that into
+    // "tomato" folds a 400g tin into fresh tomatoes and produces a total that
+    // looks entirely plausible.
+    // Evidence-driven, from the backfill's cross-category collision report on a
+    // prod dry-run: of four flagged merges the one real error was "Whites"
+    // (dairy_eggs) pulled together with "White" (other). Both are parser debris
+    // rather than foods, so the merge invented an ingredient no recipe
+    // contains. The failure shape — residue that resembles a real ingredient
+    // closely enough to attract it — is general, hence a rule and not a
+    // per-label patch.
+    it('treats not-a-food parser residue as its own raw ingredient', () => {
+        const prompt = buildClassificationPrompt(labels, { includeRaw: true });
+
+        assert.ok(
+            prompt.includes(
+                'For any label that is not recognisably a food or drink item, the raw ingredient is the label itself, normalized — never merge it with another label, and never merge it with a real ingredient it happens to resemble',
+            ),
+            'the residue clause must state the identity rule and both no-merge directions',
+        );
+        assert.ok(
+            prompt.includes(
+                'Residue labels are individually harmless; merging them invents ingredients that no recipe contains.',
+            ),
+            'the clause must say why the merge is worse than the residue',
+        );
+
+        // The three kinds of debris the corpus actually produces, named so the
+        // model has an example of each rather than only the category.
+        for (const example of [
+            '"White", "Whites", "Green"',      // bare colours / adjectives
+            '"Leaves", "Of Lamb", "(halved)", "(finely chopped)"', // fragments
+            '"Cheesecloth", "Sharp Knife"',    // equipment
+        ]) {
+            assert.ok(prompt.includes(example), `the residue clause is missing: ${example}`);
+        }
+
+        // The two worked negatives, including the pair that produced the flag.
+        assert.ok(
+            prompt.includes('"Whites" is NOT "egg white", "Leaves" is NOT "bay leaf"'),
+            'the clause must name the lookalike merges it forbids',
+        );
+        for (const label of ['Whites', 'Leaves', 'Cheesecloth']) {
+            assert.ok(prompt.includes(label), `the residue examples must name ${label}`);
+        }
+    });
+
+    it('keeps processed tomato products off the merge path, even unlabelled as canned', () => {
+        const prompt = buildClassificationPrompt(labels, { includeRaw: true });
+
+        assert.ok(
+            prompt.includes(
+                'these are shelf products EVEN WHEN the label omits "canned" or "tinned", so "Crushed Tomatoes" becomes "Crushed Tomato" and never "tomato"',
+            ),
+            'the rules must name the unlabelled-tin case and its worked answer',
+        );
+        // The blanket wording that caused it must be gone: crushing is prep
+        // only for a whole item crushed in the kitchen.
+        assert.ok(
+            !RAW_INGREDIENT_RULES.includes('crushed-as-prep'),
+            'the blanket "crushed is prep" token must not survive — it matches Crushed Tomatoes',
+        );
+        // Both sides stated, as with the botanical-fruit boundary: the model
+        // needs telling where the item goes AND that its other reading is wrong.
+        const merge = RAW_INGREDIENT_RULES.slice(
+            RAW_INGREDIENT_RULES.indexOf('MERGE (prep, not product)'),
+            RAW_INGREDIENT_RULES.indexOf('KEEP DISTINCT'),
+        );
+        assert.ok(merge.includes('crushed garlic clove'), 'MERGE keeps kitchen crushing');
+        assert.ok(
+            !merge.includes('crushed tomatoes'),
+            'the tin must not appear on the MERGE side',
+        );
+    });
+
+    it('switches the output contract to the object shape when raw is asked for', () => {
+        const prompt = buildClassificationPrompt(labels, { includeRaw: true });
+        assert.ok(prompt.includes('{"<label>": {"category": "<category_id>", "raw": "<raw_ingredient>"}}'));
+        assert.ok(!prompt.includes('{"<label>": "<category_id>"}'), 'the bare-id contract must be replaced, not offered alongside');
+        assert.ok(prompt.includes(`exactly ${labels.length} keys`));
+        // 80 is interpolated from MAX_RAW_INGREDIENT_LENGTH, not typed out, so
+        // the bound the model is told cannot drift from the one enforced. The
+        // parser-side boundary tests below pin the same number from the other
+        // direction: exactly 80 accepted, 81 dropped.
+        assert.ok(
+            prompt.includes('"raw" must be a non-empty single-line name of at most 80 characters'),
+            'the prompt must state the same bound the parser enforces',
+        );
+        assert.ok(/no markdown code fences/i.test(prompt));
+        assert.ok(!prompt.includes('```'), 'the prompt itself must not contain a fence');
+        // The taxonomy half is untouched: every category still carries its rules.
+        for (const category of INGREDIENT_CATEGORIES) {
+            assert.ok(prompt.includes(category.rules), `raw prompt lost the rules for ${category.id}`);
+        }
+    });
+
+    it('carries raw and icon categories independently', () => {
+        const both = buildClassificationPrompt(labels, {
+            includeIconCategories: true,
+            includeRaw: true,
+        });
+        assert.ok(both.includes('action_or_state'));
+        assert.ok(both.includes(RAW_INGREDIENT_RULES));
+        assert.ok(both.includes('"category" must be one of: '));
+        assert.ok(both.includes('action_or_state.'), 'the id list must include the icon-only id');
     });
 
     it('omits the icon-only category unless it is asked for', () => {
@@ -597,6 +886,15 @@ describe('ingredient-taxonomy — parseClassificationResponse', () => {
         assert.deepEqual(rejected.missing, ['salt']);
     });
 
+    it('leaves rawAssignments empty for a legacy bare-id response', () => {
+        const result = parseClassificationResponse(
+            '{"salt":"herbs_spices","onion":"aromatics","cebula":"aromatics"}',
+            labels,
+        );
+        assert.deepEqual(plain(result.rawAssignments), {});
+        assert.equal(Object.getPrototypeOf(result.rawAssignments), null);
+    });
+
     it('round-trips the prompt contract: every prompted label is a parseable key', () => {
         const prompted = ['Salt', 'Zwiebel', 'Ξηροί καρποί'];
         const prompt = buildClassificationPrompt(prompted);
@@ -607,5 +905,251 @@ describe('ingredient-taxonomy — parseClassificationResponse', () => {
         const result = parseClassificationResponse(raw, prompted);
         assert.deepEqual(result.missing, []);
         assert.equal(result.assignments['Ξηροί καρποί'], 'nuts_seeds');
+    });
+});
+
+// The `includeRaw` response shape. Both shapes are accepted in BOTH modes,
+// because the option controls what we ask for and not what arrives: a model
+// told to return objects still sometimes returns bare strings, and a category
+// is too useful to throw away over a missing merge hint.
+describe('ingredient-taxonomy — parseClassificationResponse with raw ingredients', () => {
+    const labels = ['Carrot, Chopped', 'Carrot', 'Marchewka, Posiekana'];
+    const opts = { includeRaw: true };
+
+    it('reads the object shape into parallel category and raw records', () => {
+        const raw = JSON.stringify({
+            'Carrot, Chopped': { category: 'vegetables', raw: 'Carrot' },
+            Carrot: { category: 'vegetables', raw: 'Carrot' },
+            'Marchewka, Posiekana': { category: 'vegetables', raw: 'Marchewka' },
+        });
+        const result = parseClassificationResponse(raw, labels, opts);
+
+        assert.deepEqual(plain(result.assignments), {
+            'Carrot, Chopped': 'vegetables',
+            Carrot: 'vegetables',
+            'Marchewka, Posiekana': 'vegetables',
+        });
+        // Raw stays in the label's own language — no cross-language merging.
+        assert.deepEqual(plain(result.rawAssignments), {
+            'Carrot, Chopped': 'Carrot',
+            Carrot: 'Carrot',
+            'Marchewka, Posiekana': 'Marchewka',
+        });
+        assert.deepEqual(result.missing, []);
+        assert.deepEqual(result.invalid, []);
+        assert.equal(Object.getPrototypeOf(result.rawAssignments), null);
+    });
+
+    it('still accepts the legacy bare-id shape when raw was asked for', () => {
+        const raw = '{"Carrot, Chopped":"vegetables","Carrot":"vegetables","Marchewka, Posiekana":"vegetables"}';
+        const result = parseClassificationResponse(raw, labels, opts);
+        assert.deepEqual(result.missing, []);
+        assert.deepEqual(result.invalid, []);
+        assert.equal(result.assignments.Carrot, 'vegetables');
+        assert.deepEqual(plain(result.rawAssignments), {}, 'no raw offered, so none recorded');
+    });
+
+    it('reads the object shape even when raw was NOT asked for', () => {
+        const raw = JSON.stringify({ Carrot: { category: 'vegetables', raw: 'Carrot' } });
+        const result = parseClassificationResponse(raw, ['Carrot']);
+        assert.equal(result.assignments.Carrot, 'vegetables');
+        assert.equal(result.rawAssignments.Carrot, 'Carrot');
+    });
+
+    it('takes the two shapes mixed within one response', () => {
+        const raw = JSON.stringify({
+            'Carrot, Chopped': { category: 'vegetables', raw: 'Carrot' },
+            Carrot: 'vegetables',
+            'Marchewka, Posiekana': { category: 'vegetables', raw: 'Marchewka' },
+        });
+        const result = parseClassificationResponse(raw, labels, opts);
+        assert.deepEqual(result.missing, []);
+        assert.deepEqual(Object.keys(plain(result.assignments)).length, 3);
+        assert.deepEqual(plain(result.rawAssignments), {
+            'Carrot, Chopped': 'Carrot',
+            'Marchewka, Posiekana': 'Marchewka',
+        });
+    });
+
+    it('strips fences around an object-shaped response', () => {
+        const raw = [
+            'Here you go:',
+            '```json',
+            '{"Carrot": {"category": "vegetables", "raw": "Carrot"}}',
+            '```',
+        ].join('\n');
+        const result = parseClassificationResponse(raw, ['Carrot'], opts);
+        assert.deepEqual(result.missing, []);
+        assert.equal(result.assignments.Carrot, 'vegetables');
+        assert.equal(result.rawAssignments.Carrot, 'Carrot');
+    });
+
+    // A bad raw costs the merge; a bad category costs the answer. The label
+    // always keeps its category, and a caller with no raw name falls back to
+    // identity (raw = label), which is the conservative outcome anyway.
+    it('drops an unusable raw name but keeps the category', () => {
+        const cases: Array<[string, unknown]> = [
+            ['missing', undefined],
+            ['empty', ''],
+            ['whitespace only', '   '],
+            ['multiline', 'Carrot\nChopped'],
+            ['carriage return', 'Carrot\r\nChopped'],
+            ['oversized', 'C'.repeat(81)],
+            ['oversized after trim', `  ${'C'.repeat(81)}  `],
+            ['not a string', 42],
+            ['null', null],
+            ['nested object', { name: 'Carrot' }],
+            ['array', ['Carrot']],
+        ];
+        for (const [name, rawValue] of cases) {
+            const entry: Record<string, unknown> = { category: 'vegetables' };
+            if (rawValue !== undefined) entry.raw = rawValue;
+            const response = JSON.stringify({ Carrot: entry });
+
+            const result = parseClassificationResponse(response, ['Carrot'], opts);
+            assert.equal(result.assignments.Carrot, 'vegetables', `${name}: category must survive`);
+            assert.deepEqual(result.missing, [], `${name}: the label is classified, not missing`);
+            assert.deepEqual(result.invalid, [], `${name}: a bad raw is not an invalid entry`);
+            assert.equal(result.rawAssignments.Carrot, undefined, `${name}: raw must be dropped`);
+        }
+    });
+
+    it('trims surrounding whitespace off a usable raw name', () => {
+        const raw = JSON.stringify({ Carrot: { category: 'vegetables', raw: '  Carrot \n' } });
+        const result = parseClassificationResponse(raw, ['Carrot'], opts);
+        // Single-line is judged AFTER trimming, so a trailing newline is
+        // forgiven while an actual two-line answer (above) is not.
+        assert.equal(result.rawAssignments.Carrot, 'Carrot');
+    });
+
+    it('accepts a raw name of exactly the 80-character bound', () => {
+        const atBound = 'C'.repeat(80);
+        const raw = JSON.stringify({ Carrot: { category: 'vegetables', raw: atBound } });
+        const result = parseClassificationResponse(raw, ['Carrot'], opts);
+        assert.equal(result.rawAssignments.Carrot, atBound);
+    });
+
+    it('invalidates the whole entry when the object carries a bogus category', () => {
+        const raw = JSON.stringify({
+            'Carrot, Chopped': { category: 'root_vegetables', raw: 'Carrot' },
+            Carrot: { category: 'vegetables', raw: 'Carrot' },
+            'Marchewka, Posiekana': { raw: 'Marchewka' },
+        });
+        const result = parseClassificationResponse(raw, labels, opts);
+
+        assert.deepEqual(result.invalid, [
+            // A string category is reported as itself, so the log line reads
+            // like the legacy one rather than dumping the whole entry.
+            { label: 'Carrot, Chopped', value: 'root_vegetables' },
+            // With no category field there is nothing else to report.
+            { label: 'Marchewka, Posiekana', value: '{"raw":"Marchewka"}' },
+        ]);
+        assert.deepEqual(result.missing, ['Carrot, Chopped', 'Marchewka, Posiekana']);
+        // A rejected entry contributes no raw either — it is going to be retried.
+        assert.deepEqual(plain(result.rawAssignments), { Carrot: 'Carrot' });
+    });
+
+    it('rejects an object whose category is outside the options in play', () => {
+        const raw = JSON.stringify({ Carrot: { category: 'action_or_state', raw: 'Carrot' } });
+
+        const forRows = parseClassificationResponse(raw, ['Carrot'], opts);
+        assert.deepEqual(forRows.invalid, [{ label: 'Carrot', value: 'action_or_state' }]);
+        assert.equal(forRows.rawAssignments.Carrot, undefined);
+
+        const forIcons = parseClassificationResponse(raw, ['Carrot'], {
+            ...opts,
+            includeIconCategories: true,
+        });
+        assert.deepEqual(forIcons.invalid, []);
+        assert.equal(forIcons.rawAssignments.Carrot, 'Carrot');
+    });
+
+    it('records a raw name for a label that collides with an Object prototype key', () => {
+        // Written out rather than JSON.stringify'd: `__proto__:` in an object
+        // literal sets the prototype instead of creating an own key.
+        const raw = '{"__proto__":{"category":"herbs_spices","raw":"Salt"},'
+            + '"constructor":{"category":"aromatics","raw":"Onion"}}';
+        const result = parseClassificationResponse(raw, ['__proto__', 'constructor'], opts);
+        assert.deepEqual(result.missing, []);
+        assert.equal(result.rawAssignments['__proto__'], 'Salt');
+        assert.equal(result.rawAssignments['constructor'], 'Onion');
+        assert.deepEqual(Object.keys(plain(result.rawAssignments)).sort(), ['__proto__', 'constructor']);
+    });
+
+    it('rejects a raw name broken by a Unicode line separator', () => {
+        // U+2028 and U+2029 survive String.prototype.trim and travel through
+        // JSON intact, so a "single line" check that only looks for \r and \n
+        // lets a two-line row label through while looking like one line in a
+        // log. Asserted by code point rather than pasted in, since the
+        // characters are invisible in a source file.
+        for (const sep of ['\u2028', '\u2029']) {
+            const response = JSON.stringify({
+                Carrot: { category: 'vegetables', raw: `Carrot${sep}Chopped` },
+            });
+            const result = parseClassificationResponse(response, ['Carrot'], opts);
+            assert.equal(result.assignments.Carrot, 'vegetables', 'the category still stands');
+            assert.equal(
+                result.rawAssignments.Carrot,
+                undefined,
+                `U+${sep.codePointAt(0)!.toString(16).toUpperCase()} must not survive as a raw name`,
+            );
+        }
+    });
+
+    // The prompt and the parser have to agree on the two field names. If they
+    // ever stop agreeing the parser finds no `raw` on any entry, every label
+    // falls back to identity, and nothing fails loudly — the merge feature just
+    // quietly stops merging. So drive the fixture off the prompt's own wording
+    // rather than off a hand-typed key.
+    it('round-trips the wire field names the prompt asks for', () => {
+        const prompt = buildClassificationPrompt(['Carrot, Chopped'], opts);
+
+        const contract = prompt
+            .split('\n')
+            .find(l => l.startsWith('{"<label>": {'));
+        assert.ok(contract, 'the raw prompt must state an object output contract');
+
+        // Pull the field names straight out of the contract line the model
+        // reads, then answer using exactly those.
+        const fields = [...contract.matchAll(/"([a-z_]+)":\s*"</g)].map(m => m[1]);
+        assert.deepEqual(fields, ['category', 'raw'], 'the contract must name both fields');
+
+        const [categoryField, rawField] = fields;
+        const response = JSON.stringify({
+            'Carrot, Chopped': { [categoryField]: 'vegetables', [rawField]: 'Carrot' },
+        });
+        const result = parseClassificationResponse(response, ['Carrot, Chopped'], opts);
+
+        assert.equal(result.assignments['Carrot, Chopped'], 'vegetables');
+        assert.equal(
+            result.rawAssignments['Carrot, Chopped'],
+            'Carrot',
+            'the parser must read back the very field names the prompt asked for',
+        );
+    });
+
+    it('logs the whole entry when an object carries no usable category string', () => {
+        // An empty or whitespace-only category tells the operator nothing, and
+        // printing it leaves a blank in the log line where the clue should be.
+        for (const category of ['', '   ']) {
+            const response = JSON.stringify({ Carrot: { category, raw: 'Carrot' } });
+            const result = parseClassificationResponse(response, ['Carrot'], opts);
+            assert.deepEqual(result.invalid, [
+                { label: 'Carrot', value: JSON.stringify({ category, raw: 'Carrot' }) },
+            ]);
+            assert.deepEqual(result.missing, ['Carrot']);
+        }
+    });
+
+    it('stamps raw extraction into its own rules version, not the category one', () => {
+        // Splitting the counters is what closes the rollout gap: a backfill
+        // that runs before raw writing ships can no longer stamp "current"
+        // onto a doc that has no rawIngredient.
+        assert.ok(RAW_RULES_VERSION >= 1, 'raw rules carry a version of their own');
+        assert.equal(
+            TAXONOMY_RULES_VERSION,
+            3,
+            'and the category version is untouched by this change',
+        );
     });
 });

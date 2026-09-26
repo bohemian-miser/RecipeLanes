@@ -34,6 +34,8 @@
  * Array order is display / grouping order, with `other` last as the fallback.
  */
 
+import { guardRawIngredient } from './raw-ingredient-guard';
+
 /**
  * Structural shape of one category entry. Private: it exists so the literal
  * tables below can be `satisfies`-checked without widening their id literals.
@@ -291,10 +293,23 @@ export const TAXONOMY_RULES_VERSION = 3;
  * behind this constant, OR no `rawIngredient` field at all. The second half is
  * what makes a missed doc self-healing rather than permanently invisible.
  *
- * The stamping and the staleness query live in the backfill script (the next PR
- * in this chain); nothing writes this yet.
+ * The stamping and the staleness query live in the backfill script.
+ *
+ * "Rules" here means everything that decides the stored raw name: the prose
+ * below AND the code guard `parseClassificationResponse` applies
+ * (`guardRawIngredient`). Version 1 is the rules as first shipped. Version 2
+ * adds that guard (a bare ambiguous word — "Pepper", "Clove", "Chilli",
+ * "Breast", "Whites", "Leaves"… — never becomes a raw name, and a label that
+ * is nothing but one keys by itself) plus the narrow rehydration clause.
+ * Bumping is free: no production doc has ever carried a `rawIngredient`, and
+ * the staging run that exposed these cases aborted without writing, so the
+ * only effect is that the next backfill re-derives every raw name.
+ *
+ * Adding a word to `AMBIGUOUS_RAW` later does NOT need a bump: the lookup
+ * re-applies the guard on read, so stored docs are protected at once (see
+ * raw-ingredient-guard.ts). Bump only to refresh the stored names themselves.
  */
-export const RAW_RULES_VERSION = 1;
+export const RAW_RULES_VERSION = 2;
 
 const CATEGORY_BY_ID: ReadonlyMap<string, IngredientCategory> = new Map(
     INGREDIENT_CATEGORIES.map(c => [c.id, c]),
@@ -427,7 +442,34 @@ export const UNCLASSIFIED_PRESENTATION: { label: string; color: string } = {
  *    "White" (other). Neither is a food; merging them fabricates an ingredient
  *    no recipe contains, and the shape of the mistake — debris resembling a
  *    real ingredient closely enough to attract it — generalises well past that
- *    one pair, so it is stated as a rule rather than patched per label.
+ *    one pair, so it is stated as a rule rather than patched per label. The
+ *    prose alone did not hold that pair, though: "normalized" singularizes,
+ *    and "Whites" → "White" is the collision. The stubs are therefore also
+ *    enumerated in code (`AMBIGUOUS_RAW`), which is what actually keeps them
+ *    apart.
+ *
+ *  - SOAKING IMPLIES A DRIED PRODUCT, NARROWLY. A prod flag merged "Chillies,
+ *    Soaked & Deseeded" with "Fresh Chilli, To Taste": dried vs fresh was
+ *    already a boundary, but the label never says "dried" — the verb is the
+ *    only evidence. The clause is fenced three ways, each fixing a review
+ *    finding: only three verbs ("steeped" and "bloomed" are not signals — you
+ *    steep fresh mint and bloom ground spice); only items genuinely sold both
+ *    dried and fresh; and never for a name that already MEANS the dried form
+ *    ("Raisins, Soaked" → "Dried Raisin" would fabricate a qualifier). The
+ *    chilli case itself is settled by the code guard regardless.
+ *
+ * WHAT IS DELIBERATELY NOT HERE: homonyms. "Pepper" (spice vs capsicum),
+ * "Clove" (spice vs garlic) and bare cut words ("Breast") were first tackled
+ * in this prose with canonical names, a sense-choosing ladder, a default and a
+ * no-strip exception for residue. Two review rounds showed that cannot work:
+ * rows merge on STRING EQUALITY, so a prohibition is inert, and every clause
+ * that tried to make the model emit distinct strings composed badly with
+ * prep-stripping, quantity-stripping and singularization (the ladder's "use
+ * your category" rung always fired, so the defaults were unreachable and the
+ * unstable "Cloves, Minced" became silent key churn). That decision now lives
+ * in code — `guardRawIngredient` in raw-ingredient-guard.ts, applied by
+ * `parseClassificationResponse` — and is deterministic: a bare ambiguous word
+ * never becomes a raw name, whatever the model says.
  */
 export const RAW_INGREDIENT_RULES = `The raw ingredient is the label's pre-processed pantry form: the item as a shopper would buy it, before this recipe's own prep. Strip a qualifier only when the difference is PRODUCED IN THE KITCHEN by prep; keep it when the difference EXISTS AT PURCHASE as a different shelf product. When unsure, keep the label as its own raw ingredient — never guess a merge. Return the raw name in the SAME LANGUAGE as the label, singular, no quantities, no prep words.
 
@@ -436,6 +478,8 @@ PRECEDENCE: "never guess" governs PRODUCT IDENTITY only. Grammatical normalizati
 MERGE (prep, not product): cut/size prep (chopped, diced, sliced, minced, grated, shredded, julienned, cubed, halved, quartered, torn, cut into X); kitchen state (melted, softened, room-temperature, chilled, cold, warm, beaten, whisked, sifted, peeled, seeded, cored, stemmed, trimmed, rinsed, drained, thawed); crushing a whole item in the kitchen (crushed garlic clove → garlic clove, crushed ice → ice); cooked-in-recipe states (cooked rice → rice, toasted nuts → nut, hard-boiled egg → egg); "fresh" as qualifier (fresh basil → basil); fresh vs frozen same item (frozen peas → pea); size adjectives (large egg → egg); plural → singular.
 
 KEEP DISTINCT (different purchasable products): dried vs fresh (dried oregano, sun-dried tomato, dried mushrooms); smoked/cured/preserved (smoked paprika, smoked salmon); processed tomato products (crushed tomatoes, whole peeled tomatoes, diced tomatoes in the canned-product sense, canned/tinned tomatoes) ≠ fresh tomato — these are shelf products EVEN WHEN the label omits "canned" or "tinned", so "Crushed Tomatoes" becomes "Crushed Tomato" and never "tomato"; concentrates/derivatives (tomato paste, passata, ketchup, lemon juice, lemon zest, coconut milk/cream — never the parent); ground vs whole spice (ground cumin ≠ cumin seeds); butchery/part-of-animal (ground beef ≠ beef; chicken breast ≠ thigh ≠ whole; egg yolk ≠ egg white ≠ egg); product-spec qualifiers (unsalted butter ≠ butter; extra-virgin olive oil ≠ olive oil; whole milk ≠ milk); named varieties (red onion, cherry tomato, basmati rice, all-purpose flour ≠ bread flour); sugars/flours/salts by type (powdered/granulated/brown sugar distinct; sea salt ≠ salt).
+
+REHYDRATION: "soaked", "rehydrated" or "reconstituted" shows an item was bought DRIED only when that item is commonly sold both dried and fresh or canned — mushrooms, beans, pulses, chillies. For those, keep the dried product distinct: "Porcini, Soaked" → "Dried Porcini"; "Chickpeas, Soaked Overnight" → "Dried Chickpea". Otherwise soaking is ordinary prep and the name is unchanged: an item with no fresh counterpart on the shelf ("Rice, Soaked" → "Rice") and an item whose name already means the dried form ("Raisins, Soaked" → "Raisin", never "Dried Raisin").
 
 NOT-A-FOOD residue: some labels are parser debris rather than ingredients — bare colours or adjectives ("White", "Whites", "Green"), bare fragments ("Leaves", "Of Lamb", "(halved)", "(finely chopped)"), or equipment ("Cheesecloth", "Sharp Knife"). For any label that is not recognisably a food or drink item, the raw ingredient is the label itself, normalized — never merge it with another label, and never merge it with a real ingredient it happens to resemble ("Whites" is NOT "egg white", "Leaves" is NOT "bay leaf"). Residue labels are individually harmless; merging them invents ingredients that no recipe contains.
 
@@ -746,7 +790,8 @@ function splitEntry(value: unknown): { category: unknown; raw: unknown } {
  * Both response shapes are accepted whatever the options say — see
  * `splitEntry` — and the two fields are validated INDEPENDENTLY: an
  * unrecognised category invalidates the whole entry as it always has, while an
- * unusable raw name is merely dropped (see `validRawIngredient`).
+ * unusable raw name is merely dropped (see `validRawIngredient`), as is one
+ * `guardRawIngredient` refuses — absence always means "key by the label".
  */
 export function parseClassificationResponse(
     raw: string,
@@ -786,7 +831,11 @@ export function parseClassificationResponse(
                 typeof entry.category === 'string' ? entry.category.trim().toLowerCase() : '';
             if (category && allowed.has(category)) {
                 assignments[label] = category;
-                const raw = validRawIngredient(entry.raw);
+                // Validated first (shape), then guarded (meaning): a raw name
+                // that is a bare ambiguous word, or that guesses a sense the
+                // label never states, is dropped here — the one funnel every
+                // raw-writing caller goes through. See raw-ingredient-guard.ts.
+                const raw = guardRawIngredient(label, validRawIngredient(entry.raw));
                 if (raw !== undefined) rawAssignments[label] = raw;
             } else {
                 // Report the category value when it actually says something, so

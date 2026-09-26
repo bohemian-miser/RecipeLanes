@@ -74,6 +74,7 @@ import {
     RAW_RULES_VERSION,
     type ClassificationOptions,
 } from './recipe-lanes/ingredient-taxonomy';
+import { guardRawIngredient } from './recipe-lanes/raw-ingredient-guard';
 import { standardizeIngredientName } from './utils';
 
 /**
@@ -306,7 +307,15 @@ export async function lookupIngredientCategories(
                 // the row on that same label anyway. Truncation is right
                 // where a name is written for the first time and there is no
                 // other answer available; here there is one.
-                const raw = validRawIngredient(doc.rawIngredient);
+                //
+                // Then GUARDED, for the same reason: the parser already refuses
+                // an ambiguous raw name ("Pepper", "Clove", "Whites"…) before
+                // it is written, but a doc written before a word joined
+                // `AMBIGUOUS_RAW` still carries it. Guarding where the value is
+                // used means adding a word protects every stored doc at once,
+                // with no re-backfill — and every row-keying consumer gets its
+                // raw names through here.
+                const raw = guardRawIngredient(target.label, validRawIngredient(doc.rawIngredient));
                 // Spread, not `raw: undefined`: the contract callers test
                 // against is `'raw' in entry === false`, and an explicit
                 // undefined key satisfies `in` while failing deep equality

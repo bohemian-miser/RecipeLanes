@@ -207,6 +207,29 @@ describe('ingredient-category-lookup — cache hits', () => {
         }
     });
 
+    it('drops a stored raw ingredient the ambiguous-word guard refuses', async () => {
+        // A doc written before a word joined AMBIGUOUS_RAW (or by any writer
+        // that skipped the parser) must not key rows on it: the read side
+        // re-applies the guard, so the row falls back to its own label.
+        const h = harness({
+            stored: {
+                [ingredientCategoryDocId('Pepper, Sliced')!]: { category: 'vegetables', rawIngredient: 'Pepper' },
+                [ingredientCategoryDocId('Cloves, Minced')!]: { category: 'aromatics', rawIngredient: 'Garlic Clove' },
+                [ingredientCategoryDocId('Garlic Cloves, Minced')!]: { category: 'aromatics', rawIngredient: 'Garlic Clove' },
+            },
+        });
+        const result = await lookupIngredientCategories(
+            ['Pepper, Sliced', 'Cloves, Minced', 'Garlic Cloves, Minced'],
+            h.deps,
+        );
+        assert.deepEqual(plain(result), {
+            'pepper, sliced': { category: 'vegetables' },
+            'cloves, minced': { category: 'aromatics' },
+            'garlic cloves, minced': { category: 'aromatics', raw: 'Garlic Clove' },
+        });
+        assert.deepEqual(h.prompts, [], 'a guarded raw is still a hit, not a reason to re-classify');
+    });
+
     it('keeps a stored raw ingredient exactly at the bound', async () => {
         const name = 'C'.repeat(MAX_RAW_INGREDIENT_LENGTH);
         const h = harness({
@@ -400,6 +423,15 @@ describe('ingredient-category-lookup — classify on miss', () => {
                 'category', 'classifiedAt', 'docId', 'label', 'model', 'source',
             ]);
         }
+    });
+
+    it('writes no raw name the ambiguous-word guard refuses', async () => {
+        const h = harness({ classify: answersEverythingWith('vegetables', () => 'Pepper') });
+        const result = await lookupIngredientCategories(['Pepper, Sliced'], h.deps);
+        await h.writeSettled;
+        assert.deepEqual(plain(result), { 'pepper, sliced': { category: 'vegetables' } });
+        assert.equal('rawIngredient' in h.writes[0][0], false);
+        assert.equal('rawRulesVersion' in h.writes[0][0], false);
     });
 
     it('returns the categories even when the write-through fails', async () => {

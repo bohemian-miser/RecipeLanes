@@ -119,6 +119,29 @@ const INITIAL_EDGE_TYPES = {
  */
 const NOTATION_TEXT_POS = 'bottom' as const;
 
+/** fitView padding for every layout mode except notation. */
+const FIT_PADDING = 0.1;
+/**
+ * fitView padding in notation mode.
+ *
+ * ReactFlow fits the bounding box of the *measured node boxes*. Notation draws
+ * a node's label, its duration/temperature chips and its station badge label
+ * OUTSIDE that box (absolutely positioned, see notation-metrics.ts), so the
+ * real ink is wider and taller than the box ReactFlow measures — and a 0.1 fit
+ * slices the outermost labels off the edge of the viewport. The extra padding
+ * is the allowance for ink the fit cannot see.
+ */
+const NOTATION_FIT_PADDING = 0.15;
+/** fitView zoom cap — small recipes should not fill the whole viewport. */
+const FIT_MAX_ZOOM = 1.5;
+/** fitView options for a given layout mode. */
+function fitOptionsFor(mode: string) {
+    return {
+        padding: mode === 'notation' ? NOTATION_FIT_PADDING : FIT_PADDING,
+        maxZoom: FIT_MAX_ZOOM,
+    };
+}
+
 /**
  * The text position a node should actually render with. ONE function, used by
  * both the node-build spread and the textPos effect, so the notation pin cannot
@@ -543,7 +566,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                 // Cap zoom at 1.5 so small recipes don't fill the entire viewport.
                 // If the view zooms in too far, the pane centre lands on a node and
                 // e2e pan drags register as node-drag instead of canvas-pan.
-                fitView({ padding: 0.1, maxZoom: 1.5 });
+                fitView(fitOptionsFor(mode as string));
                 // fitView has settled — surface the e2e readiness signal.
                 setLayoutReady(true);
             }, 50);
@@ -1056,7 +1079,7 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                 nodeTypes={INITIAL_NODE_TYPES}
                 edgeTypes={INITIAL_EDGE_TYPES}
                 fitView
-                fitViewOptions={{ padding: 0.1, maxZoom: 1.5 }}
+                fitViewOptions={fitOptionsFor(mode as string)}
                 minZoom={0.1}
                 maxZoom={4}
                 nodeDragThreshold={10} // Prevent accidental drags, allow long press jitter
@@ -1068,7 +1091,15 @@ const DiagramInner = memo(forwardRef<ReactFlowDiagramHandle, ReactFlowDiagramPro
                     ? <TimelineBackground data={timelineData} />
                     : <Background color={canvasTheme.pattern} gap={20} />
                 }
-                <Controls showInteractive={false} />
+                {/* Bottom-LEFT is where the Legend panel lives (app/lanes/page.tsx,
+                    z-30), which painted straight over the default Controls
+                    position: fitView/zoom were unclickable at the default
+                    viewport — clicks landed on the Legend. */}
+                {/* fitViewOptions on <ReactFlow> only governs the fit-on-init;
+                    the Controls' own fit button calls fitView() with ITS prop,
+                    so notation's padding has to be handed to both or clicking
+                    the button silently refits at the default 0.1. */}
+                <Controls showInteractive={false} position="bottom-right" fitViewOptions={fitOptionsFor(mode as string)} />
                 <Panel position="top-right" className="flex gap-2">
                     <div className="flex gap-1 mr-2 border-r border-zinc-200 pr-2">
                         <button

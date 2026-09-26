@@ -27,6 +27,7 @@ import {
     AMBIGUOUS_RAW,
     guardRawIngredient,
     isAmbiguousRaw,
+    startsWithOf,
 } from '../lib/recipe-lanes/raw-ingredient-guard';
 import { parseClassificationResponse } from '../lib/recipe-lanes/ingredient-taxonomy';
 import { ingredientRowKey } from '../lib/recipe-lanes/comparison-table';
@@ -41,6 +42,9 @@ describe('raw-ingredient guard — the ambiguous set', () => {
         'white', 'whites', 'green', 'greens',
         'leaf', 'leaves',
         'breast', 'breasts', 'thigh', 'thighs', 'leg', 'legs', 'wing', 'wings', 'fillet', 'fillets',
+        'stick', 'sticks', 'slice', 'slices', 'shot', 'shots', 'root', 'roots',
+        'sprig', 'sprigs', 'piece', 'pieces', 'rack', 'racks', 'can', 'cans',
+        'knob', 'knobs', 'stalk', 'stalks', 'bunch', 'bunches', 'head', 'heads',
     ];
 
     it('holds exactly the reviewed entries', () => {
@@ -139,6 +143,77 @@ describe('raw-ingredient guard — the ambiguous set', () => {
         for (const [label, raw] of guesses) {
             assert.equal(guardRawIngredient(label, raw), undefined, `${label} → ${raw} is a guess`);
         }
+    });
+
+    // Measure / container words: the parser left the measure as the name and
+    // put the food in the unit (v2 staging: "1 Rosemary stick, finely
+    // chopped" -> "Stick, Finely Chopped"). Only the BARE word is dropped.
+    it('drops a bare measure word, with prep, in any case', () => {
+        for (const label of [
+            'Stick, Finely Chopped', 'Stick, Very Finely Diced', 'STICKS', 'Slices', 'Shots',
+            'Root (chopped)', 'Roots', 'Few Sprigs', '2 Pieces', 'Rack', 'Cans', 'Knob',
+            'Stalks, Thinly Sliced', 'Bunch', 'Heads',
+        ]) {
+            assert.ok(isAmbiguousRaw(label), `"${label}" is only a measure`);
+        }
+        // Label check: a qualified guess for a bare-measure label is refused.
+        assert.equal(guardRawIngredient('Stick, Finely Chopped', 'Rosemary Stick'), undefined);
+        assert.equal(guardRawIngredient('Stick, Finely Diced', 'Celery Stick'), undefined);
+        assert.equal(guardRawIngredient('Slices', 'Pineapple Slice'), undefined);
+        assert.equal(guardRawIngredient('Shots', 'Espresso'), undefined);
+    });
+
+    it('lets a qualified measure phrase through — it names the food', () => {
+        const pairs: Array<[string, string]> = [
+            ['Cinnamon Stick', 'Cinnamon Stick'],
+            ['Cinnamon Sticks', 'Cinnamon Stick'],
+            ['1-inch Cinnamon Stick', 'Cinnamon Stick'],
+            ['Rosemary Stick, Finely Chopped', 'Rosemary Stick'],
+            ['Celery Sticks, Finely Diced', 'Celery Stick'],
+            ['Celery Root (chopped)', 'Celery Root'],
+            ['Parsley Roots', 'Parsley Root'],
+            ['Espresso Shots', 'Espresso Shot'],
+            ['Pineapple Slices', 'Pineapple Slice'],
+            ['Pepperoni Slices', 'Pepperoni'],
+            ['2-3 Rosemary Sprigs', 'Rosemary Sprig'],
+            ['Few Sprigs Fresh Rosemary', 'Rosemary'],
+            ['Piece Of Ginger, Grated', 'Ginger'],
+            ['Can Of Diced Tomatoes', 'Diced Tomato'],
+            ['Knob Of Butter', 'Butter'],
+            ['Rack Of Lamb', 'Rack Of Lamb'],
+        ];
+        for (const [label, raw] of pairs) {
+            assert.equal(guardRawIngredient(label, raw), raw, `${label} → ${raw} must survive`);
+        }
+    });
+
+    // "1 Rack of Lamb" parses to the label "Of Lamb": the measure — here the
+    // identity (rack vs leg vs mince) — was split off the front.
+    it('drops measure-split "of" debris, from the label or the raw name', () => {
+        const pairs: Array<[string, string]> = [
+            ['Of Lamb', 'Lamb'],
+            ['Of The Reserved Pasta Water', 'Pasta Water'],
+            ['Of Rainbow Shavings', 'Of Rainbow Shaving'],
+            ['Of Withered Rosemary', 'Withered Rosemary'],
+            ['of lamb', 'Lamb'],
+            ['OF LAMB', 'Lamb'],
+            ['½ Of Lamb', 'Lamb'],
+            ['Lamb', 'Of Lamb'],
+        ];
+        for (const [label, raw] of pairs) {
+            assert.equal(guardRawIngredient(label, raw), undefined, `${label} → ${raw} is measure-split debris`);
+        }
+    });
+
+    it('leaves an inner or look-alike "of" alone', () => {
+        for (const label of [
+            'Half Of Prepared Sauce', 'Juice Of 1 Lemon', 'Leg Of Lamb', 'Pinch Of Salt', 'Offal', 'Often Salt',
+        ]) {
+            assert.equal(startsWithOf(label), false, `"${label}" keeps its measure`);
+        }
+        assert.equal(guardRawIngredient('Half Of Prepared Sauce', 'Prepared Sauce'), 'Prepared Sauce');
+        assert.equal(guardRawIngredient('Juice Of 1 Lemon', 'Lemon Juice'), 'Lemon Juice');
+        assert.equal(guardRawIngredient('Offal', 'Offal'), 'Offal');
     });
 
     it('does not strip words that disambiguate or name a product', () => {
@@ -279,6 +354,52 @@ describe('raw-ingredient guard — composed with the parser and the row key', ()
         same('Garlic Clove', 'Garlic Cloves, Minced');
         same('Egg Whites', 'Egg White, Beaten');
         same('Chicken Breasts', 'Chicken Breast (cooked, Sliced)');
+    });
+
+    // v2 staging dry run: three same-category (`other`) debris labels all came
+    // back raw "Stick", so rosemary and celery totalled together with no
+    // cross-category flag to catch it.
+    it('never puts rosemary and celery sticks on one row', () => {
+        const rows: Sensed[] = [
+            { label: 'Stick, Finely Chopped', sense: 'rosemary', category: 'other', raw: 'Stick' },
+            { label: 'Stick, Finely Diced', sense: 'celery', category: 'other', raw: 'Stick' },
+            { label: 'Stick, Very Finely Diced', sense: 'celery', category: 'other', raw: 'Stick' },
+            { label: 'Rosemary Stick, Finely Chopped', sense: 'rosemary', category: 'herbs_spices', raw: 'Rosemary Stick' },
+            { label: 'Celery Sticks', sense: 'celery', category: 'vegetables', raw: 'Celery Stick' },
+            { label: 'Slices', sense: 'pineapple', category: 'other', raw: 'Slice' },
+            { label: 'Pepperoni Slices', sense: 'pepperoni', category: 'proteins', raw: 'Slice' },
+        ];
+        const keys = rowKeys(answerOf(rows));
+        for (const a of rows) {
+            for (const b of rows) {
+                if (a.label >= b.label || a.sense === b.sense) continue;
+                assert.notEqual(keys.get(a.label), keys.get(b.label), `"${a.label}" (${a.sense}) vs "${b.label}" (${b.sense})`);
+            }
+        }
+        // Each debris label keys by itself, exactly as before raw extraction.
+        assert.equal(keys.get('Stick, Finely Chopped'), ingredientRowKey('Stick, Finely Chopped', ''));
+    });
+
+    it('keeps "Of Lamb" off the lamb-leg and lamb-mince rows', () => {
+        const keys = rowKeys({
+            'Of Lamb': { category: 'proteins', raw: 'Lamb' },
+            'Lamb Mince': { category: 'proteins', raw: 'Lamb' },
+            'Lamb': { category: 'proteins', raw: 'Lamb' },
+        });
+        assert.equal(keys.get('Of Lamb'), ingredientRowKey('Of Lamb', ''));
+        assert.notEqual(keys.get('Of Lamb'), keys.get('Lamb'));
+        assert.equal(keys.get('Lamb Mince'), keys.get('Lamb'), 'the unrelated merge is untouched');
+    });
+
+    it('still merges a qualified measure phrase: cinnamon sticks', () => {
+        const keys = rowKeys({
+            'Cinnamon Stick': { category: 'herbs_spices', raw: 'Cinnamon Stick' },
+            'Cinnamon Sticks': { category: 'herbs_spices', raw: 'Cinnamon Stick' },
+            '1-inch Cinnamon Stick': { category: 'herbs_spices', raw: 'Cinnamon Stick' },
+        });
+        assert.equal(keys.get('Cinnamon Stick'), keys.get('Cinnamon Sticks'));
+        assert.equal(keys.get('Cinnamon Stick'), keys.get('1-inch Cinnamon Stick'));
+        assert.equal(keys.get('Cinnamon Stick'), ingredientRowKey('Cinnamon Stick', ''));
     });
 
     it('keeps the category when it drops the raw name', () => {

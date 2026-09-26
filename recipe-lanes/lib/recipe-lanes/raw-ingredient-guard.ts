@@ -31,6 +31,12 @@
  * label it came from, is nothing but an ambiguous word, there is NO raw name
  * and the line keys by its own label, exactly as it did before raw extraction.
  *
+ * One more debris shape is caught by its FORM rather than a word: a label
+ * that starts with "of" ("Of Lamb" from "1 Rack of Lamb", "Of The Reserved
+ * Pasta Water") is what is left when the parser splits the measure off the
+ * front, and the measure it lost is often the identity (a rack is not a leg
+ * or mince). See `startsWithOf`.
+ *
  * Under-merging is cosmetic (two rows that could have been one); over-merging
  * silently adds unrelated quantities together. This guard only ever moves a
  * line in the safe direction.
@@ -56,6 +62,14 @@
  * to tests/raw-ingredient-guard.test.ts. Entries are whole PHRASES matched
  * against a label's or raw name's content, so a multi-word entry ("red
  * pepper") is possible when the evidence calls for one.
+ *
+ * The same-category case is the one to watch for: the circuit breaker only
+ * aborts when a group spans categories, so a debris stub whose members happen
+ * to share one ("Stick" = rosemary + celery, all `other`, v2 staging dry run)
+ * is invisible to it and is only found by reading the rename table. The tell
+ * is a raw name that is a bare measure or container word (stick, slice, sprig,
+ * rack, can…): the parser put the food in the unit field and left the measure
+ * as the name. When a new one turns up, add it to the measure-word block.
  */
 
 /**
@@ -104,6 +118,19 @@ export const AMBIGUOUS_RAW: ReadonlySet<string> = new Set([
     'leaf', 'leaves',
     // debris: butchery cuts with no animal named
     ...CUT_WORDS,
+    // debris: bare measure / container words. The parser put the food in the
+    // unit and left the measure as the name ("1 Rosemary stick, finely
+    // chopped" -> unit "Rosemary", name "stick, finely chopped"), so the stub
+    // says nothing about which food it is. Evidenced on the v2 staging dry run:
+    // stick (rosemary merged with celery), slices (pineapple), shots
+    // (espresso), root (celery root), and "Of Lamb" from "1 Rack of Lamb".
+    // The rest are the same class — a quantity of something, never a food on
+    // its own. 'pieces' is also a NON_FOOD_WORDS filler; it is listed so the
+    // pair reads complete. A QUALIFIED phrase ("Cinnamon Stick", "Celery
+    // Root", "Espresso Shot", "Garlic Clove") is not a bare word and passes.
+    'stick', 'sticks', 'slice', 'slices', 'shot', 'shots', 'root', 'roots',
+    'sprig', 'sprigs', 'piece', 'pieces', 'rack', 'racks', 'can', 'cans',
+    'knob', 'knobs', 'stalk', 'stalks', 'bunch', 'bunches', 'head', 'heads',
 ]);
 
 /**
@@ -129,7 +156,7 @@ const NON_FOOD_WORDS: ReadonlySet<string> = new Set([
     'large', 'medium', 'small',
     // cut / size prep
     'chopped', 'diced', 'sliced', 'minced', 'grated', 'shredded', 'julienned', 'cubed',
-    'halved', 'quartered', 'torn', 'cut', 'into', 'pieces', 'strips', 'finely', 'roughly',
+    'halved', 'quartered', 'torn', 'cut', 'into', 'pieces', 'strips', 'very', 'finely', 'roughly',
     'coarsely', 'thinly', 'thickly', 'crushed',
     // kitchen state
     'fresh', 'freshly', 'cooked', 'raw', 'melted', 'softened', 'chilled', 'cold', 'warm',
@@ -147,14 +174,29 @@ const NON_FOOD_WORDS: ReadonlySet<string> = new Set([
  * Returns '' when nothing food-bearing is left.
  */
 function contentPhrase(text: string): string {
+    return words(text).filter(word => !NON_FOOD_WORDS.has(word)).join(' ');
+}
+
+/** Normalized words of `text`, parentheticals and bare numbers dropped. */
+function words(text: string): string[] {
     return text
         .replace(/\([^)]*\)/g, ' ')
         .normalize('NFD')
         .replace(/[̀-ͯ]/g, '')
         .toLowerCase()
         .split(/[^\p{L}\p{N}]+/u)
-        .filter(word => word && !/^\p{N}+$/u.test(word) && !NON_FOOD_WORDS.has(word))
-        .join(' ');
+        .filter(word => word && !/^\p{N}+$/u.test(word));
+}
+
+/**
+ * True when `text` starts with "of" — the measure was split off the front
+ * ("1 Rack of Lamb" -> "Of Lamb"). No ingredient name starts with "of", and
+ * the measure that went missing can be the identity (rack vs leg vs mince),
+ * so the remaining words are not a safe merge key. "Half Of Prepared Sauce"
+ * and "Juice Of 1 Lemon" keep their measure and are unaffected.
+ */
+export function startsWithOf(text: string): boolean {
+    return words(text)[0] === 'of';
 }
 
 /**
@@ -180,14 +222,17 @@ export function isAmbiguousRaw(text: string): boolean {
  *     ("Garlic Clove", "Black Pepper", "Chicken Breast") is a GUESS at a sense
  *     the label never states — the very guess that flipped between runs — so
  *     it is refused too, rather than letting a coin toss pick the row.
+ *  3. Either one starts with "of" (`startsWithOf`): measure-split debris,
+ *     so "Of Lamb" never merges into "Lamb" whatever the model returns.
  *
  * A label that names the sense itself ("Garlic Cloves, Minced", "Black Pepper",
- * "Chicken Breasts", "Egg Whites", "Bay Leaves") passes both checks and merges
+ * "Chicken Breasts", "Egg Whites", "Bay Leaves") passes every check and merges
  * normally.
  */
 export function guardRawIngredient(label: string, raw: string | undefined): string | undefined {
     if (raw === undefined) return undefined;
     if (isAmbiguousRaw(raw)) return undefined;
     if (isAmbiguousRaw(label)) return undefined;
+    if (startsWithOf(label) || startsWithOf(raw)) return undefined;
     return raw;
 }

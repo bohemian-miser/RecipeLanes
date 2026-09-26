@@ -17,7 +17,8 @@
 
 /**
  * Backfills the `ingredient_categories` lookup collection — one doc per
- * distinct ingredient label, carrying the label's taxonomy category.
+ * distinct ingredient label, carrying the label's taxonomy category and the
+ * raw ingredient name comparison rows for that label should be totalled under.
  *
  * Pipeline:
  *   1. Scan `recipes`, extracting ingredient labels with the SAME pure logic
@@ -25,7 +26,8 @@
  *      written here are exactly the keys the table will look up.
  *   2. Skip labels that already have a GOOD doc (see idempotency below).
  *   3. Classify the rest with Vertex Gemini 2.5 Flash, in batches, using the
- *      shared prompt/parser from `lib/recipe-lanes/ingredient-taxonomy`.
+ *      shared prompt/parser from `lib/recipe-lanes/ingredient-taxonomy` with
+ *      `includeRaw` — one call returns both the category and the raw name.
  *      A batch that comes back incomplete is retried for its missing labels
  *      only; a batch whose RESPONSE was truncated is split in half instead,
  *      since retrying an over-long request identically just truncates again.
@@ -33,12 +35,36 @@
  *      the nearest anchor's category as `nnCategory`/`nnScore`. ADVISORY ONLY
  *      — the LLM is authoritative; the NN is known-bad on non-English labels.
  *      Its value is the disagreement report, which is where misclassifications
- *      show up for a human to eyeball.
- *   5. Write the docs, and always print (and dump to JSON) the evidence:
- *      per-category counts, top labels per category, the disagreement table.
+ *      show up for a human to eyeball. It says nothing about the raw name;
+ *      raw quality is verified by the merge report instead (step 5).
+ *   5. PRINT the evidence — per-category counts, top labels per category, the
+ *      disagreement table, and the raw-ingredient merge report
+ *      (`raw-ingredient-report`): which labels move to a different row, which
+ *      labels end up sharing one, and a loud flag on any merge that spans two
+ *      taxonomy categories. Before the write, deliberately: a section headed
+ *      "review before writing" is worthless underneath the write it was meant
+ *      to gate.
+ *   6. Write the docs, unless a circuit-breaker stopped the run.
+ *   7. Dump the whole evidence set to JSON (last, because it records what the
+ *      write actually did).
+ *
+ * RAW NAMES ARE THE RISKY HALF. A wrong category mislabels a row; a wrong raw
+ * name SUMS TWO UNRELATED QUANTITIES into one and the total still looks
+ * plausible. The model is therefore told that identity (raw = label) is always
+ * safe, an unusable raw value is dropped rather than guessed at (the parser's
+ * job), and a label with no raw of its own is stored as its own raw name here.
+ * The merge report exists so a human signs off on the collisions before a
+ * production write — see the plan's rollout checkpoint.
  *
  * IDEMPOTENCY / RESUMABILITY. Re-running is cheap and safe: a label that
- * already has a doc is not re-classified. The exception is deliberate — docs
+ * already has a GOOD doc is not re-classified. "Good" means: it carries the
+ * current `categoryRulesVersion` AND the current `rawRulesVersion` AND an
+ * actual `rawIngredient` value. The two rule sets version independently, so a
+ * doc written by a run that predates raw extraction has a fine category and no
+ * raw name, and must come back through — the last clause is the belt-and-braces
+ * version of that, catching a doc stamped current whose value never landed.
+ *
+ * A further exception is deliberate — docs
  * with `source: 'fallback'` are NOT treated as done. A fallback doc means the
  * classifier failed for that label and it was parked in `other`, so skipping
  * it would make one bad run permanent: the damage would survive every
@@ -50,9 +76,19 @@
  * not a hard corpus, and persisting it would poison the collection with
  * `other`. Use `--force-fallbacks` to write anyway once you know why.
  *
+ * A SECOND breaker covers the raw half: the run refuses to write when a label
+ * it would write shares a raw ingredient with a label in a different taxonomy
+ * category. That is the over-merge signature, it is silent once written, and
+ * `--force-merges` is the acknowledgement that a human looked at the
+ * cross-category section and accepted it. Note the merge report is computed
+ * over the WHOLE corpus — the labels that already have docs are read back and
+ * folded in — because a merge is a relationship between labels and a report
+ * scoped to the pending set cannot see one.
+ *
  * Usage:
  *   npx tsx scripts/backfill-ingredient-categories.ts (--staging | --prod)
- *       [--dry-run] [--limit N] [--force] [--force-fallbacks] [--out path.json]
+ *       [--dry-run] [--limit N] [--force] [--force-fallbacks] [--force-merges]
+ *       [--out path.json]
  *
  * `--staging` or `--prod` is REQUIRED — this script writes, so the target must
  * be stated rather than defaulted. `--dry-run` performs zero Firestore writes
@@ -79,11 +115,13 @@ import { DB_COLLECTION_RECIPES } from '../lib/config';
 import { scanCollection } from './lib/db-tools';
 import { cosineSimilarity } from '../lib/recipe-lanes/model-utils';
 import {
+    boundRawIngredientName,
     buildClassificationPrompt,
     parseClassificationResponse,
     COMPARISON_CATEGORY_IDS,
     FALLBACK_CATEGORY_ID,
     getIngredientCategory,
+    RAW_RULES_VERSION,
     TAXONOMY_RULES_VERSION,
 } from '../lib/recipe-lanes/ingredient-taxonomy';
 import {
@@ -91,6 +129,13 @@ import {
     ingredientCategoryDocId,
     type IngredientLabelUsage,
 } from '../lib/recipe-lanes/ingredient-label-extract';
+import {
+    buildRawIngredientReport,
+    type RawIngredientEntry,
+    type RawIngredientGroup,
+    type RawIngredientReport,
+} from '../lib/recipe-lanes/raw-ingredient-report';
+import { standardizeIngredientName } from '../lib/utils';
 import type { RecipeGraph } from '../lib/recipe-lanes/types';
 
 // ---------------------------------------------------------------------------
@@ -103,7 +148,16 @@ const COLLECTION = 'ingredient_categories';
 const MODEL = 'gemini-2.5-flash';
 const VERTEX_LOCATION = 'us-central1';
 
-/** Labels per classification call. ~90 calls for the full prod corpus. */
+/**
+ * Labels per classification call. ~90 calls for the full prod corpus.
+ *
+ * The object-shaped response (`{category, raw}` per label) is roughly twice the
+ * output tokens of the bare-id one, which brings MAX_TOKENS closer. It is left
+ * at 50 deliberately: the truncation-split machinery below already handles an
+ * over-long answer correctly and only costs an extra call on the batches that
+ * actually overflow, whereas halving this doubles the call count for the whole
+ * corpus. Halve it only if a real run shows splits happening routinely.
+ */
 const BATCH_SIZE = 50;
 /** Extra attempts for a batch that comes back missing/invalid labels. */
 const MAX_RETRIES = 2;
@@ -129,6 +183,14 @@ const READ_CHUNK_SIZE = 100;
 const NN_REPORT_THRESHOLD = 0.6;
 /** Rows shown per category in the "top labels" section of the report. */
 const TOP_LABELS_PER_CATEGORY = 15;
+/**
+ * Rows printed in the label→raw table before it is cut off. The collision
+ * report and the cross-category flags below it are NEVER truncated — those are
+ * the sections a human has to read in full before a production write — but this
+ * one is informational and grows with the corpus, so the console keeps the
+ * heaviest-used moves and the JSON dump keeps every one of them.
+ */
+const TOP_RAW_RENAMES = 50;
 
 /**
  * Seed anchors for the nearest-neighbour cross-check, carried over from the
@@ -159,6 +221,8 @@ interface Flags {
     dryRun: boolean;
     force: boolean;
     forceFallbacks: boolean;
+    /** Acknowledge this run's cross-category merges and write them anyway. */
+    forceMerges: boolean;
     limit: number;
     outPath: string;
 }
@@ -176,7 +240,8 @@ function flagValue(args: string[], name: string): string | undefined {
 function fail(message: string): never {
     console.error(`\n  ${message}\n`);
     console.error('Usage: npx tsx scripts/backfill-ingredient-categories.ts (--staging | --prod)');
-    console.error('           [--dry-run] [--limit N] [--force] [--force-fallbacks] [--out path.json]\n');
+    console.error('           [--dry-run] [--limit N] [--force] [--force-fallbacks] [--force-merges]');
+    console.error('           [--out path.json]\n');
     process.exit(1);
 }
 
@@ -203,6 +268,7 @@ function parseFlags(args: string[]): Flags {
         dryRun: args.includes('--dry-run'),
         force: args.includes('--force'),
         forceFallbacks: args.includes('--force-fallbacks'),
+        forceMerges: args.includes('--force-merges'),
         limit,
         outPath: flagValue(args, '--out') ?? `./ingredient-categories-${envName}-${date}.json`,
     };
@@ -377,6 +443,17 @@ async function callGemini(projectId: string, prompt: string, backoffMs: number):
 }
 
 /**
+ * What one label came back with. `raw` is optional and sparse on purpose: the
+ * parser drops a raw name it cannot use (absent, empty, multi-line, oversized)
+ * rather than failing the entry, so absence means "no merge hint", which the
+ * caller turns into identity — never "unknown".
+ */
+interface Resolved {
+    category: string;
+    raw?: string;
+}
+
+/**
  * Classifies one batch, retrying only the labels that did not come back
  * usable. Returns the assignments it managed to get; anything absent from the
  * result is the caller's fallback problem.
@@ -386,8 +463,8 @@ async function classifyBatch(
     labels: string[],
     log: (message: string) => void,
     depth = 0,
-): Promise<Map<string, string>> {
-    const resolved = new Map<string, string>();
+): Promise<Map<string, Resolved>> {
+    const resolved = new Map<string, Resolved>();
     let outstanding = labels;
     // An unsplittable truncation (below) gets exactly one extra attempt before
     // falling back — see the comment at that branch for why.
@@ -396,12 +473,24 @@ async function classifyBatch(
     for (let attempt = 1; attempt <= MAX_RETRIES + 1 && outstanding.length > 0; attempt++) {
         if (attempt > 1) await sleep(backoffFor(attempt - 1));
         try {
-            const raw = await callGemini(projectId, buildClassificationPrompt(outstanding), backoffFor(attempt));
-            const result = parseClassificationResponse(raw, outstanding);
-            // `assignments` is null-prototype by design (a label may literally
-            // be "__proto__"), so read it with Object.entries / bracket access.
+            const response = await callGemini(
+                projectId,
+                // The one place raw extraction is switched on. Every other
+                // caller of this builder (the icon backfill, classify-on-miss)
+                // leaves it off and keeps the cheaper bare-id contract.
+                buildClassificationPrompt(outstanding, { includeRaw: true }),
+                backoffFor(attempt),
+            );
+            // No `includeRaw` on the parse side on purpose: the option governs
+            // what we ASK for, and the parser accepts both response shapes
+            // regardless — a model that answers with bare ids still gets its
+            // categories kept, it just contributes no merge hints.
+            const result = parseClassificationResponse(response, outstanding);
+            // `assignments` and `rawAssignments` are null-prototype by design (a
+            // label may literally be "__proto__"), so read them with
+            // Object.entries / bracket access.
             for (const [label, category] of Object.entries(result.assignments)) {
-                resolved.set(label, category);
+                resolved.set(label, { category, raw: result.rawAssignments[label] });
             }
             if (result.invalid.length > 0) {
                 log(`  attempt ${attempt}: ${result.invalid.length} invalid category value(s), e.g. ${result.invalid.slice(0, 3).map(i => `"${i.label}" -> "${i.value}"`).join(', ')}`);
@@ -420,8 +509,8 @@ async function classifyBatch(
                     const halves = [outstanding.slice(0, mid), outstanding.slice(mid)];
                     log(`  attempt ${attempt}: ${e.message} — splitting ${outstanding.length} labels into ${halves.map(h => h.length).join(' + ')}`);
                     for (const half of halves) {
-                        for (const [label, category] of await classifyBatch(projectId, half, log, depth + 1)) {
-                            resolved.set(label, category);
+                        for (const [label, entry] of await classifyBatch(projectId, half, log, depth + 1)) {
+                            resolved.set(label, entry);
                         }
                     }
                     // The halves consumed their own retries; nothing left to do here.
@@ -500,6 +589,15 @@ interface Classified {
     key: string;
     label: string;
     category: string;
+    /**
+     * The raw ingredient name written to the doc, in display casing. Never
+     * empty: a label the model gave no usable raw for is its OWN raw name
+     * (`rawIsIdentity`), which is the conservative outcome — that label keeps
+     * exactly the comparison row it has today.
+     */
+    raw: string;
+    /** True when `raw` is the label itself because the model supplied no usable one. */
+    rawIsIdentity: boolean;
     source: 'gemini-2.5-flash' | 'fallback';
     nnCategory: string;
     nnScore: number;
@@ -548,9 +646,17 @@ interface Summary {
     counts: { category: string; label: string; count: number; usageCount: number }[];
     /** NN disagreements, computed once; shared by the printed table and the dump. */
     disagreements: Disagreement[];
+    /**
+     * Raw-ingredient merge quality — the pre-prod review gate (pure helper).
+     * Computed over this run's labels AND the ones that already have docs; see
+     * `existingForReport` for why a run-scoped report is worse than useless.
+     */
+    raw: RawIngredientReport;
+    /** Labels that kept their own name because the model offered no raw. */
+    rawIdentityCount: number;
 }
 
-function summarise(classified: Classified[]): Summary {
+function summarise(classified: Classified[], existing: RawIngredientEntry[]): Summary {
     const byCategory = new Map<string, Classified[]>();
 
     for (const entry of classified) {
@@ -571,7 +677,16 @@ function summarise(classified: Classified[]): Summary {
         };
     });
 
-    return { total: classified.length, byCategory, counts, disagreements: disagreements(classified) };
+    return {
+        total: classified.length,
+        byCategory,
+        counts,
+        disagreements: disagreements(classified),
+        // `classified` carries no `isNew`, which the helper reads as new — the
+        // safe default, and true here.
+        raw: buildRawIngredientReport([...classified, ...existing]),
+        rawIdentityCount: classified.reduce((n, c) => n + (c.rawIsIdentity ? 1 : 0), 0),
+    };
 }
 
 function printReport(summary: Summary): void {
@@ -609,6 +724,97 @@ function printReport(summary: Summary): void {
     }
 }
 
+/**
+ * One collision group as a header line plus its member rows.
+ *
+ * The `new` column is the part a reviewer of an incremental run actually needs:
+ * a group of five labels where four were written and approved months ago and
+ * one landed today is a question about that one label, not about the group.
+ */
+function printGroup(group: RawIngredientGroup): void {
+    const flag = group.crossCategory ? '  ⚠️  CROSS-CATEGORY' : '';
+    const provenance = group.hasNewMember ? '' : '  (all pre-existing)';
+    console.log(
+        `\n"${group.raw}"  ← ${group.members.length} labels, ${group.usageCount} usages`
+        + `  [${group.categories.join(', ')}]${flag}${provenance}`,
+    );
+    console.log(table(
+        ['  label', 'usage', 'category', 'new'],
+        group.members.map(m => [`  ${m.label}`, String(m.usageCount), m.category, m.isNew ? 'NEW' : '']),
+    ));
+}
+
+/**
+ * The raw-ingredient evidence: what these names would do to the comparison
+ * table if written. This is the section the owner reads before a production
+ * run, so it is ordered by how much it should worry them — what moved, what
+ * merged, and then what merged across a taxonomy boundary.
+ */
+function printRawReport(summary: Summary): void {
+    const { raw, rawIdentityCount, total } = summary;
+    const newRenames = raw.renames.reduce((n, r) => n + (r.isNew ? 1 : 0), 0);
+
+    console.log('\n================ RAW INGREDIENT — SUMMARY ================\n');
+    // Scope first, because every number under it is a statement about the
+    // corpus and it would otherwise read as a statement about this run.
+    console.log(`labels in the merge view:          ${raw.totalLabels}`
+        + `  (${raw.newLabels} classified now, ${raw.totalLabels - raw.newLabels} already had docs)`);
+    // These three split THIS RUN's labels exactly: a label either moves rows,
+    // or keeps its own row because the model said so, or keeps it because the
+    // model gave nothing usable and identity is the fallback.
+    console.log(`  of this run, raw moves the row:  ${newRenames}`);
+    console.log(`  of this run, model kept identity:${(total - rawIdentityCount - newRenames).toString().padStart(4)}`);
+    console.log(`  of this run, model gave no raw:  ${rawIdentityCount}`);
+    console.log(`renames across the whole corpus:   ${raw.renames.length}`);
+    console.log(`collision groups (2+ labels):      ${raw.groups.length}`
+        + `  (${raw.groups.filter(g => g.hasNewMember).length} contain a label from this run)`);
+    console.log(`comparison rows removed by merging:${raw.rowsMerged.toString().padStart(4)}`);
+    console.log(`CROSS-CATEGORY GROUPS (review!):   ${raw.crossCategoryGroups.length}`
+        + `  (${raw.newCrossCategoryGroups.length} this run is accountable for)`);
+
+    console.log(`\n========= LABEL → RAW (only where the row key changes) =========\n`);
+    if (raw.renames.length === 0) {
+        console.log('None — every label is its own raw ingredient.');
+    } else {
+        // Sorted new-first by the helper, so the cap below can never hide this
+        // run's own moves behind a corpus that was already reviewed.
+        const shown = raw.renames.slice(0, TOP_RAW_RENAMES);
+        console.log(table(
+            ['label', 'raw', 'usage', 'new'],
+            shown.map(r => [r.label, r.raw, String(r.usageCount), r.isNew ? 'NEW' : '']),
+        ));
+        if (raw.renames.length > shown.length) {
+            console.log(`\n... and ${raw.renames.length - shown.length} more (all of them in the JSON dump).`);
+        }
+    }
+
+    console.log(`\n===== COLLISION REPORT (raw groups; this run's first, then biggest) =====`);
+    if (raw.groups.length === 0) {
+        console.log('\nNone — no two labels share a raw ingredient.');
+    } else {
+        // Never truncated: a group hidden here is a merge nobody reviewed.
+        for (const group of raw.groups) printGroup(group);
+        console.log(`\n${raw.groups.length} group(s) merging ${raw.rowsMerged + raw.groups.length} labels into ${raw.groups.length} row(s).`);
+    }
+
+    console.log(`\n${'#'.repeat(64)}`);
+    console.log('# CROSS-CATEGORY MERGES — LIKELY OVER-MERGE, REVIEW BEFORE WRITING');
+    console.log(`${'#'.repeat(64)}`);
+    if (raw.crossCategoryGroups.length === 0) {
+        console.log('\nNone. Every merged group agrees on its category.');
+    } else {
+        // The taxonomy already calls these different kinds of thing, and
+        // summing their quantities is the silent-corruption failure mode the
+        // boundary rules exist to prevent. Not filtered, not capped — the
+        // automation's job is to make a human look at each one.
+        for (const group of raw.crossCategoryGroups) printGroup(group);
+        console.log(`\n⚠️  ${raw.crossCategoryGroups.length} group(s) merge labels across taxonomy categories,`);
+        console.log(`    ${raw.newCrossCategoryGroups.length} of them involving a label this run would write.`);
+        console.log('    Each one is a candidate over-merge: check the boundary rules in');
+        console.log('    RAW_INGREDIENT_RULES before letting these reach production.');
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Concurrency helper (same shape as backfill-icon-search-terms.ts)
 // ---------------------------------------------------------------------------
@@ -640,7 +846,7 @@ async function main(): Promise<void> {
     console.log(` ENVIRONMENT: ${flags.envName}`);
     console.log(` MODE:        ${flags.dryRun ? 'DRY RUN (zero Firestore writes)' : 'LIVE WRITE'}`);
     console.log(` LIMIT:       ${flags.limit === Infinity ? 'none' : `${flags.limit} recipes`}`);
-    console.log(` FORCE:       ${flags.force}${flags.forceFallbacks ? '   FORCE-FALLBACKS: true' : ''}`);
+    console.log(` FORCE:       ${flags.force}${flags.forceFallbacks ? '   FORCE-FALLBACKS: true' : ''}${flags.forceMerges ? '   FORCE-MERGES: true' : ''}`);
     console.log(` OUT:         ${flags.outPath}`);
     const { db, projectId } = initFirebase(flags.envName);
     console.log('========================================================\n');
@@ -681,10 +887,24 @@ async function main(): Promise<void> {
 
     let alreadyDone = 0;
     let retriedFallbacks = 0;
-    let staleVersion = 0;
+    let staleCategoryVersion = 0;
+    let staleRawVersion = 0;
+    let missingRaw = 0;
     let pending = addressable;
     // Docs that are staying as-is but whose usage numbers have moved on.
     const staleCounts: Addressable[] = [];
+    /**
+     * The labels that already have a good doc, in the merge report's shape.
+     *
+     * A merge is a relationship BETWEEN labels, so the report cannot be
+     * computed from this run's pending set alone: a later run that classifies
+     * one new "Tomato Paste" whose raw name is "Tomato" would report zero
+     * collisions and zero cross-category flags while writing a doc that folds
+     * tomato paste into the tinned-tomato row. Seeding the already-good docs in
+     * is what makes the grouping a statement about the corpus rather than about
+     * the accident of which labels happened to be pending.
+     */
+    const existingForReport: RawIngredientEntry[] = [];
 
     if (flags.force) {
         console.log('--force: reclassifying every label, existing docs included.\n');
@@ -703,19 +923,44 @@ async function main(): Promise<void> {
                 // Docs written before versioning have no field at all, which
                 // compares unequal and so gets picked up here too — exactly
                 // right, since they predate every clause added since.
-                if (data.categoryRulesVersion !== TAXONOMY_RULES_VERSION) { staleVersion++; continue; }
+                //
+                // The two rule sets are versioned SEPARATELY (see the constants
+                // in ingredient-taxonomy). A doc is only done when it satisfies
+                // both, because a run under the current category rules that
+                // predates raw extraction produced a perfectly good category
+                // and no raw name at all.
+                if (data.categoryRulesVersion !== TAXONOMY_RULES_VERSION) { staleCategoryVersion++; continue; }
+                if (data.rawRulesVersion !== RAW_RULES_VERSION) { staleRawVersion++; continue; }
+                // Belt and braces for the stamp being right while the value is
+                // not: an interim run, a partial write, a hand-edited doc. The
+                // version field is a claim, this is the field the lookup
+                // actually reads, and a missing one silently un-merges rows.
+                if (typeof data.rawIngredient !== 'string' || !data.rawIngredient.trim()) { missingRaw++; continue; }
                 good.add(doc.id);
                 const usage = byId.get(doc.id);
                 if (usage && (data.usageCount !== usage.usageCount || data.recipeCount !== usage.recipeCount)) {
                     staleCounts.push(usage);
                 }
+                // Seeded into the merge report so grouping sees the whole
+                // corpus, not just what is pending. Usage comes from the census
+                // rather than the doc, because the doc's copy describes the
+                // scan that wrote it and may be several runs out of date.
+                existingForReport.push({
+                    label: typeof data.label === 'string' && data.label ? data.label : usage?.label ?? doc.id,
+                    raw: data.rawIngredient,
+                    category: typeof data.category === 'string' ? data.category : FALLBACK_CATEGORY_ID,
+                    usageCount: usage?.usageCount ?? (typeof data.usageCount === 'number' ? data.usageCount : 0),
+                    isNew: false,
+                });
             }
         }
         pending = addressable.filter(u => !good.has(u.docId));
         alreadyDone = addressable.length - pending.length;
         const reasons = [
             retriedFallbacks ? `${retriedFallbacks} earlier fallback(s)` : '',
-            staleVersion ? `${staleVersion} classified under older rules (now v${TAXONOMY_RULES_VERSION})` : '',
+            staleCategoryVersion ? `${staleCategoryVersion} classified under older category rules (now v${TAXONOMY_RULES_VERSION})` : '',
+            staleRawVersion ? `${staleRawVersion} under older raw rules (now v${RAW_RULES_VERSION})` : '',
+            missingRaw ? `${missingRaw} stamped current but carrying no rawIngredient` : '',
         ].filter(Boolean);
         console.log(`Already classified: ${alreadyDone}   To classify: ${pending.length}${reasons.length ? ` (incl. ${reasons.join(', ')})` : ''}`);
         if (staleCounts.length > 0) {
@@ -740,14 +985,14 @@ async function main(): Promise<void> {
         // --- 4. Classify --------------------------------------------------
         const batches = chunk(pending, BATCH_SIZE);
         console.log(`Classifying ${pending.length} label(s) in ${batches.length} batch(es) of up to ${BATCH_SIZE} via ${MODEL}...`);
-        const assignments = new Map<string, string>();
+        const assignments = new Map<string, Resolved>();
         let batchesDone = 0;
 
         await withConcurrency(
             batches.map((batch, index) => async () => {
                 const labels = batch.map(u => u.label);
                 const resolved = await classifyBatch(projectId, labels, msg => console.log(`[batch ${index + 1}]${msg}`));
-                for (const [label, category] of resolved) assignments.set(label, category);
+                for (const [label, entry] of resolved) assignments.set(label, entry);
                 batchesDone++;
                 console.log(`[batch ${index + 1}] ${resolved.size}/${labels.length} classified  (${batchesDone}/${batches.length} batches done)`);
             }),
@@ -766,12 +1011,30 @@ async function main(): Promise<void> {
         console.log(`\nEmbedding ${pending.length} label(s) for the NN cross-check...`);
         for (const usage of pending) {
             const nn = nearestAnchor(anchors, await embed(embedder, usage.label));
-            const category = assignments.get(usage.label);
+            const resolved = assignments.get(usage.label);
+            // Identity fallback, in both directions: a label the classifier
+            // never answered for, and a label whose raw name was unusable, both
+            // become their own raw ingredient. `usage.label` is already
+            // standardized by the census; the model's answer is not, so it goes
+            // through the same casing the comparison table's labels use.
+            //
+            // Both paths then go through `boundRawIngredientName`. For the
+            // model's answer that is a no-op guard — the parser already held it
+            // to the length bound — but the IDENTITY path never met the parser,
+            // and recipe labels get long ("Tomatoes, San Marzano, Peeled,
+            // Canned, Drained And Crushed By Hand"). Without it the safe
+            // fallback is the one path that can store a rawIngredient the model
+            // itself would have been forbidden to return, and PR 4 turns this
+            // field into a comparison row label.
+            const modelRaw = resolved?.raw ? standardizeIngredientName(resolved.raw) : '';
+            const rawIsIdentity = !modelRaw;
             classified.push({
                 key: usage.key,
                 label: usage.label,
-                category: category ?? FALLBACK_CATEGORY_ID,
-                source: category ? MODEL : 'fallback',
+                category: resolved?.category ?? FALLBACK_CATEGORY_ID,
+                raw: boundRawIngredientName(rawIsIdentity ? usage.label : modelRaw),
+                rawIsIdentity,
+                source: resolved ? MODEL : 'fallback',
                 nnCategory: nn.category,
                 nnScore: nn.score,
                 usageCount: usage.usageCount,
@@ -781,7 +1044,18 @@ async function main(): Promise<void> {
         }
     }
 
-    // --- 6. Fallback circuit-breaker ---------------------------------------
+    // --- 6. Evidence, BEFORE the write -------------------------------------
+    // Ordering is load-bearing, not cosmetic. This used to print after step 7,
+    // which meant a live run committed the docs and only then showed the
+    // operator the "REVIEW BEFORE WRITING" section — advice about a decision
+    // already taken, on values already in Firestore. One pass here builds
+    // everything the report and the JSON dump need, instead of each of them
+    // re-scanning `classified` on their own.
+    const summary = summarise(classified, existingForReport);
+    printReport(summary);
+    printRawReport(summary);
+
+    // --- 7. Circuit-breakers ------------------------------------------------
     const fallbackFraction = classified.length > 0 ? unresolvedCount / classified.length : 0;
     const tooManyFallbacks = fallbackFraction > MAX_FALLBACK_FRACTION;
     let aborted = false;
@@ -800,7 +1074,51 @@ async function main(): Promise<void> {
         console.warn(`\n⚠️  --force-fallbacks: writing despite ${(fallbackFraction * 100).toFixed(1)}% fallbacks.\n`);
     }
 
-    // --- 7. Write ----------------------------------------------------------
+    /**
+     * The merge breaker, mirroring the fallback one above.
+     *
+     * THRESHOLD: any cross-category group this run would contribute a label to.
+     * Not a count, and not the corpus total, for two reasons. A tolerance of
+     * "N is fine" waves through N silent over-merges, each of which sums
+     * unrelated quantities into a plausible-looking number; and the corpus
+     * total never falls, so keying on it would either block every future run
+     * forever or have to be raised until it stopped meaning anything. Keyed on
+     * new members it is self-clearing: once a human has looked at a flagged
+     * group and let it through, that group has no new members next time and
+     * stops blocking, while a genuinely new over-merge always blocks.
+     *
+     * On a first, full, or `--force` run every label is new, so this fires by
+     * design — that IS the owner checkpoint the rollout plan requires before
+     * any production write, now enforced by the script instead of by the
+     * operator remembering to scroll up.
+     */
+    const flaggedMerges = summary.raw.newCrossCategoryGroups.length;
+    // A dry run has nothing to block: it writes nothing, and producing this
+    // report for review is the entire job it was asked to do. So it says what
+    // WOULD happen and still exits 0 — unlike the fallback breaker, which
+    // reports a broken classifier and is a genuine failure in either mode.
+    const mergesBlockWrite = flaggedMerges > 0 && !flags.forceMerges;
+    if (mergesBlockWrite) {
+        const log = flags.dryRun ? console.warn : console.error;
+        log(`\n${'#'.repeat(72)}`);
+        log(`# ${flags.dryRun ? 'WOULD ABORT BEFORE WRITE' : 'ABORTING BEFORE WRITE'}: ${flaggedMerges} cross-category merge group(s)`);
+        log('# involve a label this run would write. Merging labels the taxonomy puts in');
+        log('# different categories is the over-merge signature — it sums unrelated');
+        log('# quantities into one comparison row and the total still looks plausible.');
+        log('#');
+        log('# Read the CROSS-CATEGORY section above. If the merges are right, re-run');
+        log('# with --force-merges. If they are not, fix RAW_INGREDIENT_RULES, bump');
+        log(`# RAW_RULES_VERSION (now ${RAW_RULES_VERSION}) and re-run — the bump re-derives every`);
+        log('# raw name without disturbing the category corpus.');
+        log(`${'#'.repeat(72)}\n`);
+    } else if (flaggedMerges > 0) {
+        console.warn(`\n⚠️  --force-merges: writing despite ${flaggedMerges} cross-category merge group(s).\n`);
+    }
+
+    // Only a live run can be stopped by the merge breaker; see above.
+    const blocked = aborted || (mergesBlockWrite && !flags.dryRun);
+
+    // --- 8. Write ----------------------------------------------------------
     const classifiedAt = new Date();
     let written = 0;
     let refreshed = 0;
@@ -808,7 +1126,7 @@ async function main(): Promise<void> {
     if (flags.dryRun) {
         console.log(`\nDRY RUN — would write ${classified.length} doc(s) to ${COLLECTION}` +
             `${staleCounts.length ? ` and refresh usage counts on ${staleCounts.length} existing doc(s)` : ''}; nothing was written.`);
-    } else if (aborted) {
+    } else if (blocked) {
         console.error(`No documents were written (${classified.length} classification(s) discarded).`);
     } else {
         if (classified.length > 0) {
@@ -822,16 +1140,27 @@ async function main(): Promise<void> {
                     batch.set(db.collection(COLLECTION).doc(ingredientCategoryDocId(entry.label)!), {
                         label: entry.label,
                         category: entry.category,
+                        // The pantry item this label's comparison row totals
+                        // under. Always present, never empty: a label with no
+                        // merge hint stores its own name, so a reader can key
+                        // on this field unconditionally instead of re-deriving
+                        // the identity fallback at every call site.
+                        rawIngredient: entry.raw,
                         source: entry.source,
                         model: MODEL,
                         nnCategory: entry.nnCategory,
                         nnScore: entry.nnScore,
                         classifiedAt,
-                        // Which boundary text produced this answer. The scan
-                        // above reclassifies anything stamped with a different
-                        // version, so a rules edit reaches old docs instead of
-                        // needing a blanket --force.
+                        // Which boundary text produced each half of this
+                        // answer. The scan above reclassifies anything stamped
+                        // with a different version, so a rules edit reaches old
+                        // docs instead of needing a blanket --force — and the
+                        // two are stamped separately so that editing the raw
+                        // boundary does not invalidate the category corpus
+                        // (the icon index shares these categories) or vice
+                        // versa.
                         categoryRulesVersion: TAXONOMY_RULES_VERSION,
+                        rawRulesVersion: RAW_RULES_VERSION,
                         // Usage numbers describe the LAST SCAN, not all time:
                         // a --limit run records what that subset saw.
                         usageCount: entry.usageCount,
@@ -864,12 +1193,10 @@ async function main(): Promise<void> {
         }
     }
 
-    // --- 8. Evidence --------------------------------------------------------
-    // One pass here builds everything the report and the JSON dump need,
-    // instead of each of them re-scanning `classified` on their own.
-    const summary = summarise(classified);
-    printReport(summary);
-
+    // --- 9. JSON dump -------------------------------------------------------
+    // Last, because it is the only part that needs the write's own results
+    // (`docsWritten`). The human-facing report was printed back in step 6,
+    // before anything could be committed.
     const dump = {
         env: flags.envName,
         project: projectId,
@@ -877,34 +1204,62 @@ async function main(): Promise<void> {
         dryRun: flags.dryRun,
         force: flags.force,
         forceFallbacks: flags.forceFallbacks,
+        forceMerges: flags.forceMerges,
         abortedForFallbacks: aborted,
+        abortedForMerges: mergesBlockWrite && !flags.dryRun,
+        flaggedMergeGroups: flaggedMerges,
         limit: flags.limit === Infinity ? null : flags.limit,
         generatedAt: classifiedAt.toISOString(),
         recipesScanned: collector.recipesSeen,
         recipesSkipped: skippedGraphs,
         distinctLabels: census.length,
         rulesVersion: TAXONOMY_RULES_VERSION,
+        rawRulesVersion: RAW_RULES_VERSION,
         alreadyClassified: alreadyDone,
         fallbacksRetried: retriedFallbacks,
-        reclassifiedForRulesVersion: staleVersion,
+        reclassifiedForRulesVersion: staleCategoryVersion,
+        reclassifiedForRawRulesVersion: staleRawVersion,
+        reclassifiedForMissingRaw: missingRaw,
         classifiedNow: classified.length,
         fallbackCount: unresolvedCount,
+        rawIdentityCount: summary.rawIdentityCount,
         usageCountsRefreshed: staleCounts.length,
         skippedUnaddressable: unaddressable.map(u => u.label),
         docsWritten: written,
         categoryCounts: summary.counts,
         disagreements: summary.disagreements,
+        // The merge evidence, in full — the console truncates the label→raw
+        // table, this never does, and the owner checkpoint reads from here.
+        rawMerge: {
+            // Whole-corpus, not just this run: `labelsInView` counts the
+            // already-good docs seeded in alongside `newLabels`, without which
+            // a merge between a new label and an existing one is invisible.
+            labelsInView: summary.raw.totalLabels,
+            newLabels: summary.raw.newLabels,
+            renames: summary.raw.renames,
+            groups: summary.raw.groups,
+            crossCategoryGroups: summary.raw.crossCategoryGroups,
+            newCrossCategoryGroups: summary.raw.newCrossCategoryGroups,
+            rowsMerged: summary.raw.rowsMerged,
+        },
         classifications: classified,
     };
     fs.writeFileSync(path.resolve(flags.outPath), JSON.stringify(dump, null, 2));
 
     console.log(`\n========================================================`);
-    console.log(` ${aborted ? 'ABORTED (too many fallbacks; nothing written)' : flags.dryRun ? 'DRY RUN COMPLETE (no writes)' : 'BACKFILL COMPLETE'}`);
+    const verdict = aborted ? 'ABORTED (too many fallbacks; nothing written)'
+        : blocked ? 'ABORTED (cross-category merges need review; nothing written)'
+        : flags.dryRun ? 'DRY RUN COMPLETE (no writes)'
+        : 'BACKFILL COMPLETE';
+    console.log(` ${verdict}`);
     console.log(` classified: ${classified.length}   fallback: ${unresolvedCount}   already done: ${alreadyDone}   written: ${written}   counts refreshed: ${refreshed}`);
+    console.log(` raw: ${summary.raw.renames.length} label(s) move rows, ${summary.raw.groups.length} collision group(s), `
+        + `${summary.raw.crossCategoryGroups.length} cross-category flag(s) `
+        + `(${flaggedMerges} from this run)${mergesBlockWrite && flags.dryRun ? ' — a live run would be BLOCKED' : ''}`);
     console.log(` JSON dump:  ${path.resolve(flags.outPath)}`);
     console.log(`========================================================`);
 
-    if (aborted) process.exit(1);
+    if (blocked) process.exit(1);
 }
 
 main().catch(e => {

@@ -451,8 +451,13 @@ Over-merging is silent data corruption; under-merging is cosmetic. Identity (raw
  * Interpolated into the prompt rather than restated there, so "the bound the
  * model is told is the bound the parser enforces" is true by construction
  * instead of being a comment somebody has to remember to update.
+ *
+ * Exported because the bound has a THIRD user beyond the prompt and the
+ * parser: the identity fallback, which stores a label as its own raw name and
+ * so has to respect the same limit the model was held to. See
+ * `boundRawIngredientName`.
  */
-const MAX_RAW_INGREDIENT_LENGTH = 80;
+export const MAX_RAW_INGREDIENT_LENGTH = 80;
 
 /**
  * The wire field names of the `includeRaw` response object.
@@ -653,6 +658,46 @@ function validRawIngredient(value: unknown): string | undefined {
     // value with are forgiven while an actual two-line answer is not.
     if (LINE_BREAK_CHARS.test(trimmed)) return undefined;
     return trimmed;
+}
+
+/**
+ * Coerces a name into something that would PASS `validRawIngredient`: single
+ * line, trimmed, at most `MAX_RAW_INGREDIENT_LENGTH` characters.
+ *
+ * Why this exists. The model's answers are bounded by the parser, but the
+ * identity fallback — "the model offered no raw, so the label is its own raw
+ * ingredient" — bypasses the parser entirely, and real recipe labels are long:
+ * "Tomatoes, San Marzano, Peeled, Canned, Drained And Crushed By Hand". Left
+ * alone, the safe fallback would write a `rawIngredient` the model itself
+ * would never have been allowed to return, and once comparison rows key on
+ * that field it becomes a row label. One function, applied on every path into
+ * the field, is what keeps "anything stored here satisfies the contract" true
+ * by construction rather than by three separate arguments.
+ *
+ * TRUNCATION, not rejection: there is no better answer available. Identity is
+ * already the "we do not know how to merge this" outcome, so the choice is
+ * between a shortened label and an unbounded one, and unbounded is the one
+ * that leaks into the UI. The cut prefers the last word boundary inside the
+ * bound so the result reads as a name rather than a severed string, falls back
+ * to a hard cut when a single word is itself over-long, and drops trailing
+ * separators the cut may have exposed. Deterministic in all cases: the same
+ * label always yields the same name, which matters because this value is a
+ * grouping key, not just a display string.
+ */
+export function boundRawIngredientName(name: string): string {
+    // Collapse every run of whitespace — newlines included — so the result is
+    // single-line by construction rather than by rejecting multi-line input.
+    const collapsed = name.replace(/\s+/g, ' ').trim();
+    if (collapsed.length <= MAX_RAW_INGREDIENT_LENGTH) return collapsed;
+
+    const cut = collapsed.slice(0, MAX_RAW_INGREDIENT_LENGTH);
+    const lastSpace = cut.lastIndexOf(' ');
+    // Only honour the word boundary if it leaves something to keep; a first
+    // word longer than the bound must still be cut somewhere.
+    const bounded = lastSpace > 0 ? cut.slice(0, lastSpace) : cut;
+    // A cut mid-list leaves "Tomatoes, San Marzano," — strip the dangling
+    // separator so the stored name does not advertise its own truncation.
+    return bounded.replace(/[\s,;:/&+-]+$/, '');
 }
 
 /**

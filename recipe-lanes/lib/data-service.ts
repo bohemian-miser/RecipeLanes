@@ -20,7 +20,7 @@ import { setIngredientStatuses } from './data-helpers';
 import { memoryStore, IconData, IngredientData } from './store';
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
-import { claimHashForCreate, isValidClaim } from './recipe-lanes/claim-token';
+import { claimHashForCreate, isValidClaim, isAuthorizedAnonEdit } from './recipe-lanes/claim-token';
 import sharp from 'sharp';
 import type { RecipeGraph, IconStats, ShortlistEntry } from './recipe-lanes/types';
 import { DB_COLLECTION_INGREDIENTS, DB_COLLECTION_ICON_INDEX, DB_COLLECTION_QUEUE, DB_COLLECTION_RECIPES, ICON_GALLERY_PAGE_SIZE, ICON_SEARCH_SCAN_LIMIT } from './config';
@@ -834,9 +834,11 @@ export class FirebaseDataService implements DataService {
               if (!existingData?.ownerId) {
                   if (isValidClaim(userId, claimToken, existingData?.claimTokenHash)) {
                       data.claimTokenHash = FieldValue.delete();
-                  } else {
+                  } else if (isAuthorizedAnonEdit(claimToken, existingData?.claimTokenHash)) {
                       delete data.ownerId;
                       delete data.ownerName;
+                  } else {
+                      throw new Error("You do not have permission to edit this anonymous recipe.");
                   }
               }
               for (const n of existingData?.graph?.nodes || []) {
@@ -1716,6 +1718,13 @@ export class MemoryDataService implements DataService {
         const isAnonOwned = existing ? !existing.ownerId : !userId;
         const canClaim = isAnonOwned && !!existing
             && isValidClaim(userId, claimToken, existing.claimTokenHash);
+        const canEditAnon = isAnonOwned && !!existing
+            && isAuthorizedAnonEdit(claimToken, existing.claimTokenHash);
+            
+        if (existing && isAnonOwned && !canClaim && !canEditAnon) {
+            throw new Error("You do not have permission to edit this anonymous recipe.");
+        }
+
         const ownerId = canClaim
             ? userId
             : (isAnonOwned ? undefined : (existing?.ownerId || userId));

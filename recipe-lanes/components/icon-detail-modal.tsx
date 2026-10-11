@@ -135,6 +135,19 @@ export function IconDetailModal({ node, onClose }: IconDetailModalProps) {
               </div>
             )}
 
+            {/* Created by (issue #283) */}
+            {icon.createdBy && (
+              <div>
+                <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono mb-1">Created By</div>
+                <div
+                  className="text-xs text-zinc-300 font-mono truncate bg-zinc-800 border border-zinc-700 px-2 py-1.5"
+                  title={icon.createdBy}
+                >
+                  {icon.createdBy}
+                </div>
+              </div>
+            )}
+
             {/* Search Terms */}
             {icon.searchTerms && icon.searchTerms.length > 0 && (
               <div>
